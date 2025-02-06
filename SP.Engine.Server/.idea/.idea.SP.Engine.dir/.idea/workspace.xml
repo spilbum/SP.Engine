@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ChangeListManager">
+    <list default="true" id="e631d301-d6eb-47d1-9080-7820389bfbfe" name="변경" comment="">
+      <change afterPath="$PROJECT_DIR$/../DummyServer/Database/GameDB.cs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../DummyServer/Database/MasterDB.cs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../SP.Engine.Database/DatabaseAttribute.cs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../SP.Engine.Database/DatabaseConnector.cs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../SP.Engine.Database/InstRecord.cs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../SP.Engine.Database/SqlCommand.cs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../SP.Engine.Database/SqlConnection.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../DummyClient/NetPeerManager.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../DummyClient/NetPeerManager.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../DummyMultiClient/NetBot.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../DummyMultiClient/NetBot.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../DummyMultiClient/Program.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../DummyMultiClient/Program.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../DummyMultiClient/Scenario.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../DummyMultiClient/Scenario.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../DummyServer/DummyServer.csproj" beforeDir="false" afterPath="$PROJECT_DIR$/../DummyServer/DummyServer.csproj" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../DummyServer/GameServer.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../DummyServer/GameServer.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../DummyServer/Program.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../DummyServer/Program.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../DummyServer/UserPeer.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../DummyServer/UserPeer.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../NetworkCommon/Protocol/C2GSProtocol.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../NetworkCommon/Protocol/C2GSProtocol.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../NetworkCommon/Protocol/C2GSProtocolData.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../NetworkCommon/Protocol/C2GSProtocolData.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../SP.Engine.Client/NetPeer.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../SP.Engine.Client/NetPeer.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../SP.Engine.Client/ServerSession.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../SP.Engine.Client/ServerSession.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../SP.Engine.Common/Logging/SerilogFactory.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../SP.Engine.Common/Logging/SerilogFactory.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../SP.Engine.Common/Message/Message.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../SP.Engine.Common/Message/Message.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../SP.Engine.Common/Protocol/C2SProtocol.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../SP.Engine.Common/Protocol/C2SProtocol.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../SP.Engine.Common/Protocol/C2SProtocolData.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../SP.Engine.Common/Protocol/C2SProtocolData.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../SP.Engine.Common/Protocol/ProtocolBase.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../SP.Engine.Common/Protocol/ProtocolBase.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../SP.Engine.Common/Protocol/ProtocolHandler.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../SP.Engine.Common/Protocol/ProtocolHandler.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../SP.Engine.Common/Protocol/ProtocolLoader.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../SP.Engine.Common/Protocol/ProtocolLoader.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../SP.Engine.Common/SP.Engine.Common.csproj" beforeDir="false" afterPath="$PROJECT_DIR$/../SP.Engine.Common/SP.Engine.Common.csproj" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../SP.Engine.Common/Utility/BinaryConverter.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../SP.Engine.Common/Utility/BinaryConverter.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../SP.Engine.Common/Utility/TypeDefined.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../SP.Engine.Common/Utility/TypeDefined.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ClientSession.cs" beforeDir="false" afterPath="$PROJECT_DIR$/ClientSession.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Connector/ConnectorBase.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Connector/ConnectorBase.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PeerBase.cs" beforeDir="false" afterPath="$PROJECT_DIR$/PeerBase.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ServerBase.cs" beforeDir="false" afterPath="$PROJECT_DIR$/ServerBase.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SessionBase.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SessionBase.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../SP.Engine.sln" beforeDir="false" afterPath="$PROJECT_DIR$/../SP.Engine.sln" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../SP.Engine.sln.DotSettings.user" beforeDir="false" afterPath="$PROJECT_DIR$/../SP.Engine.sln.DotSettings.user" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/.." />
+  </component>
+  <component name="ProjectColorInfo"><![CDATA[{
+  "associatedIndex": 5
+}]]></component>
+  <component name="ProjectId" id="2rPxnaFyDW3OqGQhKvHo4boKVBA" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "git-widget-placeholder": "main",
+    "nodejs_package_manager_path": "npm",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="애플리케이션 수준" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="디폴트 작업">
+      <changelist id="e631d301-d6eb-47d1-9080-7820389bfbfe" name="변경" comment="" />
+      <created>1736474678943</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1736474678943</updated>
+      <workItem from="1736474680130" duration="3000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="UnityProjectConfiguration" hasMinimizedUI="false" />
+  <component name="VcsManagerConfiguration">
+    <option name="CLEAR_INITIAL_COMMIT_MESSAGE" value="true" />
+  </component>
+</project>

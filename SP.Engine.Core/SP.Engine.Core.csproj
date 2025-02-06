@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>netstandard2.1</TargetFramework>
+    </PropertyGroup>
+
+    <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+      <OutputPath>./BinOut</OutputPath>
+    </PropertyGroup>
+
+    <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+      <OutputPath>./BinOut</OutputPath>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="BouncyCastle.Cryptography" Version="2.5.0" />
+      <PackageReference Include="K4os.Compression.LZ4" Version="1.3.8" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\SP.Engine.Common\SP.Engine.Common.csproj" />
+    </ItemGroup>
+
+</Project>
