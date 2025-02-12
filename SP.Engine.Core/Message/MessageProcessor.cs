@@ -8,7 +8,7 @@ namespace SP.Engine.Core.Message
 {
     public abstract class MessageProcessor
     {
-        private class SendingMessageState
+        private sealed class SendingMessageState
         {
             public SendingMessageState(IMessage message, int sendTimeOutMs, int limitReSendCnt)
             {
@@ -107,7 +107,7 @@ namespace SP.Engine.Core.Message
 
         private void UpdateTimeOut(SendingMessageState state, double rttMs)
         {
-            if (state.EstimatedRtt == 0)
+            if (state.EstimatedRtt < 1e-10)
             {
                 state.EstimatedRtt = rttMs;
                 state.DevRtt = rttMs / 2.0;

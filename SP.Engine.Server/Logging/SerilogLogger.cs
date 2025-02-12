@@ -51,16 +51,11 @@ namespace SP.Engine.Server.Logging
     /// <summary>
     /// Serilog 기반의 ILogger 구현
     /// </summary>
-    public class SerilogLogger : ILogger
+    public class SerilogLogger(Serilog.ILogger logger) : ILogger
     {
         private const string ExceptionFormat = "An exception occurred: {0}{1}stackTrace={2}";
         private const string MessageAndExceptionFormat = "An exception occurred: {0}, exception={1}{2}stackTrace={3}";
-        private readonly Serilog.ILogger _logger;
-
-        public SerilogLogger(Serilog.ILogger logger)
-        {
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        }
+        private readonly Serilog.ILogger _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         private bool IsEnabled(ELogLevel logLevel)
         {
@@ -78,12 +73,12 @@ namespace SP.Engine.Server.Logging
             _logger.Write(logLevel.ToSerilogLevel(), format, args);
         }
 
-        public void WriteLog(Exception ex)
+        public void WriteLog(Exception exception)
         {
             if (!IsEnabled(ELogLevel.Error))
                 return;
             
-            _logger.Write(LogEventLevel.Error, ExceptionFormat, ex.Message, Environment.NewLine, ex.StackTrace);
+            _logger.Write(LogEventLevel.Error, ExceptionFormat, exception.Message, Environment.NewLine, exception.StackTrace);
         }
 
         public void WriteLog(string message, Exception ex)

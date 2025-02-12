@@ -28,7 +28,7 @@ namespace SP.Engine.Server
         private SessionServerBase<TSession> _sessionServer;
         private MessageFilter _messageFilter;
         
-        private SessionServerBase<TSession> SessionServer => _sessionServer ?? throw new NullReferenceException(nameof(_sessionServer));
+        private SessionServerBase<TSession> SessionServer => _sessionServer;
         ISessionServer ISession.SessionServer => SessionServer;
         public IServerConfig Config => SessionServer.Config;
         public ILogger Logger => SessionServer.Logger;
@@ -37,8 +37,8 @@ namespace SP.Engine.Server
         public bool IsConnected { get; internal set; }
         public DateTime StartTime { get; }
         public DateTime LastActiveTime { get; private set; }
-        public ISocketSession SocketSession => _socketSession ?? throw new NullReferenceException(nameof(_socketSession));
-        public string SessionId => _sessionId ?? throw new NullReferenceException(nameof(_sessionId));
+        public ISocketSession SocketSession => _socketSession;
+        public string SessionId => _sessionId;
         public DateTime StartClosingTime { get; protected set; }
         public bool IsAuthorized { get; protected set; }
         

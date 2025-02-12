@@ -17,18 +17,12 @@ namespace SP.Engine.Server
         void ProcessReceive(SocketAsyncEventArgs e);
     }
 
-    internal class TcpAsyncSocketSession : SocketSessionBase, ITcpAsyncSocketSession
+    internal class TcpAsyncSocketSession(Socket client, SocketAsyncEventArgsProxy socketEventArgsProxy) : SocketSessionBase(ESocketMode.Tcp, client), ITcpAsyncSocketSession
     {
         private SocketAsyncEventArgs _socketEventArgsSend;        
 
         ILogger ILoggerProvider.Logger => Session.Logger;
-        public SocketAsyncEventArgsProxy ReceiveSocketEventArgsProxy { get; }
-
-        public TcpAsyncSocketSession(Socket client, SocketAsyncEventArgsProxy socketEventArgsProxy)
-            : base(ESocketMode.Tcp, client)
-        {
-            ReceiveSocketEventArgsProxy = socketEventArgsProxy;
-        }
+        public SocketAsyncEventArgsProxy ReceiveSocketEventArgsProxy { get; } = socketEventArgsProxy;
 
         public override void Initialize(ISession session)
         {
@@ -141,7 +135,7 @@ namespace SP.Engine.Server
             try
             {
                 if (null == _socketEventArgsSend)
-                    throw new NullReferenceException();
+                    throw new InvalidOperationException("_socketEventArgsSend is null");
                 
                 _socketEventArgsSend.UserToken = queue;
 
@@ -153,15 +147,15 @@ namespace SP.Engine.Server
                     _socketEventArgsSend.SetBuffer(data.Array, data.Offset, data.Count);
                 }
 
-                var client = Client;
-                if (null == client)
+                var socket = Client;
+                if (null == socket)
                 {
                     OnSendError(queue, ECloseReason.SocketError);
                     return;
                 }
                 
-                if (!client.SendAsync(_socketEventArgsSend))
-                    OnSendCompleted(client, _socketEventArgsSend);
+                if (!socket.SendAsync(_socketEventArgsSend))
+                    OnSendCompleted(socket, _socketEventArgsSend);
             }
             catch (Exception ex)
             {
@@ -188,7 +182,7 @@ namespace SP.Engine.Server
 
         private void OnSendCompleted(object sender, SocketAsyncEventArgs e)
         {
-            if (!(e.UserToken is SendingQueue queue))
+            if (e.UserToken is not SendingQueue queue)
             {
                 Session.Logger.WriteLog(ELogLevel.Error, "SendingQueue is null");
                 return;

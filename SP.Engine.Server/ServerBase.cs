@@ -23,16 +23,10 @@ namespace SP.Engine.Server
     public abstract class ServerBase<TPeer> : SessionServerBase<ClientSession<TPeer>>, IServer
         where TPeer : PeerBase, IPeer
     {
-        private class WaitingReconnectPeer
+        private sealed class WaitingReconnectPeer(TPeer peer, int timeOutSec)
         {
-            public TPeer Peer { get; }
-            public DateTime ExpireTime { get; }
-            
-            public WaitingReconnectPeer(TPeer peer, int timeOutSec)
-            {
-                Peer = peer;
-                ExpireTime = DateTime.UtcNow.AddSeconds(timeOutSec);
-            }
+            public TPeer Peer { get; } = peer;
+            public DateTime ExpireTime { get; } = DateTime.UtcNow.AddSeconds(timeOutSec);
         }
 
         private readonly ConcurrentDictionary<EPeerId, WaitingReconnectPeer> _waitingReconnectPeerDict = new ConcurrentDictionary<EPeerId, WaitingReconnectPeer>();
@@ -41,7 +35,7 @@ namespace SP.Engine.Server
         private readonly List<ThreadFiber> _updatePeerFibers = new List<ThreadFiber>();
         private ThreadFiber _fiber;
         
-        public IFiberScheduler Scheduler => _fiber ?? throw new NullReferenceException(nameof(_fiber));
+        public IFiberScheduler Scheduler => _fiber;
 
         public override bool Initialize(string name, IServerConfig config)
         {
@@ -94,7 +88,7 @@ namespace SP.Engine.Server
                 try
                 {
                     if (!connector.Initialize(this, connectorConfig))
-                        throw new Exception($"Failed to initialize connector {connector.Name}.");
+                        throw new InvalidOperationException($"Failed to initialize connector {connector.Name}.");
 
                     _connectors.Add(connector);
                 }
@@ -259,7 +253,7 @@ namespace SP.Engine.Server
                     _peerDict.AddOrUpdate(peer.PeerId, peer, (key, value) => peer);
                     break;
                 default:
-                    throw new Exception($"Invalid peer type: {peer.PeerType}");
+                    throw new ArgumentException($"Invalid peer type: {peer.PeerType}");
             }
         }
 

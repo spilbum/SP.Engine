@@ -13,7 +13,6 @@ namespace SP.Engine.Server
     [Flags]
     public enum ESocketState
     {
-        Normal = 0,
         InSending = 1 << 0,
         InReceiving = 1 << 1,
         InClosing = 1 << 4,
@@ -41,21 +40,21 @@ namespace SP.Engine.Server
         bool TrySend(ArraySegment<byte> data);
     }
 
-    internal abstract class SocketSessionBase : ISocketSession
+    internal abstract class SocketSessionBase(ESocketMode mode) : ISocketSession
     {
         // 1st byte : Closed (y/n)
         // 2nd byte : N/A
         // 3rd byte : CloseReason
         // last byte : Normal State
         private volatile int _state;
-
+        private readonly object _lock = new object();
         private Socket _client;
         private ISmartPool<SendingQueue> _sendingQueuePool;
         private SendingQueue _sendingQueue;
         private ISession _session;
 
         public Socket Client => _client;
-        public ESocketMode Mode { get; private set; }
+        public ESocketMode Mode { get; private set; } = mode;
         public ISession Session => _session ?? throw new InvalidOperationException("Session is not initialized.");
         public IServerConfig Config { get; private set; }
         public string SessionId { get; }
@@ -72,19 +71,14 @@ namespace SP.Engine.Server
         protected bool IsInClosingOrClosed => _state >= (int)ESocketState.InClosing;
         protected bool IsClosed => _state >= (int)ESocketState.Closed;
 
-        protected SocketSessionBase(ESocketMode mode)
-        {
-            Mode = mode;
-        }
-
         protected SocketSessionBase(ESocketMode mode, Socket client)
             : this (mode)
         {
             _client = client 
                 ?? throw new ArgumentNullException(nameof(client));
 
-            LocalEndPoint = client.LocalEndPoint as IPEndPoint ?? throw new Exception("LocalEndPoint is null");
-            RemoteEndPoint = client.RemoteEndPoint as IPEndPoint ?? throw new Exception("RemoteEndPoint is null");
+            LocalEndPoint = client.LocalEndPoint as IPEndPoint;
+            RemoteEndPoint = client.RemoteEndPoint as IPEndPoint;
             SessionId = Guid.NewGuid().ToString();
         }        
 
@@ -94,11 +88,11 @@ namespace SP.Engine.Server
             Config = session.Config;
 
             if (((ISocketServerAccessor)session.SessionServer).SocketServer is SocketServer socketServer)
-                _sendingQueuePool = socketServer.SendingQueuePool ?? throw new Exception("SendingQueuePool is null");
+                _sendingQueuePool = socketServer.SendingQueuePool ?? throw new ArgumentException("SendingQueuePool is null");
 
             if (!_sendingQueuePool.Rent(out var queue) || queue == null)
             {
-                throw new Exception("Failed to acquire a SendingQueue from the pool.");
+                throw new InvalidOperationException("Failed to acquire a SendingQueue from the pool.");
             }
 
             _sendingQueue = queue;
@@ -122,19 +116,19 @@ namespace SP.Engine.Server
             }
 
             // 종료 이벤트 호출
-            lock (this)
+            lock (_lock)
             {
                 _closed?.Invoke(this, reason);
             }
         }
 
-        public bool TrySend(ArraySegment<byte> segment)
+        public bool TrySend(ArraySegment<byte> data)
         {
             if (IsClosed)
                 return false;
 
             var queue = _sendingQueue;
-            if (queue == null || !queue.Enqueue(segment, queue.TrackId))
+            if (queue == null || !queue.Enqueue(data, queue.TrackId))
                 return false;
 
             StartSend(queue, queue.TrackId, true);
@@ -158,7 +152,7 @@ namespace SP.Engine.Server
                 }
             }
 
-            if (IsInClosingOrClosed && TryValidateClosedBySocket(out var client))
+            if (IsInClosingOrClosed && TryValidateClosedBySocket(out _))
             {
                 OnSendEnd(true);
                 return;

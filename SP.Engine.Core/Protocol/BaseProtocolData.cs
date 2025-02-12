@@ -4,13 +4,6 @@ using System.Reflection;
 
 namespace SP.Engine.Core.Protocol
 {
-    public interface IProtocolData
-    {
-        EProtocolId ProtocolId { get; }
-        bool IsEncrypt { get; }
-        uint CompressibleSize { get; }
-    }
-
     public abstract class BaseProtocolData : IProtocolData
     {
         private static readonly ConcurrentDictionary<Type, ProtocolAttribute> AttributeCache = new ConcurrentDictionary<Type, ProtocolAttribute>();
@@ -25,7 +18,7 @@ namespace SP.Engine.Core.Protocol
             if (!AttributeCache.TryGetValue(type, out var cached))
             {
                 var attribute = type.GetCustomAttribute<ProtocolAttribute>();
-                cached = attribute ?? throw new Exception($"Invalid protocol type: {type}");
+                cached = attribute ?? throw new InvalidCastException($"Invalid protocol type: {type}");
                 AttributeCache[type] = cached;
             }
             

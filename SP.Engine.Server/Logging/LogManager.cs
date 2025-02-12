@@ -10,25 +10,16 @@ namespace SP.Engine.Server.Logging
 {
     public static class LogManager
     {
-        private class LogJob
+        private sealed class LogJob(string name, ELogLevel level, string format, object[] args)
         {
-            public readonly string Name;
-            public readonly ELogLevel Level;
-            public readonly string Format;
-            public readonly object[] Args;
-
-            public LogJob(string name, ELogLevel level, string format, object[] args)
-            {
-                Name = name;
-                Level = level;
-                Format = format;
-                Args = args;
-            }
+            public readonly string Name = name;
+            public readonly ELogLevel Level = level;
+            public readonly string Format = format;
+            public readonly object[] Args = args;
         }
-        
+
         private const string DefaultLoggerName = "DefaultLogger";
         private static readonly ConcurrentDictionary<string, ILogger> LoggerDict = new ConcurrentDictionary<string, ILogger>();
-        private static readonly ConcurrentQueue<LogJob> LogJobQueue = new ConcurrentQueue<LogJob>();
         private static readonly List<ThreadFiber> Fibers = new List<ThreadFiber>();
         private static int _fiberIndex;
         private static ILoggerFactory _loggerFactory;

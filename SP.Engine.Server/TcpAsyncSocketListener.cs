@@ -1,20 +1,15 @@
 ﻿using System;
 using System.Net.Sockets;
+using Org.BouncyCastle.Crypto;
 
 namespace SP.Engine.Server
 {
-    internal class TcpAsyncSocketListener : SocketListenerBase
+    internal class TcpAsyncSocketListener(ListenerInfo info) : SocketListenerBase(info)
     {
-        private readonly int _backLog;
+        private readonly int _backLog = info.BackLog;
         private Socket _socket;
         private SocketAsyncEventArgs _socketEventArgsAccept;
         private bool _disposed;
-        
-        public TcpAsyncSocketListener(ListenerInfo info)
-            : base(info)
-        {
-            _backLog = info.BackLog;
-        }
 
         public override bool Start()
         {
@@ -104,16 +99,19 @@ namespace SP.Engine.Server
             }
         }
 
-        protected override void Dispose()
+        protected override void Dispose(bool disposing)
         {
             if (_disposed)
                 return;
             
-            _disposed = true;
-            _socketEventArgsAccept?.Dispose();
-            _socket?.Dispose();
+            if (disposing)
+            {
+                _socketEventArgsAccept?.Dispose();
+                _socket?.Dispose();
+            }
             
-            base.Dispose();
+            _disposed = true;            
+            base.Dispose(disposing);
         }
     }
 }

@@ -5,15 +5,11 @@ using SP.Engine.Core;
 
 namespace SP.Engine.Server
 {
-    internal class UdpSocketListener : SocketListenerBase
+    internal class UdpSocketListener(ListenerInfo listenerInfo) : SocketListenerBase(listenerInfo)
     {
+        private readonly object _lock = new object();
         private Socket _listenSocket;
         private SocketAsyncEventArgs _socketEventArgsReceive;
-        
-        public UdpSocketListener(ListenerInfo listenerInfo)
-            : base (listenerInfo)
-        {
-        }
 
         public override bool Start()
         {
@@ -94,7 +90,7 @@ namespace SP.Engine.Server
             if (null == _listenSocket)
                 return;
 
-            lock (this)
+            lock (_lock)
             {
                 if (null == _listenSocket)
                     return;

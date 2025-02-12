@@ -76,12 +76,12 @@ namespace SP.Engine.Server
         private IClientSession _session;
 
         public EPeerState State => (EPeerState)_stateCode;
-        public byte[] CryptoSharedKey => _diffieHellman?.SharedKey ?? throw new NullReferenceException(nameof(_diffieHellman));
-        public byte[] CryptoPublicKey => _diffieHellman?.PublicKey ?? throw new NullReferenceException(nameof(_diffieHellman));
+        public byte[] CryptoSharedKey => _diffieHellman?.SharedKey;
+        public byte[] CryptoPublicKey => _diffieHellman?.PublicKey;
         public EPeerId PeerId { get; private set; }
         public EPeerType PeerType { get; } 
         public ILogger Logger { get; }
-        public IClientSession Session => _session ?? throw new NullReferenceException(nameof(_session));
+        public IClientSession Session => _session;
         public IPEndPoint LocalEndPoint => Session.LocalEndPoint;
         public IPEndPoint RemoteEndPoint => Session.RemoteEndPoint;
         public bool IsConnected => _stateCode == PeerStateConst.Authorized || _stateCode == PeerStateConst.Online;
@@ -163,12 +163,12 @@ namespace SP.Engine.Server
             Session.Close(reason);
         }
         
-        public void Send(IProtocolData protocol)
+        public void Send(IProtocolData data)
         {
             try
             {
                 var message = new TcpMessage();
-                message.SerializeProtocol(protocol, protocol.ProtocolId.IsEngineProtocol() ? null : CryptoSharedKey);
+                message.SerializeProtocol(data, data.ProtocolId.IsEngineProtocol() ? null : CryptoSharedKey);
                 Send(message);
             }
             catch (Exception e)
@@ -212,7 +212,7 @@ namespace SP.Engine.Server
             {
                 var invoker = ProtocolManager.GetProtocolInvoker(msg.ProtocolId);
                 if (null == invoker)
-                    throw new Exception($"The protocol invoker not found. protocolId={msg.ProtocolId}");
+                    throw new InvalidOperationException($"The protocol invoker not found. protocolId={msg.ProtocolId}");
 
                 invoker.Invoke(this, msg, CryptoSharedKey);
             }

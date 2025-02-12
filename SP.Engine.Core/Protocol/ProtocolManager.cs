@@ -29,14 +29,16 @@ namespace SP.Engine.Core.Protocol
             }
             
             // 정의되지 않은 프로토콜 데이터가 있는지 확인
-            foreach (var protocolId in ProtocolDataDict.Keys.Where(p => !ProtocolNameDict.ContainsKey(p)))
+            var protocolId = ProtocolDataDict.Keys.FirstOrDefault(p => !ProtocolNameDict.ContainsKey(p));
+            if (protocolId != default)
             {
                 OnError(new Exception($"The protocol data for the ID {protocolId} is not defined."));
                 return false;
             }
-            
+
             // 정의되지 않은 프로토콜 핸드러가 있는지 체크
-            foreach (var protocolId in ProtocolInvokerDict.Keys.Where(p => !ProtocolNameDict.ContainsKey(p)))
+            protocolId = ProtocolInvokerDict.Keys.FirstOrDefault(p => !ProtocolNameDict.ContainsKey(p));
+            if (protocolId != default)
             {
                 OnError(new Exception($"The protocol handler for the ID {protocolId} is not defined."));
                 return false;
@@ -89,7 +91,7 @@ namespace SP.Engine.Core.Protocol
         {
             var types = assembly.GetTypes();
             return types
-                .Where(t => typeof(T).IsAssignableFrom(t) && t.IsAbstract == false && !t.IsInterface)
+                .Where(t => typeof(T).IsAssignableFrom(t) && !t.IsInterface)
                 .ToArray();
         }
 
@@ -102,7 +104,7 @@ namespace SP.Engine.Core.Protocol
                 {
                     var attribute = type.GetCustomAttribute<ProtocolAttribute>();
                     if (null == attribute)
-                        throw new Exception($"Invalid protocol type: {type}");
+                        throw new InvalidCastException($"Invalid protocol type: {type}");
 
                     var runtimeTypeAccessor = RuntimeTypeAccessor.GetOrCreate(type);
                     ProtocolDataDict.Add(attribute.ProtocolId, runtimeTypeAccessor);

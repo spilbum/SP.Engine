@@ -8,13 +8,13 @@ namespace SP.Engine.Core
 
     public static class SocketExtensions
     {
-        private class ConnectToken
+        private sealed class ConnectToken
         {
             public object State;
             public ConnectCallback Callback;
         }
 
-        private class DnsConnectState
+        private sealed class DnsConnectState
         {
             public IPAddress[] Addresses;
             public int NextAddressIndex;
@@ -145,9 +145,11 @@ namespace SP.Engine.Core
         private static SocketAsyncEventArgs CreateSocketAsyncEventArgs(EndPoint remoteEndPoint,
             ConnectCallback callback, object state)
         {
-            var e = new SocketAsyncEventArgs();
-            e.UserToken = new ConnectToken { State = state, Callback = callback };
-            e.RemoteEndPoint = remoteEndPoint;
+            var e = new SocketAsyncEventArgs
+            {
+                UserToken = new ConnectToken { State = state, Callback = callback },
+                RemoteEndPoint = remoteEndPoint
+            };
             e.Completed += OnConnectCompleted;
             return e;
         }

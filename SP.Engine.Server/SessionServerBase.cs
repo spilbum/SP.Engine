@@ -23,7 +23,7 @@ namespace SP.Engine.Server
         ISocketServer SocketServer { get; }
     }
 
-    public enum EServerState : int
+    public enum EServerState
     {
         NotInitialized = ServerStateConst.NotInitialized,
         Initializing = ServerStateConst.Initializing,
@@ -53,17 +53,17 @@ namespace SP.Engine.Server
         private IServerConfig _config;
         private ILogger _logger;
 
-        ISocketServer ISocketServerAccessor.SocketServer => _socketServer ?? throw new NullReferenceException(nameof(_socketServer));
-        public string Name => _name ?? throw new NullReferenceException(nameof(_name));
-        public ILogger Logger => _logger ?? throw new NullReferenceException(nameof(_logger));
-        public IServerConfig Config => _config ?? throw new NullReferenceException(nameof(_config));
+        ISocketServer ISocketServerAccessor.SocketServer => _socketServer;
+        public string Name => _name;
+        public ILogger Logger => _logger;
+        public IServerConfig Config => _config;
 
         public virtual bool Initialize(string name, IServerConfig config)
         {
             if (Interlocked.CompareExchange(ref _stateCode, ServerStateConst.Initializing, ServerStateConst.NotInitialized)
                 != ServerStateConst.NotInitialized)
             {
-                throw new Exception("The server has been initialized already, you cannot initialize it again!");
+                throw new InvalidOperationException("The server has been initialized already, you cannot initialize it again!");
             }
 
             _name = !string.IsNullOrEmpty(name) ? name : $"{GetType().Name}-{Math.Abs(GetHashCode())}";
@@ -221,7 +221,7 @@ namespace SP.Engine.Server
                 return false;
             }
 
-            _listenerInfos = listenerInfos.ToArray();
+            _listenerInfos = [..listenerInfos];
             return true;
         }
 
@@ -244,7 +244,7 @@ namespace SP.Engine.Server
 
         bool ISessionServer.RegisterSession(ISession session)
         {
-            if (!(session is TSession tSession))
+            if (session is not TSession tSession)
                 return false;
 
             if (!_sessionDict.TryAdd(tSession.SessionId, tSession))
@@ -345,16 +345,16 @@ namespace SP.Engine.Server
             get
             {
                 if (Config.IsDisableSessionSnapshot)
-                    return _sessionDict.ToArray();
+                    return [.. _sessionDict];
                 else
-                    return Interlocked.CompareExchange(ref _sessionsSnapshot, null, null) ?? Array.Empty<KeyValuePair<string, TSession>>();
+                    return Interlocked.CompareExchange(ref _sessionsSnapshot, null, null) ?? [];
             }
         }
 
         private Timer _sessionsSnapshotTimer;
         private KeyValuePair<string, TSession>[] _sessionsSnapshot;
         private readonly object _snapshotLock = new object();        
-        private readonly ConcurrentDictionary<string, TSession> _sessionDict = new ConcurrentDictionary<string, TSession>(Environment.ProcessorCount, 3000, StringComparer.OrdinalIgnoreCase);        
+        private readonly ConcurrentDictionary<string, TSession> _sessionDict = new(Environment.ProcessorCount, 3000, StringComparer.OrdinalIgnoreCase);        
 
         private void StartSessionsSnapshotTimer()
         {

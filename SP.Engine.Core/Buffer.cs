@@ -49,22 +49,9 @@ namespace SP.Engine.Core
         public byte[] ToArray() =>_buffer.Slice(_readIndex, RemainSize).ToArray();
         public ReadOnlySpan<byte> ToSpan() => _buffer.Span.Slice(_readIndex, RemainSize);
 
-        public void Write(ReadOnlySpan<byte> data)
-        {
-            EnsureCapacity(data.Length);
-            data.CopyTo(_buffer.Span[_writeIndex..]);
-            _writeIndex += data.Length;
-        }
 
-        public ReadOnlySpan<byte> Read(int length)
-        {
-            if (_readIndex + length > _writeIndex)
-                throw new InvalidOperationException("Not enough data to read.");
-            
-            var span = _buffer.Span[_readIndex..(_readIndex + length)];
-            _readIndex += length;
-            return span;
-        }
+
+
 
         public ReadOnlySpan<byte> Peek(int length)
         {
@@ -72,6 +59,13 @@ namespace SP.Engine.Core
                 throw new InvalidOperationException("Not enough data to read.");
             
             return _buffer.Span[_readIndex..(_readIndex + length)];
+        }
+
+        public void Write(ReadOnlySpan<byte> data)
+        {
+            EnsureCapacity(data.Length);
+            data.CopyTo(_buffer.Span[_writeIndex..]);
+            _writeIndex += data.Length;
         }
         
         public void Write<T>(T data) where T : struct
@@ -139,6 +133,16 @@ namespace SP.Engine.Core
                     }
                     break;
             }
+        }
+
+        public ReadOnlySpan<byte> Read(int length)
+        {
+            if (_readIndex + length > _writeIndex)
+                throw new InvalidOperationException("Not enough data to read.");
+            
+            var span = _buffer.Span[_readIndex..(_readIndex + length)];
+            _readIndex += length;
+            return span;
         }
 
         public T Read<T>() where T : struct

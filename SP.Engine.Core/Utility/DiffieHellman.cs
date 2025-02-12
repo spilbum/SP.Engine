@@ -89,7 +89,7 @@ namespace SP.Engine.Core.Utility
                 }
                 default:
                 {
-                    throw new Exception($"Invalid key size: {keySize}");
+                    throw new ArgumentException($"Invalid key size: {keySize}");
                 }
             }
 
@@ -109,7 +109,7 @@ namespace SP.Engine.Core.Utility
         public void DeriveSharedKey(byte[] outherPartyPublicKey)
         {
             if (outherPartyPublicKey == null || outherPartyPublicKey.Length == 0)
-                throw new Exception("Public key is null or empty");
+                throw new ArgumentException("Public key is null or empty");
 
             var keyAgree = AgreementUtilities.GetBasicAgreement("DH");
             keyAgree.Init(_cipher.Private);
@@ -136,7 +136,7 @@ namespace SP.Engine.Core.Utility
             }
             catch (Exception e)
             {
-                throw new Exception($"An exception occurred: {e.Message}\r\nstackTrace={e.StackTrace}");
+                throw new InvalidOperationException($"An exception occurred: {e.Message}\r\nstackTrace={e.StackTrace}");
             }
         }
     }

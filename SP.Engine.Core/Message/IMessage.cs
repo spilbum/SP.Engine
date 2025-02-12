@@ -1,5 +1,4 @@
 using System;
-using System.Runtime.InteropServices;
 using SP.Engine.Core.Protocol;
 
 namespace SP.Engine.Core.Message

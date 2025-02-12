@@ -74,7 +74,7 @@ public interface ISmartPool<T>
         private void AddSource(int size)
         {
             if (null == _itemSources)
-                throw new Exception("Item sources cannot be null.");
+                throw new InvalidOperationException("Item sources cannot be null.");
             
             _itemSources[_currentSourceCount++] = _sourceCreator.Create(size, out var items);
             TotalItemCount += size;
@@ -86,7 +86,7 @@ public interface ISmartPool<T>
         private bool EnsureCapacity()
         {
             if (null == _itemSources)
-                throw new Exception("Item sources cannot be null.");
+                throw new InvalidOperationException("Item sources cannot be null.");
             
             if (_currentSourceCount >= _itemSources.Length || _isIncreasing == 1)
                 return false;

@@ -18,26 +18,18 @@ namespace SP.Engine.Server
         void Stop();
     }
 
-    internal sealed class SocketServer : ISocketServer, IDisposable
+    internal sealed class SocketServer(ISessionServer server, ListenerInfo[] listenerInfos) : ISocketServer, IDisposable
     {
-        public ISessionServer Server { get; private set; }
+        public ISessionServer Server { get; private set; } = server;
         public bool IsRunning { get; private set; }
-        private List<ISocketListener> Listeners { get; }
-        private ListenerInfo[] ListenerInfos { get; }
+        private List<ISocketListener> Listeners { get; } = new List<ISocketListener>(listenerInfos.Length);
+        private ListenerInfo[] ListenerInfos { get; } = listenerInfos;
         private bool IsStopped { get; set; }
 
         internal ISmartPool<SendingQueue> SendingQueuePool { get; private set; }
 
         private byte[] _keepAliveOptionValues;        
-        private byte[] _readWriteBuffer;
         private ConcurrentStack<SocketAsyncEventArgsProxy> _readWritePool;
-        
-        public SocketServer(ISessionServer server, ListenerInfo[] listenerInfos)
-        {
-            Server = server;
-            ListenerInfos = listenerInfos;
-            Listeners = new List<ISocketListener>(listenerInfos.Length);
-        }
 
         public bool Start()
         {
@@ -112,7 +104,7 @@ namespace SP.Engine.Server
         private bool SetupReadWritePool(IServerConfig config)
         {
             var totalBytes = config.ReceiveBufferSize * config.LimitConnectionCount;
-            _readWriteBuffer = new byte[totalBytes];
+            var buffer = new byte[totalBytes];
             var bufferSize = config.ReceiveBufferSize;
 
             var currentOffset = 0;
@@ -123,7 +115,7 @@ namespace SP.Engine.Server
                 if (totalBytes - bufferSize < currentOffset)
                     return false;
 
-                socketEventArgs.SetBuffer(_readWriteBuffer, currentOffset, bufferSize);
+                socketEventArgs.SetBuffer(buffer, currentOffset, bufferSize);
                 currentOffset += bufferSize;
 
                 proxies.Add(new SocketAsyncEventArgsProxy(socketEventArgs));
@@ -151,8 +143,6 @@ namespace SP.Engine.Server
                 _readWritePool.Clear();
             }            
 
-            _readWriteBuffer = null;
-
             IsRunning = false;
         }
 
@@ -164,15 +154,12 @@ namespace SP.Engine.Server
 
         private static ISocketListener CreateListener(ListenerInfo listenerInfo)
         {
-            switch (listenerInfo.Mode)
+            return listenerInfo.Mode switch
             {
-                case ESocketMode.Tcp:
-                    return new TcpAsyncSocketListener(listenerInfo);
-                case ESocketMode.Udp:
-                    return new UdpSocketListener(listenerInfo);
-                default:
-                    throw new Exception($"Invalid socket mode: {listenerInfo.Mode}");
-            }
+                ESocketMode.Tcp => new TcpAsyncSocketListener(listenerInfo),
+                ESocketMode.Udp => new UdpSocketListener(listenerInfo),
+                _ => throw new ArgumentException($"Invalid socket mode: {listenerInfo.Mode}"),
+            };
         }
 
         private void OnNewClientAccepted(ISocketListener listener, Socket socket, object state)
@@ -222,7 +209,7 @@ namespace SP.Engine.Server
 
         private void OnSessionClosed(ISocketSession session, ECloseReason reason)
         {
-            if (!(session is ITcpAsyncSocketSession socketSession)) return;
+            if (session is not ITcpAsyncSocketSession socketSession) return;
             var proxy = socketSession.ReceiveSocketEventArgsProxy;
             proxy.Reset();
             _readWritePool?.Push(proxy);

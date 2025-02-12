@@ -24,7 +24,7 @@ namespace SP.Engine.Server
     {
         public TPeer Peer { get; private set; }
         internal ServerBase<TPeer> Server { get; private set; }
-        IServer IClientSession.Server => Server ?? throw new NullReferenceException(nameof(Server));
+        IServer IClientSession.Server => Server;
 
         public ERejectReason RejectReason { get; private set; }
         public string RejectDetailReason { get; private set; }
@@ -56,7 +56,7 @@ namespace SP.Engine.Server
                 // 시스템 메시지
                 var invoker = ProtocolManager.GetProtocolInvoker(message.ProtocolId);
                 if (null == invoker)
-                    throw new Exception($"The protocol invoker not found. protocolId={message.ProtocolId}");
+                    throw new InvalidOperationException($"The protocol invoker not found. protocolId={message.ProtocolId}");
 
                 invoker.Invoke(this, message, null);
             }
@@ -64,7 +64,7 @@ namespace SP.Engine.Server
             {
                 var peer = Peer;
                 if (null == peer)
-                    throw new Exception("The peer is null.");
+                    throw new InvalidOperationException("The peer is null.");
 
                 // 메시지 응답
                 SendMessageAck(message.SequenceNumber);
@@ -126,24 +126,22 @@ namespace SP.Engine.Server
                     {
                         // 이전 세션이 살아 있는 경우
                         if (ERejectReason.None != prevSession.RejectReason)
-                            throw new Exception($"Reconnection is not allowed because the session was rejected. sessionId={prevSession.SessionId} reason={prevSession.RejectReason}");
+                            throw new InvalidOperationException($"Reconnection is not allowed because the session was rejected. sessionId={prevSession.SessionId} reason={prevSession.RejectReason}");
 
                         var peer = prevSession.Peer;
-                        if (null == peer)
-                            throw new Exception("The peer of previous session is null.");
 
                         // 이전 세션 종료
                         prevSession.Peer = null;
                         prevSession.Close();
                         
-                        Peer = peer;
+                        Peer = peer ?? throw new InvalidOperationException("The peer of previous session is null.");
                         Server.OnlinePeer(peer, this);
                     }
                     else
                     {
                         // 재 연결 대기인 경우
                         var peer = Server.GetWaitingReconnectPeer(authReq.PeerId);
-                        Peer = peer ?? throw new Exception("The waiting reconnect peer is null.");
+                        Peer = peer ?? throw new InvalidOperationException("The waiting reconnect peer is null.");
                         Server.OnlinePeer(peer, this);
                     }
                 }

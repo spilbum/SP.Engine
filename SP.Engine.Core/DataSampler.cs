@@ -93,7 +93,10 @@ namespace SP.Engine.Core
                 LastValue = value;
 
                 // 초과된 경우 제거
-                while (_sample.Count > _capacity && _sample.TryDequeue(out _)) { }
+                while (_sample.Count > _capacity && _sample.TryDequeue(out _)) 
+                { 
+                    //noting... 
+                }
             }
         }
 

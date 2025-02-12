@@ -22,25 +22,20 @@ namespace SP.Engine.Server.Connector
         void Send(IProtocolData protocol);
     }
 
-    public abstract class ConnectorBase : IProtocolHandler, IConnector, IDisposable
+    public abstract class ConnectorBase(string name) : IProtocolHandler, IConnector, IDisposable
     {
+        private readonly string _name = name;
         private bool _isDisposed;
-        private bool _isOffline;
-        private string _name;
+        private bool _isOffline;        
         private NetPeer _netPeer;
         private ILogger _logger;
         public event EventHandler Connected;
         public event EventHandler Disconnected;
 
-        public string Name => _name ?? throw new NullReferenceException(nameof(_name));
+        public string Name => _name;
         public EPeerId PeerId => _netPeer?.PeerId ?? EPeerId.None;
         public string Host { get; private set; }
         public int Port { get; private set; }
-
-        protected ConnectorBase(string name)
-        {
-            _name = name;
-        }
 
         public virtual bool Initialize(IServer server, ConnectorConfig config)
         {
@@ -152,7 +147,7 @@ namespace SP.Engine.Server.Connector
                 var message = e.Message;
                 var invoker = ProtocolManager.GetProtocolInvoker(message.ProtocolId);
                 if (null == invoker)
-                    throw new Exception($"The protocol invoker not found. protocolId={message.ProtocolId}");
+                    throw new InvalidOperationException($"The protocol invoker not found. protocolId={message.ProtocolId}");
 
                 invoker.Invoke(this, message, _netPeer?.CryptoSharedKey);
             }

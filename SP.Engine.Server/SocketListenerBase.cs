@@ -28,23 +28,16 @@ namespace SP.Engine.Server
         void Stop();
     }
 
-    internal abstract class SocketListenerBase : ISocketListener
+    internal abstract class SocketListenerBase(ListenerInfo info) : ISocketListener, IDisposable
     {
-        public ESocketMode Mode { get; set; }
-        public IPEndPoint EndPoint { get; private set; }
-        public int BackLog { get; private set; }
+        public ESocketMode Mode { get; set; } = info.Mode;
+        public IPEndPoint EndPoint { get; private set; } = info.EndPoint ?? throw new Exception("EndPoint is null");
+        public int BackLog { get; private set; } = info.BackLog;
 
         public event EventHandler Stopped;
         public event ErrorHandler Error;
         public event NewClientAcceptHandler NewClientAccepted;
-        
-        protected SocketListenerBase(ListenerInfo info)
-        {
-            EndPoint = info.EndPoint ?? throw new Exception("EndPoint is null");
-            BackLog = info.BackLog;
-            Mode = info.Mode;
-        }
-        
+
         public abstract bool Start();
         public abstract void Stop();
 
@@ -65,7 +58,14 @@ namespace SP.Engine.Server
             }
         }
 
-        protected virtual void Dispose()
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+
+        protected virtual void Dispose(bool disposing)
         {
             OnStopped();
         }

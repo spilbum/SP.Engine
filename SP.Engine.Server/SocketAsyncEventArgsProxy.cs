@@ -18,7 +18,7 @@ namespace SP.Engine.Server
 
         private static void OnReceiveCompleted(object sender, SocketAsyncEventArgs e)
         {
-            if (!(e.UserToken is ITcpAsyncSocketSession socketSession))
+            if (e.UserToken is not ITcpAsyncSocketSession socketSession)
                 return;
 
             if (e.LastOperation == SocketAsyncOperation.Receive)

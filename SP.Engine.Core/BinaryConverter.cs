@@ -81,7 +81,7 @@ namespace SP.Engine.Core
             return obj;
         }
 
-        public static byte[] SerializeObject<T>(T obj)
+        public static byte[] SerializeObject<T>(T obj) where T : class
         {
             if (obj == null)
                 throw new ArgumentNullException(nameof(obj));
@@ -116,12 +116,9 @@ namespace SP.Engine.Core
 
                 case EDataType.Enum:
                     {
-                        if (type.IsNullable())
+                        if (type.IsNullable() && buffer.Read<bool>())
                         {
-                            if (buffer.Read<bool>())
-                            {
-                                return null;
-                            }
+                            return null;
                         }
 
                         var underlyingType = Enum.GetUnderlyingType(type);
@@ -161,9 +158,8 @@ namespace SP.Engine.Core
                         var count = buffer.Read<int>();
                         var elementType = type.GetElementType() ?? throw new InvalidOperationException("Array type has no element type.");
 
-                        var list = Activator.CreateInstance(type, count) as IList;
-                        if (null == list)
-                            throw new InvalidOperationException($"Unable to create instance of {type}");                        
+                        if (!(Activator.CreateInstance(type, count) is IList list))
+                            throw new InvalidOperationException($"Unable to create instance of {type}");
 
                         for (var i = 0; i < count; i++)
                         {
@@ -178,8 +174,7 @@ namespace SP.Engine.Core
                         var count = buffer.Read<int>();
                         var listType = typeof(List<>).MakeGenericType(type.GetGenericArguments());
 
-                        var list = Activator.CreateInstance(listType) as IList;
-                        if (null == list)
+                        if (!(Activator.CreateInstance(listType) is IList list))
                             throw new InvalidOperationException($"Unable to create instance of {listType}");
 
                         var itemType = type.GetGenericArguments()[0];
@@ -196,9 +191,8 @@ namespace SP.Engine.Core
                         var count = buffer.Read<int>();
                         var keyType = type.GetGenericArguments()[0];
                         var valueType = type.GetGenericArguments()[1];
-                        
-                        var dictionary = Activator.CreateInstance(type) as IDictionary;
-                        if (null == dictionary)
+
+                        if (!(Activator.CreateInstance(type) is IDictionary dictionary))
                             throw new InvalidOperationException($"Unable to create instance of {type}");
 
                         for (var i = 0; i < count; i++)

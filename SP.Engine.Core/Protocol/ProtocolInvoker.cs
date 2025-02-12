@@ -19,7 +19,7 @@ namespace SP.Engine.Core.Protocol
 
             var parameters = method.GetParameters();
             if (0 == parameters.Length)
-                throw new Exception($"No method parameter. protocolId={protocolId}, methodName={method.Name}");
+                throw new ArgumentException($"No method parameter. protocolId={protocolId}, methodName={method.Name}");
 
             ProtocolId = protocolId;
             _method = method;            
@@ -36,7 +36,7 @@ namespace SP.Engine.Core.Protocol
                 // 메시지 역직렬화
                 var protocol = message.DeserializeProtocol(_protocolType, sharedKey);
                 if (null == protocol)
-                    throw new Exception($"Failed to deserialize the message: protocolId={message.ProtocolId}");
+                    throw new InvalidOperationException($"Failed to deserialize the message: protocolId={message.ProtocolId}");
 
                 var instanceType = instance.GetType();
                 if (instanceType.IsGenericType)
@@ -46,7 +46,7 @@ namespace SP.Engine.Core.Protocol
                         .SingleOrDefault(x => x.Name.Equals(_method.Name));
                     
                     if (null == method)
-                        throw new Exception($"Method not found. name={_method.Name}");
+                        throw new InvalidOperationException($"Method not found. name={_method.Name}");
 
                     method.Invoke(instance, new object[] { protocol });
                 }
