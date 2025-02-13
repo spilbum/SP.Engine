@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 
 namespace SP.Engine.Core.Message
@@ -16,6 +17,7 @@ namespace SP.Engine.Core.Message
                 ExpireTime = DateTime.UtcNow.AddMilliseconds(sendTimeOutMs);
                 LimitReSendCnt = limitReSendCnt;
                 TimeOutMs = sendTimeOutMs;
+                EstimatedRtt = sendTimeOutMs / 2.0;
             }
 
             public IMessage Message { get; }
@@ -23,13 +25,13 @@ namespace SP.Engine.Core.Message
             public int LimitReSendCnt { get; }
             public int TimeOutMs { get; set; }
             public int ReSendCnt { get; private set; }
-            public long LastSentTime { get; } = Stopwatch.GetTimestamp();
+            public long LastSentTime { get; private set; } = Stopwatch.GetTimestamp();
             public double EstimatedRtt { get; set; }
-            public double DevRtt { get; set; }
             
             public void IncrementReSendCnt()
             {
                 ReSendCnt++;
+                LastSentTime = Stopwatch.GetTimestamp();
                 ExpireTime = DateTime.UtcNow.AddMilliseconds(TimeOutMs);
             }
 
@@ -42,26 +44,36 @@ namespace SP.Engine.Core.Message
 
         private readonly ConcurrentDictionary<long, IMessage> _pendingReceiveMessageDict = new ConcurrentDictionary<long, IMessage>();
         private long _expectedSequenceNumber;
-        private readonly ConcurrentDictionary<long, SendingMessageState> _sendingMessageStateDict = new ConcurrentDictionary<long, SendingMessageState>();
+        private readonly ConcurrentDictionary<long, SendingMessageState> _messageStateDict = new ConcurrentDictionary<long, SendingMessageState>();
         private readonly ConcurrentQueue<IMessage> _pendingMessageQueue = new ConcurrentQueue<IMessage>();
-        private const double Alpha = 0.125;
-        private const double Beta = 0.25;
+        private const double ALPHA = 0.125;
+        private const double RTT_VARIANCE_THRESHOLD = 2.0;
+        private const double TIMEOUT_MULTIPLIER = 1.5;
         protected int SendTimeOutMs { get; set; }
         protected int MaxReSendCnt { get; set; }
+
+        private readonly object _lock = new object();
         
-        protected void AddSendingMessage(IMessage tcpMessage)
+        protected void AddSendingMessage(IMessage message)
         {
-            var sequenceNumber = Interlocked.Increment(ref _expectedSequenceNumber);
-            var state = new SendingMessageState(tcpMessage, SendTimeOutMs, MaxReSendCnt);
-            if (!_sendingMessageStateDict.TryAdd(sequenceNumber, state)) 
-                return;
-            
-            tcpMessage.SetSequenceNumber(sequenceNumber);
+            lock (_lock)
+            {
+                var sequenceNumber = Interlocked.Increment(ref _expectedSequenceNumber);
+                var state = new SendingMessageState(message, SendTimeOutMs, MaxReSendCnt);
+
+                if (!_messageStateDict.TryAdd(sequenceNumber, state))
+                {
+                    Interlocked.Decrement(ref _expectedSequenceNumber);
+                    return;
+                }
+
+                message.SetSequenceNumber(sequenceNumber);
+            }            
         }
 
-        protected void RegisterPendingMessage(IMessage tcpMessage)
+        protected void RegisterPendingMessage(IMessage message)
         {
-            _pendingMessageQueue.Enqueue(tcpMessage);
+            _pendingMessageQueue.Enqueue(message);
         }
 
         protected IEnumerable<IMessage> GetPendingMessages()
@@ -74,55 +86,44 @@ namespace SP.Engine.Core.Message
 
         protected void ReceiveMessageAck(long sequenceNumber)
         {
-            if (!_sendingMessageStateDict.TryRemove(sequenceNumber, out var state)) 
+            if (!_messageStateDict.TryRemove(sequenceNumber, out var state)) 
+                return;
+
+            var currentTimestamp = Stopwatch.GetTimestamp();
+            var elapsedTicks = currentTimestamp - state.LastSentTime;
+            if (elapsedTicks <= 0)
                 return;
             
-            var rtt = (Stopwatch.GetTimestamp() - state.LastSentTime) * 1000.0 / Stopwatch.Frequency;
-            UpdateTimeOut(state, rtt);
+            var rtt = elapsedTicks * 1000.0 / Stopwatch.Frequency;
+            rtt = Math.Clamp(rtt, state.EstimatedRtt / RTT_VARIANCE_THRESHOLD, state.EstimatedRtt * RTT_VARIANCE_THRESHOLD);
+
+            state.EstimatedRtt = (1 - ALPHA) * state.EstimatedRtt + ALPHA * rtt;
+            state.TimeOutMs = (int)(state.EstimatedRtt * TIMEOUT_MULTIPLIER);
         }
 
-        protected IEnumerable<IMessage> FindExpiredMessages(out bool isLimitExceededReSend)
+        protected IEnumerable<IMessage> CheckMessageTimeout(out bool isLimitExceededReSend)
         {
             isLimitExceededReSend = false;
+            var expiredMessages = _messageStateDict.Values
+                .Where(state => DateTime.UtcNow >= state.ExpireTime)
+                .ToList();
 
             var result = new List<IMessage>();
-            foreach (var kv in _sendingMessageStateDict)
+            foreach (var state in expiredMessages)
             {
-                var state = kv.Value;
-                if (DateTime.UtcNow < state.ExpireTime)
-                    continue;
-                
-                if (state.ReSendCnt >= state.LimitReSendCnt)
+                if (state.ReSendCnt < state.LimitReSendCnt)
+                {
+                    state.IncrementReSendCnt();
+                    result.Add(state.Message);
+                }
+                else
                 {
                     isLimitExceededReSend = true;
                     result.Clear();
                     return result;
                 }
-                
-                state.IncrementReSendCnt();
-                result.Add(state.Message);
             }
             return result;
-        }
-
-        private void UpdateTimeOut(SendingMessageState state, double rttMs)
-        {
-            if (state.EstimatedRtt < 1e-10)
-            {
-                state.EstimatedRtt = rttMs;
-                state.DevRtt = rttMs / 2.0;
-            }
-            else
-            {
-                state.EstimatedRtt = (1 - Alpha) * state.EstimatedRtt + Alpha * rttMs;
-                state.DevRtt = (1 - Beta) * state.DevRtt + Beta * Math.Abs(rttMs - state.EstimatedRtt);
-            }
-
-            state.TimeOutMs = (int)(state.EstimatedRtt + 4 * state.DevRtt);
-            if (state.TimeOutMs < SendTimeOutMs) 
-                state.TimeOutMs = SendTimeOutMs;
-
-            state.ExpireTime = DateTime.UtcNow.AddMilliseconds(state.TimeOutMs);
         }
 
         protected IEnumerable<IMessage> GetPendingReceivedMessages(IMessage message)
@@ -146,14 +147,14 @@ namespace SP.Engine.Core.Message
 
         protected void ResetSendingMessageStates()
         {
-            foreach (var state in _sendingMessageStateDict.Values)
+            foreach (var state in _messageStateDict.Values)
                 state.Reset();                
         }
 
         protected void ResetMessageProcessor()
         {
             _expectedSequenceNumber = 0;
-            _sendingMessageStateDict.Clear();
+            _messageStateDict.Clear();
             _pendingReceiveMessageDict.Clear();
         }
     }

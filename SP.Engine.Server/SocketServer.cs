@@ -29,7 +29,7 @@ namespace SP.Engine.Server
         internal ISmartPool<SendingQueue> SendingQueuePool { get; private set; }
 
         private byte[] _keepAliveOptionValues;        
-        private ConcurrentStack<SocketAsyncEventArgsProxy> _readWritePool;
+        private ConcurrentStack<SocketAsyncEventArgsProxy> _socketEventArgsPool;
 
         public bool Start()
         {
@@ -38,8 +38,6 @@ namespace SP.Engine.Server
             var config = Server.Config;
             var logger = Server.Logger;
 
-            // 동접 3000명 기준으로 초기 500개만 만들고 이후 동접수가 증가함에 따라 6000개 까지 전송 큐 생성가능.
-            // 최소 256개의 풀 생성함
             var sendingQueuePool = new SmartPool<SendingQueue>();
             sendingQueuePool.Initialize(Math.Max(config.LimitConnectionCount / 6, 256)
                 , Math.Max(config.LimitConnectionCount * 2, 256)
@@ -74,7 +72,7 @@ namespace SP.Engine.Server
             if (!SetupKeepAlive(config))
                 return false;
 
-            if (!SetupReadWritePool(config))
+            if (!SetupSocketEventArgsPool(config))
                 return false;
 
             IsRunning = true;
@@ -101,7 +99,7 @@ namespace SP.Engine.Server
             }
         }
 
-        private bool SetupReadWritePool(IServerConfig config)
+        private bool SetupSocketEventArgsPool(IServerConfig config)
         {
             var totalBytes = config.ReceiveBufferSize * config.LimitConnectionCount;
             var buffer = new byte[totalBytes];
@@ -121,7 +119,7 @@ namespace SP.Engine.Server
                 proxies.Add(new SocketAsyncEventArgsProxy(socketEventArgs));
             }
 
-            _readWritePool = new ConcurrentStack<SocketAsyncEventArgsProxy>(proxies);
+            _socketEventArgsPool = new ConcurrentStack<SocketAsyncEventArgsProxy>(proxies);
             return true;
         }
 
@@ -135,12 +133,12 @@ namespace SP.Engine.Server
             Listeners.Clear();
             SendingQueuePool = null;
 
-            if (null != _readWritePool)
+            if (null != _socketEventArgsPool)
             {
-                foreach (var pool in _readWritePool)
-                    pool.SocketEventArgs.Dispose();
+                foreach (var proxy in _socketEventArgsPool)
+                    proxy.SocketEventArgs.Dispose();
 
-                _readWritePool.Clear();
+                _socketEventArgsPool.Clear();
             }            
 
             IsRunning = false;
@@ -173,26 +171,26 @@ namespace SP.Engine.Server
                     ProcessTcpClient(socket);
                     break;
                 case ESocketMode.Udp:
-                    ProcessUdpClient(socket, state);
+                    //ProcessUdpClient(socket, state);
                     break;
                 default:
                     throw new NotSupportedException($"{listener.Mode}");
             }            
         }
         
-        private void ProcessUdpClient(Socket socket, object state)
-        {
-            if (state is not object[] args ||
-                args[0] is not byte[] data ||
-                args[1] is not EndPoint remoteEndPoint)
-            {
-                return;   
-            }
-        }
+        // private void ProcessUdpClient(Socket socket, object state)
+        // {
+        //     if (state is not object[] args ||
+        //         args[0] is not byte[] data ||
+        //         args[1] is not EndPoint remoteEndPoint)
+        //     {
+        //         return;   
+        //     }
+        // }
 
         private void ProcessTcpClient(Socket client)
         {
-            if (!_readWritePool.TryPop(out var proxy))
+            if (!_socketEventArgsPool.TryPop(out var proxy))
             {
                 Server.AsyncRun(client.SafeClose);
                 Server.Logger.WriteLog(ELogLevel.Error, "Limit connection count {0} was reached.", Server.Config.LimitConnectionCount);
@@ -212,7 +210,7 @@ namespace SP.Engine.Server
             if (session is not ITcpAsyncSocketSession socketSession) return;
             var proxy = socketSession.ReceiveSocketEventArgsProxy;
             proxy.Reset();
-            _readWritePool?.Push(proxy);
+            _socketEventArgsPool?.Push(proxy);
         }
 
         private void OnListenerStopped(object sender, EventArgs e)

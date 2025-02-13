@@ -1,13 +1,9 @@
-﻿
-using System;
-using System.Diagnostics;
+﻿using System;
 using System.Linq;
 using System.Net.Sockets;
 using System.Threading;
-using SP.Engine.Common;
 using SP.Engine.Common.Logging;
 using SP.Engine.Core;
-using SP.Engine.Server.Logging;
 
 namespace SP.Engine.Server
 {
@@ -71,10 +67,7 @@ namespace SP.Engine.Server
 
                     return;
                 }
-
-                if (null == Client)
-                    throw new NullReferenceException();
-
+                
                 isRaiseEvent = Client.ReceiveAsync(e);
             }
             catch (Exception ex)
@@ -101,7 +94,6 @@ namespace SP.Engine.Server
 
             try
             {
-                //Console.WriteLine($"[{DateTime.UtcNow:hh:mm:ss.fff}] [ProcessReceive] offset={e.Offset}, length={e.BytesTransferred}");
                 Session.ProcessBuffer(e.Buffer, e.Offset, e.BytesTransferred);
             }
             catch (Exception ex)

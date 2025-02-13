@@ -29,8 +29,8 @@ namespace SP.Engine.Server
         public ERejectReason RejectReason { get; private set; }
         public string RejectDetailReason { get; private set; }
         public bool IsClosing { get; private set; }
-        public int AvgLatencyMs { get; private set; }
-        public int LatencyStddevMs { get; private set; }
+        public int LatencyAverageMs { get; private set; }
+        public int LatencyStandardDeviationMs { get; private set; }
         
         public override void Initialize(ISessionServer server, ISocketSession socketSession)
         {
@@ -193,9 +193,8 @@ namespace SP.Engine.Server
         private void OnNotifyPingInfo(EngineProtocolDataC2S.NotifyPingInfo info)
         {
             SendPong(info.SendTime);
-            AvgLatencyMs = info.AvgLatencyMs;
-            LatencyStddevMs = info.LatencyStddevMs;
-            //Logger.WriteLog(ELogLevel.Debug, $"AvgLatencyMs={info.AvgLatencyMs}, LatencyStddevMs={info.LatencyStddevMs}");
+            LatencyAverageMs = info.LatencyAverageMs;
+            LatencyStandardDeviationMs = info.LatencyStandardDeviationMs;
         }
 
         [ProtocolHandler(EngineProtocolIdC2S.NotifyMessageAckInfo)]

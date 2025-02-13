@@ -23,8 +23,8 @@ namespace SP.Engine.Core.Protocol
         [Protocol(EngineProtocolIdC2S.NotifyPingInfo)]
         public class NotifyPingInfo : BaseProtocolData
         {
-            public int AvgLatencyMs { get; set; }
-            public int LatencyStddevMs { get; set; }
+            public int LatencyAverageMs { get; set; }
+            public int LatencyStandardDeviationMs { get; set; }
             public DateTime SendTime { get; set; }
         }
 

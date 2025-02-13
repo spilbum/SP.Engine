@@ -31,7 +31,7 @@ namespace SP.Engine.Server
     internal abstract class SocketListenerBase(ListenerInfo info) : ISocketListener, IDisposable
     {
         public ESocketMode Mode { get; set; } = info.Mode;
-        public IPEndPoint EndPoint { get; private set; } = info.EndPoint ?? throw new Exception("EndPoint is null");
+        public IPEndPoint EndPoint { get; private set; } = info.EndPoint;
         public int BackLog { get; private set; } = info.BackLog;
 
         public event EventHandler Stopped;

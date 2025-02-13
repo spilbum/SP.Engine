@@ -135,7 +135,7 @@ namespace SP.Engine.Server
             if (!IsConnected)
                 return;
 
-            var reSendMessages = FindExpiredMessages(out var isLimitExceededReSend);
+            var reSendMessages = CheckMessageTimeout(out var isLimitExceededReSend);
             if (isLimitExceededReSend)
             {
                 Logger.WriteLog(ELogLevel.Error, "The message resend limit has been exceeded.");

@@ -321,8 +321,8 @@ namespace SP.Engine.Client
                 var notifyPingInfo = new EngineProtocolDataC2S.NotifyPingInfo
                 {
                     SendTime = now,
-                    AvgLatencyMs = AvgLatencyMs,
-                    LatencyStddevMs = LatencyStddevMs,
+                    LatencyAverageMs = AvgLatencyMs,
+                    LatencyStandardDeviationMs = LatencyStddevMs,
                 };
 
                 LastSendPingTime = now;
@@ -426,7 +426,7 @@ namespace SP.Engine.Client
             if (!(State is ENetPeerState.Open))
                 return;
             
-            var messages = FindExpiredMessages(out var isLimitExceededReSend);
+            var messages = CheckMessageTimeout(out var isLimitExceededReSend);
             if (isLimitExceededReSend)
             {
                 // 재 전송 횟수 초과로 재 연결 처리함
