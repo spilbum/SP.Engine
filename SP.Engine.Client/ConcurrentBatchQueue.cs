@@ -8,16 +8,22 @@ namespace SP.Engine.Client
     
     public class ConcurrentBatchQueue<T>
     {
-        private class Entity
+        private sealed class Entity
         {
             public T[] Array;
             public int Count;
         }
 
-        private Entity _entity;
-        private Entity _backup;
+        private volatile Entity _entity;
+        private volatile Entity _backup;        
         private readonly T _null = default;
         private readonly Func<T, bool> _nullValidator;
+        private readonly object _lock = new object();
+        private long _count;
+
+        public int Count => (int)Interlocked.Read(ref _count);
+
+        public bool IsEmpty => Count == 0;
 
         public ConcurrentBatchQueue(int capacity, Func<T, bool> validator = null)
         {
@@ -26,15 +32,21 @@ namespace SP.Engine.Client
             
             _entity = new Entity { Array = new T[capacity] };
             _backup = new Entity { Array = new T[capacity] };
-            _nullValidator = validator ?? (item => item == null);
+            _nullValidator = validator ?? (item => EqualityComparer<T>.Default.Equals(item, default));
         }
 
         public bool Enqueue(T item)
         {
+            var spinWait = new SpinWait();
             for (var i = 0; i < 10; i++)
             {
-                if (TryEnqueue(item, out var isFull) || isFull)
-                    return !isFull;
+                if (TryEnqueue(item, out var isFull))
+                    return true;
+
+                if (isFull)
+                    return false;
+
+                spinWait.SpinOnce();
             }
             return false;
         }
@@ -55,11 +67,13 @@ namespace SP.Engine.Client
                 return false;
             }
 
-            var oldCount = Interlocked.CompareExchange(ref entity.Count, count + 1, entity.Count);
+            var newCount = count + 1;
+            var oldCount = Interlocked.CompareExchange(ref entity.Count, newCount, entity.Count);
             if (oldCount != count)
                 return false;
 
             array[oldCount] = item;
+            Interlocked.Exchange(ref _count, newCount);
             return true;
         }
 
@@ -70,18 +84,23 @@ namespace SP.Engine.Client
             if (entity.Count == 0 || array == null)
                 return false;
 
-            Interlocked.Exchange(ref _entity, _backup);
-            for (var i = 0; i < entity.Count; i++)
+            if (_backup.Array.Length != array.Length)
+                _backup = new Entity { Array = new T[array.Length] };
+
+            _backup = Interlocked.Exchange(ref _entity, _backup);
+
+            for (var i = 0; i < _backup.Count; i++)
             {
-                var item = array[i];
+                var item = _backup.Array[i];
                 if (_nullValidator(item)) 
                     continue;
                 
                 items.Add(item);
-                array[i] = _null;
+                _backup.Array[i] = _null;
             }
 
             entity.Count = 0;
+            Interlocked.Exchange(ref _count, 0);
             return true;
         }
 
@@ -94,7 +113,7 @@ namespace SP.Engine.Client
             if (newCapacity <= 0) 
                 throw new ArgumentOutOfRangeException(nameof(newCapacity), "Capacity must be greater than zero.");
 
-            lock (_entity)
+            lock (_lock)
             {
                 var entity = _entity;
                 var array = _entity.Array;
@@ -104,14 +123,12 @@ namespace SP.Engine.Client
                 var newArray = new T[newCapacity];
                 Array.Copy(array, newArray, Math.Min(entity.Count, newCapacity));
 
+                if (_backup.Array.Length != newCapacity)
+                    _backup = new Entity { Array = new T[newCapacity] };
+                    
                 _entity = new Entity { Array = newArray, Count = Math.Min(entity.Count, newCapacity) };
-                _backup = new Entity { Array = new T[newCapacity] };
+                Interlocked.Exchange(ref _count, _entity.Count);
             }
         }
-        
-        public int Count => _entity.Count;
-        public bool IsEmpty => _entity.Count == 0;
     }
-
-
 }

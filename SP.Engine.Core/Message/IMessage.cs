@@ -18,8 +18,8 @@ namespace SP.Engine.Core.Message
     public enum EOption : byte
     {
         None = 0,
-        Encrypt = 1 << 0,
-        Compress = 1 << 1,
-        All = byte.MaxValue
+        Encrypt = 1,
+        Compress = 2,
+        All = Encrypt | Compress
     }
 }

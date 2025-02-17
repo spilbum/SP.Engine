@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
 
 namespace SP.Engine.Common.Accessor
@@ -32,27 +31,26 @@ namespace SP.Engine.Common.Accessor
 
         public object GetValue(object instance)
             => _getter(instance);
-        
-        public void SetValue(object instance, object value)
-            => _setter(instance, value);
 
         public T GetValue<T>(object instance)
         {
             var value = _getter(instance);
-            if (null != value) 
-                return (T)Convert.ChangeType(value, typeof(T));
+            if (null == value)
+                return default;
             
-            if (typeof(T).IsValueType && Nullable.GetUnderlyingType(typeof(T)) == null)
-                throw new InvalidCastException($"Cannot cast null to non-nullable type {typeof(T)}");
-            
-            return default;
+            if (value is T result)
+                return result;
 
+            return (T)Convert.ChangeType(value, typeof(T));
         }
+
+        public void SetValue(object instance, object value)
+            => _setter(instance, value);
 
         public void SetValue<T>(object instance, T value)
         {
             var convertedValue = value;
-            if (null == value)
+            if (EqualityComparer<T>.Default.Equals(value, default))
             {
                 if (typeof(T).IsValueType && Nullable.GetUnderlyingType(typeof(T)) == null)
                     throw new InvalidCastException($"Cannot cast null to non-nullable type {typeof(T)}");
@@ -71,7 +69,7 @@ namespace SP.Engine.Common.Accessor
         private readonly Dictionary<string, TypeProperty> _propertyDict;
 
         public string Name { get; }
-        public List<TypeProperty> Properties => _propertyDict.Values.ToList();
+        public IEnumerable<TypeProperty> Properties => _propertyDict.Values;
 
         public object this[object instance, string name]
         {
@@ -81,7 +79,7 @@ namespace SP.Engine.Common.Accessor
                     return null;
 
                 if (!_propertyDict.TryGetValue(name, out var property))
-                    throw new Exception($"Property '{name}' not found in type '{Name}'.");
+                    throw new InvalidOperationException($"Property '{name}' not found in type '{Name}'.");
                 return property.GetValue(instance);
             }
             set
@@ -90,7 +88,7 @@ namespace SP.Engine.Common.Accessor
                     return;
 
                 if (!_propertyDict.TryGetValue(name, out var property))
-                    throw new Exception($"Property '{name}' not found in type '{Name}'.");
+                    throw new InvalidOperationException($"Property '{name}' not found in type '{Name}'.");
                 property.SetValue(instance, value);
             }
         }
@@ -104,10 +102,10 @@ namespace SP.Engine.Common.Accessor
         public static RuntimeTypeAccessor GetOrCreate(Type type)
         {
             if (!type.IsClass)
-                throw new Exception($"Type {type.FullName} is not a class");
+                throw new ArgumentException($"Type {type.FullName} is not a class");
 
             return RuntimeTypeAccessorDict.GetOrAdd(type,
-                _ => new Lazy<RuntimeTypeAccessor>(() => CreateTypeDefined(type))).Value;
+                key => new Lazy<RuntimeTypeAccessor>(() => CreateTypeDefined(key))).Value;
         }
 
         private static RuntimeTypeAccessor CreateTypeDefined(Type type)
@@ -115,9 +113,12 @@ namespace SP.Engine.Common.Accessor
             var name = type.Name;
             var properties = type.GetProperties(BindingFlags.Instance | BindingFlags.Public);
 
-            var propertyDict = properties.ToDictionary(
-                property => property.Name,
-                property => new TypeProperty(property));
+            var propertyDict = new Dictionary<string, TypeProperty>();
+            foreach (var property in properties)
+            {
+                if (!propertyDict.ContainsKey(property.Name))
+                    propertyDict[property.Name] = new TypeProperty(property);
+            }
 
             return new RuntimeTypeAccessor(name, propertyDict);
         }

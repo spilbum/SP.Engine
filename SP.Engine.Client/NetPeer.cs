@@ -42,9 +42,9 @@ namespace SP.Engine.Client
     
     public sealed class NetPeer : MessageProcessor, IProtocolHandler, IDisposable
     {
-        private class TimerManager
+        private sealed class TimerManager : IDisposable
         {
-            private class Timer
+            private sealed class Timer : IDisposable
             {
                 private DateTime _lastExecutionTime;
                 private readonly int _dueTimeMs;
@@ -133,8 +133,8 @@ namespace SP.Engine.Client
         public EndPoint RemoteEndPoint { get; private set; }
         public EPeerId PeerId { get; private set; }   
         public DateTime LastSendPingTime { get; private set; }
-        public int AvgLatencyMs => (int)_latencySampler.Mean;
-        public int LatencyStddevMs => (int)_latencySampler.StandardDeviation;
+        public int AvgLatencyMs => (int)_latencySampler.Avg;
+        public int LatencyStdDevMs => (int)_latencySampler.StdDev;
         public ENetPeerState State => (ENetPeerState)_stateCode;
         public byte[] CryptoSharedKey => _diffieHellman.SharedKey;
 
@@ -167,7 +167,7 @@ namespace SP.Engine.Client
                 Assembly.GetExecutingAssembly()
             };
 
-            ProtocolManager.Initialize(assemblies, e => throw new Exception($"Failed to load protocols. exception={e.Message}\r\nstackTrace={e.StackTrace}"));
+            ProtocolManager.Initialize(assemblies, e => throw new InvalidOperationException($"Failed to load protocols. exception={e.Message}\r\nstackTrace={e.StackTrace}"));
         }
 
         ~NetPeer()
@@ -185,7 +185,7 @@ namespace SP.Engine.Client
         public void Open(string host, int port)
         {
             if (null != _session)
-                throw new Exception("Already opened.");
+                throw new InvalidOperationException("Already opened.");
 
             if (string.IsNullOrEmpty(host) || 0 >= port)
                 throw new ArgumentException("Invalid host or port");
@@ -215,7 +215,7 @@ namespace SP.Engine.Client
                     try
                     {
                         if (0 < MaxConnectionAttempts && MaxConnectionAttempts <= _connectionAttempts)
-                            throw new Exception("Max connection attempts exceeded.");
+                            throw new InvalidOperationException("Max connection attempts exceeded.");
 
                         _connectionAttempts++;
                         if (s is ServerSession ss)
@@ -283,7 +283,7 @@ namespace SP.Engine.Client
                         try
                         {
                             if (!session.TrySend(data, 0, data.Length))
-                                throw new Exception($"Failed to send message. protocolId={message.ProtocolId}");
+                                throw new InvalidOperationException($"Failed to send message. protocolId={message.ProtocolId}");
                         }
                         catch (Exception ex)
                         {
@@ -322,7 +322,7 @@ namespace SP.Engine.Client
                 {
                     SendTime = now,
                     LatencyAverageMs = AvgLatencyMs,
-                    LatencyStandardDeviationMs = LatencyStddevMs,
+                    LatencyStandardDeviationMs = LatencyStdDevMs,
                 };
 
                 LastSendPingTime = now;
@@ -524,7 +524,7 @@ namespace SP.Engine.Client
                 // 시스템 프로토콜
                 var invoker = ProtocolManager.GetProtocolInvoker(message.ProtocolId);
                 if (null == invoker)
-                    throw new Exception($"The protocol invoker not found. protocolId={message.ProtocolId}");
+                    throw new InvalidOperationException($"The protocol invoker not found. protocolId={message.ProtocolId}");
                 
                 invoker.Invoke(this, message, null);
             }
@@ -685,7 +685,7 @@ namespace SP.Engine.Client
             // 네트워크 레이턴시를 고려해 서버 시간 설정
             _lastServerTime = info.ServerTime.AddMilliseconds(latencyMs / 2.0f);
             _serverUpdateTime = DateTime.UtcNow;
-            Console.WriteLine("latencyMs={0}, avgMs={1}, stddevMs={2}, serverTime={3:yyyy-MM-dd hh:mm:ss.fff}", latencyMs, AvgLatencyMs, LatencyStddevMs, _lastServerTime);
+            //Console.WriteLine("latencyMs={0}, avgMs={1}, stddevMs={2}, serverTime={3:yyyy-MM-dd hh:mm:ss.fff}", latencyMs, AvgLatencyMs, LatencyStdDevMs, _lastServerTime);
         }
 
         [ProtocolHandler(EngineProtocolIdS2C.NotifyMessageAckInfo)]
@@ -698,7 +698,6 @@ namespace SP.Engine.Client
         [ProtocolHandler(EngineProtocolIdS2C.NotifyClose)]
         private void OnNotifyClose(EngineProtocolDataS2C.NotifyClose notifyClose)
         {
-            //OnDebug("Received a termination request from the server. state={0}", State);
             if (_stateCode == NetPeerStateConst.Closing)
             {
                 // 클라이언트 요청으로 받은 경우, 즉시 종료함

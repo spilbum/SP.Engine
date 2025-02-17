@@ -16,9 +16,18 @@ namespace SP.Engine.Core
         private readonly object _lock = new object();
 
         /// <summary>
-        /// 기본 표본 크기 (100)
+        /// 기본 표본 크기
         /// </summary>
         private const int DefaultCapacity = 100;
+        /// <summary>
+        /// 이상치 필터 활성화 여부
+        /// </summary>
+        /// <value></value>
+        public bool EnableOutlierFilter { get; set; } = true;
+        /// <summary>
+        /// 이상치 감지 임계값
+        /// </summary>
+        public double OutlierThreshold { get; set; } = 3.0;
 
         /// <summary>
         /// 첫 번째 값 반환 (없으면 default)
@@ -42,7 +51,7 @@ namespace SP.Engine.Core
         /// <summary>
         /// 평균 값 반환 (샘플 데이터가 없으면 0.0)
         /// </summary>
-        public double Mean
+        public double Avg
         {
             get
             {
@@ -57,14 +66,14 @@ namespace SP.Engine.Core
         /// <summary>
         /// 표준 편차 계산 (샘플 데이터가 없으면 0.0)
         /// </summary>
-        public double StandardDeviation
+        public double StdDev
         {
             get
             {
                 lock (_lock)
                 {
                     if (_sample.Count == 0) return 0.0;
-                    double mean = Mean;
+                    double mean = Avg;
                     double variance = _sample.Average(v => Math.Pow(Convert.ToDouble(v) - mean, 2));
                     return Math.Sqrt(variance);
                 }
@@ -89,6 +98,21 @@ namespace SP.Engine.Core
         {
             lock (_lock)
             {
+                var doubleValue = Convert.ToDouble(value);
+                if (EnableOutlierFilter && _sample.Count > 10)
+                {
+                    var mean = Avg;
+                    var stdDev = StdDev;
+                    var lowerBound = mean - (OutlierThreshold * stdDev);
+                    var upperBound = mean + (OutlierThreshold * stdDev);
+
+                    if (doubleValue < lowerBound || doubleValue > upperBound)
+                    {
+                        Console.WriteLine($"[Warning] Outlier detected: {doubleValue} (Threshold: {lowerBound} ~ {upperBound})");
+                        return;
+                    }
+                }
+
                 _sample.Enqueue(value);
                 LastValue = value;
 

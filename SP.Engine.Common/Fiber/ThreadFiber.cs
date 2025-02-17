@@ -41,7 +41,12 @@ namespace SP.Engine.Common.Fiber
         {
             _queue.Stop();
             _scheduler.Dispose();
-            _thread.Join();
+            
+            if (!_thread.Join(TimeSpan.FromSeconds(5)))
+            {
+                // 5초후 강제 종료
+                _thread.Abort();
+            }
         }
         
         void IExecutionAction.Enqueue(IAsyncJob job)

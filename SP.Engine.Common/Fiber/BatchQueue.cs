@@ -47,7 +47,7 @@ namespace SP.Engine.Common.Fiber
             while (true)
             {
                 var jobs = GetBatchJobs();
-                if (jobs == null) break;
+                if (jobs.Count == 0) break;
 
                 ExecuteBatchJobs(jobs);
             }
@@ -59,7 +59,7 @@ namespace SP.Engine.Common.Fiber
             {
                 while (_queue.Count == 0)
                 {
-                    if (!_running) return null;
+                    if (!_running) return new List<IAsyncJob>();
                     Monitor.Wait(_lock); // 작업이 추가될 때까지 대기
                 }
 
@@ -72,13 +72,13 @@ namespace SP.Engine.Common.Fiber
             }
         }
 
-        private void ExecuteBatchJobs(List<IAsyncJob> asyncJobs)
+        private void ExecuteBatchJobs(List<IAsyncJob> batchJobs)
         {
-            foreach (var asyncJob in asyncJobs)
+            foreach (var batchJob in batchJobs)
             {
                 try
                 {
-                    asyncJob.Execute(_exceptionHandler);
+                    batchJob.Execute(_exceptionHandler);
                 }
                 catch (Exception ex)
                 {

@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Diagnostics;
 using Serilog;
 using Serilog.Events;
 using SP.Engine.Common.Logging;

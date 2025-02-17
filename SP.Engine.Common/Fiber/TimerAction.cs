@@ -12,7 +12,9 @@ namespace SP.Engine.Common.Fiber
         private readonly int _dueTimeMs;
         private readonly int _intervalMs;
         private Timer _timer;
-        private bool _running;
+        private volatile bool _running = true;
+        private readonly object _lock = new object();
+        private bool _disposed;
 
         public TimerAction(ISchedulerRegistry registry, IAsyncJob job, int dueTimeMs, int intervalMs)
         {
@@ -20,28 +22,37 @@ namespace SP.Engine.Common.Fiber
             _job = job ?? throw new ArgumentNullException(nameof(job));
             _dueTimeMs = dueTimeMs;
             _intervalMs = intervalMs;
-            _running = true;
         }
 
         public void Schedule()
         {
-            if (!_running) return;
-            _timer = new Timer(state => { Execute(); }, null, _dueTimeMs, _intervalMs);
+            lock (_lock)
+            {
+                if (!_running || _disposed) return;
+                _timer = new Timer(state => { Execute(); }, null, _dueTimeMs, _intervalMs);
+            }            
         }
 
         private void Execute()
         {
-            if (_running)
+            lock (_lock)
+            {
+                if (!_running || _disposed) return;
                 _registry.Enqueue(_job);
-            else
-                Dispose();
+            }            
         }
 
         public void Dispose()
         {
-            _running = false;
-            Interlocked.Exchange(ref _timer, null)?.Dispose();
-            _registry.Remove(this);
+            lock (_lock)
+            {
+                if (_disposed) return;
+                _disposed = true;
+                _running = false;
+
+                Interlocked.Exchange(ref _timer, null)?.Dispose();
+                _registry.Remove(this);
+            }            
         }
     }
 }

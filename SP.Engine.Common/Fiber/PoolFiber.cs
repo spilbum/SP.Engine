@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -11,10 +12,10 @@ namespace SP.Engine.Common.Fiber
         private readonly object _lock = new object();
         private readonly int _maxBatchSize;
         private readonly Scheduler _scheduler;
-        private readonly List<IAsyncJob> _queue = new List<IAsyncJob>();
+        private readonly ConcurrentQueue<IAsyncJob> _queue = new ConcurrentQueue<IAsyncJob>();
         private readonly Action<Exception> _exceptionHandler;
-        private bool _batching;
-        private bool _running;
+        private volatile bool _batching;
+        private volatile bool _running;
 
         public PoolFiber(int maxBatchSize = 20, Action<Exception> exceptionHandler = null)
         {
@@ -40,66 +41,64 @@ namespace SP.Engine.Common.Fiber
         public void Dispose()
         {
             Stop();
+            while (!_queue.IsEmpty)
+            {
+                Task.Delay(10).Wait();
+            }
         }
 
         private void ExecuteBatchJob()
         {
             var batchJobs = GetBatchJobs();
-            if (batchJobs == null) return;
+            if (batchJobs.Count == 0) return;
 
             try
             {
                 foreach (var batchJob in batchJobs)
                 {   
-                    batchJob.Execute(_exceptionHandler);
+                    try
+                    {
+                        batchJob.Execute(_exceptionHandler);
+                    }   
+                    catch (Exception ex)
+                    {
+                        _exceptionHandler?.Invoke(ex);
+                    }                 
                 }
             }
             finally
             {
-                lock (_lock)
+                if (!_queue.IsEmpty)
                 {
-                    if (_queue.Count > 0)
-                    {
-                        // 실행하는 동안에 큐에 쌓인 작업이 있는 경우
-                        ThreadPool.QueueUserWorkItem(_ => ExecuteBatchJob());
-                    }
-                    else
-                    {
-                        _batching = false;
-                    }
+                    Task.Run(ExecuteBatchJob);
+                }
+                else
+                {
+                    _batching = false;
                 }
             }
         }
         
         private List<IAsyncJob> GetBatchJobs()
         {
-            lock (_lock)
+            var batchJobs = new List<IAsyncJob>();
+            while (batchJobs.Count < _maxBatchSize && _queue.TryDequeue(out var job))
             {
-                if (_queue.Count == 0)
-                {
-                    _batching = false;
-                    return null;
-                }
-
-                // 최대 배치 크기만큼 작업 가져오기
-                var batchSize = Math.Min(_maxBatchSize, _queue.Count);
-                var asyncJobs = _queue.Take(batchSize).ToList();
-                _queue.RemoveRange(0, batchSize);
-
-                return asyncJobs;
+                batchJobs.Add(job);
             }
+            return batchJobs;
         }
 
-        void IExecutionAction.Enqueue(IAsyncJob asyncJob)
+        void IExecutionAction.Enqueue(IAsyncJob job)
         {
+            _queue.Enqueue(job);
+            if (_batching) return;
+
             lock (_lock)
             {
-                if (!_running) return;
-                _queue.Add(asyncJob);
-                
                 if (_batching) return;
-                ThreadPool.QueueUserWorkItem(_ => ExecuteBatchJob());
                 _batching = true;
+                Task.Run(ExecuteBatchJob);
             }
         }
 

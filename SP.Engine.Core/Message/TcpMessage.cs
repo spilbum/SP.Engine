@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Buffers.Binary;
-using System.Net;
 using System.Runtime.InteropServices;
 using SP.Engine.Core.Protocol;
 using SP.Engine.Core.Utility;
@@ -99,7 +98,7 @@ namespace SP.Engine.Core.Message
 
             if (!data.IsEncrypt) return;
             if (null == sharedKey || 0 == sharedKey.Length)
-                throw new Exception("Invalid sharedKey");
+                throw new ArgumentException(nameof(sharedKey));
 
             _header.EnableOption(EOption.Encrypt);
             _payload = Encryptor.Encrypt(sharedKey, _payload);
@@ -113,7 +112,7 @@ namespace SP.Engine.Core.Message
             if (_header.HasOption(EOption.Encrypt))
             {
                 if (null == sharedKey || 0 == sharedKey.Length)
-                    throw new Exception("Invalid sharedKey");
+                    throw new ArgumentException(nameof(sharedKey));
 
                 _payload = Encryptor.Decrypt(sharedKey, _payload);
             }

@@ -48,10 +48,16 @@ namespace SP.Engine.Common.Accessor
             il.Emit(OpCodes.Castclass, propertyInfo.DeclaringType); // 객체 타입 캐스팅
             il.Emit(OpCodes.Ldarg_1); // 값 로드
 
-            il.Emit(propertyInfo.PropertyType.IsValueType
-                    ? OpCodes.Unbox_Any // 값 타입이면 Unboxing 
-                    : OpCodes.Castclass, // 참조 타입이면 캐스팅
-                propertyInfo.PropertyType);
+            if (Nullable.GetUnderlyingType(propertyInfo.PropertyType) != null)
+            {
+                il.Emit(OpCodes.Unbox_Any, propertyInfo.PropertyType);
+            }
+            else
+            {
+                il.Emit(propertyInfo.PropertyType.IsValueType
+                    ? OpCodes.Unbox_Any
+                    : OpCodes.Castclass, propertyInfo.PropertyType);
+            }
 
             il.EmitCall(OpCodes.Callvirt, propertyInfo.GetSetMethod(), null); // Setter 호출
             il.Emit(OpCodes.Ret); // 반환
