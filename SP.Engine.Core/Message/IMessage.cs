@@ -8,18 +8,16 @@ namespace SP.Engine.Core.Message
         long SequenceNumber { get; }
         EProtocolId ProtocolId { get; }
         byte[] ToArray();
-        bool ReadBuffer(Buffer buffer);
         void SetSequenceNumber(long sequenceNumber);
         void SerializeProtocol(IProtocolData protocol, byte[] sharedKey);
         IProtocolData DeserializeProtocol(Type type, byte[] sharedKey);
     }
 
     [Flags]
-    public enum EOption : byte
+    internal enum EMessageFlags : byte
     {
         None = 0,
-        Encrypt = 1,
-        Compress = 2,
-        All = Encrypt | Compress
+        Encrypted = 1 << 0,  // 암호화됨
+        Compressed = 1 << 1, // 압축됨
     }
 }

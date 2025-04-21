@@ -7,6 +7,7 @@ using SP.Engine.Core;
 using SP.Engine.Core.Message;
 using SP.Engine.Core.Protocol;
 using SP.Engine.Core.Utility;
+using SP.Engine.Core.Utility.Crypto;
 
 namespace SP.Engine.Server
 {
@@ -71,13 +72,11 @@ namespace SP.Engine.Server
         }
 
         private int _stateCode = PeerStateConst.NotAuthorized;
-        private readonly DiffieHellman _diffieHellman;
         private bool _disposed;
         private IClientSession _session;
+        private DhSession _dh;
 
         public EPeerState State => (EPeerState)_stateCode;
-        public byte[] CryptoSharedKey => _diffieHellman?.SharedKey;
-        public byte[] CryptoPublicKey => _diffieHellman?.PublicKey;
         public EPeerId PeerId { get; private set; }
         public EPeerType PeerType { get; } 
         public ILogger Logger { get; }
@@ -85,8 +84,9 @@ namespace SP.Engine.Server
         public IPEndPoint LocalEndPoint => Session.LocalEndPoint;
         public IPEndPoint RemoteEndPoint => Session.RemoteEndPoint;
         public bool IsConnected => _stateCode == PeerStateConst.Authorized || _stateCode == PeerStateConst.Online;
-
-        protected PeerBase(EPeerType peerType, IClientSession session, ECryptographicKeySize keySize, byte[] publicKey)
+        public byte[] CryptoPublicKey => _dh.PublicKey;
+        
+        protected PeerBase(EPeerType peerType, IClientSession session, DhKeySize keySize, byte[] clientPublicKey)
         {
             PeerId = PeerIdGenerator.Generate();
             PeerType = peerType;
@@ -94,8 +94,9 @@ namespace SP.Engine.Server
             SendTimeOutMs = session.Config.SendTimeOutMs;
             MaxReSendCnt = session.Config.MaxReSendCnt;
             _session = session;
-            _diffieHellman = new DiffieHellman(keySize);
-            _diffieHellman.DeriveSharedKey(publicKey);
+            
+            _dh = new DhSession(keySize);
+            _dh.DeriveSharedKey(clientPublicKey);
         }
 
         internal void OnAuthorized()
@@ -168,7 +169,7 @@ namespace SP.Engine.Server
             try
             {
                 var message = new TcpMessage();
-                message.SerializeProtocol(data, data.ProtocolId.IsEngineProtocol() ? null : CryptoSharedKey);
+                message.SerializeProtocol(data, data.ProtocolId.IsEngineProtocol() ? null : _dh.SharedKey);
                 Send(message);
             }
             catch (Exception e)
@@ -214,7 +215,7 @@ namespace SP.Engine.Server
                 if (null == invoker)
                     throw new InvalidOperationException($"The protocol invoker not found. protocolId={msg.ProtocolId}");
 
-                invoker.Invoke(this, msg, CryptoSharedKey);
+                invoker.Invoke(this, msg, _dh.SharedKey);
             }
         }
         

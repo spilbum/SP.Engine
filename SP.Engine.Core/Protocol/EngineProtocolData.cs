@@ -1,5 +1,6 @@
 ﻿using System;
 using SP.Engine.Core.Utility;
+using SP.Engine.Core.Utility.Crypto;
 
 namespace SP.Engine.Core.Protocol
 {
@@ -10,8 +11,8 @@ namespace SP.Engine.Core.Protocol
         {
             public string SessionId { get; set; }
             public EPeerId PeerId { get; set; }
-            public byte[] CryptoPublicKey { get; set; }
-            public ECryptographicKeySize CryptoKeySize{ get; set; }
+            public DhKeySize KeySize{ get; set; }
+            public byte[] ClientPublicKey { get; set; }
         }
 
         [Protocol(EngineProtocolIdC2S.NotifyMessageAckInfo)]
@@ -49,7 +50,8 @@ namespace SP.Engine.Core.Protocol
             public ESystemErrorCode ErrorCode { get; set; }
             public string SessionId { get; set; }
             public EPeerId PeerId { get; set; }
-            public byte[] CryptoPublicKey { get; set; }
+            public byte[] ServerPublicKey { get; set; }
+            public byte[] Signature { get; set; }
             public int LimitRequestLength { get; set; }
             public int SendTimeOutMs { get; set; }
             public int MaxReSendCnt { get; set; }

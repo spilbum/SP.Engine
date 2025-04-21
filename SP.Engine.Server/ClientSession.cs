@@ -4,6 +4,7 @@ using SP.Engine.Common.Logging;
 using SP.Engine.Core;
 using SP.Engine.Core.Message;
 using SP.Engine.Core.Protocol;
+using SP.Engine.Core.Utility.Crypto;
 
 namespace SP.Engine.Server
 {
@@ -94,7 +95,9 @@ namespace SP.Engine.Server
                 Server?.EnqueueCloseHandshakePendingQueue(this);
             }
             
-            TryInternalSend(new EngineProtocolDataS2C.NotifyClose());
+            var protocol = new EngineProtocolDataS2C.NotifyClose();
+            TryInternalSend(protocol);
+            
         }
 
         public override void Close(ECloseReason reason)
@@ -115,7 +118,7 @@ namespace SP.Engine.Server
                 return;
 
             var errorCode = ESystemErrorCode.Unknown;
-            
+
             try
             {
                 if (!string.IsNullOrEmpty(authReq.SessionId))
@@ -151,7 +154,7 @@ namespace SP.Engine.Server
                     if (null != Peer)
                         return;
 
-                    var peer = Server.CreatePeer(this, authReq.CryptoKeySize, authReq.CryptoPublicKey);
+                    var peer = Server.CreatePeer(this, authReq.KeySize, authReq.ClientPublicKey);
                     if (null == peer)
                         return;
 
@@ -181,7 +184,7 @@ namespace SP.Engine.Server
                     if (null != Peer)
                     {
                         authAck.PeerId = Peer.PeerId;
-                        authAck.CryptoPublicKey = Peer.CryptoPublicKey;
+                        authAck.ServerPublicKey = Peer.CryptoPublicKey;
                     }
                 }
 

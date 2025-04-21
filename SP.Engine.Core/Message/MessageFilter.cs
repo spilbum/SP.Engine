@@ -21,10 +21,9 @@ namespace SP.Engine.Core.Message
         {
             left = 0;
 
-            var message = new TcpMessage();
-            if (!message.ReadBuffer(_buffer))
+            if (!TcpMessage.TryReadBuffer(_buffer, out var message))
                 return null;
-
+            
             left = _buffer.RemainSize;
             return message;
         }

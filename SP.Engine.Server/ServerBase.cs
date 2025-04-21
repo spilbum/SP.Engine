@@ -10,6 +10,7 @@ using SP.Engine.Common.Logging;
 using SP.Engine.Core;
 using SP.Engine.Core.Protocol;
 using SP.Engine.Core.Utility;
+using SP.Engine.Core.Utility.Crypto;
 using SP.Engine.Server.Connector;
 
 namespace SP.Engine.Server
@@ -232,7 +233,7 @@ namespace SP.Engine.Server
                 peer?.Update();
         }
 
-        public abstract TPeer CreatePeer(IClientSession session, ECryptographicKeySize cryptoKeySize, byte[] cryptoPublicKey);
+        public abstract TPeer CreatePeer(IClientSession session, DhKeySize dhKeySize, byte[] dhPublicKey);
         protected abstract IConnector CreateConnector(string name);
 
         public TPeer FindPeer(EPeerId peerId)

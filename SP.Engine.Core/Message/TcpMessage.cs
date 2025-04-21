@@ -1,8 +1,11 @@
 ﻿using System;
 using System.Buffers.Binary;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using SP.Engine.Core.Protocol;
 using SP.Engine.Core.Utility;
+using SP.Engine.Core.Utility.Crypto;
 
 namespace SP.Engine.Core.Message
 {
@@ -12,33 +15,40 @@ namespace SP.Engine.Core.Message
         private struct Header
         {
             public long SequenceNumber;
-            public EProtocolId ProtocolId;
-            public EOption Option;
+            public ushort ProtocolId;
+            public byte Flags;
+
+            public static int Size => Marshal.SizeOf<Header>();
             
-            public static int Size => Marshal.SizeOf(typeof(Header));
+            public void AddFlags(EMessageFlags toAdd) 
+                => Flags |= (byte)toAdd;
         
-            public bool HasOption(EOption option) => (Option & option) == option;
-            public void EnableOption(EOption option) => Option |= option;
-            public void DisableOption(EOption option) => Option &= ~option;
+            public void RemoveFlags(EMessageFlags toRemove) 
+                => Flags &= (byte)~toRemove;
+
+            public bool HasFlags(EMessageFlags check)
+                => (Flags & (byte)check) != 0;
+            
+            public override string ToString()
+                => $"Seq:{SequenceNumber} Proto:{(EProtocolId)ProtocolId} Flags:{(EMessageFlags)Flags}";
         }
         
-        private static byte[] SerializeHeader(Header header)
+        private static void SerializeHeader(Header header, Span<byte> buffer)
         {
-            var data = new byte[Header.Size];
-            MemoryMarshal.Write(data, ref header);
-            return data;
+            Debug.Assert(buffer.Length >= Header.Size);
+            MemoryMarshal.Write(buffer, ref header);
         }
 
         private static Header DeserializeHeader(ReadOnlySpan<byte> data)
         {
             if (data.Length < Header.Size)
-                throw new ArgumentException("Byte array is too small for the target structure");
-            
+                throw new ArgumentException("Insufficient data to deserialize header", nameof(data));
+
             return MemoryMarshal.Read<Header>(data);
         }
         
         public long SequenceNumber => _header.SequenceNumber;
-        public EProtocolId ProtocolId => _header.ProtocolId;
+        public EProtocolId ProtocolId => (EProtocolId)_header.ProtocolId;
 
         private Header _header;
         private byte[] _payload;
@@ -47,52 +57,66 @@ namespace SP.Engine.Core.Message
         {
             _header.SequenceNumber = sequenceNumber;
         }
-        
+
         public byte[] ToArray()
         {
-            var headerBytes = SerializeHeader(_header);
-            var payloadSize = _payload?.Length ?? 0;
-            var sizeBytes = BitConverter.GetBytes(payloadSize);
-            
-            var result = new byte[headerBytes.Length + sizeBytes.Length + payloadSize];
-            System.Buffer.BlockCopy(headerBytes, 0, result, 0, headerBytes.Length);
-            System.Buffer.BlockCopy( sizeBytes, 0, result, headerBytes.Length, sizeBytes.Length);
-            if (null != _payload)
-                System.Buffer.BlockCopy(_payload, 0, result, headerBytes.Length + sizeBytes.Length, payloadSize);
-            
+            var payloadLength = _payload?.Length ?? 0;
+            var totalLength = Header.Size + sizeof(int) + payloadLength;
+
+            var result = new byte[totalLength];
+            var span = result.AsSpan();
+            var offset = 0;
+
+            // Serialize Header
+            SerializeHeader(_header, span.Slice(offset, Header.Size));
+            offset += Header.Size;
+
+            // Write Payload Size (Little Endian)
+            BinaryPrimitives.WriteInt32LittleEndian(span.Slice(offset, sizeof(int)), payloadLength);
+            offset += sizeof(int);
+
+            // Copy Payload
+            if (payloadLength > 0)
+                _payload.CopyTo(span.Slice(offset, payloadLength));
+
             return result;
         }
-
-        public bool ReadBuffer(Buffer buffer)
+        
+        public static bool TryReadBuffer(Buffer buffer, out TcpMessage message)
         {
-            var headerSize = Header.Size + sizeof(int);
-            if (buffer.RemainSize < headerSize)
+            message = null;
+
+            var minSize = Header.Size + sizeof(int); // Header + PayloadSize
+            if (buffer.RemainSize < minSize)
                 return false;
 
-            var span = buffer.Peek(headerSize);
-            var payloadSize = BinaryPrimitives.ReadInt32LittleEndian(span[Header.Size..]);
-            if (buffer.RemainSize < payloadSize + headerSize)
+            var headerAndLength = buffer.Peek(minSize);
+            var header = DeserializeHeader(headerAndLength.Slice(0, Header.Size));
+            var payloadSize = BinaryPrimitives.ReadInt32LittleEndian(headerAndLength.Slice(Header.Size));
+
+            var totalSize = minSize + payloadSize;
+            if (buffer.RemainSize < totalSize)
                 return false;
 
+            // 실제 데이터 Read
             var headerSpan = buffer.Read(Header.Size);
             var length = buffer.Read<int>();
-            var header = DeserializeHeader(headerSpan);
-            
-            _header = header;
-            _payload = buffer.ReadBytes(length);
+            var payload = buffer.ReadBytes(length);
+
+            message = new TcpMessage { _header = DeserializeHeader(headerSpan), _payload = payload };
             return true;
         }
  
         public void SerializeProtocol(IProtocolData data, byte[] sharedKey)
         {
-            _header.ProtocolId = data.ProtocolId;
+            _header.ProtocolId = (ushort)data.ProtocolId;
             _payload = BinaryConverter.SerializeObject(data, data.GetType());
             if (null == _payload)
                 throw new InvalidOperationException("Failed to serialize protocol");
 
-            if (0 < data.CompressibleSize && data.CompressibleSize <= _payload.Length)
+            if (1024 < data.CompressibleSize && data.CompressibleSize <= _payload.Length)
             {
-                _header.EnableOption(EOption.Compress);
+                _header.AddFlags(EMessageFlags.Compressed);
                 _payload = Compressor.Compress(_payload);
             }
 
@@ -100,7 +124,7 @@ namespace SP.Engine.Core.Message
             if (null == sharedKey || 0 == sharedKey.Length)
                 throw new ArgumentException(nameof(sharedKey));
 
-            _header.EnableOption(EOption.Encrypt);
+            _header.AddFlags(EMessageFlags.Encrypted);
             _payload = Encryptor.Encrypt(sharedKey, _payload);
         }
 
@@ -109,7 +133,7 @@ namespace SP.Engine.Core.Message
             if (null == _payload || 0 == _payload.Length)
                 return null;
 
-            if (_header.HasOption(EOption.Encrypt))
+            if (_header.HasFlags(EMessageFlags.Encrypted))
             {
                 if (null == sharedKey || 0 == sharedKey.Length)
                     throw new ArgumentException(nameof(sharedKey));
@@ -117,7 +141,7 @@ namespace SP.Engine.Core.Message
                 _payload = Encryptor.Decrypt(sharedKey, _payload);
             }
 
-            if (_header.HasOption(EOption.Compress))
+            if (_header.HasFlags(EMessageFlags.Compressed))
                 _payload = Compressor.Decompress(_payload);
 
             return BinaryConverter.DeserializeObject(_payload, type) as IProtocolData;

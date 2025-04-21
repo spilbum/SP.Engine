@@ -8,9 +8,9 @@ namespace SP.Engine.Core.Protocol
     {
         private static readonly ConcurrentDictionary<Type, ProtocolAttribute> AttributeCache = new ConcurrentDictionary<Type, ProtocolAttribute>();
 
-        public EProtocolId ProtocolId { get; set; }
-        public bool IsEncrypt { get; set; }
-        public uint CompressibleSize { get; set; }
+        public EProtocolId ProtocolId { get; }
+        public bool IsEncrypt { get; }
+        public uint CompressibleSize { get; }
         
         protected BaseProtocolData()
         {

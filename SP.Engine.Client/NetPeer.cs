@@ -9,6 +9,7 @@ using SP.Engine.Core;
 using SP.Engine.Core.Message;
 using SP.Engine.Core.Protocol;
 using SP.Engine.Core.Utility;
+using SP.Engine.Core.Utility.Crypto;
 
 namespace SP.Engine.Client
 {
@@ -125,7 +126,7 @@ namespace SP.Engine.Client
         private int _connectionAttempts;
         private readonly TimerManager _timer = new TimerManager(); 
         private readonly DataSampler<int> _latencySampler = new DataSampler<int>(1024);
-        private readonly DiffieHellman _diffieHellman = new DiffieHellman(ECryptographicKeySize.KS256);
+        private readonly DhSession _dh = new DhSession(DhKeySize.Bit2048);
         private readonly MessageFilter _messageFilter = new MessageFilter();
         private readonly ConcurrentQueue<IMessage> _sendingMessageQueue = new ConcurrentQueue<IMessage>();
         private readonly ConcurrentQueue<IMessage> _receivedMessageQueue = new ConcurrentQueue<IMessage>();
@@ -136,7 +137,7 @@ namespace SP.Engine.Client
         public int AvgLatencyMs => (int)_latencySampler.Avg;
         public int LatencyStdDevMs => (int)_latencySampler.StdDev;
         public ENetPeerState State => (ENetPeerState)_stateCode;
-        public byte[] CryptoSharedKey => _diffieHellman.SharedKey;
+        public byte[] CryptoSharedKey => _dh.SharedKey;
 
         public DateTime ServerTime
         {
@@ -340,8 +341,8 @@ namespace SP.Engine.Client
             {
                 SessionId = _sessionId,
                 PeerId = PeerId,
-                CryptoPublicKey = _diffieHellman.PublicKey,
-                CryptoKeySize = _diffieHellman.KeySize,
+                ClientPublicKey = _dh.PublicKey,
+                KeySize = _dh.KeySize,
             });
         }
         
@@ -667,10 +668,10 @@ namespace SP.Engine.Client
             if (0 < authAck.MaxReSendCnt)
                 MaxReSendCnt = authAck.MaxReSendCnt;
 
-            if (null != authAck.CryptoPublicKey)
+            if (null != authAck.ServerPublicKey)
             {
                 // 암호화 키 생성
-                _diffieHellman.DeriveSharedKey(authAck.CryptoPublicKey);
+                _dh.DeriveSharedKey(authAck.ServerPublicKey);
             }
             
             OnOpened();
