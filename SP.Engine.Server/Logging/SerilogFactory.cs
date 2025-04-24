@@ -1,39 +1,49 @@
 ﻿using System;
+using System.Collections.Generic;
 using Serilog;
+using Serilog.Core;
 using Serilog.Events;
 using SP.Engine.Common.Logging;
 using ILogger = SP.Engine.Common.Logging.ILogger;
 
 namespace SP.Engine.Server.Logging
 {
+    public class ThreadIdEnricher : Serilog.Core.ILogEventEnricher
+    {
+        public void Enrich(LogEvent logEvent, ILogEventPropertyFactory propertyFactory)
+        {
+            var threadId = Environment.CurrentManagedThreadId;
+            logEvent.AddPropertyIfAbsent(propertyFactory.CreateProperty("ThreadId", threadId));
+        }
+    }
+    
     public class SerilogFactory : ILoggerFactory
     {
-        private const string OutputTemplate =
-            "{Timestamp:yyyy-MM-dd hh:mm:ss.fff} [{Level:u3}] [{ThreadId}] {Message:lj}{NewLine}{Exception}";
-        
-        public ILogger GetLogger(string name)
+        private readonly Dictionary<string, ILogger> _loggers = new();
+        private readonly object _lock = new();
+
+        public ILogger GetLogger(string category)
         {
-            var loggerConfiguration = new LoggerConfiguration()
-                .SetMinimumLogLevel(ELogLevel.Debug)
-                .Enrich.WithProperty("ThreadId", Environment.CurrentManagedThreadId)
-                .WriteTo.Console(outputTemplate: OutputTemplate);
+            lock (_lock)
+            {
+                if (_loggers.TryGetValue(category, out var existing))
+                    return existing;
 
-            loggerConfiguration.WriteTo.File(
-                path: $"logs/error-{name}-.log",
-                rollingInterval: RollingInterval.Day,
-                restrictedToMinimumLevel: LogEventLevel.Error,
-                outputTemplate: OutputTemplate
-            );
-            
-            loggerConfiguration.WriteTo.File(
-                path: $"logs/{name}-.log",
-                rollingInterval: RollingInterval.Day,
-                restrictedToMinimumLevel: LogEventLevel.Debug,
-                outputTemplate: OutputTemplate
-            );
+                var logger = new LoggerConfiguration()
+                    .Enrich.With(new ThreadIdEnricher())
+                    .MinimumLevel.Debug()
+                    .WriteTo.File(
+                        path: $"logs/{category}.log",
+                        rollingInterval: RollingInterval.Day,
+                        retainedFileCountLimit: 7,
+                        outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [T:{ThreadId}] {Message:lj}{NewLine}{Exception}"
+                    )
+                    .CreateLogger();
 
-            var logger = loggerConfiguration.CreateLogger();
-            return new SerilogLogger(logger);
+                var wrapper = new SerilogLogger(logger.ForContext("Category", category));
+                _loggers[category] = wrapper;
+                return wrapper;
+            }
         }
     }
 }

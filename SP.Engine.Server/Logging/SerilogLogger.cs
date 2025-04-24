@@ -6,86 +6,88 @@ using ILogger = SP.Engine.Common.Logging.ILogger;
 
 namespace SP.Engine.Server.Logging
 {
-    public static class ExtensionMethod
+      public static class ExtensionMethod
     {
         public static LoggerConfiguration SetMinimumLogLevel(this LoggerConfiguration configuration, ELogLevel logLevel)
         {
-            switch (logLevel)
+            return logLevel switch
             {
-                case ELogLevel.Debug:
-                    return configuration.MinimumLevel.Debug();
-                case ELogLevel.Info:
-                    return configuration.MinimumLevel.Information();
-                case ELogLevel.Warning:
-                    return configuration.MinimumLevel.Warning();
-                case ELogLevel.Error:
-                    return configuration.MinimumLevel.Error();
-                case ELogLevel.Fatal:
-                    return configuration.MinimumLevel.Fatal();
-                default:
-                    return configuration.MinimumLevel.Debug();
-            }
+                ELogLevel.Debug => configuration.MinimumLevel.Debug(),
+                ELogLevel.Info => configuration.MinimumLevel.Information(),
+                ELogLevel.Warning => configuration.MinimumLevel.Warning(),
+                ELogLevel.Error => configuration.MinimumLevel.Error(),
+                ELogLevel.Fatal => configuration.MinimumLevel.Fatal(),
+                _ => configuration.MinimumLevel.Debug(),
+            };
         }
 
         public static LogEventLevel ToSerilogLevel(this ELogLevel logLevel)
         {
-            switch (logLevel)
+            return logLevel switch
             {
-                case ELogLevel.Debug:
-                    return LogEventLevel.Debug;
-                case ELogLevel.Info:
-                    return LogEventLevel.Information;
-                case ELogLevel.Warning:
-                    return LogEventLevel.Warning;
-                case ELogLevel.Error:
-                    return LogEventLevel.Error;
-                case ELogLevel.Fatal:
-                    return LogEventLevel.Fatal;
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(logLevel), logLevel, "Invalid log level");
-            }
+                ELogLevel.Debug => LogEventLevel.Debug,
+                ELogLevel.Info => LogEventLevel.Information,
+                ELogLevel.Warning => LogEventLevel.Warning,
+                ELogLevel.Error => LogEventLevel.Error,
+                ELogLevel.Fatal => LogEventLevel.Fatal,
+                _ => LogEventLevel.Debug
+            };
         }
     }
-    
-    /// <summary>
-    /// Serilog 기반의 ILogger 구현
-    /// </summary>
+
     public class SerilogLogger(Serilog.ILogger logger) : ILogger
     {
-        private const string ExceptionFormat = "An exception occurred: {0}{1}stackTrace={2}";
-        private const string MessageAndExceptionFormat = "An exception occurred: {0}, exception={1}{2}stackTrace={3}";
         private readonly Serilog.ILogger _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-        private bool IsEnabled(ELogLevel logLevel)
+        private bool IsEnabled(ELogLevel logLevel) => _logger.IsEnabled(logLevel.ToSerilogLevel());
+
+        public void Log(ELogLevel level, string message)
         {
-            return _logger.IsEnabled(logLevel.ToSerilogLevel());
+            if (!IsEnabled(level)) return;
+            _logger.Write(level.ToSerilogLevel(), message);
         }
 
-        public void WriteLog(ELogLevel logLevel, string format, params object[] args)
+        public void Log(ELogLevel level, string format, params object[] args)
         {
-            if (string.IsNullOrEmpty(format))
-                return;
-
-            if (!IsEnabled(logLevel))
-                return;
-
-            _logger.Write(logLevel.ToSerilogLevel(), format, args);
+            if (!IsEnabled(level)) return;
+            _logger.Write(level.ToSerilogLevel(), format, args);
         }
 
-        public void WriteLog(Exception exception)
+        public void Log(ELogLevel level, Exception ex)
         {
-            if (!IsEnabled(ELogLevel.Error))
-                return;
-            
-            _logger.Write(LogEventLevel.Error, ExceptionFormat, exception.Message, Environment.NewLine, exception.StackTrace);
+            if (!IsEnabled(level)) return;
+            _logger.Write(level.ToSerilogLevel(), "Exception: {Message}\n{StackTrace}", ex.Message, ex.StackTrace);
         }
 
-        public void WriteLog(string message, Exception ex)
+        public void Log(ELogLevel level, Exception ex, string format, params object[] args)
         {
-            if (!IsEnabled(ELogLevel.Error))
-                return;
-            
-            _logger.Write(LogEventLevel.Error, MessageAndExceptionFormat, message, ex.Message, Environment.NewLine, ex.StackTrace);
+            if (!IsEnabled(level)) return;
+            var formatted = string.Format(format, args);
+            _logger.Write(level.ToSerilogLevel(), "{Message}\nException: {Exception}\n{StackTrace}", formatted,
+                ex.Message, ex.StackTrace);
         }
+
+        public void Debug(string message) => Log(ELogLevel.Debug, message);
+        public void Debug(string format, params object[] args) => Log(ELogLevel.Debug, format, args);
+
+        public void Info(string message) => Log(ELogLevel.Info, message);
+        public void Info(string format, params object[] args) => Log(ELogLevel.Info, format, args);
+
+        public void Warn(string message) => Log(ELogLevel.Warning, message);
+        public void Warn(string format, params object[] args) => Log(ELogLevel.Warning, format, args);
+
+        public void Error(string message) => Log(ELogLevel.Error, message);
+        public void Error(string format, params object[] args) => Log(ELogLevel.Error, format, args);
+        public void Error(Exception ex) => Log(ELogLevel.Error, ex);
+
+        public void Error(Exception ex, string format, params object[] args) =>
+            Log(ELogLevel.Error, ex, format, args);
+
+        public void Fatal(string message) => Log(ELogLevel.Fatal, message);
+        public void Fatal(string format, params object[] args) => Log(ELogLevel.Fatal, format, args);
+        public void Fatal(Exception ex) => Log(ELogLevel.Fatal, ex);
+
+        public void Fatal(Exception ex, string format, params object[] args) =>
+            Log(ELogLevel.Fatal, ex, format, args);
     }
 }

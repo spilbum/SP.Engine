@@ -11,7 +11,7 @@ using SP.Engine.Server.Logging;
 
 namespace SP.Engine.Server
 {
-    public interface ISessionServer : ILoggerProvider
+    public interface ISessionServer : ILogContext
     {
         IServerConfig Config { get; }
         ISession CreateSession(ISocketSession socketSession);        
@@ -46,17 +46,14 @@ namespace SP.Engine.Server
     public abstract class SessionServerBase<TSession> : ISessionServer, ISocketServerAccessor, IDisposable
         where TSession : SessionBase<TSession>, ISession, new()
     {
-        private string  _name;
         private ISocketServer _socketServer;
         private ListenerInfo[] _listenerInfos;
         private int _stateCode = ServerStateConst.NotInitialized;
-        private IServerConfig _config;
-        private ILogger _logger;
 
         ISocketServer ISocketServerAccessor.SocketServer => _socketServer;
-        public string Name => _name;
-        public ILogger Logger => _logger;
-        public IServerConfig Config => _config;
+        public string Name { get; private set; }
+        public ILogger Logger { get; private set; }
+        public IServerConfig Config { get; private set; }
 
         public virtual bool Initialize(string name, IServerConfig config)
         {
@@ -66,8 +63,8 @@ namespace SP.Engine.Server
                 throw new InvalidOperationException("The server has been initialized already, you cannot initialize it again!");
             }
 
-            _name = !string.IsNullOrEmpty(name) ? name : $"{GetType().Name}-{Math.Abs(GetHashCode())}";
-            _config = config ?? throw new ArgumentNullException(nameof(config));
+            Name = !string.IsNullOrEmpty(name) ? name : $"{GetType().Name}-{Math.Abs(GetHashCode())}";
+            Config = config ?? throw new ArgumentNullException(nameof(config));
 
             if (!SetupLogger())
                 return false;
@@ -87,7 +84,7 @@ namespace SP.Engine.Server
             var oldState = Interlocked.CompareExchange(ref _stateCode, ServerStateConst.Starting, ServerStateConst.NotStarted);
             if (oldState != ServerStateConst.NotStarted)
             {
-                Logger.WriteLog(ELogLevel.Fatal, "This server instance is in the state {0}, you cannot start it now.", (EServerState)oldState);
+                Logger.Fatal("This server instance is in the state {0}, you cannot start it now.", (EServerState)oldState);
                 return false;
             }
 
@@ -113,10 +110,10 @@ namespace SP.Engine.Server
             }
             catch (Exception ex)
             {
-                Logger.WriteLog(ELogLevel.Fatal, "An exception occurred in the method 'OnStarted()': {0}", ex.Message);
+                Logger.Fatal("An exception occurred in the method 'OnStarted()': {0}", ex.Message);
             }
 
-            Logger.WriteLog(ELogLevel.Debug, "The server instance {0} was been started!", Name);
+            Logger.Info("The server instance {0} was been started!", Name);
             return true;
         }
 
@@ -150,7 +147,7 @@ namespace SP.Engine.Server
 
             OnStopped();
 
-            Logger.WriteLog(ELogLevel.Debug, "The server instance {0} has been stopped!", Name);
+            Logger.Debug("The server instance {0} has been stopped!", Name);
         }
 
         public TSession GetSession(string sessionId)
@@ -178,11 +175,11 @@ namespace SP.Engine.Server
         private bool SetupLogger()
         {
             var loggerFactory = new SerilogFactory();
-            if (!LogManager.Initialize(loggerFactory))
-                return false;
+            LogManager.SetLoggerFactory(loggerFactory);
+            LogManager.SetDefaultCategory(Name);
 
-            _logger = LogManager.GetLogger(Name);
-            _logger?.WriteLog(ELogLevel.Debug, "Logger setup was successful");
+            Logger = LogManager.GetLogger();
+            Logger?.Info("Logger setup was successful: {0}", Name);
             return true;
         }
 
@@ -190,7 +187,7 @@ namespace SP.Engine.Server
         {
             if (null == _listenerInfos)
             {
-                Logger.WriteLog(ELogLevel.Fatal, "ListenerInfos is null");
+                Logger.Fatal("ListenerInfos is null");
                 return false;
             }
 
@@ -202,7 +199,7 @@ namespace SP.Engine.Server
         {
             if (null == config.Listeners || 0 == config.Listeners.Count)
             {
-                Logger.WriteLog(ELogLevel.Fatal, "Listeners is null or empty in server config.");
+                Logger.Fatal("Listeners is null or empty in server config.");
                 return false;
             }
 
@@ -217,7 +214,7 @@ namespace SP.Engine.Server
 
             if (0 == listenerInfos.Count)
             {
-                Logger.WriteLog(ELogLevel.Fatal, "No listener defined.");
+                Logger.Fatal("No listener defined.");
                 return false;
             }
 
@@ -249,8 +246,7 @@ namespace SP.Engine.Server
 
             if (!_sessionDict.TryAdd(tSession.SessionId, tSession))
             {
-                Logger.WriteLog(ELogLevel.Error,
-                    "The session is refused because the it's ID already exists. sessionId={0}", tSession.SessionId);
+                Logger.Error("The session is refused because the it's ID already exists. sessionId={0}", tSession.SessionId);
                 return false;
             }
 
@@ -258,7 +254,7 @@ namespace SP.Engine.Server
 
             // 인증 해드쉐이크 대기 등록
             EnqueueAuthHandshakePendingQueue(tSession);
-            Logger.WriteLog(ELogLevel.Debug, "A new session connected. sessionId={0}, remoteEndPoint={1}", tSession.SessionId, tSession.RemoteEndPoint);
+            Logger.Debug("A new session connected. sessionId={0}, remoteEndPoint={1}", tSession.SessionId, tSession.RemoteEndPoint);
             return true;
         }
 
@@ -275,11 +271,11 @@ namespace SP.Engine.Server
         {
             if (!_sessionDict.TryRemove(session.SessionId, out var removed))
             {
-                Logger.WriteLog(ELogLevel.Error, "Failed to remove this session, because it hasn't been in session container.");
+                Logger.Error("Failed to remove this session, because it hasn't been in session container.");
                 return;
             }
             
-            Logger.WriteLog(ELogLevel.Debug, "The session {0} has been closed. reason={1}", removed.SessionId, reason);
+            Logger.Debug("The session {0} has been closed. reason={1}", removed.SessionId, reason);
         }
 
         private Timer _clearIdleSessionTimer;
@@ -298,7 +294,7 @@ namespace SP.Engine.Server
             
             _clearIdleSessionTimer.Dispose();
             _clearIdleSessionTimer = null;
-            Logger.WriteLog(ELogLevel.Debug, $"Timer stopped.");
+            Logger.Debug("Timer stopped.");
         }
 
         private void ClearIdleSession(object state)
@@ -320,7 +316,7 @@ namespace SP.Engine.Server
                 var options = new ParallelOptions() { MaxDegreeOfParallelism = Environment.ProcessorCount };
                 Parallel.ForEach(sessions, options, session =>
                 {
-                    Logger.WriteLog(ELogLevel.Info,
+                    Logger.Debug(
                         "The session {0} will be closed for {1} timeout, the session start time: {2}, last active time: {3}",
                         session.SessionId,
                         now.Subtract(session.LastActiveTime).TotalSeconds,
@@ -332,7 +328,7 @@ namespace SP.Engine.Server
             }
             catch (Exception ex)
             {
-                Logger.WriteLog(ELogLevel.Error, "Clear idle session error: {0}\n{1}", ex.Message, ex.StackTrace);
+                Logger.Error("Clear idle session error: {0}\n{1}", ex.Message, ex.StackTrace);
             }
             finally
             {
@@ -463,7 +459,7 @@ namespace SP.Engine.Server
                     if (DateTime.UtcNow < session.StartClosingTime.AddSeconds(Config.CloseHandshakeTimeOutSec))
                         continue;
 
-                    Logger.WriteLog(ELogLevel.Debug, "Client terminated due to timeout. sessionId={0}", session.SessionId);
+                    Logger.Debug("Client terminated due to timeout. sessionId={0}", session.SessionId);
                     
                     // 종료 타임아웃
                     _closeHandshakePendingQueue.TryDequeue(out _);
@@ -472,7 +468,7 @@ namespace SP.Engine.Server
             }
             catch (Exception e)
             {
-                Logger.WriteLog(e);
+                Logger.Error(e);
             }
             finally
             {

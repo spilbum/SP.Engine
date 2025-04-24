@@ -7,7 +7,7 @@ using System.Runtime.InteropServices;
 using SP.Engine.Common;
 using SP.Engine.Common.Logging;
 using SP.Engine.Core;
-using SP.Engine.Core.Message;
+using SP.Engine.Core.Utilities;
 
 namespace SP.Engine.Server
 {
@@ -55,11 +55,11 @@ namespace SP.Engine.Server
                 if (listener.Start())
                 {
                     Listeners.Add(listener);
-                    logger.WriteLog(ELogLevel.Debug, "Listener ({0}) was started.", listener.EndPoint);
+                    logger.Info("Listener ({0}) was started.", listener.EndPoint);
                 }
                 else
                 {
-                    logger.WriteLog(ELogLevel.Debug, "Listener ({0}) failed to start.", listener.EndPoint);
+                    logger.Error("Listener ({0}) failed to start.", listener.EndPoint);
 
                     foreach (var t in Listeners)
                         t.Stop();
@@ -94,7 +94,7 @@ namespace SP.Engine.Server
             }
             catch (Exception ex)
             {
-                Server.Logger.WriteLog(ELogLevel.Fatal, "An exception occurred: {0}\r\nstackTrace: {1}", ex.Message, ex.StackTrace);
+                Server.Logger.Fatal("An exception occurred: {0}\r\nstackTrace: {1}", ex.Message, ex.StackTrace);
                 return false;
             }
         }
@@ -193,7 +193,7 @@ namespace SP.Engine.Server
             if (!_socketEventArgsPool.TryPop(out var proxy))
             {
                 Server.AsyncRun(client.SafeClose);
-                Server.Logger.WriteLog(ELogLevel.Error, "Limit connection count {0} was reached.", Server.Config.LimitConnectionCount);
+                Server.Logger.Error("Limit connection count {0} was reached.", Server.Config.LimitConnectionCount);
                 return;
             }
 
@@ -216,12 +216,12 @@ namespace SP.Engine.Server
         private void OnListenerStopped(object sender, EventArgs e)
         {
             if (sender is ISocketListener listener)
-                Server.Logger.WriteLog(ELogLevel.Debug, $"Listener ({listener.EndPoint}) was stopped.");            
+                Server.Logger.Info("Listener ({0}) was stopped.", listener.EndPoint);            
         }
 
         private void OnListenerError(ISocketListener listener, Exception e)
         {
-            Server.Logger.WriteLog(ELogLevel.Error, $"Listener ({listener.EndPoint}) error: {e.Message}\r\nstackTrace={e.StackTrace}");
+            Server.Logger.Error($"Listener ({listener.EndPoint}) error: {e.Message}\r\nstackTrace={e.StackTrace}");
         }
 
         private ISession CreateSession(Socket client, ISocketSession socketSession)

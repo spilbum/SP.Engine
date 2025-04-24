@@ -6,22 +6,22 @@ namespace SP.Engine.Server
 {
     public static class AsyncExtensions
     {
-        public static Task AsyncRun(this ILoggerProvider logProvider, Action task, Action<Exception> exceptionHandler = null)
+        public static Task AsyncRun(this ILogContext logContext, Action task, Action<Exception> exceptionHandler = null)
         {
-            return Task.Run(task).ContinueWith(t => { HandleException(logProvider, t, exceptionHandler); },
+            return Task.Run(task).ContinueWith(t => { HandleException(logContext, t, exceptionHandler); },
                 TaskContinuationOptions.OnlyOnFaulted);
         }
 
-        public static Task AsyncRun(this ILoggerProvider logProvider, 
+        public static Task AsyncRun(this ILogContext logContext, 
             Action<object> task, 
             object state,
             Action<Exception> exceptionHandler = null)
         {
-            return Task.Run(() => task(state)).ContinueWith(t => { HandleException(logProvider, t, exceptionHandler); },
+            return Task.Run(() => task(state)).ContinueWith(t => { HandleException(logContext, t, exceptionHandler); },
                 TaskContinuationOptions.OnlyOnFaulted);
         }
     
-        private static void HandleException(ILoggerProvider logProvider, Task task, Action<Exception> exceptionHandler)
+        private static void HandleException(ILogContext logContext, Task task, Action<Exception> exceptionHandler)
         {
             if (task.Exception == null)
                 return;
@@ -35,7 +35,7 @@ namespace SP.Engine.Server
             else
             {
                 foreach (var ex in exceptions)
-                    logProvider.Logger.WriteLog(ex);
+                    logContext.Logger.Error(ex);
             }
         }
     }

@@ -8,9 +8,8 @@ using SP.Engine.Common;
 using SP.Engine.Common.Fiber;
 using SP.Engine.Common.Logging;
 using SP.Engine.Core;
-using SP.Engine.Core.Protocol;
-using SP.Engine.Core.Utility;
-using SP.Engine.Core.Utility.Crypto;
+using SP.Engine.Core.Protocols;
+using SP.Engine.Core.Security;
 using SP.Engine.Server.Connector;
 
 namespace SP.Engine.Server
@@ -62,7 +61,7 @@ namespace SP.Engine.Server
             if (!SetupConnector(config))
                 return false;
             
-            Logger.WriteLog(ELogLevel.Info, "The server {0} is initialized.", name);
+            Logger.Info("The server {0} is initialized.", name);
             return true;
         }
         
@@ -70,7 +69,7 @@ namespace SP.Engine.Server
         {
             var fiber = new ThreadFiber(ex =>
             {
-                Logger.WriteLog(ELogLevel.Error, "Fiber exception occurred: {0}\r\n{1}", ex.Message, ex.StackTrace);
+                Logger.Error("Fiber exception occurred: {0}\r\n{1}", ex.Message, ex.StackTrace);
             });
             return fiber;
         }
@@ -82,7 +81,7 @@ namespace SP.Engine.Server
                 var connector = CreateConnector(connectorConfig.Name);
                 if (null == connector)
                 {
-                    Logger.WriteLog(ELogLevel.Info, "Failed to create connector {0}.", connectorConfig.Name);
+                    Logger.Info("Failed to create connector {0}.", connectorConfig.Name);
                     return false;
                 }
 
@@ -95,7 +94,7 @@ namespace SP.Engine.Server
                 }
                 catch (Exception e)
                 {
-                    Logger.WriteLog(e);
+                    Logger.Error(e);
                     return false;
                 }
             }
@@ -106,10 +105,10 @@ namespace SP.Engine.Server
         private bool SetupProtocolLoader()
         {
             var assemblies = new List<Assembly> { Assembly.GetEntryAssembly(), Assembly.GetExecutingAssembly() };
-             if (!ProtocolManager.Initialize(assemblies, Logger.WriteLog))
+             if (!ProtocolManager.Initialize(assemblies, Logger.Error))
                  return false;
              
-             Logger.WriteLog(ELogLevel.Info, "The protocol was successfully loaded. list=[{0}]", string.Join(", ", ProtocolManager.ProtocolNameList)); 
+             Logger.Info("The protocol was successfully loaded. list=[{0}]", string.Join(", ", ProtocolManager.ProtocolNameList)); 
              return true;
         }
         
@@ -156,7 +155,7 @@ namespace SP.Engine.Server
             }
             catch (Exception e)
             {
-                Logger.WriteLog(e);
+                Logger.Error(e);
             }
         }
 
@@ -206,7 +205,7 @@ namespace SP.Engine.Server
                     if (DateTime.UtcNow < expireTime)
                         continue;
                     
-                    Logger.WriteLog(ELogLevel.Debug, "Client terminated due to timeout. peerId={0}", peer.PeerId);
+                    Logger.Debug("Client terminated due to timeout. peerId={0}", peer.PeerId);
                  
                     // 재 연결 타임아웃으로 종료함
                     _waitingReconnectPeerDict.TryRemove(peer.PeerId, out _);
@@ -215,7 +214,7 @@ namespace SP.Engine.Server
             }
             catch (Exception e)
             {
-                Logger.WriteLog(e);
+                Logger.Error(e);
             }
             finally
             {
@@ -315,11 +314,11 @@ namespace SP.Engine.Server
         {
             if (!TryRemovePeer(peer.PeerId, out var removed))
             {
-                Logger.WriteLog(ELogLevel.Error, "Failed to remove peer: {0}", peer);
+                Logger.Error("Failed to remove peer: {0}", peer);
                 return;
             }
 
-            Logger.WriteLog(ELogLevel.Debug, "Peer removed. peerId={0}", removed.PeerId);
+            Logger.Debug("Peer removed. peerId={0}", removed.PeerId);
             removed.LeaveServer(reason);
         }
 
@@ -331,7 +330,7 @@ namespace SP.Engine.Server
             if (!_waitingReconnectPeerDict.TryAdd(peer.PeerId, new WaitingReconnectPeer(peer, Config.WaitingReconnectPeerTimeOutSec)))
                 return;
             
-            Logger.WriteLog(ELogLevel.Debug, "Peer waiting reconnect registered. peerId={0}", peer.PeerId);
+            Logger.Debug("Peer waiting reconnect registered. peerId={0}", peer.PeerId);
         }
 
         private void RemoveWaitingReconnectPeer(TPeer peer)
@@ -339,7 +338,7 @@ namespace SP.Engine.Server
             if (!_waitingReconnectPeerDict.TryRemove(peer.PeerId, out _))
                 return;
             
-            Logger.WriteLog(ELogLevel.Debug, "Peer waiting reconnect removed. peerId={0}", peer.PeerId);
+            Logger.Debug("Peer waiting reconnect removed. peerId={0}", peer.PeerId);
         }
 
         public TPeer GetWaitingReconnectPeer(EPeerId peerId)

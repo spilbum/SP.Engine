@@ -1,15 +1,13 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Net;
-using SP.Engine.Common;
 using SP.Engine.Common.Logging;
 using SP.Engine.Core;
-using SP.Engine.Core.Message;
-using SP.Engine.Core.Protocol;
+using SP.Engine.Core.Networking;
+using SP.Engine.Core.Protocols;
 
 namespace SP.Engine.Server
 {
-    public interface ISession : ILoggerProvider
+    public interface ISession : ILogContext
     {
         IServerConfig Config { get; }
         ISessionServer SessionServer { get; }
@@ -25,10 +23,9 @@ namespace SP.Engine.Server
     {
         private string _sessionId;
         private ISocketSession _socketSession;
-        private SessionServerBase<TSession> _sessionServer;
         private MessageFilter _messageFilter;
-        
-        private SessionServerBase<TSession> SessionServer => _sessionServer;
+        private SessionServerBase<TSession> SessionServer { get; set; }
+
         ISessionServer ISession.SessionServer => SessionServer;
         public IServerConfig Config => SessionServer.Config;
         public ILogger Logger => SessionServer.Logger;
@@ -50,7 +47,7 @@ namespace SP.Engine.Server
 
         public virtual void Initialize(ISessionServer server, ISocketSession socketSession)
         {            
-            _sessionServer = (SessionServerBase<TSession>)server;
+            SessionServer = (SessionServerBase<TSession>)server;
             _messageFilter = new MessageFilter(server.Config.LimitRequestLength);
             _socketSession = socketSession;
             _sessionId = socketSession.SessionId;            
@@ -81,7 +78,7 @@ namespace SP.Engine.Server
             }
             catch (Exception e)
             {
-                Logger.WriteLog(e);
+                Logger.Error(e);
                 return false;
             }
         }
@@ -105,33 +102,26 @@ namespace SP.Engine.Server
             try
             {
                 filter.AddBuffer(buffer, offset, length);
-            
-                while (true)
-                {
-                    var message = filter.Filter(out var left);
-                    if (null != message)
-                    {
-                        try
-                        {
-                            OnMessageReceived(message);
-                        }
-                        catch (Exception ex)
-                        {
-                            Logger.WriteLog(ex);
-                        }
-                        finally
-                        {
-                            LastActiveTime = DateTime.UtcNow;
-                        }
-                    }
 
-                    if (0 >= left)
-                        break;
+                foreach (var message in filter.FilterAll())
+                {
+                    try
+                    {
+                        OnMessageReceived(message);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Error(ex);
+                    }
+                    finally
+                    {
+                        LastActiveTime = DateTime.UtcNow;
+                    }
                 }
             }
             catch (Exception e)
             {
-                Logger.WriteLog(e);
+                Logger.Error(e);
             }
         }
 

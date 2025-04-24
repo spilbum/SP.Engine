@@ -2,10 +2,9 @@ using System;
 using System.IO;
 using System.Reflection;
 using SP.Engine.Client;
-using SP.Engine.Common;
 using SP.Engine.Common.Logging;
 using SP.Engine.Core;
-using SP.Engine.Core.Protocol;
+using SP.Engine.Core.Protocols;
 
 namespace SP.Engine.Server.Connector
 {
@@ -42,7 +41,7 @@ namespace SP.Engine.Server.Connector
             var logger = server.Logger;
             if (string.IsNullOrEmpty(config.Host) || 0 >= config.Port)
             {
-                logger.WriteLog(ELogLevel.Error, "Invalid connector config. host={0}, port={1}", config.Host,
+                logger.Error("Invalid connector config. host={0}, port={1}", config.Host,
                     config.Port);
                 return false;
             }
@@ -58,7 +57,7 @@ namespace SP.Engine.Server.Connector
             }
             catch (Exception e)
             {
-                server.Logger.WriteLog(e);
+                server.Logger.Error(e);
                 return false;
             }
         }
@@ -81,7 +80,7 @@ namespace SP.Engine.Server.Connector
         private void OnOffline(object sender, EventArgs e)
         {
             _isOffline = true;
-            WriteLog(ELogLevel.Info, "Connection to server {0}:{1} has been lost.", Host, Port);
+            Log(ELogLevel.Info, "Connection to server {0}:{1} has been lost.", Host, Port);
         }
 
         public void Connect()
@@ -92,7 +91,7 @@ namespace SP.Engine.Server.Connector
             }
             catch (Exception ex)
             {
-                WriteLog(ex);
+                LogError(ex);
             }
         }
 
@@ -153,38 +152,38 @@ namespace SP.Engine.Server.Connector
             }
             catch (Exception ex)
             {
-                WriteLog(ex);
+                LogError(ex);
             }
         }
 
         private void OnDisconnect(object sender, EventArgs e)
         {
-            WriteLog(ELogLevel.Info, "Disconnected from server {0}:{1}", Host, Port);
+            Log(ELogLevel.Info, "Disconnected from server {0}:{1}", Host, Port);
             Disconnected?.Invoke(this, e);
         }
 
         private void OnError(object sender, ErrorEventArgs e)
         {
-            WriteLog(e.GetException());
+            LogError(e.GetException());
         }
 
         private void OnConnected(object sender, EventArgs e)
         {
-            WriteLog(ELogLevel.Info, "Connected to server {0}:{1}. peerId={2}", Host, Port, PeerId);
+            Log(ELogLevel.Info, "Connected to server {0}:{1}. peerId={2}", Host, Port, PeerId);
             if (_isOffline)
                 _isOffline = false;
             else
                 Connected?.Invoke(this, EventArgs.Empty);
         }
 
-        private void WriteLog(ELogLevel level, string format, params object[] args)
+        private void Log(ELogLevel level, string format, params object[] args)
         {
-            _logger?.WriteLog(level, format, args);
+            _logger?.Log(level, format, args);
         }
 
-        private void WriteLog(Exception ex)
+        private void LogError(Exception ex)
         {
-            _logger?.WriteLog(ex);
+            _logger?.Error(ex);
         }
     }
 }

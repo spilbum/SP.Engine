@@ -4,10 +4,11 @@ using System.Net.Sockets;
 using System.Threading;
 using SP.Engine.Common.Logging;
 using SP.Engine.Core;
+using SP.Engine.Core.Utilities;
 
 namespace SP.Engine.Server
 {
-    internal interface ITcpAsyncSocketSession : ILoggerProvider
+    internal interface ITcpAsyncSocketSession : ILogContext
     {
         SocketAsyncEventArgsProxy ReceiveSocketEventArgsProxy { get; }
         void ProcessReceive(SocketAsyncEventArgs e);
@@ -17,7 +18,7 @@ namespace SP.Engine.Server
     {
         private SocketAsyncEventArgs _socketEventArgsSend;        
 
-        ILogger ILoggerProvider.Logger => Session.Logger;
+        ILogger ILogContext.Logger => Session.Logger;
         public SocketAsyncEventArgsProxy ReceiveSocketEventArgsProxy { get; } = socketEventArgsProxy;
 
         public override void Initialize(ISession session)
@@ -176,7 +177,7 @@ namespace SP.Engine.Server
         {
             if (e.UserToken is not SendingQueue queue)
             {
-                Session.Logger.WriteLog(ELogLevel.Error, "SendingQueue is null");
+                Session.Logger.Error("SendingQueue is null");
                 return;
             }
 
@@ -191,7 +192,7 @@ namespace SP.Engine.Server
             if (count != e.BytesTransferred)
             {
                 queue.InternalTrim(e.BytesTransferred);
-                Session.Logger.WriteLog(ELogLevel.Info, "{0} of {1} were transferred, send the rest {2} bytes right now.", e.BytesTransferred, count, queue.Sum(x => x.Count));
+                Session.Logger.Warn("{0} of {1} were transferred, send the rest {2} bytes right now.", e.BytesTransferred, count, queue.Sum(x => x.Count));
                 ClearPrevSendState(e);
                 Send(queue);
                 return;

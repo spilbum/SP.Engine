@@ -4,10 +4,9 @@ using System.Net;
 using System.Threading;
 using SP.Engine.Common.Logging;
 using SP.Engine.Core;
-using SP.Engine.Core.Message;
-using SP.Engine.Core.Protocol;
-using SP.Engine.Core.Utility;
-using SP.Engine.Core.Utility.Crypto;
+using SP.Engine.Core.Networking;
+using SP.Engine.Core.Protocols;
+using SP.Engine.Core.Security;
 
 namespace SP.Engine.Server
 {
@@ -139,7 +138,7 @@ namespace SP.Engine.Server
             var reSendMessages = CheckMessageTimeout(out var isLimitExceededReSend);
             if (isLimitExceededReSend)
             {
-                Logger.WriteLog(ELogLevel.Error, "The message resend limit has been exceeded.");
+                Logger.Error("The message resend limit has been exceeded.");
                 Close(ECloseReason.LimitExceededReSend);
                 return;
             }
@@ -174,7 +173,7 @@ namespace SP.Engine.Server
             }
             catch (Exception e)
             {
-                Logger.WriteLog(e);
+                Logger.Error(e);
             }
         }
 

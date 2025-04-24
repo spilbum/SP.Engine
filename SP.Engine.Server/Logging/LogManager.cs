@@ -10,103 +10,156 @@ namespace SP.Engine.Server.Logging
 {
     public static class LogManager
     {
-        private sealed class LogJob(string name, ELogLevel level, string format, object[] args)
-        {
-            public readonly string Name = name;
-            public readonly ELogLevel Level = level;
-            public readonly string Format = format;
-            public readonly object[] Args = args;
-        }
-
-        private const string DefaultLoggerName = "DefaultLogger";
-        private static readonly ConcurrentDictionary<string, ILogger> LoggerDict = new ConcurrentDictionary<string, ILogger>();
-        private static readonly List<ThreadFiber> Fibers = new List<ThreadFiber>();
+        private static ILoggerFactory _loggerFactory = new ConsoleLoggerFactory();
+        private static readonly ConcurrentDictionary<string, ILogger> _loggers = new();
+        private static readonly List<ThreadFiber> _fibers = new();
         private static int _fiberIndex;
-        private static ILoggerFactory _loggerFactory;
+        private static string _defaultCategory;
 
-        private static int GetIndex()
+        static LogManager()
         {
-            if (_fiberIndex >= int.MaxValue)
-                _fiberIndex = 0;
-            else            
-                Interlocked.Increment(ref _fiberIndex);
-            return _fiberIndex;
-        }
-        
-        public static bool Initialize(ILoggerFactory loggerFactory)
-        {
-            _loggerFactory = loggerFactory
-                ?? new ConsoleLoggerFactory();
-
-            var fiberCnt = Math.Min(Environment.ProcessorCount * 2, 8);
-            for (var index = 0; index < fiberCnt; index++)
-                AddFiber();
-
-            return true;
-        }
-
-        public static void Dispose()
-        {
-            foreach (var fiber in Fibers)
-                fiber.Dispose();
-        }
-        
-        private static void AddFiber()
-        {
-            var fiber = new ThreadFiber(OnError);
-            fiber.Start();
-            Fibers.Add(fiber);
-        }
-
-        public static ILogger GetLogger(string name)
-        {
-            return LoggerDict.GetOrAdd(name ?? DefaultLoggerName, n => _loggerFactory.GetLogger(n));
-        }
-
-        public static void WriteLog(string name, ELogLevel level, string format, params object[] args)
-        {
-            var stackFrame = new StackFrame(1, false);
-            var method = stackFrame.GetMethod();
-            format = null == method ? format : $"[{method.DeclaringType?.Name}.{method.Name}] {format}";
-            
-            var logJob = new LogJob(name, level, format, args);
-            EnqueueLogJob(logJob);
-        }
-
-        public static void WriteLog(ELogLevel level, string format, params object[] args)
-        {
-            var stackFrame = new StackFrame(1, false);
-            var method = stackFrame.GetMethod();
-            format = null == method ? format : $"[{method.DeclaringType?.Name}.{method.Name}] {format}";
-            
-            var logJob = new LogJob(DefaultLoggerName, level, format, args);
-            EnqueueLogJob(logJob);
-        }
-        
-        private static void EnqueueLogJob(LogJob job)
-        {
-            var fiberIndex = GetIndex();
-            var fiber = Fibers[fiberIndex % Fibers.Count];
-            fiber.Enqueue(ProcessLogJob, job);
-        }
-
-        private static void ProcessLogJob(LogJob job)
-        {
-            try
+            for (var i = 0; i < Environment.ProcessorCount; i++)
             {
-                var logger = GetLogger(job.Name);
-                logger.WriteLog(job.Level, job.Format, job.Args);
+                var fiber = new ThreadFiber(OnError);
+                fiber.Start();
+                _fibers.Add(fiber);
             }
-            catch (Exception ex)
-            {
-                OnError(ex);
-            }
+        }
+
+        public static void SetLoggerFactory(ILoggerFactory factory)
+        {
+            _loggerFactory = factory;
+            _loggers.Clear();
+        }
+
+        public static void SetDefaultCategory(string category)
+        {
+            _defaultCategory = category;
+        }
+
+        public static ILogger GetLogger(string category = null)
+        {
+            if (string.IsNullOrEmpty(category))
+                category = _defaultCategory ?? throw new ArgumentNullException(nameof(category));
+            return _loggers.GetOrAdd(category, key => _loggerFactory.GetLogger(key));
+        }
+
+        private static void Enqueue(Action job)
+        {
+            var index = Interlocked.Increment(ref _fiberIndex);
+            var fiber = _fibers[index % _fibers.Count];
+            fiber.Enqueue(job);
         }
 
         private static void OnError(Exception ex)
         {
-            var logger = GetLogger(DefaultLoggerName);
-            logger.WriteLog(ELogLevel.Error, "Logging failed: {0}\r\n{1}", ex.Message, ex.StackTrace);
+            Console.WriteLine("[LogFiberError] {0}", ex);
+        }
+
+        public static void Dispose()
+        {
+            foreach (var fiber in _fibers)
+                fiber.Dispose();
+
+            if (_loggerFactory is IDisposable disposableFactory)
+                disposableFactory.Dispose();
+
+            try
+            {
+                Serilog.Log.CloseAndFlush();
+            }
+            catch (Exception)
+            {
+                // Serilog가 없거나 예외 발생 시 무시
+            }
+        }
+
+        private static void Log(ELogLevel level, string category, string message)
+        {
+            var logger = GetLogger(category);
+            var method = new StackFrame(2, false).GetMethod();
+            var prefix = method != null ? $"[{method.DeclaringType?.Name}.{method.Name}] " : string.Empty;
+            Enqueue(() => logger.Log(level, prefix + message));
+        }
+
+        private static void Log(ELogLevel level, string category, string format, params object[] args)
+        {
+            var logger = GetLogger(category);
+            var method = new StackFrame(2, false).GetMethod();
+            var prefix = method != null ? $"[{method.DeclaringType?.Name}.{method.Name}] " : string.Empty;
+            Enqueue(() => logger.Log(level, prefix + string.Format(format, args)));
+        }
+
+        private static void Log(ELogLevel level, ILogContext context, string format, params object[] args)
+        {
+            var method = new StackFrame(2, false).GetMethod();
+            var prefix = method != null ? $"[{method.DeclaringType?.Name}.{method.Name}] " : string.Empty;
+            Enqueue(() => context.Logger.Log(level, prefix + string.Format(format, args)));
+        }
+
+        private static void LogDefault(ELogLevel level, string format, params object[] args)
+        {
+            if (string.IsNullOrWhiteSpace(_defaultCategory))
+                throw new InvalidOperationException("Default log category is not set.");
+            Log(level, _defaultCategory, format, args);
+        }
+
+        public static void Debug(string category, string format, params object[] args) =>
+            Log(ELogLevel.Debug, category, format, args);
+
+        public static void Info(string category, string format, params object[] args) =>
+            Log(ELogLevel.Info, category, format, args);
+
+        public static void Warn(string category, string format, params object[] args) =>
+            Log(ELogLevel.Warning, category, format, args);
+
+        public static void Error(string category, string format, params object[] args) =>
+            Log(ELogLevel.Error, category, format, args);
+
+        public static void Fatal(string category, string format, params object[] args) =>
+            Log(ELogLevel.Fatal, category, format, args);
+
+        public static void Debug(ILogContext context, string format, params object[] args) =>
+            Log(ELogLevel.Debug, context, format, args);
+
+        public static void Info(ILogContext context, string format, params object[] args) =>
+            Log(ELogLevel.Info, context, format, args);
+
+        public static void Warn(ILogContext context, string format, params object[] args) =>
+            Log(ELogLevel.Warning, context, format, args);
+
+        public static void Error(ILogContext context, string format, params object[] args) =>
+            Log(ELogLevel.Error, context, format, args);
+
+        public static void Fatal(ILogContext context, string format, params object[] args) =>
+            Log(ELogLevel.Fatal, context, format, args);
+
+        public static void Debug(string format, params object[] args) => LogDefault(ELogLevel.Debug, format, args);
+        public static void Info(string format, params object[] args) => LogDefault(ELogLevel.Info, format, args);
+        public static void Warn(string format, params object[] args) => LogDefault(ELogLevel.Warning, format, args);
+        public static void Error(string format, params object[] args) => LogDefault(ELogLevel.Error, format, args);
+        public static void Fatal(string format, params object[] args) => LogDefault(ELogLevel.Fatal, format, args);
+
+        public static void Error(string category, Exception ex)
+        {
+            var logger = GetLogger(category);
+            var method = new StackFrame(2, false).GetMethod();
+            var prefix = method != null ? $"[{method.DeclaringType?.Name}.{method.Name}] " : string.Empty;
+            Enqueue(() => logger.Error(prefix + ex.Message + "\n" + ex.StackTrace));
+        }
+
+        public static void Error(ILogContext context, Exception ex)
+        {
+            var method = new StackFrame(2, false).GetMethod();
+            var prefix = method != null ? $"[{method.DeclaringType?.Name}.{method.Name}] " : string.Empty;
+            Enqueue(() => context.Logger.Error(prefix + ex.Message + "\n" + ex.StackTrace));
+        }
+
+        public static void Error(Exception ex)
+        {
+            if (string.IsNullOrWhiteSpace(_defaultCategory))
+                throw new InvalidOperationException("Default log category is not set.");
+            Error(_defaultCategory, ex);
         }
     }
 }

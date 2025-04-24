@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using SP.Engine.Common.Logging;
 using SP.Engine.Core;
+using SP.Engine.Core.Utilities;
 
 namespace SP.Engine.Server
 {
@@ -160,7 +161,7 @@ namespace SP.Engine.Server
 
             if (!_sendingQueuePool.Rent(out var newQueue))
             {
-                Session.Logger.WriteLog(ELogLevel.Error, "Unable to acquire a new sending queue from the pool.");
+                Session.Logger.Error("Unable to acquire a new sending queue from the pool.");
                 OnSendEnd(false);
                 Close(ECloseReason.InternalError);
                 return;
@@ -177,7 +178,7 @@ namespace SP.Engine.Server
                 else
                 {
                     OnSendEnd(false);
-                    Session.Logger.WriteLog(ELogLevel.Error, "Failed to switch the sending queue.");
+                    Session.Logger.Error("Failed to switch the sending queue.");
                     Close(ECloseReason.InternalError);
                 }
 
@@ -189,7 +190,7 @@ namespace SP.Engine.Server
 
             if (0 == queue.Count)
             {
-                Session.Logger.WriteLog(ELogLevel.Error, "There is no data to be sent in the queue.");
+                Session.Logger.Error("There is no data to be sent in the queue.");
                 _sendingQueuePool.Return(queue);
                 OnSendEnd(false);
                 Close(ECloseReason.InternalError);
@@ -440,7 +441,7 @@ namespace SP.Engine.Server
                 return;
 
             var message = 0 < socketErrorCode ? string.Format(SocketErrorFormat, socketErrorCode) : string.Format(ErrorMessageFormat, e.Message, e.StackTrace);
-            Session.Logger.WriteLog(ELogLevel.Error, message + Environment.NewLine + string.Format(CallerFormat, caller, filePath, lineNumber));
+            Session.Logger.Error(message + Environment.NewLine + string.Format(CallerFormat, caller, filePath, lineNumber));
         }
 
         protected void LogError(int socketErrorCode, [CallerMemberName] string caller = "", [CallerFilePath] string filePath = "", [CallerLineNumber] int lineNumber = -1)
@@ -448,7 +449,7 @@ namespace SP.Engine.Server
             if (!Config.IsLogAllSocketError && IsIgnoreSocketError(socketErrorCode))
                 return;
 
-            Session.Logger.WriteLog(ELogLevel.Error, string.Format(SocketErrorFormat, socketErrorCode) + Environment.NewLine + string.Format(CallerFormat, caller, filePath, lineNumber));
+            Session.Logger.Error(string.Format(SocketErrorFormat, socketErrorCode) + Environment.NewLine + string.Format(CallerFormat, caller, filePath, lineNumber));
         }
     }
 }

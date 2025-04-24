@@ -6,10 +6,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using SP.Engine.Core;
-using SP.Engine.Core.Message;
-using SP.Engine.Core.Protocol;
-using SP.Engine.Core.Utility;
-using SP.Engine.Core.Utility.Crypto;
+using SP.Engine.Core.Networking;
+using SP.Engine.Core.Protocols;
+using SP.Engine.Core.Security;
+using SP.Engine.Core.Utilities;
 
 namespace SP.Engine.Client
 {
@@ -472,24 +472,16 @@ namespace SP.Engine.Client
                 // 수신된 데이터 버퍼에 추가
                 _messageFilter.AddBuffer(e.Data, e.Offset, e.Length);
 
-                while (true)
+                foreach (var message in _messageFilter.FilterAll())
                 {
-                    // 메시지 필터링
-                    var message = _messageFilter.Filter(out var left);
-                    if (message != null)
+                    try
                     {
-                        try
-                        {
-                            ExecuteMessage(message);
-                        }
-                        catch (Exception ex)
-                        {
-                            OnError(ex);
-                        }
+                        ExecuteMessage(message);
                     }
-
-                    if (left <= 0)
-                        break;
+                    catch (Exception ex)
+                    {
+                        OnError(ex);
+                    }
                 }
             }
             catch (Exception ex)

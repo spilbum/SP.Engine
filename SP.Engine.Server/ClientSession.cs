@@ -2,13 +2,12 @@
 using System.Net;
 using SP.Engine.Common.Logging;
 using SP.Engine.Core;
-using SP.Engine.Core.Message;
-using SP.Engine.Core.Protocol;
-using SP.Engine.Core.Utility.Crypto;
+using SP.Engine.Core.Networking;
+using SP.Engine.Core.Protocols;
 
 namespace SP.Engine.Server
 {
-    public interface IClientSession : ILoggerProvider
+    public interface IClientSession : ILogContext
     {
         string SessionId { get; }
         IServer Server { get; }
@@ -44,7 +43,7 @@ namespace SP.Engine.Server
             RejectReason = reason;
             RejectDetailReason = detailReason;
             Close(ECloseReason.Rejected);
-            Logger.WriteLog(ELogLevel.Debug, "Reject session. reason={0}, detailReason={1}", reason, detailReason);
+            Logger.Debug("Reject session. reason={0}, detailReason={1}", reason, detailReason);
         }
         
         protected override void OnMessageReceived(IMessage message)
@@ -169,7 +168,7 @@ namespace SP.Engine.Server
             catch (Exception ex)
             {
                 errorCode = ESystemErrorCode.Invalid;
-                Logger.WriteLog(ELogLevel.Error, "Failed to authorize peer: exception={0}\r\nstackTrace={1}", ex.Message, ex.StackTrace);
+                Logger.Error("Failed to authorize peer: exception={0}\r\nstackTrace={1}", ex.Message, ex.StackTrace);
             }
             finally
             {
@@ -209,7 +208,7 @@ namespace SP.Engine.Server
         [ProtocolHandler(EngineProtocolIdC2S.NotifyClose)]
         private void OnNotifyClose(EngineProtocolDataC2S.NotifyClose notifyClose)
         {
-            Logger.WriteLog(ELogLevel.Debug, "Received a termination request from the client. isClosing={0}", IsClosing);
+            Logger.Debug("Received a termination request from the client. isClosing={0}", IsClosing);
             if (IsClosing)
             {
                 Close(ECloseReason.ClientClosing);

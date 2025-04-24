@@ -6,51 +6,53 @@ namespace SP.Engine.Common.Logging
 {
     public class ConsoleLogger : ILogger
     {
-        private readonly string _name;
+        private readonly string _category;
         private readonly object _lock = new object();
-        private const string MessageTemplate = "{0}-{1}: {2}";
-        private const string ExceptionFormat = "An exception occurred: {0}{1}stackTrace={2}";
-        private const string MessageAndExceptionFormat = "An exception occurred: {0}, exception={1}{2}stackTrace={3}";
 
-        private static readonly Dictionary<ELogLevel, string> LogLevelMap = new Dictionary<ELogLevel, string>()
+        public ConsoleLogger(string category)
         {
-            { ELogLevel.Debug, "DEBUG" },
-            { ELogLevel.Error, "ERROR" },
-            { ELogLevel.Fatal, "FATAL" },
-            { ELogLevel.Info, "INFO" },
-            { ELogLevel.Warning, "WARN" }
-        };
-
-        public ConsoleLogger(string name)
-        {
-            _name = name ?? "none";
+            _category = category;
         }
 
-        public void WriteLog(ELogLevel logLevel, string format, params object[] args)
+        public void Log(ELogLevel level, string message)
+            => Write(level, message);
+
+        public void Log(ELogLevel level, string format, params object[] args)
+            => Write(level, string.Format(format, args));
+
+        public void Log(ELogLevel level, Exception ex)
+            => Write(level, ex.ToString());
+
+        public void Log(ELogLevel level, Exception ex, string format, params object[] args)
+            => Write(level, string.Format(format, args) + "\n" + ex);
+
+        private void Write(ELogLevel level, string message)
         {
-            if (string.IsNullOrEmpty(format))
-                return;
-
-            if (!LogLevelMap.TryGetValue(logLevel, out var logLevelString))
-                throw new ArgumentException($"Invalid log level: {logLevel}");
-
-            var message = args == null ? format : string.Format(format, args);
-
             lock (_lock)
             {
-                Console.WriteLine(MessageTemplate, _name, logLevelString, message);
+                Console.WriteLine("{0}-{1}: {2}", _category, level.ToString().ToUpper(), message);
             }
         }
 
-        public void WriteLog(Exception exception)
-        {
-            WriteLog(ELogLevel.Error, ExceptionFormat, exception.Message, Environment.NewLine, exception.StackTrace);
-        }
+        public void Debug(string message) => Log(ELogLevel.Debug, message);
+        public void Debug(string format, params object[] args) => Log(ELogLevel.Debug, format, args);
 
-        public void WriteLog(string message, Exception ex)
-        {
-            WriteLog(ELogLevel.Error, MessageAndExceptionFormat, message, ex.Message, Environment.NewLine, ex.StackTrace);
-        }
+        public void Info(string message) => Log(ELogLevel.Info, message);
+        public void Info(string format, params object[] args) => Log(ELogLevel.Info, format, args);
+
+        public void Warn(string message) => Log(ELogLevel.Warning, message);
+        public void Warn(string format, params object[] args) => Log(ELogLevel.Warning, format, args);
+
+        public void Error(string message) => Log(ELogLevel.Error, message);
+        public void Error(string format, params object[] args) => Log(ELogLevel.Error, format, args);
+        public void Error(Exception ex) => Log(ELogLevel.Error, ex);
+        public void Error(Exception ex, string format, params object[] args) => Log(ELogLevel.Error, ex, format, args);
+
+        public void Fatal(string message) => Log(ELogLevel.Fatal, message);
+        public void Fatal(string format, params object[] args) => Log(ELogLevel.Fatal, format, args);
+        public void Fatal(Exception ex) => Log(ELogLevel.Fatal, ex);
+        public void Fatal(Exception ex, string format, params object[] args) => Log(ELogLevel.Fatal, ex, format, args);
+
     }
 
 }
