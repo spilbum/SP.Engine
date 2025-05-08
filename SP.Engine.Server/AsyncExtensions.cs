@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
-using SP.Engine.Common.Logging;
+using SP.Common.Logging;
 
 namespace SP.Engine.Server
 {

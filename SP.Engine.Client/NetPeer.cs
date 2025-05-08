@@ -1,15 +1,18 @@
 ﻿using System;
 using System.Net;
-using System.Reflection;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
-using SP.Engine.Core;
-using SP.Engine.Core.Networking;
-using SP.Engine.Core.Protocols;
-using SP.Engine.Core.Security;
-using SP.Engine.Core.Utilities;
+using SP.Common.Logging;
+using SP.Engine.Client.ProtocolHandler;
+using SP.Protocol;
+using SP.Engine.Runtime;
+using SP.Engine.Runtime.Networking;
+using SP.Engine.Runtime.Protocol;
+using SP.Engine.Runtime.Security;
+using SP.Engine.Runtime.Serialization;
+using SP.Engine.Runtime.Utilities;
 
 namespace SP.Engine.Client
 {
@@ -41,7 +44,7 @@ namespace SP.Engine.Client
         public const int Closed = 4;
     }
     
-    public sealed class NetPeer : MessageProcessor, IProtocolHandler, IDisposable
+    public sealed class NetPeer : MessageProcessor, IDisposable
     {
         private sealed class TimerManager : IDisposable
         {
@@ -127,9 +130,12 @@ namespace SP.Engine.Client
         private readonly TimerManager _timer = new TimerManager(); 
         private readonly DataSampler<int> _latencySampler = new DataSampler<int>(1024);
         private readonly DhSession _dh = new DhSession(DhKeySize.Bit2048);
-        private readonly MessageFilter _messageFilter = new MessageFilter();
+        private readonly BinaryBuffer _receiveBuffer = new BinaryBuffer();
         private readonly ConcurrentQueue<IMessage> _sendingMessageQueue = new ConcurrentQueue<IMessage>();
         private readonly ConcurrentQueue<IMessage> _receivedMessageQueue = new ConcurrentQueue<IMessage>();
+
+        private readonly Dictionary<EProtocolId, IHandler<NetPeer, IMessage>> _handlerDict =
+            new Dictionary<EProtocolId, IHandler<NetPeer, IMessage>>();
         
         public EndPoint RemoteEndPoint { get; private set; }
         public EPeerId PeerId { get; private set; }   
@@ -137,8 +143,8 @@ namespace SP.Engine.Client
         public int AvgLatencyMs => (int)_latencySampler.Avg;
         public int LatencyStdDevMs => (int)_latencySampler.StdDev;
         public ENetPeerState State => (ENetPeerState)_stateCode;
-        public byte[] CryptoSharedKey => _dh.SharedKey;
-
+        public byte[] DhSharedKey => _dh.SharedKey;
+        
         public DateTime ServerTime
         {
             get
@@ -147,6 +153,8 @@ namespace SP.Engine.Client
                 return _lastServerTime.AddMilliseconds(elapsedTimeMs);
             }
         }        
+        
+        public ILogger Logger { get; set; }
         
         public bool IsEnableAutoSendPing { get; set; } = true;
         public int AutoSendPingIntervalSec { get; set; } = 30;
@@ -160,22 +168,19 @@ namespace SP.Engine.Client
         public event EventHandler<ErrorEventArgs> Error;
         public event EventHandler<MessageEventArgs> MessageReceived;
         
-        public NetPeer(Assembly assembly)
+        public NetPeer()
         {
-            var assemblies = new List<Assembly>
-            {
-                assembly,
-                Assembly.GetExecutingAssembly()
-            };
-
-            ProtocolManager.Initialize(assemblies, e => throw new InvalidOperationException($"Failed to load protocols. exception={e.Message}\r\nstackTrace={e.StackTrace}"));
+            _handlerDict[S2CEngineProtocol.SessionAuthAck] = new SessionAuth();
+            _handlerDict[S2CEngineProtocol.Close] = new Close();
+            _handlerDict[S2CEngineProtocol.MessageAck] = new MessageAck();
+            _handlerDict[S2CEngineProtocol.Pong] = new Pong();
         }
 
         ~NetPeer()
         {
             Dispose(false);
         }
-        
+
         private static EndPoint ResolveEndPoint(string host, int port)
         {
             if (IPAddress.TryParse(host, out var ipAddress))
@@ -250,7 +255,7 @@ namespace SP.Engine.Client
                 else
                 {
                     var message = new TcpMessage();
-                    message.SerializeProtocol(protocol, CryptoSharedKey);
+                    message.SerializeProtocol(protocol, DhSharedKey);
                     EnqueueSendingMessage(message);   
                 }
             }
@@ -319,7 +324,7 @@ namespace SP.Engine.Client
             try
             {
                 var now = DateTime.UtcNow;
-                var notifyPingInfo = new EngineProtocolDataC2S.NotifyPingInfo
+                var protocol = new C2SEngineProtocol.Data.Ping
                 {
                     SendTime = now,
                     LatencyAverageMs = AvgLatencyMs,
@@ -327,7 +332,7 @@ namespace SP.Engine.Client
                 };
 
                 LastSendPingTime = now;
-                Send(notifyPingInfo);
+                Send(protocol);
             }
             catch (Exception e)
             {
@@ -337,7 +342,7 @@ namespace SP.Engine.Client
 
         private void SendAuthHandshake()
         {
-            Send(new EngineProtocolDataC2S.AuthReq
+            Send(new C2SEngineProtocol.Data.SessionAuthReq
             {
                 SessionId = _sessionId,
                 PeerId = PeerId,
@@ -348,12 +353,17 @@ namespace SP.Engine.Client
         
         private void SendCloseHandshake()
         {
-            Send(new EngineProtocolDataC2S.NotifyClose());
+            Send(new C2SEngineProtocol.Data.Close());
         }
         
         private void SendMessageAck(long sequenceNumber)
         {
-            Send(new EngineProtocolDataC2S.NotifyMessageAckInfo { SequenceNumber = sequenceNumber });
+            Send(new C2SEngineProtocol.Data.MessageAck { SequenceNumber = sequenceNumber });
+        }
+
+        internal void CloseWithoutHandshake()
+        {
+            _session?.Close();
         }
 
         public void Close()
@@ -416,7 +426,7 @@ namespace SP.Engine.Client
             // 종료 중이면 메시지를 보내지 않음
             if (State == ENetPeerState.Closing  || State == ENetPeerState.Closed)
                 return;
-            
+
             while (_sendingMessageQueue.TryDequeue(out var message))
                 Send(message);
         }
@@ -469,14 +479,17 @@ namespace SP.Engine.Client
         {
             try
             {
-                // 수신된 데이터 버퍼에 추가
-                _messageFilter.AddBuffer(e.Data, e.Offset, e.Length);
-
-                foreach (var message in _messageFilter.FilterAll())
+                foreach (var message in Filter(e.Data, e.Offset, e.Length))
                 {
                     try
                     {
-                        ExecuteMessage(message);
+                        if (_handlerDict.TryGetValue(message.ProtocolId, out var handler))
+                            handler.ExecuteMessage(this, message);
+                        else
+                        {
+                            SendMessageAck(message.SequenceNumber);
+                            EnqueueReceivedMessage(message);
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -488,6 +501,23 @@ namespace SP.Engine.Client
             {
                 OnError(ex);
             }
+        }
+        
+        private IEnumerable<TcpMessage> Filter(byte[] buffer, int offset, int length) 
+        {
+            _receiveBuffer.Write(buffer.AsSpan(offset, length));
+            
+            while (true)
+            {
+                var message = TcpMessage.TryReadBuffer(_receiveBuffer, out _);
+                if (message != null)
+                    yield return message;
+                else
+                    break;
+            }
+
+            if (_receiveBuffer.RemainSize < 1024)
+                _receiveBuffer.Trim();
         }
 
         private void OnSessionError(object sender, ErrorEventArgs e)
@@ -507,29 +537,6 @@ namespace SP.Engine.Client
             SendAuthHandshake();
         }
         
-        private void ExecuteMessage(IMessage message)
-        {
-            if (null == message)
-                return;
-            
-            if (message.ProtocolId.IsEngineProtocol())
-            {
-                // 시스템 프로토콜
-                var invoker = ProtocolManager.GetProtocolInvoker(message.ProtocolId);
-                if (null == invoker)
-                    throw new InvalidOperationException($"The protocol invoker not found. protocolId={message.ProtocolId}");
-                
-                invoker.Invoke(this, message, null);
-            }
-            else
-            {
-                // 메시지 응답
-                SendMessageAck(message.SequenceNumber);
-                // 수신 메시지 큐잉
-                EnqueueReceivedMessage(message);
-            }   
-        }
-
         /// <summary>
         /// 수신된 메시지를 큐에 넣습니다.
         /// </summary>
@@ -549,7 +556,7 @@ namespace SP.Engine.Client
             Error?.Invoke(this, new ErrorEventArgs(ex));
         }
 
-        private void OnError(ESystemErrorCode errorCode)
+        internal void OnError(EEngineErrorCode errorCode)
         {
             OnError(new Exception($"The system error occurred: {errorCode}"));
         }
@@ -573,10 +580,14 @@ namespace SP.Engine.Client
             }
         }
 
-        private void OnOpened()
+        internal void OnOpened(EPeerId peerId, string sessionId, byte[] serverPublicKey)
         {
             _stateCode = NetPeerStateConst.Open;
             _connectionAttempts = 0;
+            
+            PeerId = peerId;
+            _sessionId = sessionId;
+            _dh.DeriveSharedKey(serverPublicKey);
             
             // 핑 타이머 시작
             StartPingTimer();
@@ -601,6 +612,22 @@ namespace SP.Engine.Client
         private void OnMessageReceived(IMessage message)
         {
             MessageReceived?.Invoke(this, new MessageEventArgs(message));
+        }
+
+        internal void OnPong(DateTime sentTime, DateTime serverTime)
+        {
+            // 네트워크 레이턴시 계산
+            var latencyMs = (int)Math.Round(DateTime.UtcNow.Subtract(sentTime).TotalMilliseconds, MidpointRounding.AwayFromZero);
+            _latencySampler.Add(latencyMs);
+            // 네트워크 레이턴시를 고려해 서버 시간 설정
+            _lastServerTime = serverTime.AddMilliseconds(latencyMs / 2.0f);
+            _serverUpdateTime = DateTime.UtcNow;
+            //Console.WriteLine("latencyMs={0}, avgMs={1}, stddevMs={2}, serverTime={3:yyyy-MM-dd hh:mm:ss.fff}", latencyMs, AvgLatencyMs, LatencyStdDevMs, _lastServerTime);
+        }
+
+        internal void OnMessageAck(long sequenceNumber)
+        {
+            ReceiveMessageAck(sequenceNumber);
         }
 
         public void Dispose()
@@ -636,70 +663,6 @@ namespace SP.Engine.Client
             }
 
             _disposed = true;
-        }
-
-        [ProtocolHandler(EngineProtocolIdS2C.AuthAck)]
-        private void OnAuthAck(EngineProtocolDataS2C.AuthAck authAck)
-        {
-            if (authAck.ErrorCode != ESystemErrorCode.Success)
-            {
-                // 인증 실패로 종료 함
-                OnError(authAck.ErrorCode);
-                Close();
-                return;
-            }
-            
-            PeerId = authAck.PeerId;
-            _sessionId = authAck.SessionId;
-            
-            // 전송 타임아웃 시간 설정
-            if (0 < authAck.SendTimeOutMs)
-                SendTimeOutMs = authAck.SendTimeOutMs;
-            
-            // 최대 재 전송 횟수 설정
-            if (0 < authAck.MaxReSendCnt)
-                MaxReSendCnt = authAck.MaxReSendCnt;
-
-            if (null != authAck.ServerPublicKey)
-            {
-                // 암호화 키 생성
-                _dh.DeriveSharedKey(authAck.ServerPublicKey);
-            }
-            
-            OnOpened();
-        }
-
-        [ProtocolHandler(EngineProtocolIdS2C.NotifyPongInfo)]
-        private void OnNotifyPongInfo(EngineProtocolDataS2C.NotifyPongInfo info)
-        {
-            // 네트워크 레이턴시 계산
-            var latencyMs = (int)Math.Round(DateTime.UtcNow.Subtract(info.SentTime).TotalMilliseconds, MidpointRounding.AwayFromZero);
-            _latencySampler.Add(latencyMs);
-            // 네트워크 레이턴시를 고려해 서버 시간 설정
-            _lastServerTime = info.ServerTime.AddMilliseconds(latencyMs / 2.0f);
-            _serverUpdateTime = DateTime.UtcNow;
-            //Console.WriteLine("latencyMs={0}, avgMs={1}, stddevMs={2}, serverTime={3:yyyy-MM-dd hh:mm:ss.fff}", latencyMs, AvgLatencyMs, LatencyStdDevMs, _lastServerTime);
-        }
-
-        [ProtocolHandler(EngineProtocolIdS2C.NotifyMessageAckInfo)]
-        private void OnNotifyMessageAckInfo(EngineProtocolDataS2C.NotifyMessageAckInfo info)
-        {
-            // 전송 한 메시지에 대한 시퀀스 번호 수신
-            ReceiveMessageAck(info.SequenceNumber);
-        }
-
-        [ProtocolHandler(EngineProtocolIdS2C.NotifyClose)]
-        private void OnNotifyClose(EngineProtocolDataS2C.NotifyClose notifyClose)
-        {
-            if (_stateCode == NetPeerStateConst.Closing)
-            {
-                // 클라이언트 요청으로 받은 경우, 즉시 종료함
-                _session?.Close();
-                return;
-            }
-
-            // 서버 요청으로 종료함
-            Close();
         }
     }
 }

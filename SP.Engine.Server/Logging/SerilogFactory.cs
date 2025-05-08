@@ -3,12 +3,12 @@ using System.Collections.Generic;
 using Serilog;
 using Serilog.Core;
 using Serilog.Events;
-using SP.Engine.Common.Logging;
-using ILogger = SP.Engine.Common.Logging.ILogger;
+using SP.Common.Logging;
+using ILogger = SP.Common.Logging.ILogger;
 
 namespace SP.Engine.Server.Logging
 {
-    public class ThreadIdEnricher : Serilog.Core.ILogEventEnricher
+    public class ThreadIdEnricher : ILogEventEnricher
     {
         public void Enrich(LogEvent logEvent, ILogEventPropertyFactory propertyFactory)
         {
@@ -32,12 +32,13 @@ namespace SP.Engine.Server.Logging
                 var logger = new LoggerConfiguration()
                     .Enrich.With(new ThreadIdEnricher())
                     .MinimumLevel.Debug()
+                    .WriteTo.Console(
+                        outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [T:{ThreadId}] {Message:lj}{NewLine}{Exception}")
                     .WriteTo.File(
                         path: $"logs/{category}.log",
                         rollingInterval: RollingInterval.Day,
                         retainedFileCountLimit: 7,
-                        outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [T:{ThreadId}] {Message:lj}{NewLine}{Exception}"
-                    )
+                        outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [T:{ThreadId}] {Message:lj}{NewLine}{Exception}")
                     .CreateLogger();
 
                 var wrapper = new SerilogLogger(logger.ForContext("Category", category));

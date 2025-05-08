@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>netstandard2.1</TargetFramework>
+        <LangVersion>7.3</LangVersion>
+        <Nullable>disable</Nullable>
+        <AssemblyName>SP.Database</AssemblyName>
+        <RootNamespace>SP.Database</RootNamespace>
+    </PropertyGroup>
+
+    <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+      <DefineConstants>TRACE,</DefineConstants>
+      <OutputPath>../BinOut/</OutputPath>
+    </PropertyGroup>
+
+    <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+      <OutputPath>../BinOut/</OutputPath>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\SP.Common\SP.Common.csproj" />
+    </ItemGroup>
+
+</Project>

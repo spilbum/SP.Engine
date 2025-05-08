@@ -3,16 +3,16 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
-using SP.Engine.Common.Logging;
-using SP.Engine.Common.Fiber;
+using SP.Common.Logging;
+using SP.Common.Fiber;
 
 namespace SP.Engine.Server.Logging
 {
     public static class LogManager
     {
         private static ILoggerFactory _loggerFactory = new ConsoleLoggerFactory();
-        private static readonly ConcurrentDictionary<string, ILogger> _loggers = new();
-        private static readonly List<ThreadFiber> _fibers = new();
+        private static readonly ConcurrentDictionary<string, ILogger> Loggers = new();
+        private static readonly List<ThreadFiber> Fibers = [];
         private static int _fiberIndex;
         private static string _defaultCategory;
 
@@ -22,14 +22,14 @@ namespace SP.Engine.Server.Logging
             {
                 var fiber = new ThreadFiber(OnError);
                 fiber.Start();
-                _fibers.Add(fiber);
+                Fibers.Add(fiber);
             }
         }
 
         public static void SetLoggerFactory(ILoggerFactory factory)
         {
             _loggerFactory = factory;
-            _loggers.Clear();
+            Loggers.Clear();
         }
 
         public static void SetDefaultCategory(string category)
@@ -41,13 +41,13 @@ namespace SP.Engine.Server.Logging
         {
             if (string.IsNullOrEmpty(category))
                 category = _defaultCategory ?? throw new ArgumentNullException(nameof(category));
-            return _loggers.GetOrAdd(category, key => _loggerFactory.GetLogger(key));
+            return Loggers.GetOrAdd(category, key => _loggerFactory.GetLogger(key));
         }
 
         private static void Enqueue(Action job)
         {
             var index = Interlocked.Increment(ref _fiberIndex);
-            var fiber = _fibers[index % _fibers.Count];
+            var fiber = Fibers[index % Fibers.Count];
             fiber.Enqueue(job);
         }
 
@@ -58,7 +58,7 @@ namespace SP.Engine.Server.Logging
 
         public static void Dispose()
         {
-            foreach (var fiber in _fibers)
+            foreach (var fiber in Fibers)
                 fiber.Dispose();
 
             if (_loggerFactory is IDisposable disposableFactory)

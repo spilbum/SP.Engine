@@ -1,0 +1,122 @@
+[15:58:45 INF] [T:1] Logger setup was successful: TestServer
+[15:58:46 FTL] [T:1] Listeners is null or empty in server config.
+[15:58:46 FTL] [T:1] This server instance is in the state "Initializing", you cannot start it now.
+[16:00:01 INF] [T:1] Logger setup was successful: TestServer
+[16:00:01 FTL] [T:1] Listeners is null or empty in server config.
+[16:00:01 FTL] [T:1] This server instance is in the state "Initializing", you cannot start it now.
+[16:01:33 INF] [T:1] Logger setup was successful: TestServer
+[16:01:33 FTL] [T:1] Listeners is null or empty in server config.
+[16:02:20 INF] [T:1] Logger setup was successful: TestServer
+[16:02:20 FTL] [T:1] Listeners is null or empty in server config.
+[16:02:41 INF] [T:1] Logger setup was successful: TestServer
+[16:02:41 FTL] [T:1] Listeners is null or empty in server config.
+[16:03:11 INF] [T:1] Logger setup was successful: TestServer
+[16:03:11 FTL] [T:1] Listeners is null or empty in server config.
+[16:03:48 INF] [T:1] Logger setup was successful: TestServer
+[16:03:52 FTL] [T:1] Listeners is null or empty in server config.
+[16:04:24 INF] [T:1] Logger setup was successful: TestServer
+[16:04:24 FTL] [T:1] Listeners is null or empty in server config.
+[16:04:41 INF] [T:1] Logger setup was successful: TestServer
+[16:04:42 FTL] [T:1] Listeners is null or empty in server config.
+[16:07:01 INF] [T:1] Logger setup was successful: TestServer
+[16:07:01 FTL] [T:1] Listeners is null or empty in server config.
+[19:07:16 INF] [T:1] Logger setup was successful: TestServer
+[19:07:40 FTL] [T:1] Listeners is null or empty in server config.
+[19:08:29 INF] [T:1] Logger setup was successful: TestServer
+[19:08:51 DBG] [T:1] The handler "10000" has been registered.
+[19:08:54 INF] [T:1] The server TestServer is initialized.
+[19:08:56 INF] [T:1] Listener (127.0.0.1:3542) was started.
+[19:08:56 INF] [T:1] The server instance TestServer was been started!
+[19:09:06 INF] [T:1] Logger setup was successful: TestServer
+[19:09:06 DBG] [T:1] The handler "10000" has been registered.
+[19:09:06 INF] [T:1] The server TestServer is initialized.
+[19:09:06 INF] [T:1] Listener (127.0.0.1:3542) was started.
+[19:09:06 INF] [T:1] The server instance TestServer was been started!
+[19:10:15 INF] [T:1] Logger setup was successful: TestServer
+[19:10:15 DBG] [T:1] The handler "10000" has been registered.
+[19:10:15 INF] [T:1] The server TestServer is initialized.
+[19:10:15 INF] [T:1] Listener (127.0.0.1:3542) was started.
+[19:10:15 INF] [T:1] The server instance TestServer was been started!
+[19:11:01 INF] [T:1] Logger setup was successful: TestServer
+[19:11:01 DBG] [T:1] The handler "10000" has been registered.
+[19:11:01 INF] [T:1] The server TestServer is initialized.
+[19:11:01 INF] [T:1] Listener (127.0.0.1:3542) was started.
+[19:11:01 INF] [T:1] The server instance TestServer was been started!
+[19:14:46 INF] [T:1] Logger setup was successful: TestServer
+[19:14:46 DBG] [T:1] The handler "10000" has been registered.
+[19:14:46 INF] [T:1] The server TestServer is initialized.
+[19:14:46 INF] [T:1] Listener (127.0.0.1:3542) was started.
+[19:14:46 INF] [T:1] The server instance TestServer was been started!
+[19:14:55 INF] [T:1] Logger setup was successful: TestServer
+[19:14:55 DBG] [T:1] The handler "10000" has been registered.
+[19:14:55 INF] [T:1] The server TestServer is initialized.
+[19:14:55 INF] [T:1] Listener (127.0.0.1:3542) was started.
+[19:14:55 INF] [T:1] The server instance TestServer was been started!
+[19:15:19 INF] [T:1] Logger setup was successful: TestServer
+[19:15:19 DBG] [T:1] The handler "10000" has been registered.
+[19:15:19 INF] [T:1] The server TestServer is initialized.
+[19:15:19 INF] [T:1] Listener (127.0.0.1:3542) was started.
+[19:15:19 INF] [T:1] The server instance TestServer was been started!
+[19:15:57 INF] [T:1] Logger setup was successful: TestServer
+[19:15:57 DBG] [T:1] The handler "10000" has been registered.
+[19:15:57 INF] [T:1] The server TestServer is initialized.
+[19:15:57 INF] [T:1] Listener (127.0.0.1:3542) was started.
+[19:15:57 INF] [T:1] The server instance TestServer was been started!
+[19:17:24 INF] [T:1] Logger setup was successful: TestServer
+[19:17:24 DBG] [T:1] The handler "10000" has been registered.
+[19:17:24 INF] [T:1] The server TestServer is initialized.
+[19:17:24 INF] [T:1] Listener (127.0.0.1:3542) was started.
+[19:17:24 INF] [T:1] The server instance TestServer was been started!
+[20:07:59 INF] [T:1] Logger setup was successful: TestServer
+[20:07:59 DBG] [T:1] The handler "10000" has been registered.
+[20:07:59 INF] [T:1] The server TestServer is initialized.
+[20:07:59 INF] [T:1] Listener (192.168.0.109:3542) was started.
+[20:07:59 INF] [T:1] The server instance TestServer was been started!
+[20:10:41 INF] [T:1] Logger setup was successful: TestServer
+[20:10:41 DBG] [T:1] The handler "10000" has been registered.
+[20:10:41 INF] [T:1] The server TestServer is initialized.
+[20:10:41 INF] [T:1] Listener (192.168.0.109:3542) was started.
+[20:10:41 INF] [T:1] The server instance TestServer was been started!
+[20:10:45 DBG] [T:36] A new session connected. sessionId=a312df1f-430a-4078-98b2-0d758db2e4d5, remoteEndPoint=192.168.0.109:65509
+[20:12:08 INF] [T:1] Logger setup was successful: TestServer
+[20:12:08 DBG] [T:1] The handler "10000" has been registered.
+[20:12:08 INF] [T:1] The server TestServer is initialized.
+[20:12:08 INF] [T:1] Listener (192.168.0.109:3542) was started.
+[20:12:08 INF] [T:1] The server instance TestServer was been started!
+[20:12:23 DBG] [T:40] A new session connected. sessionId=63237c4d-6413-4fb9-9f5b-f7d331406def, remoteEndPoint=192.168.0.109:49183
+[20:13:31 DBG] [T:37] The session 63237c4d-6413-4fb9-9f5b-f7d331406def has been closed. reason="ClientClosing"
+[20:18:12 INF] [T:1] Logger setup was successful: TestServer
+[20:18:12 DBG] [T:1] The handler "10000" has been registered.
+[20:18:12 INF] [T:1] The server TestServer is initialized.
+[20:18:12 INF] [T:1] Listener (192.168.0.109:3542) was started.
+[20:18:12 INF] [T:1] The server instance TestServer was been started!
+[20:18:17 DBG] [T:37] A new session connected. sessionId=4b14bbd7-7fc2-4227-b0d7-feb43f47bb1e, remoteEndPoint=192.168.0.109:49230
+[20:18:17 ERR] [T:40] Failed to send auth ack. sessionId=4b14bbd7-7fc2-4227-b0d7-feb43f47bb1e
+[20:20:17 INF] [T:1] Logger setup was successful: TestServer
+[20:20:18 DBG] [T:1] The handler "10000" has been registered.
+[20:20:18 INF] [T:1] The server TestServer is initialized.
+[20:20:18 INF] [T:1] Listener (192.168.0.109:3542) was started.
+[20:20:18 INF] [T:1] The server instance TestServer was been started!
+[20:20:22 DBG] [T:43] A new session connected. sessionId=6a1ad013-4f05-4183-9ba1-7551aed342d1, remoteEndPoint=192.168.0.109:49261
+[20:20:22 ERR] [T:40] Failed to send auth ack. sessionId=6a1ad013-4f05-4183-9ba1-7551aed342d1
+[20:21:27 DBG] [T:39] The session 6a1ad013-4f05-4183-9ba1-7551aed342d1 has been closed. reason="ClientClosing"
+[20:21:27 DBG] [T:39] Peer waiting reconnect registered. peerId="1"
+[20:21:32 DBG] [T:40] A new session connected. sessionId=da7a5ec6-fe48-4bcb-b6a3-902ea1154083, remoteEndPoint=192.168.0.109:49283
+[20:21:32 ERR] [T:38] Failed to send auth ack. sessionId=da7a5ec6-fe48-4bcb-b6a3-902ea1154083
+[20:22:26 DBG] [T:47] The session da7a5ec6-fe48-4bcb-b6a3-902ea1154083 has been closed. reason="ClientClosing"
+[20:22:26 DBG] [T:47] Peer waiting reconnect registered. peerId="2"
+[20:22:42 DBG] [T:47] A new session connected. sessionId=228dfb2c-0269-486f-9c98-e4a5ed8f3dcf, remoteEndPoint=192.168.0.109:49318
+[20:22:42 ERR] [T:39] Failed to send auth ack. sessionId=228dfb2c-0269-486f-9c98-e4a5ed8f3dcf
+[20:34:19 INF] [T:1] Logger setup was successful: TestServer
+[20:34:19 DBG] [T:1] The handler "10000" has been registered.
+[20:34:19 INF] [T:1] The server TestServer is initialized.
+[20:34:19 INF] [T:1] Listener (192.168.0.109:3542) was started.
+[20:34:19 INF] [T:1] The server instance TestServer was been started!
+[20:34:23 DBG] [T:36] A new session connected. sessionId=5787d65f-4ade-4acf-97b1-4e74f7c165a1, remoteEndPoint=192.168.0.109:49509
+[20:34:23 ERR] [T:36] Failed to send auth ack. sessionId=5787d65f-4ade-4acf-97b1-4e74f7c165a1
+[20:35:49 INF] [T:1] Logger setup was successful: TestServer
+[20:35:49 DBG] [T:1] The handler "10000" has been registered.
+[20:35:49 INF] [T:1] The server TestServer is initialized.
+[20:35:49 INF] [T:1] Listener (192.168.0.109:3542) was started.
+[20:35:49 INF] [T:1] The server instance TestServer was been started!
+[20:35:52 DBG] [T:41] A new session connected. sessionId=c1d186db-6bf4-424b-ab4c-0c978c0e50ab, remoteEndPoint=192.168.0.109:49534

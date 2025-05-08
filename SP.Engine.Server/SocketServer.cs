@@ -1,13 +1,11 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
-using SP.Engine.Common;
-using SP.Engine.Common.Logging;
-using SP.Engine.Core;
-using SP.Engine.Core.Utilities;
+using SP.Engine.Runtime;
+using SP.Engine.Runtime.Utilities;
+using SP.Engine.Server.Configuration;
 
 namespace SP.Engine.Server
 {
@@ -18,9 +16,9 @@ namespace SP.Engine.Server
         void Stop();
     }
 
-    internal sealed class SocketServer(ISessionServer server, ListenerInfo[] listenerInfos) : ISocketServer, IDisposable
+    internal sealed class SocketServer(IEngine engine, ListenerInfo[] listenerInfos) : ISocketServer, IDisposable
     {
-        public ISessionServer Server { get; private set; } = server;
+        private IEngine Engine { get; } = engine;
         public bool IsRunning { get; private set; }
         private List<ISocketListener> Listeners { get; } = new List<ISocketListener>(listenerInfos.Length);
         private ListenerInfo[] ListenerInfos { get; } = listenerInfos;
@@ -35,8 +33,8 @@ namespace SP.Engine.Server
         {
             IsStopped = false;
            
-            var config = Server.Config;
-            var logger = Server.Logger;
+            var config = Engine.Config;
+            var logger = Engine.Logger;
 
             var sendingQueuePool = new SmartPool<SendingQueue>();
             sendingQueuePool.Initialize(Math.Max(config.LimitConnectionCount / 6, 256)
@@ -79,7 +77,7 @@ namespace SP.Engine.Server
             return true;
         }
 
-        private bool SetupKeepAlive(IServerConfig config)
+        private bool SetupKeepAlive(IEngineConfig config)
         {
             try
             {
@@ -94,12 +92,12 @@ namespace SP.Engine.Server
             }
             catch (Exception ex)
             {
-                Server.Logger.Fatal("An exception occurred: {0}\r\nstackTrace: {1}", ex.Message, ex.StackTrace);
+                Engine.Logger.Fatal("An exception occurred: {0}\r\nstackTrace: {1}", ex.Message, ex.StackTrace);
                 return false;
             }
         }
 
-        private bool SetupSocketEventArgsPool(IServerConfig config)
+        private bool SetupSocketEventArgsPool(IEngineConfig config)
         {
             var totalBytes = config.ReceiveBufferSize * config.LimitConnectionCount;
             var buffer = new byte[totalBytes];
@@ -192,8 +190,8 @@ namespace SP.Engine.Server
         {
             if (!_socketEventArgsPool.TryPop(out var proxy))
             {
-                Server.AsyncRun(client.SafeClose);
-                Server.Logger.Error("Limit connection count {0} was reached.", Server.Config.LimitConnectionCount);
+                Engine.AsyncRun(client.SafeClose);
+                Engine.Logger.Error("Limit connection count {0} was reached.", Engine.Config.LimitConnectionCount);
                 return;
             }
 
@@ -202,7 +200,7 @@ namespace SP.Engine.Server
 
             var session = CreateSession(client, socketSession);
             if (RegisterSession(session))
-                Server.AsyncRun(socketSession.Start);
+                Engine.AsyncRun(socketSession.Start);
         }
 
         private void OnSessionClosed(ISocketSession session, ECloseReason reason)
@@ -216,17 +214,17 @@ namespace SP.Engine.Server
         private void OnListenerStopped(object sender, EventArgs e)
         {
             if (sender is ISocketListener listener)
-                Server.Logger.Info("Listener ({0}) was stopped.", listener.EndPoint);            
+                Engine.Logger.Info("Listener ({0}) was stopped.", listener.EndPoint);            
         }
 
         private void OnListenerError(ISocketListener listener, Exception e)
         {
-            Server.Logger.Error($"Listener ({listener.EndPoint}) error: {e.Message}\r\nstackTrace={e.StackTrace}");
+            Engine.Logger.Error($"Listener ({listener.EndPoint}) error: {e.Message}\r\nstackTrace={e.StackTrace}");
         }
 
         private ISession CreateSession(Socket client, ISocketSession socketSession)
         {
-            var config = Server.Config;
+            var config = Engine.Config;
             if (0 < config.SendTimeOutMs)
                 client.SendTimeout = config.SendTimeOutMs;
 
@@ -241,12 +239,12 @@ namespace SP.Engine.Server
             var lingerOption = new LingerOption(false, 0); // 즉시 닫기
             client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Linger, lingerOption); 
             client.NoDelay = true;
-            return Server.CreateSession(socketSession);
+            return Engine.CreateSession(socketSession);
         }
         
         private bool RegisterSession(ISession session)
         {
-            if (Server.RegisterSession(session))
+            if (Engine.RegisterSession(session))
                 return true;
 
             session.SocketSession.Close(ECloseReason.InternalError);

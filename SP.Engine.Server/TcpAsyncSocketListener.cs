@@ -3,7 +3,7 @@ using System.Net.Sockets;
 
 namespace SP.Engine.Server
 {
-    internal class TcpAsyncSocketListener(ListenerInfo info) : SocketListenerBase(info)
+    internal class TcpAsyncSocketListener(ListenerInfo info) : BaseSocketListener(info)
     {
         private readonly int _backLog = info.BackLog;
         private Socket _socket;

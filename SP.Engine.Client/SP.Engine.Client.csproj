@@ -14,7 +14,8 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\SP.Engine.Core\SP.Engine.Core.csproj" />
+      <ProjectReference Include="..\SP.Protocol\SP.Protocol.csproj" />
+      <ProjectReference Include="..\SP.Engine.Runtime\SP.Engine.Runtime.csproj" />
     </ItemGroup>
 
 </Project>

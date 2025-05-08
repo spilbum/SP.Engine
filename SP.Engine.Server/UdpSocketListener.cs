@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Net;
 using System.Net.Sockets;
-using SP.Engine.Core;
+using SP.Engine.Runtime;
 
 namespace SP.Engine.Server
 {
-    internal class UdpSocketListener(ListenerInfo listenerInfo) : SocketListenerBase(listenerInfo)
+    internal class UdpSocketListener(ListenerInfo listenerInfo) : BaseSocketListener(listenerInfo)
     {
         private readonly object _lock = new object();
         private Socket _listenSocket;

@@ -23,9 +23,6 @@
 
     <ItemGroup>
       <ProjectReference Include="..\SP.Engine.Client\SP.Engine.Client.csproj" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <Folder Include="Protocol\" />
+      <ProjectReference Include="..\SP.Protocol\SP.Protocol.csproj" />
     </ItemGroup>
 </Project>

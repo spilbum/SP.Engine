@@ -1,26 +1,12 @@
 ﻿using System;
-using Serilog;
 using Serilog.Events;
-using SP.Engine.Common.Logging;
-using ILogger = SP.Engine.Common.Logging.ILogger;
+using SP.Common.Logging;
+using ILogger = SP.Common.Logging.ILogger;
 
 namespace SP.Engine.Server.Logging
 {
-      public static class ExtensionMethod
+    public static class ExtensionMethod
     {
-        public static LoggerConfiguration SetMinimumLogLevel(this LoggerConfiguration configuration, ELogLevel logLevel)
-        {
-            return logLevel switch
-            {
-                ELogLevel.Debug => configuration.MinimumLevel.Debug(),
-                ELogLevel.Info => configuration.MinimumLevel.Information(),
-                ELogLevel.Warning => configuration.MinimumLevel.Warning(),
-                ELogLevel.Error => configuration.MinimumLevel.Error(),
-                ELogLevel.Fatal => configuration.MinimumLevel.Fatal(),
-                _ => configuration.MinimumLevel.Debug(),
-            };
-        }
-
         public static LogEventLevel ToSerilogLevel(this ELogLevel logLevel)
         {
             return logLevel switch

@@ -1,0 +1,202 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using SP.Common.Logging;
+using SP.Engine.Client;
+using SP.Engine.Runtime;
+using SP.Engine.Runtime.Handler;
+using SP.Engine.Runtime.Protocol;
+using SP.Engine.Server.Configuration;
+using SP.Engine.Server.Handler;
+
+namespace SP.Engine.Server.Connector
+{
+
+    public interface IServerConnector
+    {
+        string Name { get; }
+        string Host { get; }
+        int Port { get; }
+        bool Initialize(IEngine server, ConnectorConfig config);
+        void Connect();
+        void Close();
+        void Update();
+        void Send(IProtocolData protocol);
+    }
+
+    public abstract class BaseServerConnector(string name) : IHandleContext, IServerConnector, IDisposable
+    {
+        private bool _isDisposed;
+        private bool _isOffline;        
+        private NetPeer _netPeer;
+        private ILogger _logger;
+        private readonly Dictionary<EProtocolId, ProtocolMethodInvoker> _invokerDict = new();
+        
+        public event EventHandler Connected;
+        public event EventHandler Disconnected;
+
+        public string Name { get; } = name;
+
+        public EPeerId PeerId => _netPeer?.PeerId ?? EPeerId.None;
+        public string Host { get; private set; }
+        public int Port { get; private set; }
+
+        public virtual bool Initialize(IEngine server, ConnectorConfig config)
+        {
+            var logger = server.Logger;
+            if (string.IsNullOrEmpty(config.Host) || 0 >= config.Port)
+            {
+                logger.Error("Invalid connector config. host={0}, port={1}", config.Host,
+                    config.Port);
+                return false;
+            }
+
+            Host = config.Host;
+            Port = config.Port;
+            _logger = logger;
+
+            try
+            {
+                _netPeer = CreateNetPeer();
+
+                foreach (var invoker in ProtocolMethodInvoker.LoadInvokers(GetType()))
+                    _invokerDict.Add(invoker.ProtocolId, invoker);
+                
+                return true;
+            }
+            catch (Exception e)
+            {
+                server.Logger.Error(e);
+                return false;
+            }
+        }
+
+        private ProtocolMethodInvoker GetInvoker(EProtocolId protocolId)
+        {
+            _invokerDict.TryGetValue(protocolId, out var invoker);
+            return invoker;
+        }
+
+        private NetPeer CreateNetPeer()
+        {
+            var netPeer = new NetPeer();
+            netPeer.IsEnableAutoSendPing = true;
+            netPeer.AutoSendPingIntervalSec = 10;
+            netPeer.MaxConnectionAttempts = -1;
+            netPeer.LimitRequestLength = 64 * 1024;
+            netPeer.Connected += OnConnected;
+            netPeer.Error += OnError;
+            netPeer.Offline += OnOffline;
+            netPeer.Disconnected += OnDisconnect;
+            netPeer.MessageReceived += OnMessageReceived;
+            return netPeer;
+        }
+
+        private void OnOffline(object sender, EventArgs e)
+        {
+            _isOffline = true;
+            Log(ELogLevel.Info, "Connection to server {0}:{1} has been lost.", Host, Port);
+        }
+
+        public void Connect()
+        {
+            try
+            {
+                _netPeer?.Open(Host, Port);
+            }
+            catch (Exception ex)
+            {
+                LogError(ex);
+            }
+        }
+
+        public void Close()
+        {
+            _netPeer?.Close();
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (_isDisposed)
+                return;
+
+            if (disposing)
+            {
+                var netPeer = _netPeer;
+                if (netPeer != null)
+                {
+                    netPeer.Connected -= OnConnected;
+                    netPeer.Error -= OnError;
+                    netPeer.Offline -= OnOffline;
+                    netPeer.Disconnected -= OnDisconnect;
+                    netPeer.MessageReceived -= OnMessageReceived;
+                    netPeer.Dispose();
+                    _netPeer = null;
+                }
+            }
+
+            _isDisposed = true;
+        }
+
+        public void Send(IProtocolData protocol)
+        {
+            _netPeer?.Send(protocol);
+        }
+
+        public virtual void Update()
+        {
+            _netPeer?.Update();
+        }
+
+        private void OnMessageReceived(object sender, MessageEventArgs e)
+        {
+            try
+            {
+                var message = e.Message;
+                var invoker = GetInvoker(message.ProtocolId);
+                invoker.Invoke(this, message, _netPeer.DhSharedKey);
+            }
+            catch (Exception ex)
+            {
+                LogError(ex);
+            }
+        }
+
+        private void OnDisconnect(object sender, EventArgs e)
+        {
+            Log(ELogLevel.Info, "Disconnected from server {0}:{1}", Host, Port);
+            Disconnected?.Invoke(this, e);
+        }
+        
+
+        private void OnError(object sender, ErrorEventArgs e)
+        {
+            LogError(e.GetException());
+        }
+
+        private void OnConnected(object sender, EventArgs e)
+        {
+            Log(ELogLevel.Info, "Connected to server {0}:{1}. peerId={2}", Host, Port, PeerId);
+            if (_isOffline)
+                _isOffline = false;
+            else
+                Connected?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void Log(ELogLevel level, string format, params object[] args)
+        {
+            _logger?.Log(level, format, args);
+        }
+
+        private void LogError(Exception ex)
+        {
+            _logger?.Error(ex);
+        }
+    }
+}

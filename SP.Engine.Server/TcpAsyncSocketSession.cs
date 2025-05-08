@@ -2,9 +2,9 @@
 using System.Linq;
 using System.Net.Sockets;
 using System.Threading;
-using SP.Engine.Common.Logging;
-using SP.Engine.Core;
-using SP.Engine.Core.Utilities;
+using SP.Common.Logging;
+using SP.Engine.Runtime;
+using SP.Engine.Runtime.Utilities;
 
 namespace SP.Engine.Server
 {
@@ -14,7 +14,7 @@ namespace SP.Engine.Server
         void ProcessReceive(SocketAsyncEventArgs e);
     }
 
-    internal class TcpAsyncSocketSession(Socket client, SocketAsyncEventArgsProxy socketEventArgsProxy) : SocketSessionBase(ESocketMode.Tcp, client), ITcpAsyncSocketSession
+    internal class TcpAsyncSocketSession(Socket client, SocketAsyncEventArgsProxy socketEventArgsProxy) : BaseSocketSession(ESocketMode.Tcp, client), ITcpAsyncSocketSession
     {
         private SocketAsyncEventArgs _socketEventArgsSend;        
 

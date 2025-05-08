@@ -1,11 +1,11 @@
 ﻿using System.Net;
 using System.Net.Sockets;
-using SP.Engine.Core;
-using SP.Engine.Core.Utilities;
+using SP.Engine.Runtime;
+using SP.Engine.Runtime.Utilities;
 
 namespace SP.Engine.Server
 {
-    internal class UdpSocketSession : SocketSessionBase
+    internal class UdpSocketSession : BaseSocketSession
     {
         private readonly Socket _socket;        
 
