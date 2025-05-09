@@ -8,7 +8,12 @@ namespace SP.Common.Accessor
         public bool IgnoreOnRead { get; set; }
         public bool IgnoreOnWrite { get; set; }
 
-        public IgnorePropertyAttribute(bool ignoreOnRead = true, bool ignoreOnWrite = true)
+        public IgnorePropertyAttribute()
+            : this(true, true)
+        {
+            
+        }
+        public IgnorePropertyAttribute(bool ignoreOnRead, bool ignoreOnWrite)
         {
             IgnoreOnRead = ignoreOnRead;
             IgnoreOnWrite = ignoreOnWrite;
