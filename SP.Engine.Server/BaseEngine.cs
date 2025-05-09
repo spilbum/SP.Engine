@@ -178,10 +178,7 @@ namespace SP.Engine.Server
 
         private bool SetupLogger()
         {
-            var loggerFactory = new SerilogFactory();
-            LogManager.SetLoggerFactory(loggerFactory);
-            LogManager.SetDefaultCategory(Name);
-
+            LogManager.Initialize(Name, new SerilogFactory());
             Logger = LogManager.GetLogger();
             Logger?.Info("Logger setup was successful: {0}", Name);
             return true;

@@ -30,7 +30,7 @@ namespace SP.Common.Logging
         {
             lock (_lock)
             {
-                Console.WriteLine("{0}-{1}: {2}", _category, level.ToString().ToUpper(), message);
+                Console.WriteLine("[{0:yyyy-MM-dd hh:mm:ss.fff}][{1}][{2}] {3}", DateTime.UtcNow, _category, level.ToString().ToUpper(), message);
             }
         }
 

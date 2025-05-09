@@ -1,11 +1,10 @@
-using System;
+using SP.Common.Logging;
 
 namespace SP.Common.Fiber
 {
-
     internal interface IAsyncJob
     {
-        void Execute(Action<Exception> exceptionHandler);
+        void Execute(ILogger logger);
     }    
 }
 

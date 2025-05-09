@@ -3,7 +3,7 @@ using System.Buffers;
 using System.Text;
 using System.Runtime.InteropServices;
 
-namespace SP.Engine.Runtime.Serialization
+namespace SP.Common.Buffer
 {
     public sealed class BinaryBuffer : IDisposable
     {
@@ -16,7 +16,7 @@ namespace SP.Engine.Runtime.Serialization
         public BinaryBuffer(int size = 4096)
         {
             _memoryOwner = MemoryPool<byte>.Shared.Rent(size);
-            _memory = _memoryOwner.Memory[..size];
+            _memory = _memoryOwner.Memory.Slice(0, size);
         }
 
         public int RemainSize => _writeIndex - _readIndex;
@@ -40,7 +40,7 @@ namespace SP.Engine.Runtime.Serialization
         public void Write(ReadOnlySpan<byte> data)
         {
             EnsureCapacity(data.Length);
-            data.CopyTo(_memory.Span[_writeIndex..]);
+            data.CopyTo(_memory.Span.Slice(_writeIndex));
             _writeIndex += data.Length;
         }
         
@@ -177,7 +177,7 @@ namespace SP.Engine.Runtime.Serialization
 
             _memoryOwner.Dispose();
             _memoryOwner = newOwner;
-            _memory = _memoryOwner.Memory[..newSize];
+            _memory = _memoryOwner.Memory.Slice(0, newSize);
         }
         
         public byte[] ToArray() => _memory.Span.Slice(_readIndex, RemainSize).ToArray();

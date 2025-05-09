@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using SP.Engine.Runtime.Protocol;
 
 namespace NetworkCommon
@@ -13,7 +14,6 @@ namespace NetworkCommon
             public class LoginReq : BaseProtocolData
             {
                 public long Uid { get; set; }
-                public DateTime SendTime { get; set; }
             }
         }
     }

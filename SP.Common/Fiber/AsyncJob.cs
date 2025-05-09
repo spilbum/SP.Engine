@@ -1,35 +1,50 @@
 ﻿using System;
+using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
+using SP.Common.Logging;
 
 namespace SP.Common.Fiber
 {
     internal class AsyncJob : IAsyncJob
     {
-        private readonly object _instance;
-        private readonly MethodInfo _method;
-        private readonly object[] _parameters;
-
-        public AsyncJob(object instance, MethodInfo method, params object[] parameters)
+        private readonly Action _delegate;
+        
+        public AsyncJob(object target, MethodInfo method, params object[] args)
         {
-            _instance = instance;
-            _method = method ?? throw new ArgumentNullException(nameof(method));
-            _parameters = parameters;
+            _delegate = CreateDelegate(target, method, args);
         }
 
-        public void Execute(Action<Exception> exceptionHandler)
+        public void Execute(ILogger logger)
         {
             try
             {
-                _method.Invoke(_instance, _parameters);
+                _delegate();
             }
-            catch (TargetInvocationException ex)
+            catch (Exception e)
             {
-                exceptionHandler?.Invoke(ex.InnerException ?? ex);
+                logger?.Error(e);
             }
-            catch (Exception ex)
-            {
-                exceptionHandler?.Invoke(ex);
-            }
+        }
+
+        private static Action CreateDelegate(object target, MethodInfo method, object[] args)
+        {
+            if (method.GetParameters().Length != args.Length)
+                throw new Exception($"Invalid parameter count. method:{method.Name}");
+            
+            var instanceExpr = Expression.Constant(target);
+            var arguments = method.GetParameters()
+                .Select((p, i) =>
+                    Expression.Convert(
+                        Expression.Constant(args[i]), p.ParameterType)
+                ).ToArray<Expression>();
+
+            var call = method.IsStatic
+                ? Expression.Call(method, arguments)
+                : Expression.Call(instanceExpr, method, arguments);
+            
+            var lambda = Expression.Lambda<Action>(call);
+            return lambda.Compile();
         }
     }
 }

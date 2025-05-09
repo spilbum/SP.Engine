@@ -66,10 +66,7 @@ namespace SP.Engine.Server
         
         private ThreadFiber CreateFiber()
         {
-            var fiber = new ThreadFiber(ex =>
-            {
-                Logger.Error("Fiber exception occurred: {0}\r\n{1}", ex.Message, ex.StackTrace);
-            });
+            var fiber = new ThreadFiber(logger: Logger);
             return fiber;
         }
 

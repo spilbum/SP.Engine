@@ -2,7 +2,7 @@
 using System.Collections;
 using System.Data;
 using System.Data.Common;
-using SP.Common.Utilities;
+using SP.Common.Accessor;
 
 namespace SP.Database
 {

@@ -15,6 +15,7 @@ namespace SP.Common.Fiber
         private volatile bool _running = true;
         private readonly object _lock = new object();
         private bool _disposed;
+        private int _executing = 0;
 
         public TimerAction(ISchedulerRegistry registry, IAsyncJob job, int dueTimeMs, int intervalMs)
         {
@@ -35,11 +36,23 @@ namespace SP.Common.Fiber
 
         private void Execute()
         {
-            lock (_lock)
+            if (Interlocked.Exchange(ref _executing, 1) == 1)
+                return;
+
+            try
             {
-                if (!_running || _disposed) return;
+                lock (_lock)
+                {
+                    if (!_running || _disposed) 
+                        return;
+                }     
+                
                 _registry.Enqueue(_job);
-            }            
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _executing, 0);
+            }
         }
 
         public void Dispose()

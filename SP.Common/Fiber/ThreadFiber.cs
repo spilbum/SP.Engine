@@ -2,6 +2,7 @@
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using SP.Common.Logging;
 
 namespace SP.Common.Fiber
 {
@@ -11,13 +12,16 @@ namespace SP.Common.Fiber
         private readonly BatchQueue _queue;
         private readonly Scheduler _scheduler;
         private readonly Thread _thread;
+        private readonly ILogger _logger;
+        private bool _disposed;
 
         public int Index { get; }
 
-        public ThreadFiber(Action<Exception> exceptionHandler = null, ApartmentState apartmentState = ApartmentState.MTA, int maxBatchSize = 50)
+        public ThreadFiber(ILogger logger = null, ApartmentState apartmentState = ApartmentState.MTA, int maxBatchSize = 50)
         {
             Index = Interlocked.Increment(ref _globalIndex);
-            _queue = new BatchQueue(maxBatchSize, exceptionHandler);
+            _logger = logger;
+            _queue = new BatchQueue(maxBatchSize, logger);
             _scheduler = new Scheduler(this);
             _thread = new Thread(_queue.Run)
             {
@@ -38,13 +42,15 @@ namespace SP.Common.Fiber
 
         public void Dispose()
         {
+            if (_disposed) return;
+            _disposed = true;
+            
             _queue.Stop();
             _scheduler.Dispose();
             
             if (!_thread.Join(TimeSpan.FromSeconds(5)))
             {
-                // 5초후 강제 종료
-                _thread.Abort();
+                _logger?.Warn("[ThreadFiber-{0}] graceful shutdown failed (timeout)", Index);
             }
         }
         
@@ -111,31 +117,6 @@ namespace SP.Common.Fiber
         public IDisposable Schedule<T1, T2, T3, T4, T5>(Action<T1, T2, T3, T4, T5> action, T1 param1, T2 param2, T3 param3, T4 param4, T5 param5, int dueTimeInMs, int intervalInMs)
         {
             return _scheduler.Schedule(new AsyncJob(action.Target, action.Method, param1, param2, param3, param4, param5), dueTimeInMs, intervalInMs);
-        }
-        
-        public IDisposable Schedule<T1>(Func<T1, Task> action, T1 param1, int dueTimeInMs, int intervalInMs)
-        {
-            return _scheduler.Schedule(new AsyncJob(action.Target, action.Method, param1), dueTimeInMs, intervalInMs);
-        }
-        
-        public IDisposable Schedule<T1, T2>(Func<T1, T2, Task> action, T1 param1, T2 param2, int dueTimeInMs, int intervalInMs)
-        {
-            return _scheduler.Schedule(new AsyncJob(action.Target, action.Method, param1), dueTimeInMs, intervalInMs);
-        }
-        
-        public IDisposable Schedule<T1, T2, T3>(Func<T1, T2, T3, Task> action, T1 param1, T2 param2, T3 param3, int dueTimeInMs, int intervalInMs)
-        {
-            return _scheduler.Schedule(new AsyncJob(action.Target, action.Method, param1), dueTimeInMs, intervalInMs);
-        }
-        
-        public IDisposable Schedule<T1, T2, T3, T4>(Func<T1, T2, T3, T4, Task> action, T1 param1, T2 param2, T3 param3, T4 param4, int dueTimeInMs, int intervalInMs)
-        {
-            return _scheduler.Schedule(new AsyncJob(action.Target, action.Method, param1), dueTimeInMs, intervalInMs);
-        }
-        
-        public IDisposable Schedule<T1, T2, T3, T4, T5>(Func<T1, T2, T3, T4, T5, Task> action, T1 param1, T2 param2, T3 param3, T4 param4, T5 param5, int dueTimeInMs, int intervalInMs)
-        {
-            return _scheduler.Schedule(new AsyncJob(action.Target, action.Method, param1), dueTimeInMs, intervalInMs);
         }
     }
 }

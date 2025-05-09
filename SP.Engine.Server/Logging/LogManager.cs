@@ -16,27 +16,19 @@ namespace SP.Engine.Server.Logging
         private static int _fiberIndex;
         private static string _defaultCategory;
 
-        static LogManager()
+        public static void Initialize(string defaultCategory, ILoggerFactory loggerFactory)
         {
+            _defaultCategory = defaultCategory;
+            _loggerFactory = loggerFactory;
+
+            var logger = GetLogger(defaultCategory);
             for (var i = 0; i < Environment.ProcessorCount; i++)
             {
-                var fiber = new ThreadFiber(OnError);
+                var fiber = new ThreadFiber(logger);
                 fiber.Start();
                 Fibers.Add(fiber);
             }
         }
-
-        public static void SetLoggerFactory(ILoggerFactory factory)
-        {
-            _loggerFactory = factory;
-            Loggers.Clear();
-        }
-
-        public static void SetDefaultCategory(string category)
-        {
-            _defaultCategory = category;
-        }
-
         public static ILogger GetLogger(string category = null)
         {
             if (string.IsNullOrEmpty(category))
@@ -49,11 +41,6 @@ namespace SP.Engine.Server.Logging
             var index = Interlocked.Increment(ref _fiberIndex);
             var fiber = Fibers[index % Fibers.Count];
             fiber.Enqueue(job);
-        }
-
-        private static void OnError(Exception ex)
-        {
-            Console.WriteLine("[LogFiberError] {0}", ex);
         }
 
         public static void Dispose()

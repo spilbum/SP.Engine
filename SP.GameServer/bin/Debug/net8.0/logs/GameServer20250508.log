@@ -201,3 +201,15 @@
 [11:56:20 INF] [T:1] The server instance GameServer was been started!
 [11:56:23 DBG] [T:36] A new session connected. sessionId=89cd3cd9-5c69-41c2-81e9-f5e9b17c0233, remoteEndPoint=192.168.0.109:54629
 [11:56:23 DBG] [T:38] LoginReq received. uid=1, sendTime="2025-05-08T02:56:23.5624010"
+[13:25:41 INF] [T:1] Logger setup was successful: GameServer
+[13:25:42 DBG] [T:1] The handler "10000" has been registered.
+[13:25:42 INF] [T:1] The server GameServer is initialized.
+[13:25:42 INF] [T:1] Listener (192.168.0.109:3542) was started.
+[13:25:42 INF] [T:1] The server instance GameServer was been started!
+[13:25:44 DBG] [T:39] A new session connected. sessionId=c50ee8b9-62b6-4ae3-a9ba-9b42f734527c, remoteEndPoint=192.168.0.109:55941
+[17:27:03 INF] [T:1] Logger setup was successful: GameServer
+[17:27:03 DBG] [T:1] The handler "10000" has been registered.
+[17:27:03 INF] [T:1] The server GameServer is initialized.
+[17:27:03 INF] [T:1] Listener (192.168.0.109:3542) was started.
+[17:27:03 INF] [T:1] The server instance GameServer was been started!
+[17:27:06 DBG] [T:39] A new session connected. sessionId=e21a9060-da8a-4726-9cb1-df39c870745e, remoteEndPoint=192.168.0.109:60819

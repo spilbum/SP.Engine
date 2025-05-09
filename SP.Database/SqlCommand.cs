@@ -5,7 +5,7 @@ using System.Data;
 using System.Data.Common;
 using System.Text;
 using System.Threading.Tasks;
-using SP.Common.Utilities;
+using SP.Common.Accessor;
 
 namespace SP.Database
 {

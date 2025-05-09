@@ -1,0 +1,12 @@
+[10:43:11 INF] [T:1] Logger setup was successful: GameServer
+[10:43:11 DBG] [T:1] The handler "10000" has been registered.
+[10:43:11 INF] [T:1] The server GameServer is initialized.
+[10:43:11 INF] [T:1] Listener (192.168.0.109:3542) was started.
+[10:43:11 INF] [T:1] The server instance GameServer was been started!
+[10:43:15 DBG] [T:5] A new session connected. sessionId=ce063192-def3-4807-b771-cf80d9ab2dba, remoteEndPoint=192.168.0.109:54931
+[10:47:15 INF] [T:1] Logger setup was successful: GameServer
+[10:47:15 DBG] [T:1] The handler "10000" has been registered.
+[10:47:15 INF] [T:1] The server GameServer is initialized.
+[10:47:15 INF] [T:1] Listener (192.168.0.109:3542) was started.
+[10:47:15 INF] [T:1] The server instance GameServer was been started!
+[10:47:20 DBG] [T:37] A new session connected. sessionId=a8148d71-222e-4e73-b46c-3ff09e3f9718, remoteEndPoint=192.168.0.109:55039

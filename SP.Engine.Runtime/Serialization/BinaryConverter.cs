@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using SP.Common.Utilities;
-using SP.Engine.Runtime.Networking;
+using SP.Common.Buffer;
+using SP.Common.Accessor;
 
 namespace SP.Engine.Runtime.Serialization
 {

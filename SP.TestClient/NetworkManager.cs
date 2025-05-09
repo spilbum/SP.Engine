@@ -1,6 +1,7 @@
 using System.Reflection;
 using NetworkCommon;
 using SP.Common;
+using SP.Common.Logging;
 using SP.Engine.Client;
 using SP.Engine.Runtime.Handler;
 using SP.Engine.Runtime.Protocol;
@@ -12,8 +13,9 @@ public class NetworkManager : Singleton<NetworkManager>
     private NetPeer? _netPeer;
     private readonly Dictionary<EProtocolId, ProtocolMethodInvoker> _invokerDict = new();
     
+    public ILogger Logger { get; } = new ConsoleLogger("Client");
     public bool Connected => _netPeer?.State == ENetPeerState.Open;
-    
+
     public bool Initialize()
     {
         _netPeer = new NetPeer();
@@ -23,6 +25,8 @@ public class NetworkManager : Singleton<NetworkManager>
         _netPeer.Error += OnError;
         _netPeer.MessageReceived += OnMessageReceived;
 
+        
+        
         foreach (var invoker in ProtocolMethodInvoker.LoadInvokers(GetType()))
             _invokerDict.Add(invoker.ProtocolId, invoker);
         
@@ -64,27 +68,27 @@ public class NetworkManager : Singleton<NetworkManager>
 
     private void OnError(object? sender, ErrorEventArgs e)
     {
-        Console.WriteLine("Error message: {0}", e.GetException().Message);
+        Logger.Error("Error message: {0}", e.GetException().Message);
     }
 
     private void OnOffline(object? sender, EventArgs e)
     {
-        Console.WriteLine("OnOffline");
+        Logger.Debug("OnOffline");
     }
 
     private void OnDisconnected(object? sender, EventArgs e)
     {
-        Console.WriteLine("OnDisconnected");
+        Logger.Debug("OnDisconnected");
     }
 
     private void OnConnected(object? sender, EventArgs e)
     {
-        Console.WriteLine("OnConnected");
+        Logger.Debug("OnConnected");
     }
 
     [ProtocolMethod(S2CProtocol.LoginAck)]
-    private void OnLoginAck(S2CProtocol.Data.LoginAck loginAck)
+    private void OnLoginAck(S2CProtocol.Data.LoginAck protocol)
     {
-        Console.WriteLine("[{2:yyyy-MM-dd hh:mm:ss.fff}] LoginAck: {0}, {1}", loginAck.Uid, loginAck.SentTime, DateTime.UtcNow);
+        Logger.Debug("[{0:yyyy-MM-dd hh:mm:ss.fff}] LoginAck - {1}", DateTime.UtcNow, protocol.Uid);
     }
 }

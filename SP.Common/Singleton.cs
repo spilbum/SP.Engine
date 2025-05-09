@@ -4,7 +4,7 @@ namespace SP.Common
 {
 public class Singleton<T> where T : Singleton<T>
 {
-    private static readonly Lazy<T> InstanceLazy = new Lazy<T>(() => CreateInstance());
+    private static readonly Lazy<T> InstanceLazy = new Lazy<T>(CreateInstance);
 
     /// <summary>
     /// 싱글톤 인스턴스 반환

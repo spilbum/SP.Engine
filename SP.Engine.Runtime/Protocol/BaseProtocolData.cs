@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Reflection;
+using SP.Common.Accessor;
 
 namespace SP.Engine.Runtime.Protocol
 {

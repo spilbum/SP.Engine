@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
+using SP.Common.Buffer;
 using SP.Common.Logging;
 using SP.Engine.Client.ProtocolHandler;
 using SP.Protocol;
@@ -11,7 +12,6 @@ using SP.Engine.Runtime;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Runtime.Security;
-using SP.Engine.Runtime.Serialization;
 using SP.Engine.Runtime.Utilities;
 
 namespace SP.Engine.Client
