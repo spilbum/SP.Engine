@@ -28,95 +28,65 @@ namespace SP.Engine.Client
 
     public enum ENetPeerState
     {
-        None = NetPeerStateConst.None,
-        Connecting = NetPeerStateConst.Connecting,
-        Open = NetPeerStateConst.Open,
-        Closing = NetPeerStateConst.Closing,
-        Closed = NetPeerStateConst.Closed,
+        None = 0,
+        Connecting = 1,
+        Open = 2,
+        Closing = 3,
+        Closed = 4,
     }
 
-    public static class NetPeerStateConst
-    {
-        public const int None = 0;
-        public const int Connecting = 1;
-        public const int Open = 2;
-        public const int Closing = 3;
-        public const int Closed = 4;
-    }
-    
     public sealed class NetPeer : MessageProcessor, IDisposable
     {
-        private sealed class TimerManager : IDisposable
+        private sealed class Timer : IDisposable
         {
-            private sealed class Timer : IDisposable
+            private DateTime _lastExecutionTime;
+            private readonly int _dueTimeMs;
+            private readonly int _intervalMs;
+            private readonly object _state;
+            private Action<object> _callback;
+            private bool _isRunning;
+            private bool _isFirstExecution;
+
+            public Timer(Action<object> callback, object state, int dueTimeMs, int intervalMs)
             {
-                private DateTime _lastExecutionTime;
-                private readonly int _dueTimeMs;
-                private readonly int _intervalMs;
-                private readonly object _state;
-                private Action<object> _callback;
-                private bool _isRunning;
-                private bool _isFirstExecution;
-
-                public Timer(Action<object> callback, object state, int dueTimeMs, int intervalMs)
-                {
-                    _isRunning = true;
-                    _isFirstExecution = true;
-                    _lastExecutionTime = DateTime.UtcNow;
-                    _callback = callback;
-                    _state = state; 
-                    _dueTimeMs = dueTimeMs;
-                    _intervalMs = intervalMs;
-                }
-
-                public void Update()
-                {
-                    if (!_isRunning) return;
-                    
-                    var now = DateTime.UtcNow;
-                    var elapsedMs = (int)(now - _lastExecutionTime).TotalMilliseconds;
-
-                    if (_isFirstExecution)
-                    {
-                        if (Timeout.Infinite == _dueTimeMs || elapsedMs < _dueTimeMs) return;
-                        _callback?.Invoke(_state);
-                        _lastExecutionTime = now;
-                        _isFirstExecution = false;
-                        
-                        if (_intervalMs == Timeout.Infinite)
-                            Dispose();
-                    }
-                    else
-                    {
-                        if (Timeout.Infinite == _intervalMs || elapsedMs < _intervalMs) return;
-                        _callback?.Invoke(_state);
-                        _lastExecutionTime = now;
-                    }
-                }
-
-                public void Dispose()
-                {
-                    _isRunning = false;
-                    _callback = null;
-                }
-            }
-            
-            private Timer _timer;
-            public void SetTimer(Action<object> callback, object state, int dueTimeMs, int intervalMs)
-            {
-                _timer?.Dispose();
-                _timer = new Timer(callback, state, dueTimeMs, intervalMs);
+                _isRunning = true;
+                _isFirstExecution = true;
+                _lastExecutionTime = DateTime.UtcNow;
+                _callback = callback;
+                _state = state;
+                _dueTimeMs = dueTimeMs;
+                _intervalMs = intervalMs;
             }
 
             public void Update()
             {
-                _timer?.Update();
+                if (!_isRunning) return;
+
+                var now = DateTime.UtcNow;
+                var elapsedMs = (int)(now - _lastExecutionTime).TotalMilliseconds;
+
+                if (_isFirstExecution)
+                {
+                    if (Timeout.Infinite == _dueTimeMs || elapsedMs < _dueTimeMs) return;
+                    _callback?.Invoke(_state);
+                    _lastExecutionTime = now;
+                    _isFirstExecution = false;
+
+                    if (_intervalMs == Timeout.Infinite)
+                        Dispose();
+                }
+                else
+                {
+                    if (Timeout.Infinite == _intervalMs || elapsedMs < _intervalMs) return;
+                    _callback?.Invoke(_state);
+                    _lastExecutionTime = now;
+                }
             }
 
             public void Dispose()
             {
-                _timer?.Dispose();
-                _timer = null;
+                _isRunning = false;
+                _callback = null;
             }
         }
 
@@ -127,7 +97,7 @@ namespace SP.Engine.Client
         private DateTime _serverUpdateTime;
         private DateTime _lastServerTime;
         private int _connectionAttempts;
-        private readonly TimerManager _timer = new TimerManager(); 
+        private Timer _timer;
         private readonly DataSampler<int> _latencySampler = new DataSampler<int>(1024);
         private readonly DhSession _dh = new DhSession(DhKeySize.Bit2048);
         private readonly BinaryBuffer _receiveBuffer = new BinaryBuffer();
@@ -154,8 +124,6 @@ namespace SP.Engine.Client
             }
         }        
         
-        public ILogger Logger { get; set; }
-        
         public bool IsEnableAutoSendPing { get; set; } = true;
         public int AutoSendPingIntervalSec { get; set; } = 30;
         public int LimitRequestLength { get; set; } = 4096;
@@ -167,9 +135,13 @@ namespace SP.Engine.Client
         public event EventHandler Offline;
         public event EventHandler<ErrorEventArgs> Error;
         public event EventHandler<MessageEventArgs> MessageReceived;
+        public event Action<ENetPeerState> StateChanged;
         
-        public NetPeer()
+        public ILogger Logger { get; }
+        
+        public NetPeer(ILogger logger = null)
         {
+            Logger = logger;
             _handlerDict[S2CEngineProtocol.SessionAuthAck] = new SessionAuth();
             _handlerDict[S2CEngineProtocol.Close] = new Close();
             _handlerDict[S2CEngineProtocol.MessageAck] = new MessageAck();
@@ -181,6 +153,27 @@ namespace SP.Engine.Client
             Dispose(false);
         }
 
+        private bool TrySetState(ENetPeerState expected, ENetPeerState next)
+        {
+            if (Interlocked.CompareExchange(ref _stateCode, (int)next, (int)expected) != (int)expected) return false;
+            Logger?.Info($"[NetPeer] State changed: {expected} -> {next}");
+            StateChanged?.Invoke(next);
+            return true;
+        }
+
+        private void SetState(ENetPeerState state)
+        {
+            Interlocked.Exchange(ref _stateCode, (int)state);
+            Logger?.Info($"[NetPeer] State changed: {state}");
+            StateChanged?.Invoke(state);
+        }
+
+        private void SetTimer(Action<object> callback, object state, int dueTimeMs, int intervalMs)
+        {
+            _timer?.Dispose();
+            _timer = new Timer(callback, state, dueTimeMs, intervalMs);
+        }
+        
         private static EndPoint ResolveEndPoint(string host, int port)
         {
             if (IPAddress.TryParse(host, out var ipAddress))
@@ -204,39 +197,41 @@ namespace SP.Engine.Client
 
         private void StartConnection()
         {
-            // 연결 중 상태 변경
-            _stateCode = NetPeerStateConst.Connecting;
-
-            var session = _session;
-            session?.Close();
+            SetState(ENetPeerState.Connecting);
             
-            // 새로운 세션 생성
-            session = CreateNewSession();
-            _session = session;
+            _session?.Close();
+            _session = CreateNewSession();
 
             try
             {
-                _timer.SetTimer(s =>
-                {
-                    try
-                    {
-                        if (0 < MaxConnectionAttempts && MaxConnectionAttempts <= _connectionAttempts)
-                            throw new InvalidOperationException("Max connection attempts exceeded.");
-
-                        _connectionAttempts++;
-                        if (s is ServerSession ss)
-                            ss.Connect(RemoteEndPoint);   
-                    }
-                    catch (Exception e)
-                    {
-                        OnError(e);
-                        Close();
-                    }
-                }, session, 100, ReconnectionIntervalSec * 1000);
+                SetTimer(TryReconnect, _session, 100, ReconnectionIntervalSec * 1000);
             }
             catch (Exception e)
             {
                 OnError(e);
+            }
+        }
+
+        private void TryReconnect(object state)
+        {
+            var session = (ServerSession)state;
+            if (MaxConnectionAttempts > 0 && _connectionAttempts >= MaxConnectionAttempts)
+            {
+                Logger?.Warn("Max connection attempts exceeded.");
+                Close();
+                return;
+            }
+
+            try
+            {
+                _connectionAttempts++;
+                Logger?.Info($"Reconnect attempt #{_connectionAttempts}");
+                session.Connect(RemoteEndPoint);
+            }
+            catch (Exception e)
+            {
+                OnError(e);
+                Close();
             }
         }
 
@@ -316,7 +311,7 @@ namespace SP.Engine.Client
                 return;
 
             var intervalSec = AutoSendPingIntervalSec > 0 ? AutoSendPingIntervalSec : 60;
-            _timer.SetTimer(_ => SendPing(), null, intervalSec * 1000, intervalSec * 1000);
+            SetTimer(_ => SendPing(), null, intervalSec * 1000, intervalSec * 1000);
         }
         
         public void SendPing()
@@ -368,21 +363,19 @@ namespace SP.Engine.Client
 
         public void Close()
         {
-            if (Interlocked.CompareExchange(ref _stateCode, NetPeerStateConst.Closed, NetPeerStateConst.None)
-                == NetPeerStateConst.None)
+            if (TrySetState(ENetPeerState.None, ENetPeerState.Closed))
             {
                 // 초기 상태에서 종료를 호출함
                 OnClosed();
                 return;
             }
 
-            if (Interlocked.CompareExchange(ref _stateCode, NetPeerStateConst.Closing, NetPeerStateConst.Connecting)
-                == NetPeerStateConst.Connecting)
+            if (TrySetState(ENetPeerState.Connecting, ENetPeerState.Closing))
             {
                 var session = _session;
                 if (session != null && session.IsConnected)
                 {
-                    // 세션이 연결되어 있으면 종료함
+                    // 세션이 연결되어 있으면 종료
                     session.Close();
                     return;
                 }
@@ -391,14 +384,14 @@ namespace SP.Engine.Client
                 return;
             }
 
-            _stateCode = NetPeerStateConst.Closing;
+            SetState(ENetPeerState.Closing);
 
             // 종료 요청
             SendCloseHandshake();
             
-            _timer.SetTimer(_ =>
+            SetTimer(_ =>
             {
-                if (_stateCode == NetPeerStateConst.Closed) 
+                if (_stateCode == (int)ENetPeerState.Closed) 
                     return;
             
                 // 종료 요청에 대한 응답을 받지 못했으면 즉시 종료함
@@ -563,16 +556,16 @@ namespace SP.Engine.Client
 
         private void OnClosed()
         {
-            switch (_stateCode)
+            switch ((ENetPeerState)_stateCode)
             {
-                case NetPeerStateConst.Open:
+                case ENetPeerState.Open:
                     // 오프라인으로 전환
                     OnOffline();
                     return;
-                case NetPeerStateConst.Connecting:
+                case ENetPeerState.Connecting:
                     return;
                 default:
-                    _stateCode = NetPeerStateConst.Closed;
+                    SetState(ENetPeerState.Closed);
                     _timer.Dispose();
                     _session = null;
                     Disconnected?.Invoke(this, EventArgs.Empty);
@@ -582,7 +575,7 @@ namespace SP.Engine.Client
 
         internal void OnOpened(EPeerId peerId, string sessionId, byte[] serverPublicKey)
         {
-            _stateCode = NetPeerStateConst.Open;
+            SetState(ENetPeerState.Open);
             _connectionAttempts = 0;
             
             PeerId = peerId;

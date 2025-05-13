@@ -212,7 +212,7 @@ namespace SP.Engine.Client
             }
         }
 
-        public bool TrySend(ArraySegment<byte> segment)
+        private bool TrySend(ArraySegment<byte> segment)
         {
             if (_socket == null || !IsConnected)
                 throw new InvalidOperationException("Socket is not connected.");

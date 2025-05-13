@@ -1,6 +1,7 @@
 ﻿
 using System;
 using System.Threading;
+using SP.Common.Logging;
 
 namespace SP.Engine.Client
 {
@@ -19,17 +20,19 @@ namespace SP.Engine.Client
         private readonly T _null = default;
         private readonly Func<T, bool> _nullValidator;
         private readonly object _lock = new object();
+        private readonly ILogger _logger;
         private long _count;
 
         public int Count => (int)Interlocked.Read(ref _count);
 
         public bool IsEmpty => Count == 0;
 
-        public ConcurrentBatchQueue(int capacity, Func<T, bool> validator = null)
+        public ConcurrentBatchQueue(int capacity, Func<T, bool> validator = null, ILogger logger = null)
         {
             if (capacity <= 0)
                 throw new ArgumentOutOfRangeException(nameof(capacity), "Capacity must be greater than zero.");
             
+            _logger = logger;
             _entity = new Entity { Array = new T[capacity] };
             _backup = new Entity { Array = new T[capacity] };
             _nullValidator = validator ?? (item => EqualityComparer<T>.Default.Equals(item, default));
@@ -68,7 +71,7 @@ namespace SP.Engine.Client
             }
 
             var newCount = count + 1;
-            var oldCount = Interlocked.CompareExchange(ref entity.Count, newCount, entity.Count);
+            var oldCount = Interlocked.CompareExchange(ref entity.Count, newCount, count);
             if (oldCount != count)
                 return false;
 
@@ -119,15 +122,14 @@ namespace SP.Engine.Client
                 var array = _entity.Array;
                 if (array == null || newCapacity == array.Length)
                     return;
-
+                
                 var newArray = new T[newCapacity];
                 Array.Copy(array, newArray, Math.Min(entity.Count, newCapacity));
 
-                if (_backup.Array.Length != newCapacity)
-                    _backup = new Entity { Array = new T[newCapacity] };
-                    
+                _backup = new Entity { Array = new T[newCapacity], Count = 0};
                 _entity = new Entity { Array = newArray, Count = Math.Min(entity.Count, newCapacity) };
                 Interlocked.Exchange(ref _count, _entity.Count);
+                _logger?.Info($"Resized queue to {newCapacity} (prev={array.Length}, kept={entity.Count}");
             }
         }
     }

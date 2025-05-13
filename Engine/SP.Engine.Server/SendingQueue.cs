@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Threading;
 
-namespace SP.Engine.Runtime.Utilities
+namespace SP.Engine.Server
 {
 
     public sealed class SendingQueue : IList<ArraySegment<byte>>

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Threading;
 
-namespace SP.Engine.Runtime.Utilities
+namespace SP.Engine.Server
 {
 
 public interface ISmartPoolSourceCreator<T>

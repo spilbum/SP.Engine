@@ -57,8 +57,7 @@ namespace SP.Engine.Runtime.Utilities
             {
                 lock (_lock)
                 {
-                    if (_sample.Count == 0) return 0.0;
-                    return _sample.Average(v => Convert.ToDouble(v));
+                    return _sample.Count == 0 ? 0.0 : _sample.Average(v => Convert.ToDouble(v));
                 }
             }
         }
@@ -73,8 +72,8 @@ namespace SP.Engine.Runtime.Utilities
                 lock (_lock)
                 {
                     if (_sample.Count == 0) return 0.0;
-                    double mean = Avg;
-                    double variance = _sample.Average(v => Math.Pow(Convert.ToDouble(v) - mean, 2));
+                    var mean = Avg;
+                    var variance = _sample.Average(v => Math.Pow(Convert.ToDouble(v) - mean, 2));
                     return Math.Sqrt(variance);
                 }
             }
@@ -115,7 +114,7 @@ namespace SP.Engine.Runtime.Utilities
 
                 _sample.Enqueue(value);
                 LastValue = value;
-
+                
                 // 초과된 경우 제거
                 while (_sample.Count > _capacity && _sample.TryDequeue(out _)) 
                 { 
