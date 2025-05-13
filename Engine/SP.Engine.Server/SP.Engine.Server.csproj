@@ -8,11 +8,11 @@
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
-      <OutputPath>../../BinOut/net8.0/</OutputPath>
+      <OutputPath>../../BinOut/</OutputPath>
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
-      <OutputPath>../../BinOut/net8.0/</OutputPath>
+      <OutputPath>../../BinOut/</OutputPath>
     </PropertyGroup>
 
     <ItemGroup>

@@ -6,11 +6,11 @@
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
-      <OutputPath>../../BinOut/netstandard2.1/</OutputPath>
+      <OutputPath>../../BinOut/</OutputPath>
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
-      <OutputPath>../../BinOut/netstandard2.1/</OutputPath>
+      <OutputPath>../../BinOut/</OutputPath>
     </PropertyGroup>
 
     <ItemGroup>
