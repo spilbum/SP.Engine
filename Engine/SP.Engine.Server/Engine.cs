@@ -103,10 +103,10 @@ namespace SP.Engine.Server
         {
             try
             {
-                _engineHandlerDict[C2SEngineProtocol.SessionAuthReq] = new SessionAuth<TPeer>();
-                _engineHandlerDict[C2SEngineProtocol.Close] = new Close<TPeer>();
-                _engineHandlerDict[C2SEngineProtocol.Ping] = new Ping<TPeer>();
-                _engineHandlerDict[C2SEngineProtocol.MessageAck] = new MessageAck<TPeer>();
+                _engineHandlerDict[EngineProtocol.C2S.SessionAuthReq] = new SessionAuth<TPeer>();
+                _engineHandlerDict[EngineProtocol.C2S.Close] = new Close<TPeer>();
+                _engineHandlerDict[EngineProtocol.C2S.Ping] = new Ping<TPeer>();
+                _engineHandlerDict[EngineProtocol.C2S.MessageAck] = new MessageAck<TPeer>();
                 return DiscoverHandlers().All(RegisterHandler);
             }
             catch (Exception e)
@@ -315,18 +315,19 @@ namespace SP.Engine.Server
             return peer;
         }
 
-        protected virtual void UpdatePeer(TPeer peer)
+        protected virtual bool AddOrUpdatePeer(TPeer peer)
         {
             switch (peer.PeerType)
             {
                 case EPeerType.User:
-                    _peerDict.TryAdd(peer.PeerId, peer);
-                    break;
+                    return _peerDict.TryAdd(peer.PeerId, peer);
                 case EPeerType.Server:
-                    _peerDict.AddOrUpdate(peer.PeerId, peer, (key, value) => peer);
-                    break;
+                    _peerDict.AddOrUpdate(peer.PeerId, peer, (_, _) => peer);
+                    return true;
+                case EPeerType.None:
                 default:
-                    throw new ArgumentException($"Invalid peer type: {peer.PeerType}");
+                    Logger.Error("Invalid peer: {0}", peer.PeerType);
+                    return false;
             }
         }
 
@@ -371,7 +372,7 @@ namespace SP.Engine.Server
         internal void OnlinePeer(TPeer peer, ISession<TPeer> session)
         {
             RemoveWaitingReconnectPeer(peer);
-            UpdatePeer(peer);
+            AddOrUpdatePeer(peer);
             peer.Online(session);
         }
 

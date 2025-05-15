@@ -2,3 +2,5 @@ BinOut/
 obj/
 .idea/
 .vscode/
+bin/
+.DS_Store

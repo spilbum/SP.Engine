@@ -82,12 +82,11 @@ namespace SP.Engine.Server
 
         
 
-        internal virtual bool TryInternalSend(IProtocolData protocolData)
+        internal virtual bool TryInternalSend(IProtocolData protocol)
         {
             try
             {
-                var message = new TcpMessage();
-                message.SerializeProtocol(protocolData, null);
+                var message = TcpMessage.Create(protocol);
                 var bytes = message.ToArray();
                 return null != bytes && TrySend(new ArraySegment<byte>(bytes, 0, bytes.Length));
             }

@@ -32,8 +32,9 @@ namespace SP.Engine.Server.Connector
         private ILogger _logger;
         private readonly Dictionary<EProtocolId, ProtocolMethodInvoker> _invokerDict = new();
         
-        public event EventHandler Connected;
-        public event EventHandler Disconnected;
+        public event Action Connected;
+        public event Action Offline;
+        public event Action Disconnected;
 
         public string Name { get; } = name;
 
@@ -79,7 +80,7 @@ namespace SP.Engine.Server.Connector
 
         private NetPeer CreateNetPeer()
         {
-            var netPeer = new NetPeer();
+            var netPeer = new NetPeer(_logger);
             netPeer.IsEnableAutoSendPing = true;
             netPeer.AutoSendPingIntervalSec = 10;
             netPeer.MaxConnectionAttempts = -1;
@@ -96,6 +97,7 @@ namespace SP.Engine.Server.Connector
         {
             _isOffline = true;
             Log(ELogLevel.Info, "Connection to server {0}:{1} has been lost.", Host, Port);
+            Offline?.Invoke();
         }
 
         public void Connect()
@@ -151,7 +153,23 @@ namespace SP.Engine.Server.Connector
 
         public virtual void Update()
         {
-            _netPeer?.Update();
+            var netPeer = _netPeer;
+            if (netPeer == null) return;
+            
+            netPeer.Update();
+            switch (netPeer.State)
+            {
+                case ENetPeerState.None:
+                case ENetPeerState.Connecting:
+                case ENetPeerState.Open:
+                case ENetPeerState.Closing:
+                    break;
+                case ENetPeerState.Closed:
+                    netPeer.Open(Host, Port);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
         }
 
         private void OnMessageReceived(object sender, MessageEventArgs e)
@@ -160,6 +178,9 @@ namespace SP.Engine.Server.Connector
             {
                 var message = e.Message;
                 var invoker = GetInvoker(message.ProtocolId);
+                if (invoker == null)
+                    throw new Exception("Unknown protocol: " + message.ProtocolId);
+                
                 invoker.Invoke(this, message, _netPeer.DhSharedKey);
             }
             catch (Exception ex)
@@ -171,7 +192,7 @@ namespace SP.Engine.Server.Connector
         private void OnDisconnect(object sender, EventArgs e)
         {
             Log(ELogLevel.Info, "Disconnected from server {0}:{1}", Host, Port);
-            Disconnected?.Invoke(this, e);
+            Disconnected?.Invoke();
         }
         
 
@@ -186,7 +207,7 @@ namespace SP.Engine.Server.Connector
             if (_isOffline)
                 _isOffline = false;
             else
-                Connected?.Invoke(this, EventArgs.Empty);
+                Connected?.Invoke();
         }
 
         private void Log(ELogLevel level, string format, params object[] args)

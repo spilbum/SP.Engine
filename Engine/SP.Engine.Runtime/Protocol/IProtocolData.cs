@@ -4,6 +4,5 @@ namespace SP.Engine.Runtime.Protocol
     {
         EProtocolId ProtocolId { get; }
         bool IsEncrypt { get; }
-        uint CompressibleSize { get; }
     }
 }

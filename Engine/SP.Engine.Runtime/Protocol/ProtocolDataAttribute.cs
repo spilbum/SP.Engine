@@ -7,13 +7,11 @@ namespace SP.Engine.Runtime.Protocol
     {
         public EProtocolId ProtocolId { get; }
         public bool IsEncrypt { get; }
-        public uint CompressibleSize { get; }
-        
-        public ProtocolDataAttribute(EProtocolId protocolId, bool isEncrypt = false, uint compressibleSize = 0)
+
+        public ProtocolDataAttribute(EProtocolId protocolId, bool isEncrypt = false)
         {
             ProtocolId = protocolId;
             IsEncrypt = isEncrypt;
-            CompressibleSize = compressibleSize;
         }
     }
 }

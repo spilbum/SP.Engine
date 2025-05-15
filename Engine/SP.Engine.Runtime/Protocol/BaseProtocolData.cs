@@ -13,8 +13,6 @@ namespace SP.Engine.Runtime.Protocol
         public EProtocolId ProtocolId { get; }
         [IgnoreProperty]
         public bool IsEncrypt { get; }
-        [IgnoreProperty]
-        public uint CompressibleSize { get; }
         
         protected BaseProtocolData()
         {
@@ -28,7 +26,6 @@ namespace SP.Engine.Runtime.Protocol
             
             ProtocolId = cached.ProtocolId;
             IsEncrypt = cached.IsEncrypt;
-            CompressibleSize = cached.CompressibleSize;
         }
     }
 

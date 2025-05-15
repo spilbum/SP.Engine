@@ -74,7 +74,7 @@ namespace SP.Engine.Server
 
         private int _stateCode = PeerStateConst.NotAuthorized;
         private bool _disposed;
-        private readonly DhSession _dh;
+        private readonly DiffieHellman _dh;
 
         public EPeerState State => (EPeerState)_stateCode;
         public EPeerId PeerId { get; private set; }
@@ -97,8 +97,19 @@ namespace SP.Engine.Server
             SetMaxReSendCnt(session.Config.MaxReSendCnt);
             Session = session;
             
-            _dh = new DhSession(dhKeySize);
+            _dh = new DiffieHellman(dhKeySize);
             _dh.DeriveSharedKey(dhPublicKey);
+        }
+
+        protected BasePeer(BasePeer other)
+        {
+            PeerId = other.PeerId;
+            PeerType = other.PeerType;
+            Logger = other.Logger;
+            Session = other.Session;
+            SetSendTimeOutMs(other.Session.Config.SendTimeOutMs);
+            SetMaxReSendCnt(other.Session.Config.MaxReSendCnt);
+            _dh = other._dh;
         }
 
         ~BasePeer()
@@ -165,8 +176,7 @@ namespace SP.Engine.Server
         {
             try
             {
-                var message = new TcpMessage();
-                message.SerializeProtocol(data, data.ProtocolId.IsEngineProtocol() ? null : _dh.SharedKey);
+                var message = TcpMessage.Create(data, _dh);
                 Send(message);
             }
             catch (Exception e)

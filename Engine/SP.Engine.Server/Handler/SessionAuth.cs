@@ -5,11 +5,11 @@ using SP.Engine.Protocol;
 
 namespace SP.Engine.Server.Handler;
 
-[ProtocolHandler(C2SEngineProtocol.SessionAuthReq)]
-internal class SessionAuth<TPeer> : BaseEngineHandler<Session<TPeer>, C2SEngineProtocolData.SessionAuthReq>
+[ProtocolHandler(EngineProtocol.C2S.SessionAuthReq)]
+internal class SessionAuth<TPeer> : BaseEngineHandler<Session<TPeer>, EngineProtocolData.C2S.SessionAuthReq>
     where TPeer : BasePeer, IPeer
 {
-    protected override void ExecuteProtocol(Session<TPeer> session, C2SEngineProtocolData.SessionAuthReq protocol)
+    protected override void ExecuteProtocol(Session<TPeer> session, EngineProtocolData.C2S.SessionAuthReq protocol)
     {
         var engine = session.Engine;
         if (null == engine)
@@ -71,7 +71,7 @@ internal class SessionAuth<TPeer> : BaseEngineHandler<Session<TPeer>, C2SEngineP
         }
         finally
         {
-            var authAck = new S2CEngineProtocolData.SessionAuthAck { ErrorCode = errorCode };
+            var authAck = new EngineProtocolData.S2C.SessionAuthAck { ErrorCode = errorCode };
             if (errorCode == EEngineErrorCode.Success)
             {
                 authAck.SessionId = session.SessionId;

@@ -4,11 +4,11 @@ using SP.Engine.Protocol;
 
 namespace SP.Engine.Server.Handler;
 
-[ProtocolHandler(C2SEngineProtocol.Close)]
-internal class Close<TPeer> : BaseEngineHandler<Session<TPeer>, C2SEngineProtocolData.Close>
+[ProtocolHandler(EngineProtocol.C2S.Close)]
+internal class Close<TPeer> : BaseEngineHandler<Session<TPeer>, EngineProtocolData.C2S.Close>
     where TPeer : BasePeer, IPeer
 {
-    protected override void ExecuteProtocol(Session<TPeer> context, C2SEngineProtocolData.Close protocol)
+    protected override void ExecuteProtocol(Session<TPeer> context, EngineProtocolData.C2S.Close protocol)
     {
         context.Logger.Debug("Received a termination request from the client. isClosing={0}", context.IsClosing);
         if (context.IsClosing)

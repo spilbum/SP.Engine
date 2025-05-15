@@ -17,10 +17,10 @@ namespace SP.Engine.Runtime.Compression
             var originalLength = data.Length;
             var maxOutputSize = LZ4Codec.MaximumOutputSize(originalLength);
 
-            byte[] buffer = new byte[HeaderSize + maxOutputSize];
+            var buffer = new byte[HeaderSize + maxOutputSize];
             var span = buffer.AsSpan();
 
-            BinaryPrimitives.WriteInt32LittleEndian(span.Slice(0, sizeof(int)), originalLength);
+            BinaryPrimitives.WriteInt32LittleEndian(span[..HeaderSize], originalLength);
 
             var compressedSize = LZ4Codec.Encode(
                 data, 0, originalLength,
@@ -37,7 +37,7 @@ namespace SP.Engine.Runtime.Compression
                 throw new ArgumentException("data");
 
             var span = data.AsSpan();
-            var originalLength = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(0, sizeof(int)));
+            var originalLength = BinaryPrimitives.ReadInt32LittleEndian(span[..HeaderSize]);
 
             var decompressedData = new byte[originalLength];
             var decodedSize = LZ4Codec.Decode(

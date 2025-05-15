@@ -98,8 +98,9 @@ namespace SP.Engine.Client
         private DateTime _lastServerTime;
         private int _connectionAttempts;
         private Timer _timer;
+        private bool _isReconnecting;
         private readonly DataSampler<int> _latencySampler = new DataSampler<int>(1024);
-        private readonly DhSession _dh = new DhSession(DhKeySize.Bit2048);
+        private readonly DiffieHellman _dh = new DiffieHellman(DhKeySize.Bit2048);
         private readonly BinaryBuffer _receiveBuffer = new BinaryBuffer();
         private readonly ConcurrentQueue<IMessage> _sendingMessageQueue = new ConcurrentQueue<IMessage>();
         private readonly ConcurrentQueue<IMessage> _receivedMessageQueue = new ConcurrentQueue<IMessage>();
@@ -142,10 +143,10 @@ namespace SP.Engine.Client
         public NetPeer(ILogger logger = null)
         {
             Logger = logger;
-            _handlerDict[S2CEngineProtocol.SessionAuthAck] = new SessionAuth();
-            _handlerDict[S2CEngineProtocol.Close] = new Close();
-            _handlerDict[S2CEngineProtocol.MessageAck] = new MessageAck();
-            _handlerDict[S2CEngineProtocol.Pong] = new Pong();
+            _handlerDict[EngineProtocol.S2C.SessionAuthAck] = new SessionAuth();
+            _handlerDict[EngineProtocol.S2C.Close] = new Close();
+            _handlerDict[EngineProtocol.S2C.MessageAck] = new MessageAck();
+            _handlerDict[EngineProtocol.S2C.Pong] = new Pong();
         }
 
         ~NetPeer()
@@ -214,6 +215,8 @@ namespace SP.Engine.Client
 
         private void TryReconnect(object state)
         {
+            if (_isReconnecting) return;
+            
             var session = (ServerSession)state;
             if (MaxConnectionAttempts > 0 && _connectionAttempts >= MaxConnectionAttempts)
             {
@@ -224,6 +227,7 @@ namespace SP.Engine.Client
 
             try
             {
+                _isReconnecting = true;
                 _connectionAttempts++;
                 Logger?.Info($"Reconnect attempt #{_connectionAttempts}");
                 session.Connect(RemoteEndPoint);
@@ -241,16 +245,14 @@ namespace SP.Engine.Client
             {
                 if (protocol.ProtocolId.IsEngineProtocol())
                 {
-                    var message = new TcpMessage();
-                    message.SerializeProtocol(protocol, null);
+                    var message = TcpMessage.Create(protocol, _dh);
                     var bytes = message.ToArray();
                     if (bytes != null && bytes.Length > 0)
                         _session?.TrySend(bytes, 0, bytes.Length);
                 }
                 else
                 {
-                    var message = new TcpMessage();
-                    message.SerializeProtocol(protocol, DhSharedKey);
+                    var message = TcpMessage.Create(protocol, _dh);
                     EnqueueSendingMessage(message);   
                 }
             }
@@ -319,7 +321,7 @@ namespace SP.Engine.Client
             try
             {
                 var now = DateTime.UtcNow;
-                var protocol = new C2SEngineProtocolData.Ping
+                var protocol = new EngineProtocolData.C2S.Ping
                 {
                     SendTime = now,
                     LatencyAverageMs = AvgLatencyMs,
@@ -337,7 +339,7 @@ namespace SP.Engine.Client
 
         private void SendAuthHandshake()
         {
-            Send(new C2SEngineProtocolData.SessionAuthReq
+            Send(new EngineProtocolData.C2S.SessionAuthReq
             {
                 SessionId = _sessionId,
                 PeerId = PeerId,
@@ -348,12 +350,12 @@ namespace SP.Engine.Client
         
         private void SendCloseHandshake()
         {
-            Send(new C2SEngineProtocolData.Close());
+            Send(new EngineProtocolData.C2S.Close());
         }
         
         private void SendMessageAck(long sequenceNumber)
         {
-            Send(new C2SEngineProtocolData.MessageAck { SequenceNumber = sequenceNumber });
+            Send(new EngineProtocolData.C2S.MessageAck { SequenceNumber = sequenceNumber });
         }
 
         internal void CloseWithoutHandshake()
@@ -445,7 +447,7 @@ namespace SP.Engine.Client
         
         public void Update()
         {
-            _timer.Update();
+            _timer?.Update();
             
             // 수신된 메시지 처리
             DequeueReceivedMessage();
@@ -526,6 +528,7 @@ namespace SP.Engine.Client
 
         private void OnSessionOpened(object sender, EventArgs e)
         {
+            _isReconnecting = false;
             // 인증 요청
             SendAuthHandshake();
         }
@@ -563,10 +566,11 @@ namespace SP.Engine.Client
                     OnOffline();
                     return;
                 case ENetPeerState.Connecting:
+                    _isReconnecting = false;
                     return;
                 default:
                     SetState(ENetPeerState.Closed);
-                    _timer.Dispose();
+                    _timer?.Dispose();
                     _session = null;
                     Disconnected?.Invoke(this, EventArgs.Empty);
                     break;
@@ -650,7 +654,7 @@ namespace SP.Engine.Client
                     _session = null;
                 }
 
-                _timer.Dispose();
+                _timer?.Dispose();
                 _latencySampler.Clear();
                 ResetMessageProcessor();
             }

@@ -46,7 +46,7 @@ namespace SP.Engine.Server
         {
             LatencyAverageMs = latencyAvgMs;
             LatencyStandardDeviationMs = latencyStddevMs;
-            TryInternalSend(new S2CEngineProtocolData.Pong { SentTime = sentTime, ServerTime = DateTime.UtcNow });
+            TryInternalSend(new EngineProtocolData.S2C.Pong { SentTime = sentTime, ServerTime = DateTime.UtcNow });
         }
 
         public void OnMessageAck(long sequenceNumber)
@@ -63,12 +63,12 @@ namespace SP.Engine.Server
                 Engine?.EnqueueCloseHandshakePendingQueue(this);
             }
             
-            TryInternalSend(new S2CEngineProtocolData.Close());
+            TryInternalSend(new EngineProtocolData.S2C.Close());
         }
         
         internal void SendMessageAck(long sequenceNumber)
         {
-            TryInternalSend( new S2CEngineProtocolData.MessageAck { SequenceNumber = sequenceNumber });
+            TryInternalSend( new EngineProtocolData.S2C.MessageAck { SequenceNumber = sequenceNumber });
         }
 
         public override void Close(ECloseReason reason)

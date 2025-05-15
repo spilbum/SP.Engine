@@ -4,10 +4,10 @@ using SP.Engine.Protocol;
 
 namespace SP.Engine.Client.ProtocolHandler
 {
-    [ProtocolHandler(S2CEngineProtocol.SessionAuthAck)]
-    public class SessionAuth : BaseProtocolHandler<S2CEngineProtocolData.SessionAuthAck>
+    [ProtocolHandler(EngineProtocol.S2C.SessionAuthAck)]
+    public class SessionAuth : BaseProtocolHandler<EngineProtocolData.S2C.SessionAuthAck>
     {
-        protected override void ExecuteProtocol(NetPeer session,S2CEngineProtocolData.SessionAuthAck protocol)
+        protected override void ExecuteProtocol(NetPeer session,EngineProtocolData.S2C.SessionAuthAck protocol)
         {
             if (protocol.ErrorCode != EEngineErrorCode.Success)
             {

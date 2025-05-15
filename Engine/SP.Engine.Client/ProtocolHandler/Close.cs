@@ -3,10 +3,10 @@ using SP.Engine.Protocol;
 
 namespace SP.Engine.Client.ProtocolHandler
 {
-    [ProtocolHandler(S2CEngineProtocol.Close)]
-    public class Close : BaseProtocolHandler<S2CEngineProtocolData.Close>
+    [ProtocolHandler(EngineProtocol.S2C.Close)]
+    public class Close : BaseProtocolHandler<EngineProtocolData.S2C.Close>
     {
-        protected override void ExecuteProtocol(NetPeer session, S2CEngineProtocolData.Close protocol)
+        protected override void ExecuteProtocol(NetPeer session, EngineProtocolData.S2C.Close protocol)
         {
             if (session.State == ENetPeerState.Closing)
             {
