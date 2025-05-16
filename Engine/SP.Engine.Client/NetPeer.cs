@@ -205,18 +205,17 @@ namespace SP.Engine.Client
 
             try
             {
-                SetTimer(TryReconnect, _session, 100, ReconnectionIntervalSec * 1000);
+                _session.Connect(RemoteEndPoint);
             }
             catch (Exception e)
             {
                 OnError(e);
+                Close();
             }
         }
 
         private void TryReconnect(object state)
         {
-            if (_isReconnecting) return;
-            
             var session = (ServerSession)state;
             if (MaxConnectionAttempts > 0 && _connectionAttempts >= MaxConnectionAttempts)
             {
@@ -227,7 +226,6 @@ namespace SP.Engine.Client
 
             try
             {
-                _isReconnecting = true;
                 _connectionAttempts++;
                 Logger?.Info($"Reconnect attempt #{_connectionAttempts}");
                 session.Connect(RemoteEndPoint);
@@ -523,12 +521,15 @@ namespace SP.Engine.Client
 
         private void OnSessionClosed(object sender, EventArgs e)
         {
+            _isReconnecting = false;
+            
             OnClosed();
         }
 
         private void OnSessionOpened(object sender, EventArgs e)
         {
             _isReconnecting = false;
+            
             // 인증 요청
             SendAuthHandshake();
         }
@@ -564,10 +565,12 @@ namespace SP.Engine.Client
                 case ENetPeerState.Open:
                     // 오프라인으로 전환
                     OnOffline();
-                    return;
+                    break;
                 case ENetPeerState.Connecting:
-                    _isReconnecting = false;
-                    return;
+                    if (_isReconnecting) break;
+                    _isReconnecting = true;
+                    SetTimer(TryReconnect, _session, 0, ReconnectionIntervalSec * 1000);
+                    break;
                 default:
                     SetState(ENetPeerState.Closed);
                     _timer?.Dispose();

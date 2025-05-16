@@ -8,9 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\..\Engine\SP.Engine.Server\SP.Engine.Server.csproj" />
-      <ProjectReference Include="..\DatabaseHandler\DatabaseHandler.csproj" />
-      <ProjectReference Include="..\NetworkCommon\NetworkCommon.csproj" />
+      <ProjectReference Include="..\..\Engine\SP.Engine.Client\SP.Engine.Client.csproj" />
     </ItemGroup>
 
 </Project>

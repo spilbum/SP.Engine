@@ -28,20 +28,22 @@ internal class SessionAuth<TPeer> : BaseEngineHandler<Session<TPeer>, EngineProt
                 {
                     // 이전 세션이 살아 있는 경우
                     if (ERejectReason.None != prevSession.RejectReason)
-                        throw new InvalidOperationException(
+                        throw new ErrorCodeException(EEngineErrorCode.ReconnectionFailed,
                             $"Reconnection is not allowed because the session was rejected. sessionId={prevSession.SessionId} reason={prevSession.RejectReason}");
 
                     peer = prevSession.Peer;
                     prevSession.Close();
-
-                    engine.OnlinePeer(peer, session);
                 }
                 else
                 {
                     // 재 연결 대기인 경우
                     peer = engine.GetWaitingReconnectPeer(protocol.PeerId);
-                    engine.OnlinePeer(peer, session);
+                    if (peer == null)
+                        throw new ErrorCodeException(EEngineErrorCode.ReconnectionFailed,
+                            $"No waiting reconnection peer found for sessionId={protocol.SessionId}");
                 }
+
+                engine.OnlinePeer(peer, session);
             }
             else
             {
@@ -63,10 +65,16 @@ internal class SessionAuth<TPeer> : BaseEngineHandler<Session<TPeer>, EngineProt
             session.SetAuthorized();
             errorCode = EEngineErrorCode.Success;
         }
+        catch (ErrorCodeException e)
+        {
+            errorCode = e.ErrorCode;
+            session.Logger.Error("errorCode={0}, exception={1}\r\nstackTrace={2}", e.ErrorCode, e.Message,
+                e.StackTrace);
+        }
         catch (Exception ex)
         {
             errorCode = EEngineErrorCode.Invalid;
-            session.Logger.Error("Failed to authorize peer: exception={0}\r\nstackTrace={1}", ex.Message,
+            session.Logger.Error("exception={0}\r\nstackTrace={1}", ex.Message,
                 ex.StackTrace);
         }
         finally
@@ -87,7 +95,7 @@ internal class SessionAuth<TPeer> : BaseEngineHandler<Session<TPeer>, EngineProt
             }
 
             if (!session.TryInternalSend(authAck))
-                session.Logger.Error("Failed to send auth ack. sessionId={0}", session.SessionId);
+                session.Logger.Error("Failed to send session auth ack. sessionId={0}", session.SessionId);
         }
     }
 }

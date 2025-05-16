@@ -32,7 +32,6 @@ namespace SP.Engine.Server
         private readonly List<ThreadFiber> _updatePeerFibers = [];
         private readonly Dictionary<EProtocolId, IHandler<Session<TPeer>, IMessage>> _engineHandlerDict = new();
         private readonly Dictionary<EProtocolId, IHandler<TPeer, IMessage>> _handlerDict = new();
-        private readonly Dictionary<EProtocolId, string> _protocolNameDict = new();
         private ThreadFiber _fiber;
         
         public IFiberScheduler Scheduler => _fiber;
@@ -138,14 +137,9 @@ namespace SP.Engine.Server
 
         private bool RegisterHandler(IHandler<TPeer, IMessage> handler)
         {
-            if (!_handlerDict.TryAdd(handler.Id, handler))
-            {
-                Logger.Error("Handler {0} already exists.", handler.Id);
-                return false;
-            }
-
-            Logger.Debug("The handler {0} has been registered.", handler.Id);
-            return true;
+            if (_handlerDict.TryAdd(handler.Id, handler)) return true;
+            Logger.Error("Handler '{0}' already exists.", handler.Id);
+            return false;
         }
 
         private IHandler<TPeer, IMessage> GetHandler(EProtocolId protocolId)

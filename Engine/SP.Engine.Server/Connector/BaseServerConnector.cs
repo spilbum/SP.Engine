@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using SP.Common.Logging;
 using SP.Engine.Client;
 using SP.Engine.Runtime;
@@ -23,24 +24,24 @@ namespace SP.Engine.Server.Connector
         void Update();
         void Send(IProtocolData protocol);
     }
-
+    
     public abstract class BaseServerConnector(string name) : IHandleContext, IServerConnector, IDisposable
     {
         private bool _isDisposed;
         private bool _isOffline;        
         private NetPeer _netPeer;
-        private ILogger _logger;
         private readonly Dictionary<EProtocolId, ProtocolMethodInvoker> _invokerDict = new();
         
         public event Action Connected;
-        public event Action Offline;
         public event Action Disconnected;
-
+        public event Action Offline;
+        
         public string Name { get; } = name;
 
         public EPeerId PeerId => _netPeer?.PeerId ?? EPeerId.None;
         public string Host { get; private set; }
         public int Port { get; private set; }
+        public ILogger Logger { get; private set; }
 
         public virtual bool Initialize(IEngine server, ConnectorConfig config)
         {
@@ -54,15 +55,16 @@ namespace SP.Engine.Server.Connector
 
             Host = config.Host;
             Port = config.Port;
-            _logger = logger;
+            Logger = logger;
 
             try
             {
                 _netPeer = CreateNetPeer();
 
-                foreach (var invoker in ProtocolMethodInvoker.LoadInvokers(GetType()))
-                    _invokerDict.Add(invoker.ProtocolId, invoker);
+                if (!ProtocolMethodInvoker.LoadInvokers(GetType()).All(RegisterInvoker))
+                    return false;
                 
+                Logger.Debug("Invoker loaded: {0}", string.Join(", ", _invokerDict.Keys.ToArray()));
                 return true;
             }
             catch (Exception e)
@@ -70,6 +72,13 @@ namespace SP.Engine.Server.Connector
                 server.Logger.Error(e);
                 return false;
             }
+        }
+
+        private bool RegisterInvoker(ProtocolMethodInvoker invoker)
+        {
+            if (_invokerDict.TryAdd(invoker.ProtocolId, invoker)) return true;
+            Logger.Error("Invoker '{0}' already exists.", invoker.ProtocolId);
+            return false;
         }
 
         private ProtocolMethodInvoker GetInvoker(EProtocolId protocolId)
@@ -80,7 +89,7 @@ namespace SP.Engine.Server.Connector
 
         private NetPeer CreateNetPeer()
         {
-            var netPeer = new NetPeer(_logger);
+            var netPeer = new NetPeer(Logger);
             netPeer.IsEnableAutoSendPing = true;
             netPeer.AutoSendPingIntervalSec = 10;
             netPeer.MaxConnectionAttempts = -1;
@@ -212,12 +221,12 @@ namespace SP.Engine.Server.Connector
 
         private void Log(ELogLevel level, string format, params object[] args)
         {
-            _logger?.Log(level, format, args);
+            Logger.Log(level, format, args);
         }
 
         private void LogError(Exception ex)
         {
-            _logger?.Error(ex);
+            Logger.Error(ex);
         }
     }
 }

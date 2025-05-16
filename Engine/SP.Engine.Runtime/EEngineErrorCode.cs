@@ -4,6 +4,7 @@ namespace SP.Engine.Runtime
     {
         Success = 0,
         Invalid = -1,
+        ReconnectionFailed = -2,
         Unknown = -99,        
     }    
 }
