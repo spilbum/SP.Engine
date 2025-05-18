@@ -4,7 +4,7 @@ using SP.Engine.Runtime.Handler;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
 
-namespace SP.Engine.Server.Handler;
+namespace SP.Engine.Server.ProtocolHandler;
 
 public abstract class BaseHandler<TContext, TMessage> : IHandler<TContext, TMessage>
     where TContext : IHandleContext

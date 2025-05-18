@@ -1,9 +1,7 @@
-using System;
-using System.Reflection;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
 
-namespace SP.Engine.Server.Handler;
+namespace SP.Engine.Server.ProtocolHandler;
 
 public interface IHandler
 {

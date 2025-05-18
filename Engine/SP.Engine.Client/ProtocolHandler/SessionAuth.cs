@@ -17,6 +17,10 @@ namespace SP.Engine.Client.ProtocolHandler
                 return;
             }
             
+            // 허용되는 최대 데이터 크기 설정
+            if (0 < protocol.MaxAllowedLength)
+                session.MaxAllowedLength = protocol.MaxAllowedLength;
+                    
             // 전송 타임아웃 시간 설정
             if (0 < protocol.SendTimeOutMs)
                 session.SetSendTimeOutMs(protocol.SendTimeOutMs);

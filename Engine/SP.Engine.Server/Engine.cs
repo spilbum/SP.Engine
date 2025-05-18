@@ -12,8 +12,8 @@ using SP.Engine.Runtime.Protocol;
 using SP.Engine.Runtime.Security;
 using SP.Engine.Server.Configuration;
 using SP.Engine.Server.Connector;
-using SP.Engine.Server.Handler;
 using SP.Engine.Protocol;
+using SP.Engine.Server.ProtocolHandler;
 
 namespace SP.Engine.Server
 {

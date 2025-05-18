@@ -8,7 +8,7 @@ using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Runtime.Security;
-using SP.Engine.Server.Handler;
+using SP.Engine.Server.ProtocolHandler;
 
 namespace SP.Engine.Server
 {
@@ -172,11 +172,12 @@ namespace SP.Engine.Server
             Session.Close(reason);
         }
         
-        public void Send(IProtocolData data)
+        public void Send(IProtocolData protocol)
         {
             try
             {
-                var message = TcpMessage.Create(data, _dh);
+                var message = new TcpMessage();
+                message.SerializeProtocol(protocol, _dh.SharedKey);
                 Send(message);
             }
             catch (Exception e)

@@ -8,7 +8,7 @@ using SP.Engine.Runtime;
 using SP.Engine.Runtime.Handler;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Server.Configuration;
-using SP.Engine.Server.Handler;
+using SP.Engine.Server.ProtocolHandler;
 
 namespace SP.Engine.Server.Connector
 {
@@ -93,7 +93,7 @@ namespace SP.Engine.Server.Connector
             netPeer.IsEnableAutoSendPing = true;
             netPeer.AutoSendPingIntervalSec = 10;
             netPeer.MaxConnectionAttempts = -1;
-            netPeer.LimitRequestLength = 64 * 1024;
+            netPeer.MaxAllowedLength = 64 * 1024;
             netPeer.Connected += OnConnected;
             netPeer.Error += OnError;
             netPeer.Offline += OnOffline;

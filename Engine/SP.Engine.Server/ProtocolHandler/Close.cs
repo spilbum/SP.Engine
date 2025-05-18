@@ -1,8 +1,8 @@
+using SP.Engine.Protocol;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Handler;
-using SP.Engine.Protocol;
 
-namespace SP.Engine.Server.Handler;
+namespace SP.Engine.Server.ProtocolHandler;
 
 [ProtocolHandler(EngineProtocol.C2S.Close)]
 internal class Close<TPeer> : BaseEngineHandler<Session<TPeer>, EngineProtocolData.C2S.Close>

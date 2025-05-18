@@ -1,9 +1,9 @@
 using System;
+using SP.Engine.Protocol;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Handler;
-using SP.Engine.Protocol;
 
-namespace SP.Engine.Server.Handler;
+namespace SP.Engine.Server.ProtocolHandler;
 
 [ProtocolHandler(EngineProtocol.C2S.SessionAuthReq)]
 internal class SessionAuth<TPeer> : BaseEngineHandler<Session<TPeer>, EngineProtocolData.C2S.SessionAuthReq>
@@ -83,7 +83,7 @@ internal class SessionAuth<TPeer> : BaseEngineHandler<Session<TPeer>, EngineProt
             if (errorCode == EEngineErrorCode.Success)
             {
                 authAck.SessionId = session.SessionId;
-                authAck.LimitRequestLength = session.Config.LimitRequestLength;
+                authAck.MaxAllowedLength = session.Config.MaxAllowedLength;
                 authAck.SendTimeOutMs = session.Config.SendTimeOutMs;
                 authAck.MaxReSendCnt = session.Config.MaxReSendCnt;
 

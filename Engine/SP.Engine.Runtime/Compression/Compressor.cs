@@ -7,14 +7,14 @@ namespace SP.Engine.Runtime.Compression
 {
     public static class Compressor
     {
-        private const int HeaderSize = sizeof(int); // Original length only
-
-        public static byte[] Compress(byte[] data)
+        private const int HeaderSize = sizeof(int);
+        
+        public static byte[] Compress(byte[] source)
         {
-            if (data == null || data.Length == 0)
+            if (source == null || source.Length == 0)
                 throw new ArgumentException("data");
 
-            var originalLength = data.Length;
+            var originalLength = source.Length;
             var maxOutputSize = LZ4Codec.MaximumOutputSize(originalLength);
 
             var buffer = new byte[HeaderSize + maxOutputSize];
@@ -23,7 +23,7 @@ namespace SP.Engine.Runtime.Compression
             BinaryPrimitives.WriteInt32LittleEndian(span[..HeaderSize], originalLength);
 
             var compressedSize = LZ4Codec.Encode(
-                data, 0, originalLength,
+                source, 0, originalLength,
                 buffer, HeaderSize, maxOutputSize
             );
 
@@ -31,17 +31,17 @@ namespace SP.Engine.Runtime.Compression
             return buffer;
         }
 
-        public static byte[] Decompress(byte[] data)
+        public static byte[] Decompress(byte[] source)
         {
-            if (data == null || data.Length <= HeaderSize)
+            if (source == null || source.Length <= HeaderSize)
                 throw new ArgumentException("data");
 
-            var span = data.AsSpan();
+            var span = source.AsSpan();
             var originalLength = BinaryPrimitives.ReadInt32LittleEndian(span[..HeaderSize]);
 
             var decompressedData = new byte[originalLength];
             var decodedSize = LZ4Codec.Decode(
-                data, HeaderSize, data.Length - HeaderSize,
+                source, HeaderSize, source.Length - HeaderSize,
                 decompressedData, 0, originalLength
             );
 

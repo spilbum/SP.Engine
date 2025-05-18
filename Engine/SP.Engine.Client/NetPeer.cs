@@ -96,7 +96,7 @@ namespace SP.Engine.Client
         private ServerSession _session;
         private DateTime _serverUpdateTime;
         private DateTime _lastServerTime;
-        private int _connectionAttempts;
+        private int _reconnectionAttempts;
         private Timer _timer;
         private bool _isReconnecting;
         private readonly DataSampler<int> _latencySampler = new DataSampler<int>(1024);
@@ -127,7 +127,7 @@ namespace SP.Engine.Client
         
         public bool IsEnableAutoSendPing { get; set; } = true;
         public int AutoSendPingIntervalSec { get; set; } = 30;
-        public int LimitRequestLength { get; set; } = 4096;
+        public int MaxAllowedLength { get; set; } = 4096;
         public int MaxConnectionAttempts { get; set; } = 5;
         public int ReconnectionIntervalSec { get; set; } = 30;
         
@@ -214,10 +214,10 @@ namespace SP.Engine.Client
             }
         }
 
-        private void TryReconnect(object state)
+        private void TryReconnection(object state)
         {
             var session = (ServerSession)state;
-            if (MaxConnectionAttempts > 0 && _connectionAttempts >= MaxConnectionAttempts)
+            if (MaxConnectionAttempts > 0 && _reconnectionAttempts >= MaxConnectionAttempts)
             {
                 Logger?.Warn("Max connection attempts exceeded.");
                 Close();
@@ -226,8 +226,8 @@ namespace SP.Engine.Client
 
             try
             {
-                _connectionAttempts++;
-                Logger?.Info($"Reconnect attempt #{_connectionAttempts}");
+                _reconnectionAttempts++;
+                Logger?.Info($"Reconnect attempt #{_reconnectionAttempts}");
                 session.Connect(RemoteEndPoint);
             }
             catch (Exception e)
@@ -243,14 +243,16 @@ namespace SP.Engine.Client
             {
                 if (protocol.ProtocolId.IsEngineProtocol())
                 {
-                    var message = TcpMessage.Create(protocol, _dh);
+                    var message = new TcpMessage();
+                    message.SerializeProtocol(protocol);
                     var bytes = message.ToArray();
                     if (bytes != null && bytes.Length > 0)
                         _session?.TrySend(bytes, 0, bytes.Length);
                 }
                 else
                 {
-                    var message = TcpMessage.Create(protocol, _dh);
+                    var message = new TcpMessage();
+                    message.SerializeProtocol(protocol, _dh.SharedKey);
                     EnqueueSendingMessage(message);   
                 }
             }
@@ -502,11 +504,20 @@ namespace SP.Engine.Client
             
             while (true)
             {
-                var message = TcpMessage.TryReadBuffer(_receiveBuffer, out _);
-                if (message != null)
-                    yield return message;
-                else
+                if (!TcpHeader.TryValidateLength(_receiveBuffer, out var totalLength))
                     break;
+                
+                if (totalLength > MaxAllowedLength)
+                {
+                    Logger.Warn("Max allowed length: {0}, current: {1}", MaxAllowedLength, totalLength);
+                    Close();
+                    yield break;
+                }
+                
+                if (!TcpMessage.TryParse(_receiveBuffer, out var message))
+                    break;
+
+                yield return message;
             }
 
             if (_receiveBuffer.RemainSize < 1024)
@@ -569,7 +580,7 @@ namespace SP.Engine.Client
                 case ENetPeerState.Connecting:
                     if (_isReconnecting) break;
                     _isReconnecting = true;
-                    SetTimer(TryReconnect, _session, 0, ReconnectionIntervalSec * 1000);
+                    SetTimer(TryReconnection, _session, 0, ReconnectionIntervalSec * 1000);
                     break;
                 default:
                     SetState(ENetPeerState.Closed);
@@ -583,7 +594,7 @@ namespace SP.Engine.Client
         internal void OnOpened(EPeerId peerId, string sessionId, byte[] serverPublicKey)
         {
             SetState(ENetPeerState.Open);
-            _connectionAttempts = 0;
+            _reconnectionAttempts = 0;
             
             PeerId = peerId;
             _sessionId = sessionId;

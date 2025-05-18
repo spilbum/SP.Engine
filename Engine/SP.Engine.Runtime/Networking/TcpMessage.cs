@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Buffers.Binary;
 using System.Collections.Generic;
 using SP.Common.Buffer;
 using SP.Engine.Runtime.Compression;
@@ -12,138 +11,72 @@ namespace SP.Engine.Runtime.Networking
 {
     public class TcpMessage : IMessage
     {
-        private static class HeaderLayout
+        public static bool TryParse(BinaryBuffer buffer, out TcpMessage message)
         {
-            public const int SequenceOffset = 0;
-            public const int SequenceSize = sizeof(long);
+            message = null;
+            
+            if (!TcpHeader.TryValidateLength(buffer, out _))
+                return false;
 
-            public const int ProtocolOffset = SequenceOffset + SequenceSize;
-            public const int ProtocolSize = sizeof(ushort);
+            if (!TcpHeader.TryParse(buffer, out var header))
+                return false;
 
-            public const int FlagsOffset = ProtocolOffset + ProtocolSize;
-            public const int FlagsSize = sizeof(byte);
-
-            public const int PayloadLengthOffset = FlagsOffset + FlagsSize;
-            public const int PayloadLengthSize = sizeof(ushort);
-
-            public const int TotalHeaderSize = PayloadLengthOffset + PayloadLengthSize;
+            var payload = buffer.ReadBytes(header.PayloadLength);
+            message = new TcpMessage { _header = header, _payload = payload };
+            return true;
         }
-
-        public static TcpMessage Create(IProtocolData data, DiffieHellman dh = null)
-        {
-            var key = data.ProtocolId.IsEngineProtocol() ? null : dh?.SharedKey;
-            var message = new TcpMessage();
-            message.SerializeProtocol(data, key);
-            return message;
-        }
-
+        
         private const double CompressionThreshold = 0.9;
         
-        public long SequenceNumber { get; private set; }
-        public EProtocolId ProtocolId { get; private set; }
-        public bool IsEncypted => _flags.HasFlag(EMessageFlags.Encrypted);
-        public bool IsCompressed => _flags.HasFlag(EMessageFlags.Compressed);
+        public long SequenceNumber => _header.SequenceNumber;
+        public EProtocolId ProtocolId => _header.ProtocolId;
 
-        private EMessageFlags _flags;
+        private TcpHeader _header = new TcpHeader();
         private byte[] _payload;
+
+        private void EnableEncryption() => SetFlag(EMessageFlags.Encrypted);
+        private void EnableCompression() => SetFlag(EMessageFlags.Compressed);
+        private bool IsEncrypted => HasFlag(EMessageFlags.Encrypted);
+        private bool IsCompressed => HasFlag(EMessageFlags.Compressed);
+        
+        private void SetFlag(EMessageFlags flag)
+            => _header.Flags |= flag;
+        
+        private bool HasFlag(EMessageFlags flag)
+            => _header.Flags.HasFlag(flag);
 
         public void SetSequenceNumber(long sequenceNumber)
         {
-            SequenceNumber = sequenceNumber;
-        }
-
-        public byte[] ToArray()
-        {
-            var payloadLength = (ushort)(_payload?.Length ?? 0);
-            var totalLength = HeaderLayout.TotalHeaderSize + payloadLength;
-            var result = new byte[totalLength];
-            var span = result.AsSpan();
-            WriteHeader(span);
-            
-            if (payloadLength > 0)
-                _payload.CopyTo(span.Slice(HeaderLayout.TotalHeaderSize, payloadLength));
-
-            return result;
-        }
-
-        private void WriteHeader(Span<byte> span)
-        {
-            BinaryPrimitives.WriteInt64LittleEndian(span.Slice(HeaderLayout.SequenceOffset, sizeof(long)), SequenceNumber);
-            BinaryPrimitives.WriteUInt16LittleEndian(span.Slice(HeaderLayout.ProtocolOffset, sizeof(ushort)), (ushort)ProtocolId);
-            span[HeaderLayout.FlagsOffset] = (byte)_flags;
-            BinaryPrimitives.WriteUInt16LittleEndian(span.Slice(HeaderLayout.PayloadLengthOffset, sizeof(ushort)), (ushort)(_payload?.Length ?? 0));
-        }
-
-        private static bool TryReadHeader(ReadOnlySpan<byte> span, out long sequenceNumber, out ushort protocolId, out byte flags, out ushort payloadLength)
-        {
-            sequenceNumber = 0;
-            protocolId = 0;
-            flags = 0;
-            payloadLength = 0;
-            
-            if (span.Length < HeaderLayout.TotalHeaderSize)
-                return false;
-            
-            sequenceNumber = BinaryPrimitives.ReadInt64LittleEndian(span.Slice(HeaderLayout.SequenceOffset, sizeof(long)));
-            protocolId = BinaryPrimitives.ReadUInt16LittleEndian(span.Slice(HeaderLayout.ProtocolOffset, sizeof(ushort)));
-            flags = span[HeaderLayout.FlagsOffset];
-            payloadLength = BinaryPrimitives.ReadUInt16LittleEndian(span.Slice(HeaderLayout.PayloadLengthOffset, sizeof(ushort)));
-            return true;
-        }
-
-        public static TcpMessage TryReadBuffer(BinaryBuffer buffer, out int totalLength)
-        {
-            totalLength = 0;
-            
-            if (buffer.RemainSize < HeaderLayout.TotalHeaderSize)
-                return null;
-
-            var span = buffer.Peek(HeaderLayout.TotalHeaderSize);
-            if (!TryReadHeader(span, out var sequenceNumber, out var protocolId, out var flags, out var payloadLength)) 
-                return null;
-            
-            var totalSize = HeaderLayout.TotalHeaderSize + payloadLength;
-            if (buffer.RemainSize < totalSize)
-                return null;
-
-            buffer.Skip(HeaderLayout.TotalHeaderSize);
-            var payload = buffer.ReadBytes(payloadLength);
-            totalLength = totalSize;
-            
-            return new TcpMessage
-            {
-                SequenceNumber = sequenceNumber,
-                ProtocolId = (EProtocolId)protocolId,
-                _flags = (EMessageFlags)flags,
-                _payload = payload
-            };
-        }
-
-        public void SerializeProtocol(IProtocolData data, byte[] sharedKey = null)
-        {
-            ProtocolId = data.ProtocolId;
-            _payload = SerializePayload(data, sharedKey);
+            _header.SequenceNumber = sequenceNumber;
         }
         
-        private byte[] SerializePayload(IProtocolData data, byte[] sharedKey)
+        public void SerializeProtocol(IProtocolData data, byte[] sharedKey = null)
         {
-            var payload = BinaryConverter.SerializeObject(data, data.GetType());
-            if (payload == null)
-                throw new InvalidOperationException("Failed to serialize protocol");
+            _payload = BinaryConverter.SerializeObject(data, data.GetType())
+                      ?? throw new InvalidOperationException($"Failed to serialize protocol of type {data.GetType().FullName}");
 
+            _payload = CompressPayload(_payload);
+            if (data.IsEncrypt)
+                _payload = EncryptPayload(_payload, sharedKey);
+            
+            _header.ProtocolId = data.ProtocolId;
+            _header.PayloadLength = _payload.Length;
+        }
+
+        private byte[] CompressPayload(byte[] payload)
+        {
             var compressed = Compressor.Compress(payload);
             var ratio = (double)compressed.Length / payload.Length;
-            if (ratio < CompressionThreshold)
-            {
-                _flags |= EMessageFlags.Compressed;
-                payload = compressed;
-            }
-
-            if (!data.IsEncrypt) return payload;
+            if (ratio >= CompressionThreshold) return payload;
+            EnableCompression();
+            return compressed;
+        }
+        
+        private byte[] EncryptPayload(byte[] payload, byte[] sharedKey)
+        {
             if (sharedKey == null || sharedKey.Length == 0)
-                throw new ArgumentNullException(nameof(sharedKey), "Encrytption required but sharedKey is null");
-
-            _flags |= EMessageFlags.Encrypted;
+                throw new ArgumentNullException(nameof(sharedKey), "SharedKey cannot be null or empty");
+            EnableEncryption();
             return Encryptor.Encrypt(payload, sharedKey);
         }
 
@@ -151,47 +84,31 @@ namespace SP.Engine.Runtime.Networking
         {
             if (_payload == null || _payload.Length == 0)
                 return null;
-            var raw = DeserializePayload(_payload, sharedKey);
-            return BinaryConverter.DeserializeObject(raw, type) as IProtocolData;
+            var payload = _payload;
+            payload = DecryptPayload(payload, sharedKey);
+            payload = DecompressPayload(payload);
+            return BinaryConverter.DeserializeObject(payload, type) as IProtocolData;
         }
 
-        private byte[] DeserializePayload(byte[] input, byte[] sharedKey)
+        private byte[] DecryptPayload(byte[] payload, byte[] sharedKey)
         {
-            var result = input;
-            
-            if (IsEncypted)
-            {
-                if (sharedKey == null || sharedKey.Length == 0)
-                    throw new ArgumentNullException(nameof(sharedKey), "Encrytption required but sharedKey is null");
-                result = Encryptor.Decrypt(result, sharedKey);
-            }
-        
-            if (IsCompressed)
-            {
-                result = Compressor.Decompress(result);
-            }
-        
-            return result;
+            if (!IsEncrypted) return payload;
+            if (sharedKey == null || sharedKey.Length == 0)
+                throw new ArgumentNullException(nameof(sharedKey), "SharedKey cannot be null or empty");
+            return Encryptor.Decrypt(payload, sharedKey);
         }
 
-        public override string ToString()
+        private byte[] DecompressPayload(byte[] payload)
+            => IsCompressed ? Compressor.Decompress(payload) : payload;
+        
+        public byte[] ToArray()
         {
-            var info = new List<string>
-            {
-                $"Seq:{SequenceNumber}",
-                $"Protocol:{ProtocolId}",
-                $"Type:{(ProtocolId.IsEngineProtocol() ? "Engine" : "Server")}"
-            };
-
-            if (_flags.HasFlag(EMessageFlags.Compressed))
-                info.Add("Compressed");
-
-            if (_flags.HasFlag(EMessageFlags.Encrypted))
-                info.Add("Encrypted");
-
-            info.Add($"Size:{_payload?.Length ?? 0}B");
-
-            return "[TcpMessage] " + string.Join(" | ", info);
+            var totalSize = TcpHeader.HeaderSize + (_payload?.Length ?? 0);
+            var buffer = new byte[totalSize];
+            var span = buffer.AsSpan();
+            _header.WriteTo(span[..TcpHeader.HeaderSize]);
+            _payload?.CopyTo(span[TcpHeader.HeaderSize..]);
+            return buffer;
         }
     }
 }

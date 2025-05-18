@@ -66,7 +66,7 @@ namespace SP.Engine.Protocol
                 public string? SessionId { get; set; }
                 public EPeerId PeerId { get; set; }
                 public byte[]? ServerPublicKey { get; set; }
-                public int LimitRequestLength { get; set; }
+                public int MaxAllowedLength { get; set; }
                 public int SendTimeOutMs { get; set; }
                 public int MaxReSendCnt { get; set; }
             }

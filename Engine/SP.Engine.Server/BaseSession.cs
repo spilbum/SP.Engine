@@ -7,7 +7,7 @@ using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Server.Configuration;
-using SP.Engine.Server.Handler;
+using SP.Engine.Server.ProtocolHandler;
 
 namespace SP.Engine.Server
 {
@@ -58,7 +58,7 @@ namespace SP.Engine.Server
             Engine = (BaseEngine<TSession>)engine;
             SocketSession = socketSession;
             SessionId = socketSession.SessionId; 
-            _receiveBuffer = new BinaryBuffer(engine.Config.LimitRequestLength);
+            _receiveBuffer = new BinaryBuffer(engine.Config.MaxAllowedLength);
             socketSession.Initialize(this);
             IsConnected = true;
 
@@ -80,13 +80,12 @@ namespace SP.Engine.Server
             return TrySend(new ArraySegment<byte>(data, 0, data.Length));
         }
 
-        
-
         internal virtual bool TryInternalSend(IProtocolData protocol)
         {
             try
             {
-                var message = TcpMessage.Create(protocol);
+                var message = new TcpMessage();
+                message.SerializeProtocol(protocol);
                 var bytes = message.ToArray();
                 return null != bytes && TrySend(new ArraySegment<byte>(bytes, 0, bytes.Length));
             }
@@ -139,20 +138,20 @@ namespace SP.Engine.Server
             
             while (true)
             {
-                var message = TcpMessage.TryReadBuffer(_receiveBuffer, out var totalLength);
-                if (message != null)
-                {
-                    if (totalLength >= Config.LimitRequestLength)
-                    {
-                        Logger.Error("Max request length: {0}, current processed length: {1}", Config.LimitRequestLength, totalLength);
-                        Close(ECloseReason.ProtocolError);
-                        yield return null;
-                    }
-                    
-                    yield return message;
-                }
-                else
+                if (!TcpHeader.TryValidateLength(_receiveBuffer, out var totalLength))
                     break;
+                
+                if (totalLength > Config.MaxAllowedLength)
+                {
+                    Logger.Warn("Max allowed length: {0}, current: {1}", Config.MaxAllowedLength, totalLength);
+                    Close(ECloseReason.ProtocolError);
+                    break;
+                }
+                
+                if (!TcpMessage.TryParse(_receiveBuffer, out var message))
+                    break;
+
+                yield return message;
             }
 
             if (_receiveBuffer.RemainSize < 1024)

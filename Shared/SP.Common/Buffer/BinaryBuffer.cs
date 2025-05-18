@@ -20,6 +20,16 @@ namespace SP.Common.Buffer
         }
 
         public int RemainSize => _writeIndex - _readIndex;
+
+        public ReadOnlyMemory<byte> ReadMemory(int length)
+        {
+            if (RemainSize < length)
+                throw new InvalidOperationException("Insufficient data");
+
+            var memory = _memory.Slice(_readIndex, length);
+            _readIndex += length;
+            return memory;
+        }
         
         public ReadOnlySpan<byte> Peek(int length)
         {

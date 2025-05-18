@@ -12,7 +12,7 @@ namespace SP.Engine.Server.Configuration
         bool IsDisableClearIdleSession { get; }
         int ClearIdleSessionIntervalSec { get; }
         int IdleSessionTimeOutSec { get; }
-        int LimitRequestLength { get; }
+        int MaxAllowedLength { get; }
         bool IsDisableSessionSnapshot { get; }
         int SessionsSnapshotIntervalSec { get; }
         int KeepAliveTimeSec { get; }
@@ -60,7 +60,7 @@ namespace SP.Engine.Server.Configuration
         public bool IsDisableClearIdleSession { get; set; }
         public int ClearIdleSessionIntervalSec { get; set; }
         public int IdleSessionTimeOutSec { get; set; }
-        public int LimitRequestLength { get; set; }
+        public int MaxAllowedLength { get; set; }
         public bool IsDisableSessionSnapshot { get; set; }
         public int SessionsSnapshotIntervalSec { get; set; }
         public int KeepAliveTimeSec { get; set; }
@@ -91,7 +91,7 @@ namespace SP.Engine.Server.Configuration
             MinCompletionPortThreads = minCompletionPortThreads;
 
             LimitConnectionCount = DefaultLimitConnectionCount;
-            LimitRequestLength = DefaultLimitRequestLength;
+            MaxAllowedLength = DefaultLimitRequestLength;
             KeepAliveTimeSec = DefaultKeepAliveTimeSec;
             KeepAliveIntervalSec = DefaultKeepAliveIntervalSec;
             ReceiveBufferSize = DefaultReceiveBufferSize;
