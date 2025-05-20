@@ -15,8 +15,7 @@ namespace SP.Engine.Runtime.Serialization
 		String,
 		Array,
 		List,
-		Dictionary,
-		Max
+		Dictionary
 	}
 
     public static class BinaryConverterExtensions
@@ -57,6 +56,25 @@ namespace SP.Engine.Runtime.Serialization
 
     public static class BinaryConverter
     {
+        private static readonly Dictionary<Type, Type> ElementTypeCache = new Dictionary<Type, Type>();
+        private static readonly Dictionary<Type, Type[]> GenericArgCache = new Dictionary<Type, Type[]>();
+
+        private static Type GetCachedElementType(Type type)
+        {
+            if (ElementTypeCache.TryGetValue(type, out var elementType)) return elementType;
+            elementType = type.GetElementType()!;
+            ElementTypeCache[type] = elementType;
+            return elementType;
+        }
+
+        private static Type[] GetCachedGenericArgs(Type type)
+        {
+            if (GenericArgCache.TryGetValue(type, out var args)) return args;
+            args = type.GetGenericArguments();
+            GenericArgCache[type] = args;
+            return args;
+        }
+        
         private static object ReadNullable(BinaryBuffer buffer, Type type)
         {
             if (!type.IsNullable())
@@ -92,18 +110,25 @@ namespace SP.Engine.Runtime.Serialization
             switch (dataType)
             {
                 case EDataType.Value:
+                {
                     return ReadNullable(buffer, type);
+                }
 
                 case EDataType.Enum:
+                {
                     if (type.IsNullable() && buffer.Read<bool>()) return null;
                     var underlyingType = Enum.GetUnderlyingType(type);
                     var value = buffer.ReadObject(underlyingType);
                     return Enum.ToObject(type, value);
+                }
 
                 case EDataType.String:
+                {
                     return buffer.ReadString();
+                }
 
                 case EDataType.Class:
+                {
                     if (buffer.Read<bool>()) return null;
                     var instance = Activator.CreateInstance(type);
                     var accessor = RuntimeTypeAccessor.GetOrCreate(type);
@@ -115,36 +140,43 @@ namespace SP.Engine.Runtime.Serialization
                     }
 
                     return instance;
+                }
 
                 case EDataType.Array:
+                {
                     var count = buffer.Read<int>();
-                    var elementType = type.GetElementType();
+                    var elementType = GetCachedElementType(type);
                     var array = Array.CreateInstance(elementType!, count);
                     for (var i = 0; i < count; i++)
                         array.SetValue(Read(buffer, elementType), i);
                     return array;
+                }
 
                 case EDataType.List:
-                    var listCount = buffer.Read<int>();
-                    var itemType = type.GetGenericArguments()[0];
+                {
+                    var count = buffer.Read<int>();
+                    var itemType = GetCachedGenericArgs(type)[0];
                     var list = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(itemType));
-                    for (var i = 0; i < listCount; i++)
+                    for (var i = 0; i < count; i++)
                         list.Add(Read(buffer, itemType));
                     return list;
+                }
 
                 case EDataType.Dictionary:
+                {
                     var dictCount = buffer.Read<int>();
-                    var keyType = type.GetGenericArguments()[0];
-                    var valueType = type.GetGenericArguments()[1];
+                    var args = GetCachedGenericArgs(type);
+                    
                     var dict = (IDictionary)Activator.CreateInstance(type);
                     for (var i = 0; i < dictCount; i++)
                     {
-                        var key = Read(buffer, keyType);
-                        var val = Read(buffer, valueType);
+                        var key = Read(buffer, args[0]);
+                        var val = Read(buffer, args[1]);
                         dict.Add(key, val);
                     }
 
                     return dict;
+                }
 
                 default:
                     throw new NotSupportedException($"Unsupported data type: {dataType}");
@@ -157,10 +189,13 @@ namespace SP.Engine.Runtime.Serialization
             switch (dataType)
             {
                 case EDataType.Value:
+                {
                     WriteNullable(buffer, obj, type);
                     break;
+                }
 
                 case EDataType.Enum:
+                {
                     if (type.IsNullable())
                     {
                         var isNull = obj == null;
@@ -171,18 +206,19 @@ namespace SP.Engine.Runtime.Serialization
                     var underlyingValue = Convert.ChangeType(obj, Enum.GetUnderlyingType(type));
                     buffer.WriteObject(underlyingValue);
                     break;
+                }
 
                 case EDataType.String:
-                    if (obj is string str)
-                        buffer.Write(str);
-                    else
-                        buffer.Write(0);
+                {
+                    buffer.WriteString((string)obj);
                     break;
+                }
 
                 case EDataType.Class:
-                    var isNullClass = obj == null;
-                    buffer.Write(isNullClass);
-                    if (!isNullClass)
+                {
+                    var isNull = obj == null;
+                    buffer.Write(isNull);
+                    if (!isNull)
                     {
                         var accessor = RuntimeTypeAccessor.GetOrCreate(type);
                         foreach (var prop in accessor.Properties)
@@ -191,44 +227,58 @@ namespace SP.Engine.Runtime.Serialization
                             Write(buffer, val, prop.Type);
                         }
                     }
-
                     break;
+                }
 
                 case EDataType.Array:
+                {
                     if (obj is Array array)
                     {
                         buffer.Write(array.Length);
                         foreach (var item in array)
-                            Write(buffer, item, type.GetElementType());
+                            Write(buffer, item, GetCachedElementType(type));
                     }
-                    else buffer.Write(0);
-
+                    else
+                    {
+                        buffer.Write(0);
+                    }
                     break;
+                }
 
                 case EDataType.List:
+                {
                     if (obj is IList list)
                     {
                         buffer.Write(list.Count);
                         foreach (var item in list)
-                            Write(buffer, item, type.GetGenericArguments()[0]);
+                            Write(buffer, item, GetCachedGenericArgs(type)[0]);
                     }
-                    else buffer.Write(0);
-
+                    else
+                    {
+                        buffer.Write(0);
+                    }
                     break;
+                }
 
                 case EDataType.Dictionary:
+                {
                     if (obj is IDictionary dictionary)
                     {
                         buffer.Write(dictionary.Count);
+                        
+                        var args = GetCachedGenericArgs(type);
                         foreach (DictionaryEntry entry in dictionary)
                         {
-                            Write(buffer, entry.Key, type.GetGenericArguments()[0]);
-                            Write(buffer, entry.Value, type.GetGenericArguments()[1]);
+                            Write(buffer, entry.Key, args[0]);
+                            Write(buffer, entry.Value, args[1]);
                         }
                     }
-                    else buffer.Write(0);
-
+                    else
+                    {
+                        buffer.Write(0);
+                    }
                     break;
+                }
 
                 default:
                     throw new NotSupportedException($"Unsupported data type: {dataType}");
@@ -245,21 +295,11 @@ namespace SP.Engine.Runtime.Serialization
             return buffer.ToArray();
         }
 
-        public static byte[] SerializeObject<T>(T obj) where T : class
+        public static object DeserializeObject(byte[] data, Type type)
         {
-            return SerializeObject(obj, typeof(T));
-        }
-
-        public static object DeserializeObject(byte[] bytes, Type type)
-        {
-            using var buffer = new BinaryBuffer(bytes.Length);
-            buffer.Write(bytes);
+            using var buffer = new BinaryBuffer(data.Length);
+            buffer.Write(data);
             return Read(buffer, type);
-        }
-
-        public static T DeserializeObject<T>(byte[] bytes) where T : class, new()
-        {
-            return (T)DeserializeObject(bytes, typeof(T));
         }
     }
 }

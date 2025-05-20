@@ -1,6 +1,7 @@
 using System;
 using SP.Common.Buffer;
 using SP.Engine.Runtime.Protocol;
+using SP.Engine.Runtime.Utilities;
 
 namespace SP.Engine.Runtime.Networking
 {
@@ -66,7 +67,7 @@ namespace SP.Engine.Runtime.Networking
             
             var span = buffer.Peek(HeaderSize);
             var payloadLength = span.ReadInt32(PayloadLengthOffset);
-            if (payloadLength > ushort.MaxValue - HeaderSize)
+            if (payloadLength > int.MaxValue - HeaderSize)
                 return false;
             
             var length = HeaderSize + payloadLength; 

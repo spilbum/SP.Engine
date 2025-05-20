@@ -472,9 +472,11 @@ namespace SP.Engine.Client
 
         private void OnSessionDataReceived(object sender, DataEventArgs e)
         {
+            _receiveBuffer.Write(e.Data.AsSpan(e.Offset, e.Length));
+
             try
             {
-                foreach (var message in Filter(e.Data, e.Offset, e.Length))
+                foreach (var message in Filter())
                 {
                     try
                     {
@@ -496,16 +498,19 @@ namespace SP.Engine.Client
             {
                 OnError(ex);
             }
+            finally
+            {
+                if (_receiveBuffer.RemainSize < 1024)
+                    _receiveBuffer.Trim();
+            }
         }
         
-        private IEnumerable<TcpMessage> Filter(byte[] buffer, int offset, int length) 
+        private IEnumerable<TcpMessage> Filter() 
         {
-            _receiveBuffer.Write(buffer.AsSpan(offset, length));
-            
             while (true)
             {
                 if (!TcpHeader.TryValidateLength(_receiveBuffer, out var totalLength))
-                    break;
+                    yield break;
                 
                 if (totalLength > MaxAllowedLength)
                 {
@@ -513,15 +518,17 @@ namespace SP.Engine.Client
                     Close();
                     yield break;
                 }
-                
-                if (!TcpMessage.TryParse(_receiveBuffer, out var message))
-                    break;
 
-                yield return message;
+                if (!TcpHeader.TryParse(_receiveBuffer, out var header))
+                {
+                    Logger.Warn("Failed to parse header");
+                    Close();
+                    yield break;
+                }
+
+                var payload = _receiveBuffer.ReadBytes(header.PayloadLength);
+                yield return new TcpMessage(header, payload);
             }
-
-            if (_receiveBuffer.RemainSize < 1024)
-                _receiveBuffer.Trim();
         }
 
         private void OnSessionError(object sender, ErrorEventArgs e)

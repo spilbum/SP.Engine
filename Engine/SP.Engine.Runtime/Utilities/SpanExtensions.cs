@@ -1,7 +1,7 @@
 using System;
 using System.Buffers.Binary;
 
-namespace SP.Engine.Runtime.Networking
+namespace SP.Engine.Runtime.Utilities
 {
     public static class SpanExtensions
     {

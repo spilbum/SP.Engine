@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Buffers;
+using System.Collections.Generic;
 using System.Text;
 using System.Runtime.InteropServices;
 
@@ -7,10 +8,59 @@ namespace SP.Common.Buffer
 {
     public sealed class BinaryBuffer : IDisposable
     {
+        private static readonly Dictionary<TypeCode, Action<BinaryBuffer, object>> WriterDict = new Dictionary<TypeCode, Action<BinaryBuffer, object>>()
+        {
+            [TypeCode.Boolean]  = (b, v) => b.Write((bool)v),
+            [TypeCode.Byte]     = (b, v) => b.Write((byte)v),
+            [TypeCode.SByte]    = (b, v) => b.Write((sbyte)v),
+            [TypeCode.Char]     = (b, v) => b.Write((char)v),
+            [TypeCode.Int16]    = (b, v) => b.Write((short)v),
+            [TypeCode.UInt16]   = (b, v) => b.Write((ushort)v),
+            [TypeCode.Int32]    = (b, v) => b.Write((int)v),
+            [TypeCode.UInt32]   = (b, v) => b.Write((uint)v),
+            [TypeCode.Int64]    = (b, v) => b.Write((long)v),
+            [TypeCode.UInt64]   = (b, v) => b.Write((ulong)v),
+            [TypeCode.Single]   = (b, v) => b.Write((float)v),
+            [TypeCode.Double]   = (b, v) => b.Write((double)v),
+            [TypeCode.Decimal]  = (b, v) => b.Write((decimal)v),
+            [TypeCode.String]   = (b, v) => b.WriteString((string)v),
+            [TypeCode.DateTime] = (b, v) => b.Write(((DateTime)v).Ticks)
+        };
+
+        private static readonly Dictionary<TypeCode, Func<BinaryBuffer, object>> ReaderDict = new Dictionary<TypeCode, Func<BinaryBuffer, object>>()
+        {
+            [TypeCode.Boolean]  = b => b.Read<bool>(),
+            [TypeCode.Byte]     = b => b.Read<byte>(),
+            [TypeCode.SByte]    = b => b.Read<sbyte>(),
+            [TypeCode.Char]     = b => b.Read<char>(),
+            [TypeCode.Int16]    = b => b.Read<short>(),
+            [TypeCode.UInt16]   = b => b.Read<ushort>(),
+            [TypeCode.Int32]    = b => b.Read<int>(),
+            [TypeCode.UInt32]   = b => b.Read<uint>(),
+            [TypeCode.Int64]    = b => b.Read<long>(),
+            [TypeCode.UInt64]   = b => b.Read<ulong>(),
+            [TypeCode.Single]   = b => b.Read<float>(),
+            [TypeCode.Double]   = b => b.Read<double>(),
+            [TypeCode.Decimal]  = b => b.Read<decimal>(),
+            [TypeCode.String]   = b => b.ReadString(),
+            [TypeCode.DateTime] = b => new DateTime(b.Read<long>())
+        };
+
+        private static readonly Dictionary<Type, TypeCode> TypeCodeCache = new Dictionary<Type, TypeCode>();
+
+        private static TypeCode GetCachedTypeCode(Type type)
+        {
+            if (TypeCodeCache.TryGetValue(type, out var typeCode)) return typeCode;
+            typeCode = Type.GetTypeCode(type);
+            TypeCodeCache[type] = typeCode;
+            return typeCode;
+        }
+        
         private IMemoryOwner<byte> _memoryOwner;
         private Memory<byte> _memory;
         private int _writeIndex;
         private int _readIndex;
+        private bool _disposed;
         private const int MaxBufferSize = 1024 * 1024 * 1024;
         
         public BinaryBuffer(int size = 4096)
@@ -21,37 +71,18 @@ namespace SP.Common.Buffer
 
         public int RemainSize => _writeIndex - _readIndex;
 
-        public ReadOnlyMemory<byte> ReadMemory(int length)
-        {
-            if (RemainSize < length)
-                throw new InvalidOperationException("Insufficient data");
-
-            var memory = _memory.Slice(_readIndex, length);
-            _readIndex += length;
-            return memory;
-        }
-        
         public ReadOnlySpan<byte> Peek(int length)
         {
             if (RemainSize < length)
                 throw new InvalidOperationException("Insufficient data");
-
             return _memory.Span.Slice(_readIndex, length);
         }
         
-        public void Skip(int count)
+        public void Write(ReadOnlySpan<byte> span)
         {
-            if (RemainSize < count)
-                throw new InvalidOperationException("Skip overflow");
-
-            _readIndex += count;
-        }
-        
-        public void Write(ReadOnlySpan<byte> data)
-        {
-            EnsureCapacity(data.Length);
-            data.CopyTo(_memory.Span.Slice(_writeIndex));
-            _writeIndex += data.Length;
+            EnsureCapacity(span.Length);
+            span.CopyTo(_memory.Span.Slice(_writeIndex));
+            _writeIndex += span.Length;
         }
         
         public void Write<T>(T value) where T : struct
@@ -66,6 +97,9 @@ namespace SP.Common.Buffer
         public T Read<T>() where T : struct
         {
             var size = Marshal.SizeOf<T>();
+            if (RemainSize < size)
+                throw new InvalidOperationException("Insufficient data");
+            
             var span = _memory.Span.Slice(_readIndex, size);
             _readIndex += size;
             return MemoryMarshal.Read<T>(span);
@@ -86,17 +120,27 @@ namespace SP.Common.Buffer
         
         public string ReadString()
         {
-            int length = Read<int>();
-            if (length <= 0) return string.Empty;
+            var length = Read<int>();
+            if (length < 0) 
+                return null;
+            if (length == 0)
+                return string.Empty;
+            
             var span = Read(length);
             return Encoding.UTF8.GetString(span);
         }
         
-        public void Write(string value)
+        public void WriteString(string value)
         {
-            if (string.IsNullOrEmpty(value))
+            if (value == null)
             {
-                Write(0);
+                Write(-1); // null
+                return;
+            }
+
+            if (value.Length == 0)
+            {
+                Write(0); // empty
                 return;
             }
 
@@ -110,25 +154,14 @@ namespace SP.Common.Buffer
             if (value == null)
                 throw new ArgumentNullException(nameof(value));
 
-            switch (Type.GetTypeCode(value.GetType()))
+            var typeCode = GetCachedTypeCode(value.GetType());
+            if (WriterDict.TryGetValue(typeCode, out var writer))
             {
-                case TypeCode.Boolean: Write((bool)value); break;
-                case TypeCode.Byte: Write((byte)value); break;
-                case TypeCode.SByte: Write((sbyte)value); break;
-                case TypeCode.Char: Write((char)value); break;
-                case TypeCode.Int16: Write((short)value); break;
-                case TypeCode.UInt16: Write((ushort)value); break;
-                case TypeCode.Int32: Write((int)value); break;
-                case TypeCode.UInt32: Write((uint)value); break;
-                case TypeCode.Int64: Write((long)value); break;
-                case TypeCode.UInt64: Write((ulong)value); break;
-                case TypeCode.Single: Write((float)value); break;
-                case TypeCode.Double: Write((double)value); break;
-                case TypeCode.Decimal: Write((decimal)value); break;
-                case TypeCode.DateTime: Write(((DateTime)value).Ticks); break;
-
-                default:
-                    throw new NotSupportedException($"Unsupported value type: {value.GetType()}");
+                writer(this, value);
+            }
+            else
+            {
+                throw new NotSupportedException($"Unsupported type: {value.GetType().FullName}");
             }
         }
 
@@ -137,26 +170,13 @@ namespace SP.Common.Buffer
             if (type == null)
                 throw new ArgumentNullException(nameof(type));
 
-            switch (Type.GetTypeCode(type))
+            var typeCode = GetCachedTypeCode(type);
+            if (ReaderDict.TryGetValue(typeCode, out var reader))
             {
-                case TypeCode.Boolean: return Read<bool>();
-                case TypeCode.Byte: return Read<byte>();
-                case TypeCode.SByte: return Read<sbyte>();
-                case TypeCode.Char: return Read<char>();
-                case TypeCode.Int16: return Read<short>();
-                case TypeCode.UInt16: return Read<ushort>();
-                case TypeCode.Int32: return Read<int>();
-                case TypeCode.UInt32: return Read<uint>();
-                case TypeCode.Int64: return Read<long>();
-                case TypeCode.UInt64: return Read<ulong>();
-                case TypeCode.Single: return Read<float>();
-                case TypeCode.Double: return Read<double>();
-                case TypeCode.Decimal: return Read<decimal>();
-                case TypeCode.DateTime: return new DateTime(Read<long>());
-
-                default:
-                    throw new NotSupportedException($"Unsupported value type: {type.FullName}");
+                return reader(this);
             }
+
+            throw new NotSupportedException($"Unsupported type: {type.FullName}");
         }
         
         public void Trim()
@@ -178,7 +198,10 @@ namespace SP.Common.Buffer
         {
             if (_writeIndex + additionalSize <= _memory.Length) return;
 
-            var newSize = Math.Min(_memory.Length * 2, MaxBufferSize);
+            var requiredSize = _writeIndex + additionalSize;
+            var newSize = Math.Max(_memory.Length * 2, requiredSize);
+            newSize = Math.Min(newSize, MaxBufferSize);
+            
             var newOwner = MemoryPool<byte>.Shared.Rent(newSize);
             _memory.Span.Slice(_readIndex, RemainSize).CopyTo(newOwner.Memory.Span);
 
@@ -190,8 +213,14 @@ namespace SP.Common.Buffer
             _memory = _memoryOwner.Memory.Slice(0, newSize);
         }
         
-        public byte[] ToArray() => _memory.Span.Slice(_readIndex, RemainSize).ToArray();
+        public byte[] ToArray() => AsSpan().ToArray();
+        public Span<byte> AsSpan() => _memory.Span.Slice(_readIndex, RemainSize);
 
-        public void Dispose() => _memoryOwner.Dispose();
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            _memoryOwner.Dispose();
+        }
     }
 }

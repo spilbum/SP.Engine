@@ -108,9 +108,11 @@ namespace SP.Engine.Server
 
         void ISession.ProcessBuffer(byte[] buffer, int offset, int length)
         {
+            _receiveBuffer.Write(buffer.AsSpan(offset, length));
+
             try
             {
-                foreach (var message in Filter(buffer, offset, length))
+                foreach (var message in Filter())
                 {
                     try
                     {
@@ -130,32 +132,37 @@ namespace SP.Engine.Server
             {
                 Logger.Error(e);
             }
+            finally
+            {
+                if (_receiveBuffer.RemainSize < 1024)
+                    _receiveBuffer.Trim();
+            }
         }
         
-        private IEnumerable<TcpMessage> Filter(byte[] buffer, int offset, int length) 
+        private IEnumerable<TcpMessage> Filter() 
         {
-            _receiveBuffer.Write(buffer.AsSpan(offset, length));
-            
             while (true)
             {
                 if (!TcpHeader.TryValidateLength(_receiveBuffer, out var totalLength))
-                    break;
+                    yield break;
                 
                 if (totalLength > Config.MaxAllowedLength)
                 {
                     Logger.Warn("Max allowed length: {0}, current: {1}", Config.MaxAllowedLength, totalLength);
                     Close(ECloseReason.ProtocolError);
-                    break;
+                    yield break;
                 }
-                
-                if (!TcpMessage.TryParse(_receiveBuffer, out var message))
-                    break;
 
-                yield return message;
+                if (!TcpHeader.TryParse(_receiveBuffer, out var header))
+                {
+                    Logger.Warn("Failed to parse header");
+                    Close(ECloseReason.ProtocolError);
+                    yield break;
+                }
+
+                var payload = _receiveBuffer.ReadBytes(header.PayloadLength);
+                yield return new TcpMessage(header, payload);
             }
-
-            if (_receiveBuffer.RemainSize < 1024)
-                _receiveBuffer.Trim();
         }
 
         protected abstract void ExecuteMessage(IMessage message);

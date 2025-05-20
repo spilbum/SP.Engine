@@ -8,34 +8,33 @@ namespace SP.Engine.Runtime.Security
         private const int IvSize = 16;
         private const int AesKeySize = 32;
 
-        public static byte[] Encrypt(ReadOnlySpan<byte> plaintext, ReadOnlySpan<byte> key)
+        public static byte[] Encrypt(byte[] plaintext, byte[] key)
         {
             if (key.Length != AesKeySize)
-                throw new ArgumentException("AES key must be 32 bytes");
+                throw new ArgumentException("AES key must be 32 bytes", nameof(key));
 
-            Span<byte> iv = stackalloc byte[IvSize];
+            var iv = new byte[IvSize];
             RandomNumberGenerator.Fill(iv);
-            var ivBytes = iv.ToArray();
 
             using var aes = Aes.Create();
-            aes.Key = key.ToArray();
-            aes.IV = ivBytes;
+            aes.Key = key;
+            aes.IV = iv;
             aes.Mode = CipherMode.CBC;
             aes.Padding = PaddingMode.PKCS7;
 
             using var encryptor = aes.CreateEncryptor();
-            var ciphertext = encryptor.TransformFinalBlock(plaintext.ToArray(), 0, plaintext.Length);
+            var ciphertext = encryptor.TransformFinalBlock(plaintext, 0, plaintext.Length);
 
             var result = new byte[IvSize + ciphertext.Length];
-            Buffer.BlockCopy(ivBytes, 0, result, 0, IvSize);
+            Buffer.BlockCopy(iv, 0, result, 0, IvSize);
             Buffer.BlockCopy(ciphertext, 0, result, IvSize, ciphertext.Length);
 
             return result;
         }
 
-        public static byte[] Decrypt(ReadOnlySpan<byte> encryptedData, ReadOnlySpan<byte> key)
+        public static byte[] Decrypt(byte[] encryptedData, byte[] key)
         {
-            if (key.Length != AesKeySize)
+            if (!(key is { Length: AesKeySize }))
                 throw new ArgumentException("AES key must be 32 bytes");
 
             if (encryptedData.Length < IvSize)
@@ -45,13 +44,13 @@ namespace SP.Engine.Runtime.Security
             var ciphertext = encryptedData[IvSize..];
 
             using var aes = Aes.Create();
-            aes.Key = key.ToArray();
-            aes.IV = iv.ToArray();
+            aes.Key = key;
+            aes.IV = iv;
             aes.Mode = CipherMode.CBC;
             aes.Padding = PaddingMode.PKCS7;
 
             using var decryptor = aes.CreateDecryptor();
-            return decryptor.TransformFinalBlock(ciphertext.ToArray(), 0, ciphertext.Length);
+            return decryptor.TransformFinalBlock(ciphertext, 0, ciphertext.Length);
         }
     }
 }
