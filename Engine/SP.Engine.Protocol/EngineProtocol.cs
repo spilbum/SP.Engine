@@ -31,24 +31,24 @@ namespace SP.Engine.Protocol
                 [ProtocolData(EngineProtocol.C2S.SessionAuthReq)]
                 public class SessionAuthReq : BaseProtocolData
                 {
-                    public string? SessionId { get; set; }
-                    public EPeerId PeerId { get; set; }
-                    public DhKeySize KeySize { get; set; }
-                    public byte[]? ClientPublicKey { get; set; }
+                    public string? SessionId;
+                    public EPeerId PeerId;
+                    public DhKeySize KeySize;
+                    public byte[]? ClientPublicKey;
                 }
             
                 [ProtocolData(EngineProtocol.C2S.MessageAck)]
                 public class MessageAck : BaseProtocolData
                 {
-                    public long SequenceNumber { get; set; }
+                    public long SequenceNumber;
                 }
             
                 [ProtocolData(EngineProtocol.C2S.Ping)]
                 public class Ping : BaseProtocolData
                 {
-                    public int LatencyAverageMs { get; set; }
-                    public int LatencyStandardDeviationMs { get; set; }
-                    public DateTime SendTime { get; set; }
+                    public int LatencyAverageMs;
+                    public int LatencyStandardDeviationMs;
+                    public DateTime SendTime;
                 }
             
                 [ProtocolData(EngineProtocol.C2S.Close)]
@@ -62,26 +62,26 @@ namespace SP.Engine.Protocol
             [ProtocolData(EngineProtocol.S2C.SessionAuthAck)]
             public class SessionAuthAck : BaseProtocolData
             {
-                public EEngineErrorCode ErrorCode { get; set; }
-                public string? SessionId { get; set; }
-                public EPeerId PeerId { get; set; }
-                public byte[]? ServerPublicKey { get; set; }
-                public int MaxAllowedLength { get; set; }
-                public int SendTimeOutMs { get; set; }
-                public int MaxReSendCnt { get; set; }
+                public EEngineErrorCode ErrorCode;
+                public string? SessionId;
+                public EPeerId PeerId;
+                public byte[]? ServerPublicKey;
+                public int MaxAllowedLength;
+                public int SendTimeOutMs;
+                public int MaxReSendCnt;
             }
 
             [ProtocolData(EngineProtocol.S2C.Pong)]
             public class Pong : BaseProtocolData
             {
-                public DateTime ServerTime { get; set; }
-                public DateTime SentTime { get; set; }
+                public DateTime ServerTime;
+                public DateTime SentTime;
             }
 
             [ProtocolData(EngineProtocol.S2C.MessageAck)]
             public class MessageAck : BaseProtocolData
             {
-                public long SequenceNumber { get; set; }
+                public long SequenceNumber;
             }
 
             [ProtocolData(EngineProtocol.S2C.Close)]

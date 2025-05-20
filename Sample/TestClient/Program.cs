@@ -1,4 +1,5 @@
-﻿using Common;
+﻿using System.Text;
+using Common;
 using SP.Common;
 using SP.Common.Logging;
 using SP.Engine.Client;
@@ -84,7 +85,7 @@ namespace TestClient
         [ProtocolMethod(Protocol.S2C.Echo)]
         private void OnEchoMessage(ProtocolData.S2C.Echo protocol)
         {
-            _logger?.Info("Message received: {0}", protocol.Text);
+            _logger?.Info("Message received: {0}, bytes={1}, time={2}", protocol.Str, protocol.Bytes?.Length, protocol.Time.ToString("yyyy-MM-dd HH:mm:ss.fff"));
         }
     }
     
@@ -116,7 +117,7 @@ namespace TestClient
                     switch (splits[0])
                     {
                         case "echo":
-                            NetPeerManager.Instance.Send(new ProtocolData.C2S.Echo { Text = splits[1] });
+                            NetPeerManager.Instance.Send(new ProtocolData.C2S.Echo { Str = splits[1], Bytes = Encoding.UTF8.GetBytes(splits[1]), Time = DateTime.Now});
                             break;
                         case "exit":
                             NetPeerManager.Instance.Stop();

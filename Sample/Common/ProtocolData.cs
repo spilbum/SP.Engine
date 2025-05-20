@@ -1,3 +1,4 @@
+using System;
 using SP.Engine.Runtime.Protocol;
 
 namespace Common
@@ -9,7 +10,9 @@ namespace Common
             [ProtocolData(Protocol.C2S.Echo)]
             public class Echo : BaseProtocolData
             {
-                public string? Text { get; set; }
+                public string? Str;
+                public byte[]? Bytes;
+                public DateTime Time;
             }
         }
 
@@ -18,7 +21,9 @@ namespace Common
             [ProtocolData(Protocol.S2C.Echo)]
             public class Echo : BaseProtocolData
             {
-                public string? Text { get; set; }
+                public string? Str;
+                public byte[]? Bytes;
+                public DateTime Time;
             }
         }
     }

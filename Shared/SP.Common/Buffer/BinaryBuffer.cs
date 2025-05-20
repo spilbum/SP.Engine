@@ -63,13 +63,19 @@ namespace SP.Common.Buffer
         private bool _disposed;
         private const int MaxBufferSize = 1024 * 1024 * 1024;
         
+        public int RemainSize => _writeIndex - _readIndex;
+        
         public BinaryBuffer(int size = 4096)
         {
             _memoryOwner = MemoryPool<byte>.Shared.Rent(size);
             _memory = _memoryOwner.Memory.Slice(0, size);
         }
 
-        public int RemainSize => _writeIndex - _readIndex;
+        public void Reset()
+        {
+            _writeIndex = 0;
+            _readIndex = 0;
+        }
 
         public ReadOnlySpan<byte> Peek(int length)
         {

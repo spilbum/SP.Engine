@@ -1,92 +1,60 @@
 using System;
-using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Reflection;
 
 namespace SP.Common.Accessor
 {
-    public class PropertyAccessor
+    public class PropertyAccessor : IMemberAccessor
     {
         private readonly Func<object, object> _getter;
         private readonly Action<object, object> _setter;
         
         public string Name { get; }
         public Type Type { get; }
-        
         public bool CanRead { get; }
         public bool CanWrite { get; }
         
         public PropertyAccessor(PropertyInfo propertyInfo)
         {
-            var attr = propertyInfo.GetCustomAttribute<PropertyAttribute>();
+            var attr = propertyInfo.GetCustomAttribute<MemberAttribute>();
             Name = attr == null ? propertyInfo.Name : attr.Name;
             Type = propertyInfo.PropertyType;
 
-            var ignoreAttr = propertyInfo.GetCustomAttribute<IgnorePropertyAttribute>();
+            var ignoreAttr = propertyInfo.GetCustomAttribute<IgnoreMemberAttribute>();
             CanRead = !(ignoreAttr?.IgnoreOnRead ?? false);
             CanWrite = !(ignoreAttr?.IgnoreOnWrite ?? false);
             
-            if (CanRead)
-                _getter = CreateGetter(propertyInfo);
-            if (CanWrite)
-                _setter = CreateSetter(propertyInfo);
+            if (CanRead) _getter = CreateGetter(propertyInfo);
+            if (CanWrite) _setter = CreateSetter(propertyInfo);
         }
         
-        public bool IsNullable()
-        {
-            return !Type.IsValueType || Nullable.GetUnderlyingType(Type) != null;
-        }
-
-        public object GetValue(object instance)
-        {
-            if (!CanRead || _getter == null)
-                throw new InvalidOperationException($"Property '{Name}' is not readable.");
-            return _getter(instance);
-        }
-
-        public void SetValue(object instance, object value)
-        {
-            if (!CanWrite || _setter == null)
-                throw new InvalidOperationException($"Property '{Name}' is not writable.");
-            _setter(instance, value);
-        }
+        public object GetValue(object instance) => _getter(instance);
+        public void SetValue(object instance, object value) => _setter(instance, value);
         
-        private static Func<object, object> CreateGetter(PropertyInfo propertyInfo)
+        private static Func<object, object> CreateGetter(PropertyInfo property)
         {
-            if (!propertyInfo.CanRead)
-                throw new ArgumentException($"Property {propertyInfo.Name} does not have a getter.");
-            
-            if (propertyInfo.DeclaringType == null)
-                throw new ArgumentException($"Property {propertyInfo.Name} declaring type is null.");
+            if (property.DeclaringType == null)
+                throw new ArgumentException("Property declaring type is null.", nameof(property));
             
             var instanceParam = Expression.Parameter(typeof(object), "instance");
-            var instanceCvt = Expression.Convert(instanceParam, propertyInfo.DeclaringType);
-            var property = Expression.Property(instanceCvt, propertyInfo);
-            var returnCvt = Expression.Convert(property, typeof(object));
-
-            var lambda = Expression.Lambda<Func<object, object>>(returnCvt, instanceParam);
-            return lambda.Compile();
+            var instanceCast = Expression.Convert(instanceParam, property.DeclaringType);
+            var propertyAccess = Expression.Property(instanceCast, property);
+            var returnCast = Expression.Convert(propertyAccess, typeof(object));
+            return Expression.Lambda<Func<object, object>>(returnCast, instanceParam).Compile();
         }
 
-        private static Action<object, object> CreateSetter(PropertyInfo propertyInfo)
+        private static Action<object, object> CreateSetter(PropertyInfo property)
         {
-            if (!propertyInfo.CanWrite)
-                throw new ArgumentException($"Property {propertyInfo.Name} does not have a setter.");
-            
-            if (propertyInfo.DeclaringType == null)
-                throw new ArgumentException($"Property {propertyInfo.Name} declaring type is null.");
+            if (property.DeclaringType == null)
+                throw new ArgumentException("Property declaring type is null.", nameof(property));
             
             var instanceParam = Expression.Parameter(typeof(object), "instance");
             var valueParam = Expression.Parameter(typeof(object), "value");
-            
-            var instanceCvt = Expression.Convert(instanceParam, propertyInfo.DeclaringType);
-            var valueCvt = Expression.Convert(valueParam, propertyInfo.PropertyType);
-            
-            var property = Expression.Property(instanceCvt, propertyInfo);
-            var assign = Expression.Assign(property, valueCvt);
-            
-            var lambda = Expression.Lambda<Action<object, object>>(assign, instanceParam, valueParam);
-            return lambda.Compile();
+            var instanceCast = Expression.Convert(instanceParam, property.DeclaringType);
+            var valueCast = Expression.Convert(valueParam, property.PropertyType);
+            var propertyCast = Expression.Property(instanceCast, property);
+            var assign = Expression.Assign(propertyCast, valueCast);
+            return Expression.Lambda<Action<object, object>>(assign, instanceParam, valueParam).Compile();
         }
     }
 }

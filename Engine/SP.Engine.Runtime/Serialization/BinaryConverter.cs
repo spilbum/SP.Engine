@@ -15,7 +15,9 @@ namespace SP.Engine.Runtime.Serialization
 		String,
 		Array,
 		List,
-		Dictionary
+		Dictionary,
+        ByteArray,
+        DateTime
 	}
 
     public static class BinaryConverterExtensions
@@ -29,7 +31,7 @@ namespace SP.Engine.Runtime.Serialization
             { typeof(long), EDataType.Value }, { typeof(ulong), EDataType.Value },
             { typeof(float), EDataType.Value }, { typeof(double), EDataType.Value },
             { typeof(decimal), EDataType.Value }, { typeof(string), EDataType.String },
-            { typeof(DateTime), EDataType.Value }
+            { typeof(DateTime), EDataType.DateTime }, { typeof(byte[]), EDataType.ByteArray }
         };
 
         public static EDataType GetDataType(this Type type)
@@ -40,6 +42,7 @@ namespace SP.Engine.Runtime.Serialization
             if (type.IsEnum) return EDataType.Enum;
             if (typeof(IList).IsAssignableFrom(type)) return EDataType.List;
             if (typeof(IDictionary).IsAssignableFrom(type)) return EDataType.Dictionary;
+            
             return type.IsClass ? EDataType.Class : EDataType.None;
         }
 
@@ -132,11 +135,12 @@ namespace SP.Engine.Runtime.Serialization
                     if (buffer.Read<bool>()) return null;
                     var instance = Activator.CreateInstance(type);
                     var accessor = RuntimeTypeAccessor.GetOrCreate(type);
-                    foreach (var property in accessor.Properties)
+                    foreach (var member in accessor.Members)
                     {
-                        var val = Read(buffer, property.Type);
+                        if (!member.CanRead) continue;
+                        var val = Read(buffer, member.Type);
                         if (val != null)
-                            accessor[instance, property.Name] = val;
+                            accessor[instance, member.Name] = val;
                     }
 
                     return instance;
@@ -178,6 +182,19 @@ namespace SP.Engine.Runtime.Serialization
                     return dict;
                 }
 
+                case EDataType.ByteArray:
+                {
+                    var length = buffer.Read<int>();
+                    return buffer.ReadBytes(length);
+                }
+
+                case EDataType.DateTime:
+                {
+                    var kind = (DateTimeKind)buffer.Read<byte>();
+                    var ticks = buffer.Read<long>();
+                    return new DateTime(ticks, kind);
+                }
+
                 default:
                     throw new NotSupportedException($"Unsupported data type: {dataType}");
             }
@@ -203,6 +220,7 @@ namespace SP.Engine.Runtime.Serialization
                         if (isNull) return;
                     }
 
+                    // 실제 타입으로 변환
                     var underlyingValue = Convert.ChangeType(obj, Enum.GetUnderlyingType(type));
                     buffer.WriteObject(underlyingValue);
                     break;
@@ -221,10 +239,11 @@ namespace SP.Engine.Runtime.Serialization
                     if (!isNull)
                     {
                         var accessor = RuntimeTypeAccessor.GetOrCreate(type);
-                        foreach (var prop in accessor.Properties)
+                        foreach (var member in accessor.Members)
                         {
-                            var val = accessor[obj, prop.Name];
-                            Write(buffer, val, prop.Type);
+                            if (!member.CanWrite) continue;
+                            var val = accessor[obj, member.Name];
+                            Write(buffer, val, member.Type);
                         }
                     }
                     break;
@@ -232,7 +251,7 @@ namespace SP.Engine.Runtime.Serialization
 
                 case EDataType.Array:
                 {
-                    if (obj is Array array)
+                    if (obj is Array array && array.Length > 0)
                     {
                         buffer.Write(array.Length);
                         foreach (var item in array)
@@ -247,7 +266,7 @@ namespace SP.Engine.Runtime.Serialization
 
                 case EDataType.List:
                 {
-                    if (obj is IList list)
+                    if (obj is IList list && list.Count > 0)
                     {
                         buffer.Write(list.Count);
                         foreach (var item in list)
@@ -277,6 +296,22 @@ namespace SP.Engine.Runtime.Serialization
                     {
                         buffer.Write(0);
                     }
+                    break;
+                }
+
+                case EDataType.ByteArray:
+                {
+                    var bytes = (byte[])obj;
+                    buffer.Write(bytes.Length);
+                    buffer.Write(bytes);
+                    break;
+                }
+
+                case EDataType.DateTime:
+                {
+                    var dt = (DateTime)obj;
+                    buffer.Write((byte)dt.Kind);
+                    buffer.Write(dt.Ticks);
                     break;
                 }
 

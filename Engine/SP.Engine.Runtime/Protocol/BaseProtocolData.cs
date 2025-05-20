@@ -9,9 +9,9 @@ namespace SP.Engine.Runtime.Protocol
     {
         private static readonly ConcurrentDictionary<Type, ProtocolDataAttribute> AttributeCache = new ConcurrentDictionary<Type, ProtocolDataAttribute>();
 
-        [IgnoreProperty]
+        [IgnoreMember]
         public EProtocolId ProtocolId { get; }
-        [IgnoreProperty]
+        [IgnoreMember]
         public bool IsEncrypt { get; }
         
         protected BaseProtocolData()
