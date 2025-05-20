@@ -1,7 +1,7 @@
 ﻿using System;
-using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime;
 using SP.Engine.Protocol;
+using SP.Engine.Runtime.Message;
 
 namespace SP.Engine.Server
 {

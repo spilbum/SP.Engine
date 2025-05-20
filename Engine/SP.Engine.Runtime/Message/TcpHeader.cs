@@ -3,7 +3,7 @@ using SP.Common.Buffer;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Runtime.Utilities;
 
-namespace SP.Engine.Runtime.Networking
+namespace SP.Engine.Runtime.Message
 {
     public class TcpHeader
     {

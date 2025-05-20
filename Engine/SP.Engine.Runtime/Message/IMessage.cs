@@ -1,7 +1,7 @@
 using System;
 using SP.Engine.Runtime.Protocol;
 
-namespace SP.Engine.Runtime.Networking
+namespace SP.Engine.Runtime.Message
 {
     public interface IMessage
     {

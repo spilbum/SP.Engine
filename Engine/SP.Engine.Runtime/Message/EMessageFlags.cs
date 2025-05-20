@@ -1,6 +1,6 @@
 using System;
 
-namespace SP.Engine.Runtime.Networking
+namespace SP.Engine.Runtime.Message
 {
     [Flags]
     public enum EMessageFlags : byte

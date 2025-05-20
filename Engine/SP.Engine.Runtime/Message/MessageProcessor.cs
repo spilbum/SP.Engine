@@ -5,7 +5,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 
-namespace SP.Engine.Runtime.Networking
+namespace SP.Engine.Runtime.Message
 {
     public abstract class MessageProcessor
     {

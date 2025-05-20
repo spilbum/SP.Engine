@@ -1,4 +1,4 @@
-using SP.Engine.Runtime.Networking;
+using SP.Engine.Runtime.Message;
 
 namespace SP.Engine.Client.ProtocolHandler
 {

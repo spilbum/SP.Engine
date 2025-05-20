@@ -9,7 +9,7 @@ using SP.Common.Logging;
 using SP.Engine.Client.ProtocolHandler;
 using SP.Engine.Protocol;
 using SP.Engine.Runtime;
-using SP.Engine.Runtime.Networking;
+using SP.Engine.Runtime.Message;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Runtime.Security;
 using SP.Engine.Runtime.Utilities;
