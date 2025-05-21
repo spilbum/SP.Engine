@@ -66,7 +66,7 @@ namespace TestClient
         {
             var message = e.Message;
             if (_invokerDict.TryGetValue(message.ProtocolId, out var invoker))
-                invoker.Invoke(this, message, _netPeer?.DhSharedKey);
+                invoker.Invoke(this, message, _netPeer?.DhSharedKey, _netPeer?.HmacKey);
         }
 
         private void OnError(object? sender, ErrorEventArgs e)

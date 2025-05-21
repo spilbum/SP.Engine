@@ -7,7 +7,6 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using SP.Common.Logging;
 using SP.Engine.Runtime;
-using SP.Engine.Runtime.Utilities;
 using SP.Engine.Server.Configuration;
 
 namespace SP.Engine.Server

@@ -38,24 +38,42 @@ namespace SP.Engine.Runtime.Message
             _header.SequenceNumber = sequenceNumber;
         }
         
-        public void SerializeProtocol(IProtocolData data, byte[] sharedKey = null)
+        public void Pack(IProtocolData data, byte[] sharedKey = null, byte[] hmacKey = null)
         {
             var payload = BinaryConverter.SerializeObject(data, data.GetType());
             if (payload == null || payload.Length == 0)
                 throw new InvalidOperationException($"Failed to serialize protocol of type {data.GetType().FullName}");
             
+            // 메시지 압축
             var compressed = Compressor.Compress(payload);
             var ratio = (double)compressed.Length / payload.Length;
             if (ratio < CompressionThreshold)
             {
-                SetFlag(EMessageFlags.Compressed);
                 payload = compressed;
+                SetFlag(EMessageFlags.Compressed);
             }
 
+            // 메시지 암호화
             if (data.IsEncrypt)
             {
-                SetFlag(EMessageFlags.Encrypted);
+                if (sharedKey == null)
+                    throw new InvalidOperationException("SharedKey cannot be null.");
+                
                 payload = Encryptor.Encrypt(payload, sharedKey);
+                SetFlag(EMessageFlags.Encrypted);
+            }
+
+            // 메시지 검증 정보 추가
+            if (hmacKey != null)
+            {
+                var hmac = DhUtil.ComputeHmac(hmacKey, payload);
+                
+                var result = new byte[payload.Length + hmac.Length];
+                Buffer.BlockCopy(payload, 0, result, 0, payload.Length);
+                Buffer.BlockCopy(hmac, 0, result,  payload.Length, hmac.Length);
+                
+                payload = result;
+                SetFlag(EMessageFlags.Hmac);
             }
             
             _header.ProtocolId = data.ProtocolId;
@@ -63,15 +81,37 @@ namespace SP.Engine.Runtime.Message
             _payload = payload;
         }
 
-        public IProtocolData DeserializeProtocol(Type type, byte[] sharedKey = null)
+        public IProtocolData Unpack(Type type, byte[] sharedKey = null, byte[] hmacKey = null)
         {
-            if (_payload == null || _payload.Length == 0)
-                return null;
-            
             var payload = _payload;
-            if (HasFlag(EMessageFlags.Encrypted))
-                payload = Encryptor.Decrypt(payload, sharedKey);
+            if (payload == null || payload.Length == 0)
+                return null;
 
+            // 메시지 검증
+            if (HasFlag(EMessageFlags.Hmac))
+            {
+                if (hmacKey == null || payload.Length < DhUtil.HmacSize)
+                    return null;
+                
+                var content = payload[..^DhUtil.HmacSize];
+                var hmac = payload[^DhUtil.HmacSize..];
+
+                if (!DhUtil.VerifyHmac(hmacKey, content, hmac)) 
+                    throw new InvalidOperationException($"Hmac validation failed. protocolId={_header.ProtocolId}, sequenceNumber={_header.SequenceNumber}");
+                
+                payload = content;
+            }
+
+            // 메시지 복호화
+            if (HasFlag(EMessageFlags.Encrypted))
+            {
+                if (sharedKey == null)
+                    throw new InvalidOperationException("SharedKey cannot be null.");
+                
+                payload = Encryptor.Decrypt(payload, sharedKey);
+            }
+
+            // 메시지 압축 해제
             if (HasFlag(EMessageFlags.Compressed))
                 payload = Compressor.Decompress(payload);
             

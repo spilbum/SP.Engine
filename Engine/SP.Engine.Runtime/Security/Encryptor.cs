@@ -8,43 +8,43 @@ namespace SP.Engine.Runtime.Security
         private const int IvSize = 16;
         private const int AesKeySize = 32;
 
-        public static byte[] Encrypt(byte[] plaintext, byte[] key)
+        public static byte[] Encrypt(byte[] input, byte[] aesKey)
         {
-            if (key.Length != AesKeySize)
-                throw new ArgumentException("AES key must be 32 bytes", nameof(key));
+            if (aesKey.Length != AesKeySize)
+                throw new ArgumentException("AES key must be 32 bytes", nameof(aesKey));
 
+            // 랜덤으로 IV 생성
             var iv = new byte[IvSize];
             RandomNumberGenerator.Fill(iv);
 
             using var aes = Aes.Create();
-            aes.Key = key;
+            aes.Key = aesKey;
             aes.IV = iv;
             aes.Mode = CipherMode.CBC;
             aes.Padding = PaddingMode.PKCS7;
 
             using var encryptor = aes.CreateEncryptor();
-            var ciphertext = encryptor.TransformFinalBlock(plaintext, 0, plaintext.Length);
+            var ciphertext = encryptor.TransformFinalBlock(input, 0, input.Length);
 
             var result = new byte[IvSize + ciphertext.Length];
             Buffer.BlockCopy(iv, 0, result, 0, IvSize);
             Buffer.BlockCopy(ciphertext, 0, result, IvSize, ciphertext.Length);
-
             return result;
         }
 
-        public static byte[] Decrypt(byte[] encryptedData, byte[] key)
+        public static byte[] Decrypt(byte[] input, byte[] aesKey)
         {
-            if (!(key is { Length: AesKeySize }))
+            if (aesKey.Length != AesKeySize)
                 throw new ArgumentException("AES key must be 32 bytes");
 
-            if (encryptedData.Length < IvSize)
+            if (input.Length < IvSize)
                 throw new ArgumentException("Encrypted data is too short.");
 
-            var iv = encryptedData[..IvSize];
-            var ciphertext = encryptedData[IvSize..];
+            var iv = input[..IvSize];
+            var ciphertext = input[IvSize..];
 
             using var aes = Aes.Create();
-            aes.Key = key;
+            aes.Key = aesKey;
             aes.IV = iv;
             aes.Mode = CipherMode.CBC;
             aes.Padding = PaddingMode.PKCS7;

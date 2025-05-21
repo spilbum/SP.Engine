@@ -12,7 +12,7 @@ public abstract class BaseProtocolHandler<TPeer, TProtocol> : BaseHandler<TPeer,
     {
         try
         {
-            var protocol = (TProtocol)message.DeserializeProtocol(typeof(TProtocol), peer.DhSharedKey);
+            var protocol = (TProtocol)message.Unpack(typeof(TProtocol), peer.DhSharedKey, peer.HmacKey);
             ExecuteProtocol(peer, protocol);
         }
         catch (Exception e)

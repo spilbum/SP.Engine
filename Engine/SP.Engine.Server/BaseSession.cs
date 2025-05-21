@@ -85,7 +85,7 @@ namespace SP.Engine.Server
             try
             {
                 var message = new TcpMessage();
-                message.SerializeProtocol(protocol);
+                message.Pack(protocol);
                 var bytes = message.ToArray();
                 return null != bytes && TrySend(new ArraySegment<byte>(bytes, 0, bytes.Length));
             }

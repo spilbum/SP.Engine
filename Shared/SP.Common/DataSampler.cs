@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace SP.Engine.Runtime.Utilities
+namespace SP.Common
 {
     /// <summary>
     /// 샘플링 데이터를 관리하는 제네릭 클래스 (숫자 전용)

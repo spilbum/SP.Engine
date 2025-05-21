@@ -33,39 +33,16 @@ namespace SP.Engine.Runtime.Security
         {
             var peerKey = new BigInteger(peerPublicKey, isBigEndian: true, isUnsigned: true);
             if (!DhUtil.IsValidPublicKey(peerKey, _parameters.P))
-                throw new ArgumentException("Invalid peer public key");
+                throw new ArgumentException("Invalid peer public key. Key is out of bounds for DH parameter P.");
 
             var sharedSecret = BigInteger.ModPow(peerKey, _privateKey.KeyValue, _parameters.P);
             var sharedBytes = sharedSecret.ToByteArray(isUnsigned: true, isBigEndian: true);
 
             using var sha512 = SHA512.Create();
-            var hash = sha512.ComputeHash(sharedBytes); // 64바이트
-
-            SharedKey = new byte[32];
-            HmacKey = new byte[32];
-            Buffer.BlockCopy(hash, 0, SharedKey, 0, 32);
-            Buffer.BlockCopy(hash, 32, HmacKey, 0, 32);
+            var hash = sha512.ComputeHash(sharedBytes);
+            
+            SharedKey = hash[..32]; // 공유 키
+            HmacKey = hash[32..];   // 인증 키
         }
-    }
-    
-    public class SecureSession
-    {
-        public byte[] AesKey => _aesKey;
-        public byte[] HmacKey => _hmacKey;
-
-        private readonly byte[] _aesKey;
-        private readonly byte[] _hmacKey;
-
-        public SecureSession(byte[] aesKey, byte[] hmacKey)
-        {
-            if (aesKey.Length != 32 || hmacKey.Length != 32)
-                throw new ArgumentException("Invalid AES or HMAC key size");
-
-            _aesKey = aesKey;
-            _hmacKey = hmacKey;
-        }
-
-        public static SecureSession FromDhSession(DiffieHellman session)
-            => new SecureSession(session.SharedKey, session.HmacKey);
     }
 }

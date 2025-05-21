@@ -2,7 +2,6 @@
 using System;
 using System.Buffers;
 using K4os.Compression.LZ4;
-using SP.Engine.Runtime.Utilities;
 
 namespace SP.Engine.Runtime.Compression
 {

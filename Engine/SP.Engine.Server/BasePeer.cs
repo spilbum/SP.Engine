@@ -87,6 +87,7 @@ namespace SP.Engine.Server
         public bool IsConnected => _stateCode == PeerStateConst.Authorized || _stateCode == PeerStateConst.Online;
         public byte[] DhPublicKey => _dh.PublicKey;
         public byte[] DhSharedKey => _dh.SharedKey;
+        public byte[] HmacKey => _dh.HmacKey;
         
         protected BasePeer(EPeerType peerType, ISession session, DhKeySize dhKeySize, byte[] dhPublicKey)
         {
@@ -177,7 +178,7 @@ namespace SP.Engine.Server
             try
             {
                 var message = new TcpMessage();
-                message.SerializeProtocol(protocol, _dh.SharedKey);
+                message.Pack(protocol, _dh.SharedKey, _dh.HmacKey);
                 Send(message);
             }
             catch (Exception e)

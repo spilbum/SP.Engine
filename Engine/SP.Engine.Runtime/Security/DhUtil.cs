@@ -1,14 +1,15 @@
 using System;
-using System.Linq;
 using System.Numerics;
+using System.Security.Cryptography;
 
 namespace SP.Engine.Runtime.Security
 {
     internal static class DhUtil
     {
-        public static readonly BigInteger MinPublicKey = new BigInteger(2);
-
-        public static BigInteger MaxPublicKey(BigInteger p) => p - new BigInteger(2);
+        public const int HmacSize = 32;
+        
+        private static readonly BigInteger MinPublicKey = new BigInteger(2);
+        private static BigInteger MaxPublicKey(BigInteger p) => p - new BigInteger(2);
 
         public static bool IsValidPublicKey(BigInteger key, BigInteger p)
         {
@@ -24,20 +25,17 @@ namespace SP.Engine.Runtime.Security
             Buffer.BlockCopy(input, 0, padded, length - input.Length, input.Length);
             return padded;
         }
-
-        public static byte[] Concat(params byte[][] segments)
+        
+        public static byte[] ComputeHmac(byte[] key, byte[] message)
         {
-            var totalLength = segments.Sum(s => s.Length);
-            var result = new byte[totalLength];
+            using var hmac = new HMACSHA256(key);
+            return hmac.ComputeHash(message);
+        }
 
-            var offset = 0;
-            foreach (var segment in segments)
-            {
-                System.Buffer.BlockCopy(segment, 0, result, offset, segment.Length);
-                offset += segment.Length;
-            }
-            
-            return result;
+        public static bool VerifyHmac(byte[] key, byte[] message, byte[] expectedHmac)
+        {
+            var computed = ComputeHmac(key, message);
+            return CryptographicOperations.FixedTimeEquals(computed, expectedHmac);
         }
     }
 }

@@ -190,7 +190,7 @@ namespace SP.Engine.Server.Connector
                 if (invoker == null)
                     throw new Exception("Unknown protocol: " + message.ProtocolId);
                 
-                invoker.Invoke(this, message, _netPeer.DhSharedKey);
+                invoker.Invoke(this, message, _netPeer.DhSharedKey, _netPeer.HmacKey);
             }
             catch (Exception ex)
             {

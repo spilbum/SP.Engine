@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
+using SP.Common;
 using SP.Common.Buffer;
 using SP.Common.Logging;
 using SP.Engine.Client.ProtocolHandler;
@@ -12,7 +13,7 @@ using SP.Engine.Runtime;
 using SP.Engine.Runtime.Message;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Runtime.Security;
-using SP.Engine.Runtime.Utilities;
+
 
 namespace SP.Engine.Client
 {
@@ -115,6 +116,7 @@ namespace SP.Engine.Client
         public int LatencyStdDevMs => (int)_latencySampler.StdDev;
         public ENetPeerState State => (ENetPeerState)_stateCode;
         public byte[] DhSharedKey => _dh.SharedKey;
+        public byte[] HmacKey => _dh.HmacKey;
         
         public DateTime ServerTime
         {
@@ -244,7 +246,7 @@ namespace SP.Engine.Client
                 if (protocol.ProtocolId.IsEngineProtocol())
                 {
                     var message = new TcpMessage();
-                    message.SerializeProtocol(protocol);
+                    message.Pack(protocol);
                     var bytes = message.ToArray();
                     if (bytes != null && bytes.Length > 0)
                         _session?.TrySend(bytes, 0, bytes.Length);
@@ -252,7 +254,7 @@ namespace SP.Engine.Client
                 else
                 {
                     var message = new TcpMessage();
-                    message.SerializeProtocol(protocol, _dh.SharedKey);
+                    message.Pack(protocol, _dh.SharedKey, _dh.HmacKey);
                     EnqueueSendingMessage(message);   
                 }
             }
