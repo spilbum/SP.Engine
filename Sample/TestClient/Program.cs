@@ -66,7 +66,7 @@ namespace TestClient
         {
             var message = e.Message;
             if (_invokerDict.TryGetValue(message.ProtocolId, out var invoker))
-                invoker.Invoke(this, message, _netPeer?.DhSharedKey, _netPeer?.HmacKey);
+                invoker.Invoke(this, message, _netPeer?.DhSharedKey);
         }
 
         private void OnError(object? sender, ErrorEventArgs e)
@@ -117,7 +117,7 @@ namespace TestClient
                     switch (splits[0])
                     {
                         case "echo":
-                            NetPeerManager.Instance.Send(new ProtocolData.C2S.Echo { Str = splits[1], Bytes = Encoding.UTF8.GetBytes(splits[1]), Time = DateTime.Now});
+                            for (var i = 0; i < 10 - 1; i++) NetPeerManager.Instance.Send(new ProtocolData.C2S.Echo { Str = splits[1], Bytes = Encoding.UTF8.GetBytes(splits[1]), Time = DateTime.Now});
                             break;
                         case "exit":
                             NetPeerManager.Instance.Stop();

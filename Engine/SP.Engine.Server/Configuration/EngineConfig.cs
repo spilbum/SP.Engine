@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Threading;
+using SP.Engine.Runtime.Message;
 
 namespace SP.Engine.Server.Configuration
 {
@@ -27,11 +28,16 @@ namespace SP.Engine.Server.Configuration
         int CloseHandshakeTimeOutSec { get; }
         int MaxReSendCnt { get; }
         List<ConnectorConfig> Connectors { get; } 
+        bool UseEncryption { get; }
+        bool UseCompression { get; }
+        byte CompressionThresholdPercent { get; } 
         
         int MaxWorkingThreads { get; }
         int MinWorkingThreads { get; }
         int MaxCompletionPortThreads { get; }
         int MinCompletionPortThreads { get; }
+        
+        PackOptions ToPackOptions();
     }
     public class EngineConfig : IEngineConfig
     {
@@ -52,6 +58,9 @@ namespace SP.Engine.Server.Configuration
         private const int DefaultAuthHandshakeTimeOutSec = 120;
         private const int DefaultCloseHandshakeTimeOutSec = 120;
         private const int DefaultMaxReSendCnt = 5;
+        private const bool DefaultUseEncryption = false;
+        private const bool DefaultUseCompression = false;
+        private const int DefaultCompressionThresholdPercent = 10;
         
         public int SendTimeOutMs { get; set; }
         public int LimitConnectionCount { get; set; }
@@ -67,14 +76,17 @@ namespace SP.Engine.Server.Configuration
         public int KeepAliveIntervalSec { get; set; }
         public int SendingQueueSize { get; set; }
         public bool IsLogAllSocketError { get; set; }
-        public List<ListenerConfig> Listeners { get; set; } = new List<ListenerConfig>();
+        public List<ListenerConfig> Listeners { get; } = [];
         public int WaitingReconnectPeerTimeOutSec { get; set; }
         public int WaitingReconnectPeerTimerIntervalSec { get; set; }
         public int HandshakePendingQueueTimerIntervalSec { get; set; }
         public int AuthHandshakeTimeOutSec { get; set; }
         public int CloseHandshakeTimeOutSec { get; set; }
         public int MaxReSendCnt { get; set; }
-        public List<ConnectorConfig> Connectors { get; set; } = new List<ConnectorConfig>();
+        public List<ConnectorConfig> Connectors { get; set; } = [];
+        public bool UseEncryption { get; set; }
+        public bool UseCompression { get; set; }
+        public byte CompressionThresholdPercent { get; set; }
         
         public int MaxWorkingThreads { get; set; }
         public int MinWorkingThreads { get; set; }
@@ -107,6 +119,16 @@ namespace SP.Engine.Server.Configuration
             AuthHandshakeTimeOutSec = DefaultAuthHandshakeTimeOutSec;
             CloseHandshakeTimeOutSec = DefaultCloseHandshakeTimeOutSec;
             MaxReSendCnt = DefaultMaxReSendCnt;
+            UseEncryption = DefaultUseEncryption;
+            UseCompression = DefaultUseCompression;
+            CompressionThresholdPercent = DefaultCompressionThresholdPercent;
         }
+
+        public PackOptions ToPackOptions() => new()
+        {
+            UseEncryption = UseEncryption,
+            UseCompression = UseCompression,
+            CompressionThresholdPercent = CompressionThresholdPercent
+        };
     }
 }

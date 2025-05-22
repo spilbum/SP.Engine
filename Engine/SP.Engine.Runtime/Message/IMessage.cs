@@ -8,7 +8,7 @@ namespace SP.Engine.Runtime.Message
         long SequenceNumber { get; }
         EProtocolId ProtocolId { get; }
         byte[] ToArray();
-        void SetSequenceNumber(long sequenceNumber);
-        IProtocolData Unpack(Type type, byte[] sharedKey = null, byte[] hmacKey = null);
+        void EnsureSequenceNumber(long sequenceNumber);
+        IProtocolData Unpack(Type type, byte[] sharedKey = null);
     }
 }

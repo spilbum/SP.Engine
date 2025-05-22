@@ -21,9 +21,9 @@ namespace SP.Engine.Runtime.Handler
 
         public EProtocolId ProtocolId { get; }
 
-        public void Invoke(object instance, IMessage message, byte[] sharedKey = null, byte[] hmacKey = null)
+        public void Invoke(object instance, IMessage message, byte[] sharedKey = null)
         {
-            var protocol = message.Unpack(_protocolType, sharedKey, hmacKey);
+            var protocol = message.Unpack(_protocolType, sharedKey);
             _methodInfo.Invoke(instance, new object[] { protocol });
         }
         

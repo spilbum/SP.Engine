@@ -1,5 +1,5 @@
 ﻿using System;
-using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Reflection;
 using SP.Common.Accessor;
 
@@ -7,25 +7,24 @@ namespace SP.Engine.Runtime.Protocol
 {
     public abstract class BaseProtocolData : IProtocolData
     {
-        private static readonly ConcurrentDictionary<Type, ProtocolDataAttribute> AttributeCache = new ConcurrentDictionary<Type, ProtocolDataAttribute>();
-
+        private static readonly Dictionary<Type, EProtocolId> Cache = new Dictionary<Type, EProtocolId>();
+        
         [IgnoreMember]
         public EProtocolId ProtocolId { get; }
-        [IgnoreMember]
-        public bool IsEncrypt { get; }
         
         protected BaseProtocolData()
         {
-            var type = GetType(); 
-            if (!AttributeCache.TryGetValue(type, out var cached))
+            var type = GetType();
+            if (Cache.TryGetValue(type, out var protocolId))
+                ProtocolId = protocolId;
+            else
             {
-                var attribute = type.GetCustomAttribute<ProtocolDataAttribute>();
-                cached = attribute ?? throw new InvalidCastException($"Invalid protocol type: {type}");
-                AttributeCache[type] = cached;
+                var attr = type.GetCustomAttribute<ProtocolDataAttribute>()
+                           ?? throw new InvalidCastException($"Invalid protocol data attribute: {type.FullName}");
+                Cache[type] = attr.ProtocolId;
+                ProtocolId = attr.ProtocolId;
             }
             
-            ProtocolId = cached.ProtocolId;
-            IsEncrypt = cached.IsEncrypt;
         }
     }
 

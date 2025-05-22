@@ -90,7 +90,18 @@ internal class SessionAuth<TPeer> : BaseEngineHandler<Session<TPeer>, EngineProt
                 if (null != peer)
                 {
                     authAck.PeerId = peer.PeerId;
-                    authAck.ServerPublicKey = peer.DhPublicKey;
+                    
+                    if (session.Config.UseEncryption)
+                    {
+                        authAck.UseEncryption = true;
+                        authAck.ServerPublicKey = peer.DhPublicKey;
+                    }
+
+                    if (session.Config.UseCompression)
+                    {
+                        authAck.UseCompression = true;
+                        authAck.CompressionThresholdPercent = session.Config.CompressionThresholdPercent;
+                    }
                 }
             }
 

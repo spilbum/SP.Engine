@@ -16,11 +16,12 @@ internal static class Program
             
             var ip = args[0];
             var port = int.Parse(args[1]);
-            
-            var config = new EngineConfig
-            {
-                Listeners = [new ListenerConfig { Ip = ip, Port = port, Mode = ESocketMode.Tcp }]
-            };
+
+            var config = new EngineConfig();
+            config.Listeners.Add(new ListenerConfig { Ip = ip, Port = port, Mode = ESocketMode.Tcp });
+            config.UseEncryption = true;
+            config.UseCompression = true;
+            config.CompressionThresholdPercent = 5;
             
             using var server = new TestServer();
             if (!server.Initialize("TestServer", config))
@@ -56,23 +57,4 @@ public class TestServer : Engine<NetPeer>
         throw new NotImplementedException();
     }
 
-    public bool Setup(string[] args)
-    {
-        var ip = args[0];
-        var port = int.Parse(args[1]);
-
-        var config = new EngineConfig
-        {
-            Listeners = [new ListenerConfig { Ip = ip, Port = port, Mode = ESocketMode.Tcp }]
-        };
-        
-        if (!base.Initialize("TestServer", config))
-            return false;
-        
-        if (!base.Start())
-            return false;
-
-        Logger.Info("Server started");
-        return true;
-    }
 }

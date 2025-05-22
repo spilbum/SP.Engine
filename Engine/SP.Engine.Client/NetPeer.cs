@@ -101,7 +101,7 @@ namespace SP.Engine.Client
         private Timer _timer;
         private bool _isReconnecting;
         private readonly DataSampler<int> _latencySampler = new DataSampler<int>(1024);
-        private readonly DiffieHellman _dh = new DiffieHellman(DhKeySize.Bit2048);
+        private readonly DiffieHellman _diffieHelman = new DiffieHellman(DhKeySize.Bit2048);
         private readonly BinaryBuffer _receiveBuffer = new BinaryBuffer();
         private readonly ConcurrentQueue<IMessage> _sendingMessageQueue = new ConcurrentQueue<IMessage>();
         private readonly ConcurrentQueue<IMessage> _receivedMessageQueue = new ConcurrentQueue<IMessage>();
@@ -115,8 +115,8 @@ namespace SP.Engine.Client
         public int AvgLatencyMs => (int)_latencySampler.Avg;
         public int LatencyStdDevMs => (int)_latencySampler.StdDev;
         public ENetPeerState State => (ENetPeerState)_stateCode;
-        public byte[] DhSharedKey => _dh.SharedKey;
-        public byte[] HmacKey => _dh.HmacKey;
+        public byte[] DhSharedKey => _diffieHelman.SharedKey;
+        public PackOptions PackOptions { get; }
         
         public DateTime ServerTime
         {
@@ -145,6 +145,7 @@ namespace SP.Engine.Client
         public NetPeer(ILogger logger = null)
         {
             Logger = logger;
+            PackOptions = PackOptions.Default;
             _handlerDict[EngineProtocol.S2C.SessionAuthAck] = new SessionAuth();
             _handlerDict[EngineProtocol.S2C.Close] = new Close();
             _handlerDict[EngineProtocol.S2C.MessageAck] = new MessageAck();
@@ -182,6 +183,11 @@ namespace SP.Engine.Client
             if (IPAddress.TryParse(host, out var ipAddress))
                 return new IPEndPoint(ipAddress, port);
             return new DnsEndPoint(host, port);
+        }
+
+        public void DeriveSharedKey(byte[] serverPublicKey)    
+        {
+            _diffieHelman.DeriveSharedKey(serverPublicKey);
         }
 
         public void Open(string host, int port)
@@ -254,7 +260,7 @@ namespace SP.Engine.Client
                 else
                 {
                     var message = new TcpMessage();
-                    message.Pack(protocol, _dh.SharedKey, _dh.HmacKey);
+                    message.Pack(protocol, _diffieHelman.SharedKey, PackOptions);
                     EnqueueSendingMessage(message);   
                 }
             }
@@ -275,12 +281,12 @@ namespace SP.Engine.Client
                 case ENetPeerState.Connecting:
                     // 대기 메시지 등록
                     // 연결이 완료되면 전송함
-                    RegisterPendingMessage(message);
+                    EnqueuePendingMessage(message);
                     break;
                 case ENetPeerState.Open:
                 {
                     // 전송 메시지 상태 등록
-                    AddSendingMessage(message);   
+                    RegisterSendingMessage(message);   
 
                     var data = message.ToArray();
                     if (null != data)
@@ -345,8 +351,8 @@ namespace SP.Engine.Client
             {
                 SessionId = _sessionId,
                 PeerId = PeerId,
-                ClientPublicKey = _dh.PublicKey,
-                KeySize = _dh.KeySize,
+                ClientPublicKey = _diffieHelman.PublicKey,
+                KeySize = _diffieHelman.KeySize,
             });
         }
         
@@ -412,7 +418,7 @@ namespace SP.Engine.Client
             while (_receivedMessageQueue.TryDequeue(out var message))
             {
                 // 순서대로 처리하기위해 대기 중인 메시지들을 확인함
-                var messages = GetPendingReceivedMessages(message);
+                var messages = DrainInOrderReceivedMessages(message);
                 foreach (var m in messages)
                     OnMessageReceived(m);
             }
@@ -434,19 +440,16 @@ namespace SP.Engine.Client
             if (!(State is ENetPeerState.Open))
                 return;
             
-            var messages = CheckMessageTimeout(out var isLimitExceededReSend);
-            if (isLimitExceededReSend)
-            {
-                // 재 전송 횟수 초과로 재 연결 처리함
-                OnError(new Exception("The message resend limit has been exceeded."));
-                OnClosed();
-                return;
-            }
-
-            foreach (var message in messages)
+            foreach (var message in GetTimedOutMessages())
                 EnqueueSendingMessage(message);
         }
-        
+
+        protected override void OnMessageSendFailure(IMessage message)
+        {
+            OnError(new Exception($"The message resend limit has been exceeded: {message.ProtocolId} ({message.SequenceNumber})"));
+            OnClosed();
+        }
+
         public void Update()
         {
             _timer?.Update();
@@ -600,14 +603,13 @@ namespace SP.Engine.Client
             }
         }
 
-        internal void OnOpened(EPeerId peerId, string sessionId, byte[] serverPublicKey)
+        internal void OnOpened(EPeerId peerId, string sessionId)
         {
             SetState(ENetPeerState.Open);
             _reconnectionAttempts = 0;
             
             PeerId = peerId;
             _sessionId = sessionId;
-            _dh.DeriveSharedKey(serverPublicKey);
             
             // 핑 타이머 시작
             StartPingTimer();
@@ -623,7 +625,7 @@ namespace SP.Engine.Client
         private void OnOffline()
         {            
             // 전송 메시지 상태 초기화
-            ResetSendingMessageStates();
+            ResetAllSendingStates();
             // 재 연결 시작
             StartConnection();
             Offline?.Invoke(this, EventArgs.Empty);
@@ -642,12 +644,12 @@ namespace SP.Engine.Client
             // 네트워크 레이턴시를 고려해 서버 시간 설정
             _lastServerTime = serverTime.AddMilliseconds(latencyMs / 2.0f);
             _serverUpdateTime = DateTime.UtcNow;
-            //Console.WriteLine("latencyMs={0}, avgMs={1}, stddevMs={2}, serverTime={3:yyyy-MM-dd hh:mm:ss.fff}", latencyMs, AvgLatencyMs, LatencyStdDevMs, _lastServerTime);
+            //Logger.Debug("latencyMs={0}, avgMs={1}, stddevMs={2}, serverTime={3:yyyy-MM-dd hh:mm:ss.fff}", latencyMs, AvgLatencyMs, LatencyStdDevMs, _lastServerTime);
         }
-
-        internal void OnMessageAck(long sequenceNumber)
+        
+        protected override void OnRttSpikeDetected(long sequenceNumber, double rawRtt, double estimatedRtt)
         {
-            ReceiveMessageAck(sequenceNumber);
+            Logger.Warn($"RTT spike detected: Seq={sequenceNumber}, Raw={rawRtt:F2}ms, Est={estimatedRtt:F2}ms");
         }
 
         public void Dispose()

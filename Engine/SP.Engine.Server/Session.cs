@@ -2,6 +2,7 @@
 using SP.Engine.Runtime;
 using SP.Engine.Protocol;
 using SP.Engine.Runtime.Message;
+using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Server
 {
@@ -37,6 +38,22 @@ namespace SP.Engine.Server
             base.Close();
         }
         
+        internal virtual bool TryInternalSend(IProtocolData protocol)
+        {
+            try
+            {
+                var message = new TcpMessage();
+                message.Pack(protocol);
+                var bytes = message.ToArray();
+                return null != bytes && TrySend(bytes);
+            }
+            catch (Exception e)
+            {
+                Logger.Error(e);
+                return false;
+            }
+        }
+        
         protected override void ExecuteMessage(IMessage message)
         {
             Engine.ExecuteMessage(this, message);
@@ -47,11 +64,6 @@ namespace SP.Engine.Server
             LatencyAverageMs = latencyAvgMs;
             LatencyStandardDeviationMs = latencyStddevMs;
             TryInternalSend(new EngineProtocolData.S2C.Pong { SentTime = sentTime, ServerTime = DateTime.UtcNow });
-        }
-
-        public void OnMessageAck(long sequenceNumber)
-        {
-            Peer?.OnMessageAck(sequenceNumber);
         }
         
         public void SendCloseHandshake()
@@ -68,6 +80,7 @@ namespace SP.Engine.Server
         
         internal void SendMessageAck(long sequenceNumber)
         {
+            Logger.Debug("Sending ACK: {0}", sequenceNumber);
             TryInternalSend( new EngineProtocolData.S2C.MessageAck { SequenceNumber = sequenceNumber });
         }
 

@@ -65,10 +65,17 @@ namespace SP.Engine.Protocol
                 public EEngineErrorCode ErrorCode;
                 public string? SessionId;
                 public EPeerId PeerId;
+
+                public bool UseEncryption;
                 public byte[]? ServerPublicKey;
+                
+                public bool UseCompression;
+                public int CompressionThresholdPercent;
+                
                 public int MaxAllowedLength;
                 public int SendTimeOutMs;
                 public int MaxReSendCnt;
+                
             }
 
             [ProtocolData(EngineProtocol.S2C.Pong)]

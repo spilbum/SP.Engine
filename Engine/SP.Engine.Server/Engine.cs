@@ -162,7 +162,7 @@ namespace SP.Engine.Server
                 }
                 
                 session.SendMessageAck(message.SequenceNumber);
-                foreach (var pendingMessage in peer.GetPendingMessages(message))
+                foreach (var pendingMessage in peer.DrainInOrderReceivedMessages(message))
                 {
                     GetHandler(pendingMessage.ProtocolId).ExecuteMessage(peer, pendingMessage);
                 }

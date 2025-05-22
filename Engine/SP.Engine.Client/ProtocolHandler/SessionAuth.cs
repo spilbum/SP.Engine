@@ -29,7 +29,19 @@ namespace SP.Engine.Client.ProtocolHandler
             if (0 < protocol.MaxReSendCnt)
                 session.SetMaxReSendCnt(protocol.MaxReSendCnt);
 
-            session.OnOpened(protocol.PeerId, protocol.SessionId, protocol.ServerPublicKey);
+            if (protocol.UseEncryption)
+            {
+                session.PackOptions.UseEncryption = true;
+                session.DeriveSharedKey(protocol.ServerPublicKey);
+            }
+
+            if (protocol.UseCompression)
+            {
+                session.PackOptions.UseCompression = true;
+                session.PackOptions.CompressionThresholdPercent = protocol.CompressionThresholdPercent;
+            }
+            
+            session.OnOpened(protocol.PeerId, protocol.SessionId);
         }
     }
 }

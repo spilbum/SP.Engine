@@ -74,7 +74,8 @@ namespace SP.Engine.Server
 
         private int _stateCode = PeerStateConst.NotAuthorized;
         private bool _disposed;
-        private readonly DiffieHellman _dh;
+        private readonly DiffieHellman _diffieHellman;
+        private readonly PackOptions _packOptions;
 
         public EPeerState State => (EPeerState)_stateCode;
         public EPeerId PeerId { get; private set; }
@@ -85,9 +86,8 @@ namespace SP.Engine.Server
         public IPEndPoint LocalEndPoint => Session.LocalEndPoint;
         public IPEndPoint RemoteEndPoint => Session.RemoteEndPoint;
         public bool IsConnected => _stateCode == PeerStateConst.Authorized || _stateCode == PeerStateConst.Online;
-        public byte[] DhPublicKey => _dh.PublicKey;
-        public byte[] DhSharedKey => _dh.SharedKey;
-        public byte[] HmacKey => _dh.HmacKey;
+        public byte[] DhPublicKey => _diffieHellman.PublicKey;
+        public byte[] DhSharedKey => _diffieHellman.SharedKey;
         
         protected BasePeer(EPeerType peerType, ISession session, DhKeySize dhKeySize, byte[] dhPublicKey)
         {
@@ -97,9 +97,9 @@ namespace SP.Engine.Server
             SetSendTimeOutMs(session.Config.SendTimeOutMs);
             SetMaxReSendCnt(session.Config.MaxReSendCnt);
             Session = session;
-            
-            _dh = new DiffieHellman(dhKeySize);
-            _dh.DeriveSharedKey(dhPublicKey);
+            _packOptions = session.Config.ToPackOptions();
+            _diffieHellman = new DiffieHellman(dhKeySize);
+            _diffieHellman.DeriveSharedKey(dhPublicKey);
         }
 
         protected BasePeer(BasePeer other)
@@ -108,9 +108,9 @@ namespace SP.Engine.Server
             PeerType = other.PeerType;
             Logger = other.Logger;
             Session = other.Session;
-            SetSendTimeOutMs(other.Session.Config.SendTimeOutMs);
-            SetMaxReSendCnt(other.Session.Config.MaxReSendCnt);
-            _dh = other._dh;
+            SetSendTimeOutMs(other.SendTimeOutMs);
+            SetMaxReSendCnt(other.MaxReSendCnt);
+            _diffieHellman = other._diffieHellman;
         }
 
         ~BasePeer()
@@ -145,22 +145,25 @@ namespace SP.Engine.Server
             if (!IsConnected)
                 return;
 
-            var reSendMessages = CheckMessageTimeout(out var isLimitExceededReSend);
-            if (isLimitExceededReSend)
+            foreach (var message in GetTimedOutMessages())
             {
-                Logger.Error("The message resend limit has been exceeded.");
-                Close(ECloseReason.LimitExceededReSend);
-                return;
+                if (!Session.TrySend(message.ToArray()))
+                    Logger.Warn("Message send failed: {0}({1})", message.ProtocolId, message.SequenceNumber);
             }
 
-            foreach (var message in reSendMessages)
-            {
-                Session.TrySend(message.ToArray());
-            }
-
-            var pending = GetPendingMessages();
-            foreach (var message in pending)
+            foreach (var message in GetPendingMessages())
                 Send(message);
+        }
+
+        protected override void OnMessageSendFailure(IMessage message)
+        {
+            Logger.Warn("The message resend limit has been exceeded: {0} ({1})", message.ProtocolId, message.SequenceNumber);
+            Close(ECloseReason.LimitExceededReSend);
+        }
+
+        protected override void OnRttSpikeDetected(long sequenceNumber, double rawRtt, double estimatedRtt)
+        {
+            Logger.Warn($"RTT spike detected: Seq={sequenceNumber}, Raw={rawRtt:F2}ms, Est={estimatedRtt:F2}ms");
         }
 
         public void Reject(ERejectReason reason, string detailReason = null)
@@ -178,7 +181,7 @@ namespace SP.Engine.Server
             try
             {
                 var message = new TcpMessage();
-                message.Pack(protocol, _dh.SharedKey, _dh.HmacKey);
+                message.Pack(protocol, _diffieHellman.SharedKey, _packOptions);
                 Send(message);
             }
             catch (Exception e)
@@ -192,32 +195,18 @@ namespace SP.Engine.Server
             switch (State)
             {
                 case EPeerState.Offline:
-                    RegisterPendingMessage(message);
+                    EnqueuePendingMessage(message);
                     break;
                 case EPeerState.Authorized:
                 case EPeerState.Online:
                     {
-                        if (0 == message.SequenceNumber)
-                        {
-                            // 메시지 상태 등록
-                            AddSendingMessage(message);   
-                        }
+                        RegisterSendingMessage(message);
 
                         var data = message.ToArray();
                         Session.TrySend(data);
                     }
                     break;
             }
-        }
-
-        internal void OnMessageAck(long sequenceNumber)
-        {
-            ReceiveMessageAck(sequenceNumber);
-        }
-        
-        internal IEnumerable<IMessage> GetPendingMessages(IMessage message)
-        {
-            return GetPendingReceivedMessages(message);
         }
         
         internal void JoinServer()
@@ -236,7 +225,7 @@ namespace SP.Engine.Server
         {
             Interlocked.Exchange(ref _stateCode, PeerStateConst.Online);
             Session = session;
-            ResetSendingMessageStates();
+            ResetAllSendingStates();
             OnOnline();
         }
 

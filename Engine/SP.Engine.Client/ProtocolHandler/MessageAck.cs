@@ -8,7 +8,7 @@ namespace SP.Engine.Client.ProtocolHandler
     {
         protected override void ExecuteProtocol(NetPeer session, EngineProtocolData.S2C.MessageAck protocol)
         {
-            session.OnMessageAck(protocol.SequenceNumber);
+            session.ReceiveMessageAck(protocol.SequenceNumber);
         }
     }
 }

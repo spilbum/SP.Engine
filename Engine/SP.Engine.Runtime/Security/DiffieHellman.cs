@@ -12,7 +12,6 @@ namespace SP.Engine.Runtime.Security
 
         public DhKeySize KeySize { get; }
         public byte[] SharedKey { get; private set; }
-        public byte[] HmacKey { get; private set; }
 
         public DiffieHellman(DhKeySize keySize)
         {
@@ -38,11 +37,8 @@ namespace SP.Engine.Runtime.Security
             var sharedSecret = BigInteger.ModPow(peerKey, _privateKey.KeyValue, _parameters.P);
             var sharedBytes = sharedSecret.ToByteArray(isUnsigned: true, isBigEndian: true);
 
-            using var sha512 = SHA512.Create();
-            var hash = sha512.ComputeHash(sharedBytes);
-            
-            SharedKey = hash[..32]; // 공유 키
-            HmacKey = hash[32..];   // 인증 키
+            using var sha512 = SHA256.Create();
+            SharedKey = sha512.ComputeHash(sharedBytes);
         }
     }
 }
