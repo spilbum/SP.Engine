@@ -26,22 +26,22 @@ namespace SP.Engine.Server
         Udp = 1
     }
 
-    public interface ISocketSession
+    public interface INetworkSession
     { 
         ESocketMode Mode { get; }
         string SessionId { get; }
         Socket Client { get; }
         IPEndPoint LocalEndPoint { get; }
         IPEndPoint RemoteEndPoint { get; }
-        ISession Session { get; }
+        IClientSession ClientSession { get; }
         IEngineConfig Config { get; }
-        event Action<ISocketSession, ECloseReason> Closed;
-        void Initialize(ISession session);
+        event Action<INetworkSession, ECloseReason> Closed;
+        void Attach(IClientSession clientSession);
         void Close(ECloseReason reason);
         bool TrySend(ArraySegment<byte> data);
     }
 
-    internal abstract class BaseSocketSession(ESocketMode mode) : ISocketSession
+    public abstract class BaseNetworkSession(ESocketMode mode) : INetworkSession
     {
         // 1st byte : Closed (y/n)
         // 2nd byte : N/A
@@ -50,29 +50,29 @@ namespace SP.Engine.Server
         private volatile int _state;
         private readonly object _lock = new object();
         private Socket _client;
-        private ISmartPool<SendingQueue> _sendingQueuePool;
-        private SendingQueue _sendingQueue;
-        private ISession _session;
+        private IObjectPool<SegmentQueue> _sendingQueuePool;
+        private SegmentQueue _sendingQueue;
+        private IClientSession _clientSession;
 
         public Socket Client => _client;
         public ESocketMode Mode { get; private set; } = mode;
-        public ISession Session => _session ?? throw new InvalidOperationException("Session is not initialized.");
+        public IClientSession ClientSession => _clientSession ?? throw new InvalidOperationException("Session is not initialized.");
         public IEngineConfig Config { get; private set; }
         public string SessionId { get; }
         public IPEndPoint LocalEndPoint { get; protected set; }
         public IPEndPoint RemoteEndPoint { get; protected set; }
 
-        private Action<ISocketSession, ECloseReason> _closed;
-        public event Action<ISocketSession, ECloseReason> Closed
+        private Action<INetworkSession, ECloseReason> _closed;
+        public event Action<INetworkSession, ECloseReason> Closed
         {
             add => _closed += value;
             remove => _closed -= value;
         }
 
         protected bool IsInClosingOrClosed => _state >= (int)ESocketState.InClosing;
-        protected bool IsClosed => _state >= (int)ESocketState.Closed;
+        private bool IsClosed => _state >= (int)ESocketState.Closed;
 
-        protected BaseSocketSession(ESocketMode mode, Socket client)
+        protected BaseNetworkSession(ESocketMode mode, Socket client)
             : this (mode)
         {
             _client = client 
@@ -83,15 +83,15 @@ namespace SP.Engine.Server
             SessionId = Guid.NewGuid().ToString();
         }        
 
-        public virtual void Initialize(ISession session)
+        public virtual void Attach(IClientSession session)
         {
-            _session = session ?? throw new ArgumentNullException(nameof(session));
+            _clientSession = session ?? throw new ArgumentNullException(nameof(session));
             Config = session.Config;
 
             if (((ISocketServerAccessor)session.Engine).SocketServer is SocketServer socketServer)
                 _sendingQueuePool = socketServer.SendingQueuePool ?? throw new ArgumentException("SendingQueuePool is null");
 
-            if (!_sendingQueuePool.Rent(out var queue) || queue == null)
+            if (!_sendingQueuePool.TryRent(out var queue) || queue == null)
             {
                 throw new InvalidOperationException("Failed to acquire a SendingQueue from the pool.");
             }
@@ -123,23 +123,26 @@ namespace SP.Engine.Server
             }
         }
 
-        public bool TrySend(ArraySegment<byte> data)
+        public bool TrySend(ArraySegment<byte> segment)
         {
             if (IsClosed)
                 return false;
 
             var queue = _sendingQueue;
-            if (queue == null || !queue.Enqueue(data, queue.TrackId))
+            if (queue == null || !queue.Enqueue(segment, queue.TrackId))
                 return false;
 
             StartSend(queue, queue.TrackId, true);
             return true;
         }
 
-        protected abstract void Send(SendingQueue queue);
+        protected abstract void Send(SegmentQueue queue);
 
-        private void StartSend(SendingQueue queue, int trackId, bool isInit)
+        private void StartSend(SegmentQueue queue, int trackId, bool isInit)
         {
+            if (queue == null)
+                return;
+            
             if (isInit)
             {
                 if (!TryAddState(ESocketState.InSending))
@@ -159,9 +162,9 @@ namespace SP.Engine.Server
                 return;
             }            
 
-            if (!_sendingQueuePool.Rent(out var newQueue))
+            if (!_sendingQueuePool.TryRent(out var newQueue) && newQueue == null)
             {
-                Session.Logger.Error("Unable to acquire a new sending queue from the pool.");
+                ClientSession.Logger.Error("Unable to acquire a new sending queue from the pool.");
                 OnSendEnd(false);
                 Close(ECloseReason.InternalError);
                 return;
@@ -178,7 +181,7 @@ namespace SP.Engine.Server
                 else
                 {
                     OnSendEnd(false);
-                    Session.Logger.Error("Failed to switch the sending queue.");
+                    ClientSession.Logger.Error("Failed to switch the sending queue.");
                     Close(ECloseReason.InternalError);
                 }
 
@@ -186,11 +189,11 @@ namespace SP.Engine.Server
             }
 
             queue.StopEnqueue();
-            newQueue?.StartEnqueue();
+            newQueue.StartEnqueue();
 
             if (0 == queue.Count)
             {
-                Session.Logger.Error("There is no data to be sent in the queue.");
+                ClientSession.Logger.Error("There is no data to be sent in the queue.");
                 _sendingQueuePool.Return(queue);
                 OnSendEnd(false);
                 Close(ECloseReason.InternalError);
@@ -227,7 +230,7 @@ namespace SP.Engine.Server
             }
         }
 
-        protected void OnSendCompleted(SendingQueue queue)
+        protected void OnSendCompleted(SegmentQueue queue)
         {
             queue.Clear();
             _sendingQueuePool.Return(queue);
@@ -402,7 +405,7 @@ namespace SP.Engine.Server
             }
         }
 
-        protected void OnSendError(SendingQueue queue, ECloseReason closeReason)
+        protected void OnSendError(SegmentQueue queue, ECloseReason closeReason)
         {
             queue.Clear();
             _sendingQueuePool.Return(queue);
@@ -441,7 +444,7 @@ namespace SP.Engine.Server
                 return;
 
             var message = 0 < socketErrorCode ? string.Format(SocketErrorFormat, socketErrorCode) : string.Format(ErrorMessageFormat, e.Message, e.StackTrace);
-            Session.Logger.Error(message + Environment.NewLine + string.Format(CallerFormat, caller, filePath, lineNumber));
+            ClientSession.Logger.Error(message + Environment.NewLine + string.Format(CallerFormat, caller, filePath, lineNumber));
         }
 
         protected void LogError(int socketErrorCode, [CallerMemberName] string caller = "", [CallerFilePath] string filePath = "", [CallerLineNumber] int lineNumber = -1)
@@ -449,7 +452,7 @@ namespace SP.Engine.Server
             if (!Config.IsLogAllSocketError && IsIgnoreSocketError(socketErrorCode))
                 return;
 
-            Session.Logger.Error(string.Format(SocketErrorFormat, socketErrorCode) + Environment.NewLine + string.Format(CallerFormat, caller, filePath, lineNumber));
+            ClientSession.Logger.Error(string.Format(SocketErrorFormat, socketErrorCode) + Environment.NewLine + string.Format(CallerFormat, caller, filePath, lineNumber));
         }
     }
 }

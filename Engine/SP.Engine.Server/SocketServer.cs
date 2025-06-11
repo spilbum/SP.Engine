@@ -1,9 +1,14 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using SP.Common.Buffer;
+using SP.Engine.Protocol;
 using SP.Engine.Runtime;
+using SP.Engine.Runtime.Message;
 using SP.Engine.Server.Configuration;
 
 namespace SP.Engine.Server
@@ -23,10 +28,10 @@ namespace SP.Engine.Server
         private ListenerInfo[] ListenerInfos { get; } = listenerInfos;
         private bool IsStopped { get; set; }
 
-        internal ISmartPool<SendingQueue> SendingQueuePool { get; private set; }
+        internal IObjectPool<SegmentQueue> SendingQueuePool { get; private set; }
 
         private byte[] _keepAliveOptionValues;        
-        private ConcurrentStack<SocketAsyncEventArgsProxy> _socketEventArgsPool;
+        private ConcurrentStack<SocketReceiveContext> _socketReceiveContextPool;
 
         public bool Start()
         {
@@ -35,10 +40,10 @@ namespace SP.Engine.Server
             var config = Engine.Config;
             var logger = Engine.Logger;
 
-            var sendingQueuePool = new SmartPool<SendingQueue>();
+            var sendingQueuePool = new ExpandablePool<SegmentQueue>();
             sendingQueuePool.Initialize(Math.Max(config.LimitConnectionCount / 6, 256)
                 , Math.Max(config.LimitConnectionCount * 2, 256)
-                , new SendingQueueSourceCreator(config.SendingQueueSize));
+                , new SendingQueueSegmentCreator(config.SendingQueueSize));
 
             SendingQueuePool = sendingQueuePool;
 
@@ -52,11 +57,11 @@ namespace SP.Engine.Server
                 if (listener.Start())
                 {
                     Listeners.Add(listener);
-                    logger.Info("Listener ({0}) was started.", listener.EndPoint);
+                    logger.Info("Listener ({0}:{1}) was started.", listener.EndPoint, listener.Mode);
                 }
                 else
                 {
-                    logger.Error("Listener ({0}) failed to start.", listener.EndPoint);
+                    logger.Error("Listener ({0}:{1}) failed to start.", listener.EndPoint, listener.Mode);
 
                     foreach (var t in Listeners)
                         t.Stop();
@@ -103,7 +108,7 @@ namespace SP.Engine.Server
             var bufferSize = config.ReceiveBufferSize;
 
             var currentOffset = 0;
-            var proxies = new List<SocketAsyncEventArgsProxy>(config.LimitConnectionCount);
+            var contexts = new List<SocketReceiveContext>(config.LimitConnectionCount);
             for (var i = 0; i < config.LimitConnectionCount; i++)
             {
                 var socketEventArgs = new SocketAsyncEventArgs();
@@ -113,10 +118,10 @@ namespace SP.Engine.Server
                 socketEventArgs.SetBuffer(buffer, currentOffset, bufferSize);
                 currentOffset += bufferSize;
 
-                proxies.Add(new SocketAsyncEventArgsProxy(socketEventArgs));
+                contexts.Add(new SocketReceiveContext(socketEventArgs));
             }
 
-            _socketEventArgsPool = new ConcurrentStack<SocketAsyncEventArgsProxy>(proxies);
+            _socketReceiveContextPool = new ConcurrentStack<SocketReceiveContext>(contexts);
             return true;
         }
 
@@ -130,12 +135,12 @@ namespace SP.Engine.Server
             Listeners.Clear();
             SendingQueuePool = null;
 
-            if (null != _socketEventArgsPool)
+            if (null != _socketReceiveContextPool)
             {
-                foreach (var proxy in _socketEventArgsPool)
-                    proxy.SocketEventArgs.Dispose();
+                foreach (var context in _socketReceiveContextPool)
+                    context.SocketEventArgs.Dispose();
 
-                _socketEventArgsPool.Clear();
+                _socketReceiveContextPool.Clear();
             }            
 
             IsRunning = false;
@@ -151,8 +156,8 @@ namespace SP.Engine.Server
         {
             return listenerInfo.Mode switch
             {
-                ESocketMode.Tcp => new TcpAsyncSocketListener(listenerInfo),
-                ESocketMode.Udp => new UdpSocketListener(listenerInfo),
+                ESocketMode.Tcp => new TcpNetworkListener(listenerInfo),
+                ESocketMode.Udp => new UdpNetworkListener(listenerInfo),
                 _ => throw new ArgumentException($"Invalid socket mode: {listenerInfo.Mode}"),
             };
         }
@@ -168,46 +173,78 @@ namespace SP.Engine.Server
                     ProcessTcpClient(socket);
                     break;
                 case ESocketMode.Udp:
-                    //ProcessUdpClient(socket, state);
+                    ProcessUdpClient(socket, state);
                     break;
                 default:
                     throw new NotSupportedException($"{listener.Mode}");
             }            
         }
         
-        // private void ProcessUdpClient(Socket socket, object state)
-        // {
-        //     if (state is not object[] args ||
-        //         args[0] is not byte[] data ||
-        //         args[1] is not EndPoint remoteEndPoint)
-        //     {
-        //         return;   
-        //     }
-        // }
+        private void ProcessUdpClient(Socket socket, object state)
+        {
+            if (state is not (ArraySegment<byte> segment, IPEndPoint remoteEndPoint))
+                return;
+
+            var headerSpan = segment.AsSpan();
+            if (!UdpHeader.TryParse(headerSpan, out var header))
+            {
+                Engine.Logger.Warn($"Failed to parse UdpHeader: {segment.Count} bytes");
+                return;
+            }
+
+            var peer = Engine.GetPeer(header.PeerId);
+            var session = peer?.Session;
+            if (session == null)
+                return;
+            
+            session.EnsureUdpSocket(socket, remoteEndPoint, peer.UdpMtu);
+
+            if (header.IsFragmentation)
+            {
+                if (!UdpFragment.TryParse(segment, out var fragment) ||
+                    !peer.Assembler.TryAssemble(header.SequenceNumber, fragment, out var payload))
+                {
+                    Engine.Logger.Warn($"Failed to parse fragmentation: {segment.Count} bytes");
+                    return;
+                }
+                
+                var message = new UdpMessage(header, payload);
+                session.ProcessMessage(message);
+            }
+            else
+            {
+                var message = new UdpMessage(header, segment);
+                session.ProcessMessage(message);
+            }
+        }
 
         private void ProcessTcpClient(Socket client)
         {
-            if (!_socketEventArgsPool.TryPop(out var proxy))
+            if (!_socketReceiveContextPool.TryPop(out var context))
             {
                 Engine.AsyncRun(client.SafeClose);
                 Engine.Logger.Error("Limit connection count {0} was reached.", Engine.Config.LimitConnectionCount);
                 return;
             }
 
-            var socketSession = new TcpAsyncSocketSession(client, proxy);
-            socketSession.Closed += OnSessionClosed;
+            var networkSession = new TcpNetworkSession(client, context);
+            networkSession.Closed += OnSessionClosed;
 
-            var session = CreateSession(client, socketSession);
+            var session = CreateSession(client, networkSession);
             if (RegisterSession(session))
-                Engine.AsyncRun(socketSession.Start);
+                Engine.AsyncRun(networkSession.Start);
+            else
+            {
+                networkSession.Close(ECloseReason.ApplicationError);
+            }
         }
 
-        private void OnSessionClosed(ISocketSession session, ECloseReason reason)
+        private void OnSessionClosed(INetworkSession session, ECloseReason reason)
         {
-            if (session is not ITcpAsyncSocketSession socketSession) return;
-            var proxy = socketSession.ReceiveSocketEventArgsProxy;
-            proxy.Reset();
-            _socketEventArgsPool?.Push(proxy);
+            if (session is not ITcpNetworkSession networkSession) return;
+            var context = networkSession.ReceiveContext;
+            context.Reset();
+            _socketReceiveContextPool?.Push(context);
         }
 
         private void OnListenerStopped(object sender, EventArgs e)
@@ -221,7 +258,7 @@ namespace SP.Engine.Server
             Engine.Logger.Error($"Listener ({listener.EndPoint}) error: {e.Message}\r\nstackTrace={e.StackTrace}");
         }
 
-        private ISession CreateSession(Socket client, ISocketSession socketSession)
+        private IClientSession CreateSession(Socket client, TcpNetworkSession networkSession)
         {
             var config = Engine.Config;
             if (0 < config.SendTimeOutMs)
@@ -238,15 +275,15 @@ namespace SP.Engine.Server
             var lingerOption = new LingerOption(false, 0); // 즉시 닫기
             client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Linger, lingerOption); 
             client.NoDelay = true;
-            return Engine.CreateSession(socketSession);
+            return Engine.CreateSession(networkSession);
         }
         
-        private bool RegisterSession(ISession session)
+        private bool RegisterSession(IClientSession clientSession)
         {
-            if (Engine.RegisterSession(session))
+            if (Engine.RegisterSession(clientSession))
                 return true;
 
-            session.SocketSession.Close(ECloseReason.InternalError);
+            clientSession.TcpSession.Close(ECloseReason.InternalError);
             return false;
         }
 

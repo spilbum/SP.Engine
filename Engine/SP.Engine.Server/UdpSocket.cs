@@ -1,23 +1,27 @@
-﻿using System.Net;
+﻿using System;
+using System.Net;
 using System.Net.Sockets;
 using SP.Engine.Runtime;
 
 namespace SP.Engine.Server
 {
-    internal class UdpSocketSession : BaseSocketSession
+    public class UdpSocket : BaseNetworkSession
     {
-        private readonly Socket _socket;        
-
-        public UdpSocketSession(Socket socket, IPEndPoint remoteEndPoint)
-            : base (ESocketMode.Udp)
+        public ushort Mtu { get; }
+        
+        public UdpSocket(Socket client, IPEndPoint remoteEndPoint, ushort mtu)
+            : base (ESocketMode.Udp, client)
         {
-            _socket = socket;
             RemoteEndPoint = remoteEndPoint;
-            LocalEndPoint = (IPEndPoint)socket.LocalEndPoint;
-        }        
+            LocalEndPoint = (IPEndPoint)client.LocalEndPoint;
+            Mtu = mtu;
+        }
 
         public void UpdateRemoteEndPoint(IPEndPoint remoteEndPoint)
         {
+            if (RemoteEndPoint != null && RemoteEndPoint.ToString() == remoteEndPoint.ToString())
+                return;
+            
             RemoteEndPoint = remoteEndPoint;
         }
 
@@ -25,19 +29,25 @@ namespace SP.Engine.Server
         {
         }
 
-        protected override void Send(SendingQueue queue)
+        protected override void Send(SegmentQueue queue)
         {
             var e = new SocketAsyncEventArgs();
             e.Completed += OnSendCompleted;
             e.RemoteEndPoint = RemoteEndPoint;
             e.UserToken = queue;
-
+            
             var item = queue[queue.Position];
             e.SetBuffer(item.Array, item.Offset, item.Count);
 
-            if (!_socket.SendToAsync(e))
+            var client = Client;
+            if (client == null)
+            {
+                OnSendError(queue, ECloseReason.SocketError);
+                return;
+            }
+            
+            if (!client.SendToAsync(e))
                 OnSendCompleted(this, e);
-
         }
 
         private void ClearSocketAsyncEventArgs(SocketAsyncEventArgs e)
@@ -49,7 +59,7 @@ namespace SP.Engine.Server
 
         private void OnSendCompleted(object sender, SocketAsyncEventArgs e)
         {
-            if (e.UserToken is not SendingQueue queue)
+            if (e.UserToken is not SegmentQueue queue)
                 return;
 
             if (e.SocketError != SocketError.Success)

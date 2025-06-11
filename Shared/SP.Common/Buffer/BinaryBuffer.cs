@@ -77,6 +77,11 @@ namespace SP.Common.Buffer
             _readIndex = 0;
         }
 
+        public void Advance(int count)
+        {
+            _readIndex += count;
+        }
+
         public ReadOnlySpan<byte> Peek(int length)
         {
             if (RemainSize < length)
@@ -113,6 +118,8 @@ namespace SP.Common.Buffer
         
         public ReadOnlySpan<byte> Read(int length)
         {
+            if (RemainSize < length)
+                throw new InvalidOperationException("Insufficient data");
             var span = _memory.Span.Slice(_readIndex, length);
             _readIndex += length;
             return span;

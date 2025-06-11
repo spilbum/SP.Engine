@@ -6,13 +6,13 @@ using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Server
 {
-    public interface ISession<out TPeer> : ISession
+    public interface IClientSession<out TPeer> : IClientSession
         where TPeer : BasePeer, IPeer
     {
         TPeer Peer { get; }
     }
     
-    public class Session<TPeer> : BaseSession<Session<TPeer>>, ISession<TPeer>
+    public sealed class ClientSession<TPeer> : BaseClientSession<ClientSession<TPeer>>, IClientSession<TPeer>
         where TPeer : BasePeer, IPeer
     {
         public TPeer Peer { get; private set; }
@@ -21,9 +21,9 @@ namespace SP.Engine.Server
         public int LatencyAverageMs { get; private set; }
         public int LatencyStandardDeviationMs { get; private set; }
         
-        public override void Initialize(IEngine engine, ISocketSession socketSession)
+        public override void Initialize(IEngine engine, TcpNetworkSession networkSession)
         {
-            base.Initialize(engine, socketSession);
+            base.Initialize(engine, networkSession);
             Engine = (Engine<TPeer>)engine;
         }
 
@@ -38,22 +38,6 @@ namespace SP.Engine.Server
             base.Close();
         }
         
-        internal virtual bool TryInternalSend(IProtocolData protocol)
-        {
-            try
-            {
-                var message = new TcpMessage();
-                message.Pack(protocol);
-                var bytes = message.ToArray();
-                return null != bytes && TrySend(bytes);
-            }
-            catch (Exception e)
-            {
-                Logger.Error(e);
-                return false;
-            }
-        }
-        
         protected override void ExecuteMessage(IMessage message)
         {
             Engine.ExecuteMessage(this, message);
@@ -63,7 +47,36 @@ namespace SP.Engine.Server
         {
             LatencyAverageMs = latencyAvgMs;
             LatencyStandardDeviationMs = latencyStddevMs;
-            TryInternalSend(new EngineProtocolData.S2C.Pong { SentTime = sentTime, ServerTime = DateTime.UtcNow });
+            SendPong(sentTime);
+        }
+        
+        internal bool Send(IProtocolData data)
+        {
+            var transport = TransportHelper.Resolve(data);
+            switch (transport)
+            {
+                case ETransport.Tcp:
+                {
+                    var message = new TcpMessage();
+                    message.Pack(data,null, null);
+                    return Send(message);
+                }
+                case ETransport.Udp:
+                {
+                    var message = new UdpMessage();              
+                    message.SetPeerId(Peer.PeerId);
+                    message.Pack(data, null, null);
+                    return Send(message);
+                }
+                default:
+                    throw new Exception($"Unknown transport: {transport}");
+            }
+        }
+        
+        private void SendPong(DateTime sentTime)
+        {
+            var pong = new EngineProtocolData.S2C.Pong { SentTime = sentTime, ServerTime = DateTime.UtcNow };
+            Send(pong);
         }
         
         public void SendCloseHandshake()
@@ -74,14 +87,15 @@ namespace SP.Engine.Server
                 StartClosingTime = DateTime.UtcNow;    
                 Engine?.EnqueueCloseHandshakePendingQueue(this);
             }
-            
-            TryInternalSend(new EngineProtocolData.S2C.Close());
+
+            var close = new EngineProtocolData.S2C.Close();
+            Send(close);
         }
         
         internal void SendMessageAck(long sequenceNumber)
         {
-            Logger.Debug("Sending ACK: {0}", sequenceNumber);
-            TryInternalSend( new EngineProtocolData.S2C.MessageAck { SequenceNumber = sequenceNumber });
+            var messageAck = new EngineProtocolData.S2C.MessageAck { SequenceNumber = sequenceNumber };
+            Send(messageAck);
         }
 
         public override void Close(ECloseReason reason)

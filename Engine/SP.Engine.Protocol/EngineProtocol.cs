@@ -13,6 +13,8 @@ namespace SP.Engine.Protocol
             public const EProtocolId MessageAck = (EProtocolId)101;
             public const EProtocolId Ping = (EProtocolId)102;
             public const EProtocolId Close = (EProtocolId)103;
+            public const EProtocolId UdpHelloReq = (EProtocolId)104;
+            public const EProtocolId UdpKeepAlive = (EProtocolId)105;
         }
 
         public static class S2C
@@ -21,6 +23,7 @@ namespace SP.Engine.Protocol
             public const EProtocolId MessageAck = (EProtocolId)201;
             public const EProtocolId Pong = (EProtocolId)202;
             public const EProtocolId Close = (EProtocolId)203;
+            public const EProtocolId UdpHelloAck = (EProtocolId)204;
         }
     }
 
@@ -35,6 +38,7 @@ namespace SP.Engine.Protocol
                     public EPeerId PeerId;
                     public DhKeySize KeySize;
                     public byte[]? ClientPublicKey;
+                    public ushort UdpMtu;
                 }
             
                 [ProtocolData(EngineProtocol.C2S.MessageAck)]
@@ -55,6 +59,20 @@ namespace SP.Engine.Protocol
                 public class Close : BaseProtocolData
                 {
                 }
+
+                [ProtocolData(EngineProtocol.C2S.UdpHelloReq)]
+                [Transport(ETransport.Udp)]
+                public class UdpHelloReq : BaseProtocolData
+                {
+                    public string? SessionId;
+                    public EPeerId PeerId;
+                }
+
+                [ProtocolData(EngineProtocol.C2S.UdpKeepAlive)]
+                [Transport(ETransport.Udp)]
+                public class UdpKeepAlive : BaseProtocolData
+                {
+                }
         }
 
         public static class S2C
@@ -68,14 +86,15 @@ namespace SP.Engine.Protocol
 
                 public bool UseEncryption;
                 public byte[]? ServerPublicKey;
-                
+
                 public bool UseCompression;
                 public int CompressionThresholdPercent;
-                
+
                 public int MaxAllowedLength;
                 public int SendTimeOutMs;
                 public int MaxReSendCnt;
-                
+
+                public int UdpOpenPort;
             }
 
             [ProtocolData(EngineProtocol.S2C.Pong)]
@@ -94,6 +113,13 @@ namespace SP.Engine.Protocol
             [ProtocolData(EngineProtocol.S2C.Close)]
             public class Close : BaseProtocolData
             {
+            }
+
+            [ProtocolData(EngineProtocol.S2C.UdpHelloAck)]
+            [Transport(ETransport.Udp)]
+            public class UdpHelloAck : BaseProtocolData
+            {
+                public EEngineErrorCode ErrorCode;
             }
         }
     }

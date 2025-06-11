@@ -2,14 +2,15 @@ using System;
 using SP.Engine.Protocol;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Handler;
+using SP.Engine.Runtime.Message;
 
 namespace SP.Engine.Server.ProtocolHandler;
 
 [ProtocolHandler(EngineProtocol.C2S.SessionAuthReq)]
-internal class SessionAuth<TPeer> : BaseEngineHandler<Session<TPeer>, EngineProtocolData.C2S.SessionAuthReq>
+internal class SessionAuth<TPeer> : BaseEngineHandler<ClientSession<TPeer>, EngineProtocolData.C2S.SessionAuthReq>
     where TPeer : BasePeer, IPeer
 {
-    protected override void ExecuteProtocol(Session<TPeer> session, EngineProtocolData.C2S.SessionAuthReq protocol)
+    protected override void ExecuteProtocol(ClientSession<TPeer> session, EngineProtocolData.C2S.SessionAuthReq protocol)
     {
         var engine = session.Engine;
         if (null == engine)
@@ -23,7 +24,7 @@ internal class SessionAuth<TPeer> : BaseEngineHandler<Session<TPeer>, EngineProt
             if (!string.IsNullOrEmpty(protocol.SessionId))
             {
                 // 재연결
-                var prevSession = engine.GetSession(protocol.SessionId);
+                var prevSession = (ClientSession<TPeer>)engine.GetSession(protocol.SessionId);
                 if (null != prevSession)
                 {
                     // 이전 세션이 살아 있는 경우
@@ -61,9 +62,11 @@ internal class SessionAuth<TPeer> : BaseEngineHandler<Session<TPeer>, EngineProt
             if (peer == null)
                 throw new Exception("peer is null.");
 
+            peer.SetUdpMtu(protocol.UdpMtu);
             session.SetPeer(peer);
             session.SetAuthorized();
             errorCode = EEngineErrorCode.Success;
+            session.Logger.Debug("Session auth succeeded: {0}({1})", peer.PeerId, session.SessionId);
         }
         catch (ErrorCodeException e)
         {
@@ -79,33 +82,34 @@ internal class SessionAuth<TPeer> : BaseEngineHandler<Session<TPeer>, EngineProt
         }
         finally
         {
-            var authAck = new EngineProtocolData.S2C.SessionAuthAck { ErrorCode = errorCode };
+            var sessionAuthAck = new EngineProtocolData.S2C.SessionAuthAck { ErrorCode = errorCode };
             if (errorCode == EEngineErrorCode.Success)
             {
-                authAck.SessionId = session.SessionId;
-                authAck.MaxAllowedLength = session.Config.MaxAllowedLength;
-                authAck.SendTimeOutMs = session.Config.SendTimeOutMs;
-                authAck.MaxReSendCnt = session.Config.MaxReSendCnt;
-
+                sessionAuthAck.SessionId = session.SessionId;
+                sessionAuthAck.MaxAllowedLength = session.Config.MaxAllowedLength;
+                sessionAuthAck.SendTimeOutMs = session.Config.SendTimeOutMs;
+                sessionAuthAck.MaxReSendCnt = session.Config.MaxReSendCnt;
+                sessionAuthAck.UdpOpenPort = session.Engine.GetOpenPort(ESocketMode.Udp);
+                
                 if (null != peer)
                 {
-                    authAck.PeerId = peer.PeerId;
+                    sessionAuthAck.PeerId = peer.PeerId;
                     
                     if (session.Config.UseEncryption)
                     {
-                        authAck.UseEncryption = true;
-                        authAck.ServerPublicKey = peer.DhPublicKey;
+                        sessionAuthAck.UseEncryption = true;
+                        sessionAuthAck.ServerPublicKey = peer.DhPublicKey;
                     }
 
                     if (session.Config.UseCompression)
                     {
-                        authAck.UseCompression = true;
-                        authAck.CompressionThresholdPercent = session.Config.CompressionThresholdPercent;
+                        sessionAuthAck.UseCompression = true;
+                        sessionAuthAck.CompressionThresholdPercent = session.Config.CompressionThresholdPercent;
                     }
                 }
             }
 
-            if (!session.TryInternalSend(authAck))
+            if (!session.Send(sessionAuthAck))
                 session.Logger.Error("Failed to send session auth ack. sessionId={0}", session.SessionId);
         }
     }

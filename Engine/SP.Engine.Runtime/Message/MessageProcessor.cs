@@ -17,34 +17,35 @@ namespace SP.Engine.Runtime.Message
             {
                 Message = message;
                 MaxReSendCnt = maxReSendCnt;
-                TimeOutMs = sendTimeOutMs;
                 LastSendTime = Stopwatch.GetTimestamp();
-                ExpireTime = DateTime.UtcNow.AddMilliseconds(sendTimeOutMs);
+                _timeOutMs = sendTimeOutMs;
+                _expireTime = DateTime.UtcNow.AddMilliseconds(sendTimeOutMs);
             }
+
+            private DateTime _expireTime;
+            private int _timeOutMs;
             
             public IMessage Message { get; }
             public int MaxReSendCnt { get; }
             public int ReSendCnt { get; private set; }
-            public int TimeOutMs { get; private set; }
             public long LastSendTime { get; private set; }
-            public DateTime ExpireTime { get; private set; }
 
-            public bool HasExpired => DateTime.UtcNow >= ExpireTime;
+            public bool HasExpired => DateTime.UtcNow >= _expireTime;
             
             public void IncrementReSendCnt()
             {
                 ReSendCnt++;
                 LastSendTime = Stopwatch.GetTimestamp();
-                ExpireTime = DateTime.UtcNow.AddMilliseconds(TimeOutMs);
+                _expireTime = DateTime.UtcNow.AddMilliseconds(_timeOutMs);
             }
 
             public void UpdateTimeout(double estimatedRtt)
-                => TimeOutMs = (int)(estimatedRtt * TimeoutScaleFactor);
+                => _timeOutMs = (int)(estimatedRtt * TimeoutScaleFactor);
             
             public void Reset()
             {
                 ReSendCnt = 0;
-                ExpireTime = DateTime.UtcNow;
+                _expireTime = DateTime.UtcNow;
             }
         }
 
@@ -61,8 +62,6 @@ namespace SP.Engine.Runtime.Message
         
         protected int SendTimeOutMs { get; private set; }
         protected int MaxReSendCnt { get; private set; }
-
-        private readonly object _lock = new object();
         
         public void SetSendTimeOutMs(int sendTimeOutMs) => SendTimeOutMs = sendTimeOutMs;
         public void SetMaxReSendCnt(int maxReSendCnt) => MaxReSendCnt = maxReSendCnt;
@@ -73,25 +72,13 @@ namespace SP.Engine.Runtime.Message
             _rttTracker.Reset(InitialRttMs);
         }
         
-        protected void RegisterSendingMessage(IMessage message)
-        {
-            if (message.SequenceNumber != 0)
-                return;
-            
-            lock (_lock)
-            {
-                var sequenceNumber = Interlocked.Increment(ref _nextSendSequenceNumber);
-                var state = new SendingMessageState(message, SendTimeOutMs, MaxReSendCnt);
+        protected long GetNextSendSequenceNumber()
+            => Interlocked.Increment(ref _nextSendSequenceNumber);
 
-                if (_sendingMessageStates.TryAdd(sequenceNumber, state))
-                {
-                    message.EnsureSequenceNumber(sequenceNumber);
-                }
-                else
-                {
-                    Interlocked.Decrement(ref _nextSendSequenceNumber);
-                }
-            }            
+        protected bool RegisterSendingMessage(IMessage message)
+        {
+            var state = new SendingMessageState(message, SendTimeOutMs, MaxReSendCnt);
+            return _sendingMessageStates.TryAdd(message.SequenceNumber, state);
         }
 
         protected void EnqueuePendingMessage(IMessage message) => _pendingMessages.Enqueue(message);
@@ -154,7 +141,7 @@ namespace SP.Engine.Runtime.Message
         {
         }
 
-        public IEnumerable<IMessage> DrainInOrderReceivedMessages(IMessage message)
+        protected IEnumerable<IMessage> DrainInOrderReceivedMessages(IMessage message)
         {
             if (message.SequenceNumber <= _expectedReceiveSequenceNumber || !_pendingReceiveMessages.TryAdd(message.SequenceNumber, message))
             {

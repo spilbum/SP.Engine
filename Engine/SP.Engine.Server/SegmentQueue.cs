@@ -5,29 +5,20 @@ using System.Threading;
 
 namespace SP.Engine.Server
 {
-
-    public sealed class SendingQueue : IList<ArraySegment<byte>>
+    public sealed class SegmentQueue(ArraySegment<byte>[] globalQueue, int offset, int capacity)
+        : IList<ArraySegment<byte>>
     {
-        private readonly int _offset;
-        private readonly int _capacity;
         private int _currentCount;
-        private readonly ArraySegment<byte>[] _globalQueue;
         private static readonly ArraySegment<byte> Null = default;
         private int _updatingCount;
         private int _innerOffset;
+        private bool _isEnqueueBlocked;
 
         public ushort TrackId { get; private set; } = 1;
         public int Count => _currentCount - _innerOffset;
-        public bool IsReadOnly { get; private set; }
-        
         public int Position { get; private set; }
-
-        public SendingQueue(ArraySegment<byte>[] globalQueue, int offset, int capacity)
-        {
-            _globalQueue = globalQueue;
-            _offset = offset;
-            _capacity = capacity;
-        }
+        
+        bool ICollection<ArraySegment<byte>>.IsReadOnly => true;
 
         public void SetPosition(int position)
         {
@@ -39,7 +30,7 @@ namespace SP.Engine.Server
             conflict = false;
             var oldCount = _currentCount;
 
-            if (oldCount >= _capacity || IsReadOnly || trackId != TrackId)
+            if (oldCount >= capacity || _isEnqueueBlocked || trackId != TrackId)
                 return false;
 
             var updatedCount = Interlocked.CompareExchange(ref _currentCount, oldCount + 1, oldCount);
@@ -49,18 +40,18 @@ namespace SP.Engine.Server
                 return false;
             }
 
-            _globalQueue[_offset + oldCount] = item;
+            globalQueue[offset + oldCount] = item;
             return true;
         }
 
         public bool Enqueue(ArraySegment<byte> item, ushort trackId)
         {
-            if (IsReadOnly)
+            if (_isEnqueueBlocked)
                 return false;
 
             Interlocked.Increment(ref _updatingCount);
 
-            while (!IsReadOnly)
+            while (!_isEnqueueBlocked)
             {
                 if (TryEnqueue(item, out var conflict, trackId))
                 {
@@ -78,11 +69,7 @@ namespace SP.Engine.Server
 
         public void StopEnqueue()
         {
-            if (IsReadOnly)
-                return;
-
-            IsReadOnly = true;
-
+            _isEnqueueBlocked = true;
             var spinWait = new SpinWait();
             while (_updatingCount > 0)
                 spinWait.SpinOnce();
@@ -90,15 +77,15 @@ namespace SP.Engine.Server
 
         public void StartEnqueue()
         {
-            IsReadOnly = false;
+            _isEnqueueBlocked = false;
         }
 
         public void Clear()
         {
-            TrackId = TrackId >= ushort.MaxValue ? (ushort)1 : (ushort)(TrackId + 1);
+            TrackId = (ushort)(TrackId == ushort.MaxValue ? 1 : TrackId + 1);
 
             for (var i = 0; i < _currentCount; i++)
-                _globalQueue[_offset + i] = Null;
+                globalQueue[offset + i] = Null;
 
             _currentCount = 0;
             _innerOffset = 0;
@@ -117,7 +104,7 @@ namespace SP.Engine.Server
             for (var i = 0; i < Count; i++)
             {
                 if (array.Length <= arrayIndex + i)
-                    continue;
+                    throw new ArgumentException("Target array to small");
 
                 array[arrayIndex + i] = this[i];
             }
@@ -125,42 +112,42 @@ namespace SP.Engine.Server
 
         public ArraySegment<byte> this[int index]
         {
-            get => _globalQueue[_offset + _innerOffset + index];
+            get => globalQueue[offset + _innerOffset + index];
             set => throw new NotSupportedException();
         }
 
         public IEnumerator<ArraySegment<byte>> GetEnumerator()
         {
             for (var i = 0; i < Count; i++)
-                yield return _globalQueue[_offset + _innerOffset + i];
+                yield return globalQueue[offset + _innerOffset + i];
         }
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
 
-        public void InternalTrim(int offset)
+        public void TrimSentBytes(int sentByteCount)
         {
-            if (offset <= 0 || _currentCount <= _innerOffset)
+            if (sentByteCount <= 0 || _currentCount <= _innerOffset)
                 return;
 
-            var accumulatedSize = 0;
+            var accumlated = 0;
 
             for (var i = _innerOffset; i < _currentCount; i++)
             {
-                var segment = _globalQueue[_offset + i];
-                accumulatedSize += segment.Count;
+                var segment = globalQueue[offset + i];
+                accumlated += segment.Count;
 
-                if (accumulatedSize <= offset)
+                if (accumlated <= sentByteCount)
                     continue;
 
                 // Adjust the segment with remaining data
-                var excess = accumulatedSize - offset;
+                var excess = accumlated - sentByteCount;
                 _innerOffset = i;
 
                 // Update the current segment with the leftover data
                 if (segment.Array != null)
                 {
-                    _globalQueue[_offset + i] = new ArraySegment<byte>(
+                    globalQueue[offset + i] = new ArraySegment<byte>(
                         segment.Array,
                         segment.Offset + segment.Count - excess,
                         excess
@@ -175,11 +162,11 @@ namespace SP.Engine.Server
         }
     }
 
-    public class SendingQueueSourceCreator : ISmartPoolSourceCreator<SendingQueue>
+    public class SendingQueueSegmentCreator : IPoolSegmentFactory<SegmentQueue>
     {
         private readonly int _sendingQueueSize;
 
-        public SendingQueueSourceCreator(int sendingQueueSize)
+        public SendingQueueSegmentCreator(int sendingQueueSize)
         {
             if (sendingQueueSize <= 0)
                 throw new ArgumentException("Sending queue size must be greater than zero.", nameof(sendingQueueSize));
@@ -187,30 +174,24 @@ namespace SP.Engine.Server
             _sendingQueueSize = sendingQueueSize;
         }
 
-        public ISmartPoolSource Create(int size, out SendingQueue[] poolItems)
+        public IPoolSegment Create(int size, out SegmentQueue[] poolItems)
         {
             if (size <= 0)
                 throw new ArgumentException("Size must be greater than zero.", nameof(size));
 
             var source = new ArraySegment<byte>[size * _sendingQueueSize];
-            poolItems = new SendingQueue[size];
+            poolItems = new SegmentQueue[size];
 
             for (var i = 0; i < size; i++)
-                poolItems[i] = new SendingQueue(source, i * _sendingQueueSize, _sendingQueueSize);
+                poolItems[i] = new SegmentQueue(source, i * _sendingQueueSize, _sendingQueueSize);
 
-            return new SendingPoolSource(source, size);
+            return new SendingPoolSegment(source, size);
         }
     }
 
-    public class SendingPoolSource : ISmartPoolSource
+    public class SendingPoolSegment(ArraySegment<byte>[] source, int count) : IPoolSegment
     {
-        public ArraySegment<byte>[] Source { get; }
-        public int Count { get; }
-
-        public SendingPoolSource(ArraySegment<byte>[] source, int count)
-        {
-            Source = source ?? throw new ArgumentNullException(nameof(source));
-            Count = count;
-        }
+        public ArraySegment<byte>[] Source { get; } = source ?? throw new ArgumentNullException(nameof(source));
+        public int Count { get; } = count;
     }
 }

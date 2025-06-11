@@ -5,19 +5,19 @@ using SP.Engine.Runtime.Handler;
 namespace SP.Engine.Server.ProtocolHandler;
 
 [ProtocolHandler(EngineProtocol.C2S.Close)]
-internal class Close<TPeer> : BaseEngineHandler<Session<TPeer>, EngineProtocolData.C2S.Close>
+internal class Close<TPeer> : BaseEngineHandler<ClientSession<TPeer>, EngineProtocolData.C2S.Close>
     where TPeer : BasePeer, IPeer
 {
-    protected override void ExecuteProtocol(Session<TPeer> context, EngineProtocolData.C2S.Close protocol)
+    protected override void ExecuteProtocol(ClientSession<TPeer> session, EngineProtocolData.C2S.Close protocol)
     {
-        context.Logger.Debug("Received a termination request from the client. isClosing={0}", context.IsClosing);
-        if (context.IsClosing)
+        session.Logger.Debug("Received a termination request from the client. isClosing={0}", session.IsClosing);
+        if (session.IsClosing)
         {
-            context.Close(ECloseReason.ClientClosing);
+            session.Close(ECloseReason.ClientClosing);
             return;
         }
 
-        context.SendCloseHandshake();
-        context.Close(ECloseReason.ClientClosing);
+        session.SendCloseHandshake();
+        session.Close(ECloseReason.ClientClosing);
     }
 }

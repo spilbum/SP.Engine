@@ -1,4 +1,5 @@
-﻿using SP.Engine.Runtime.Security;
+﻿using SP.Engine.Runtime;
+using SP.Engine.Runtime.Security;
 using SP.Engine.Server;
 using SP.Engine.Server.Configuration;
 using SP.Engine.Server.Connector;
@@ -19,6 +20,7 @@ internal static class Program
 
             var config = new EngineConfig();
             config.Listeners.Add(new ListenerConfig { Ip = ip, Port = port, Mode = ESocketMode.Tcp });
+            config.Listeners.Add(new ListenerConfig { Ip = ip, Port = 8080, Mode = ESocketMode.Udp });
             config.UseEncryption = true;
             config.UseCompression = true;
             config.CompressionThresholdPercent = 5;
@@ -42,19 +44,18 @@ internal static class Program
     }
 }
 
-public class NetPeer(ISession session, DhKeySize dhKeySize, byte[] dhPublicKey)
-    : BasePeer(EPeerType.User, session, dhKeySize, dhPublicKey);
+public class NetPeer(IClientSession clientSession, DhKeySize dhKeySize, byte[] dhPublicKey)
+    : BasePeer(EPeerType.User, clientSession, dhKeySize, dhPublicKey);
 
 public class TestServer : Engine<NetPeer>
 {
-    public override NetPeer CreatePeer(ISession<NetPeer> session, DhKeySize dhKeySize, byte[] dhPublicKey)
+    public override NetPeer CreatePeer(IClientSession<NetPeer> iClientSession, DhKeySize dhKeySize, byte[] dhPublicKey)
     {
-        return new NetPeer(session, dhKeySize, dhPublicKey);
+        return new NetPeer(iClientSession, dhKeySize, dhPublicKey);
     }
 
     protected override IServerConnector CreateConnector(string name)
     {
         throw new NotImplementedException();
     }
-
 }

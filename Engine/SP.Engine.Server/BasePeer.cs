@@ -42,8 +42,11 @@ namespace SP.Engine.Server
         EPeerId PeerId { get; }
         EPeerType PeerType { get; }
         EPeerState State { get; }
+        IClientSession Session { get; }
+        UdpFragmentAssembler Assembler { get; }
+        ushort UdpMtu { get; }
         byte[] DhPublicKey { get; }
-        void Send(IProtocolData iProtocolData);
+        bool Send(IProtocolData data);
         void Reject(ERejectReason reason, string detailReason = null);
     }
     
@@ -61,8 +64,7 @@ namespace SP.Engine.Server
 
                 if (FreePeerIdPool.TryDequeue(out var peerId))
                     return peerId;
-                else
-                    return (EPeerId)Interlocked.Increment(ref _latestPeerId);
+                return (EPeerId)Interlocked.Increment(ref _latestPeerId);
             }
 
             public static void Free(EPeerId peerId)
@@ -76,12 +78,15 @@ namespace SP.Engine.Server
         private bool _disposed;
         private readonly DiffieHellman _diffieHellman;
         private readonly PackOptions _packOptions;
+        private long _nextUdpSequenceNumber = 1;
 
+        public UdpFragmentAssembler Assembler { get; } = new();
         public EPeerState State => (EPeerState)_stateCode;
+        public IClientSession Session { get; private set; }
         public EPeerId PeerId { get; private set; }
         public EPeerType PeerType { get; } 
         public ILogger Logger { get; }
-        public ISession Session { get; private set; }
+        public ushort UdpMtu { get; private set; }
 
         public IPEndPoint LocalEndPoint => Session.LocalEndPoint;
         public IPEndPoint RemoteEndPoint => Session.RemoteEndPoint;
@@ -89,7 +94,7 @@ namespace SP.Engine.Server
         public byte[] DhPublicKey => _diffieHellman.PublicKey;
         public byte[] DhSharedKey => _diffieHellman.SharedKey;
         
-        protected BasePeer(EPeerType peerType, ISession session, DhKeySize dhKeySize, byte[] dhPublicKey)
+        protected BasePeer(EPeerType peerType, IClientSession session, DhKeySize dhKeySize, byte[] dhPublicKey)
         {
             PeerId = PeerIdGenerator.Generate();
             PeerType = peerType;
@@ -133,7 +138,7 @@ namespace SP.Engine.Server
             {
                 PeerIdGenerator.Free(PeerId);
                 PeerId = EPeerId.None;
-
+                
                 ResetMessageProcessor();
             }
 
@@ -147,14 +152,14 @@ namespace SP.Engine.Server
 
             foreach (var message in GetTimedOutMessages())
             {
-                if (!Session.TrySend(message.ToArray()))
+                if (!Session.Send(message))
                     Logger.Warn("Message send failed: {0}({1})", message.ProtocolId, message.SequenceNumber);
             }
 
             foreach (var message in GetPendingMessages())
-                Send(message);
+                Session.Send(message);
         }
-
+        
         protected override void OnMessageSendFailure(IMessage message)
         {
             Logger.Warn("The message resend limit has been exceeded: {0} ({1})", message.ProtocolId, message.SequenceNumber);
@@ -176,39 +181,54 @@ namespace SP.Engine.Server
             Session.Close(reason);
         }
         
-        public void Send(IProtocolData protocol)
+        public bool Send(IProtocolData data)
         {
-            try
+            var transport = TransportHelper.Resolve(data);
+            switch (transport)
             {
-                var message = new TcpMessage();
-                message.Pack(protocol, _diffieHellman.SharedKey, _packOptions);
-                Send(message);
-            }
-            catch (Exception e)
-            {
-                Logger.Error(e);
-            }
-        }
-
-        private void Send(IMessage message)
-        {
-            switch (State)
-            {
-                case EPeerState.Offline:
-                    EnqueuePendingMessage(message);
-                    break;
-                case EPeerState.Authorized:
-                case EPeerState.Online:
-                    {
-                        RegisterSendingMessage(message);
-
-                        var data = message.ToArray();
-                        Session.TrySend(data);
-                    }
-                    break;
+                case ETransport.Tcp:
+                {
+                    var message = new TcpMessage();
+                    message.SetSequenceNumber(GetNextSendSequenceNumber());
+                    message.Pack(data, _diffieHellman.SharedKey, _packOptions);
+                    return Send(message);
+                }
+                case ETransport.Udp:
+                {
+                    var message = new UdpMessage();
+                    message.SetSequenceNumber(GetNextUdpSequenceNumber());
+                    message.SetPeerId(PeerId);
+                    message.Pack(data, _diffieHellman.SharedKey, _packOptions);
+                    return Session.Send(message);
+                }
+                default:
+                    throw new Exception($"Unknown transport: {transport}");
             }
         }
         
+        private long GetNextUdpSequenceNumber()
+            => Interlocked.Increment(ref _nextUdpSequenceNumber);
+
+        private bool Send(IMessage message)
+        {
+            if (!IsConnected)
+                EnqueuePendingMessage(message);
+            else
+            {
+                RegisterSendingMessage(message);
+                if (!Session.Send(message))
+                    return false;
+            }
+            
+            return true;
+        }
+
+        internal void ExecuteMessage(IMessage message)
+        {
+            foreach (var ordered in DrainInOrderReceivedMessages(message))
+                Session.Engine.ExecuteHandler(this, ordered);
+        }
+
         internal void JoinServer()
         {
             if (Interlocked.CompareExchange(ref _stateCode, PeerStateConst.Authorized, PeerStateConst.NotAuthorized)
@@ -221,10 +241,10 @@ namespace SP.Engine.Server
             OnJoinServer();
         }
 
-        internal void Online(ISession session)
+        internal void Online(IClientSession clientSession)
         {
             Interlocked.Exchange(ref _stateCode, PeerStateConst.Online);
-            Session = session;
+            Session = clientSession;
             ResetAllSendingStates();
             OnOnline();
         }
@@ -241,6 +261,11 @@ namespace SP.Engine.Server
             PeerIdGenerator.Free(PeerId);
             PeerId = EPeerId.None;
             OnLeaveServer(reason);
+        }
+
+        internal void SetUdpMtu(ushort udpMtu)
+        {
+            UdpMtu = udpMtu;
         }
 
         protected virtual void OnJoinServer()
@@ -263,7 +288,5 @@ namespace SP.Engine.Server
         {
             return $"sessionId={Session.SessionId}, peerId={PeerId}, peerType={PeerType}, remoteEndPoint={RemoteEndPoint}";   
         }
-
-       
     }
 }

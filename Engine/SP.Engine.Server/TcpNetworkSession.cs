@@ -7,35 +7,35 @@ using SP.Engine.Runtime;
 
 namespace SP.Engine.Server
 {
-    internal interface ITcpAsyncSocketSession : ILogContext
+    public interface ITcpNetworkSession : ILogContext
     {
-        SocketAsyncEventArgsProxy ReceiveSocketEventArgsProxy { get; }
+        SocketReceiveContext ReceiveContext { get; }
         void ProcessReceive(SocketAsyncEventArgs e);
     }
 
-    internal class TcpAsyncSocketSession(Socket client, SocketAsyncEventArgsProxy socketEventArgsProxy) : BaseSocketSession(ESocketMode.Tcp, client), ITcpAsyncSocketSession
+    public class TcpNetworkSession(Socket client, SocketReceiveContext socketReceiveContext) : BaseNetworkSession(ESocketMode.Tcp, client), ITcpNetworkSession
     {
-        private SocketAsyncEventArgs _socketEventArgsSend;        
+        private SocketAsyncEventArgs _sendEventArgs;        
 
-        ILogger ILogContext.Logger => Session.Logger;
-        public SocketAsyncEventArgsProxy ReceiveSocketEventArgsProxy { get; } = socketEventArgsProxy;
+        ILogger ILogContext.Logger => ClientSession.Logger;
+        public SocketReceiveContext ReceiveContext { get; } = socketReceiveContext;
 
-        public override void Initialize(ISession session)
+        public override void Attach(IClientSession session)
         {
-            base.Initialize(session);
-            ReceiveSocketEventArgsProxy.Initialize(this);
-            _socketEventArgsSend = new SocketAsyncEventArgs();
-            _socketEventArgsSend.Completed += OnSendCompleted;
+            base.Attach(session);
+            ReceiveContext.Initialize(this);
+            _sendEventArgs = new SocketAsyncEventArgs();
+            _sendEventArgs.Completed += OnSendCompleted;
         }
 
         public override void Start()
         {
-            StartReceive(ReceiveSocketEventArgsProxy.SocketEventArgs);
+            StartReceive(ReceiveContext.SocketEventArgs);
         }
 
         protected override void OnClosed(ECloseReason reason)
         {
-            var e = _socketEventArgsSend;
+            var e = _sendEventArgs;
             if (null == e)            
             {
                 base.OnClosed(reason);
@@ -43,7 +43,7 @@ namespace SP.Engine.Server
             }
 
             // 전송 이벤트 초기화
-            if (Interlocked.CompareExchange(ref _socketEventArgsSend, null, e) != e) 
+            if (Interlocked.CompareExchange(ref _sendEventArgs, null, e) != e) 
                 return;
             
             e.Dispose();
@@ -56,7 +56,7 @@ namespace SP.Engine.Server
 
             try
             {
-                var offset = ReceiveSocketEventArgsProxy.OriginOffset;
+                var offset = ReceiveContext.OriginOffset;
                 if (e.Offset != offset)
                     e.SetBuffer(offset, Config.ReceiveBufferSize);
 
@@ -94,7 +94,7 @@ namespace SP.Engine.Server
 
             try
             {
-                Session.ProcessBuffer(e.Buffer, e.Offset, e.BytesTransferred);
+                ClientSession.ProcessBuffer(e.Buffer, e.Offset, e.BytesTransferred);
             }
             catch (Exception ex)
             {
@@ -122,21 +122,21 @@ namespace SP.Engine.Server
             return false;
         }
 
-        protected override void Send(SendingQueue queue)
+        protected override void Send(SegmentQueue queue)
         {
             try
             {
-                if (null == _socketEventArgsSend)
+                if (null == _sendEventArgs)
                     throw new InvalidOperationException("_socketEventArgsSend is null");
                 
-                _socketEventArgsSend.UserToken = queue;
+                _sendEventArgs.UserToken = queue;
 
                 if (1 < queue.Count)
-                    _socketEventArgsSend.BufferList = queue;
+                    _sendEventArgs.BufferList = queue;
                 else
                 {
                     var data = queue[0];
-                    _socketEventArgsSend.SetBuffer(data.Array, data.Offset, data.Count);
+                    _sendEventArgs.SetBuffer(data.Array, data.Offset, data.Count);
                 }
 
                 var socket = Client;
@@ -146,14 +146,14 @@ namespace SP.Engine.Server
                     return;
                 }
                 
-                if (!socket.SendAsync(_socketEventArgsSend))
-                    OnSendCompleted(socket, _socketEventArgsSend);
+                if (!socket.SendAsync(_sendEventArgs))
+                    OnSendCompleted(socket, _sendEventArgs);
             }
             catch (Exception ex)
             {
                 LogError(ex);
 
-                ClearPrevSendState(_socketEventArgsSend);
+                ClearPrevSendState(_sendEventArgs);
                 OnSendError(queue, ECloseReason.SocketError);
             }
         }
@@ -174,9 +174,9 @@ namespace SP.Engine.Server
 
         private void OnSendCompleted(object sender, SocketAsyncEventArgs e)
         {
-            if (e.UserToken is not SendingQueue queue)
+            if (e.UserToken is not SegmentQueue queue)
             {
-                Session.Logger.Error("SendingQueue is null");
+                ClientSession.Logger.Error("SendingQueue is null");
                 return;
             }
 
@@ -190,8 +190,8 @@ namespace SP.Engine.Server
             var count = queue.Sum(x => x.Count);
             if (count != e.BytesTransferred)
             {
-                queue.InternalTrim(e.BytesTransferred);
-                Session.Logger.Warn("{0} of {1} were transferred, send the rest {2} bytes right now.", e.BytesTransferred, count, queue.Sum(x => x.Count));
+                queue.TrimSentBytes(e.BytesTransferred);
+                ClientSession.Logger.Warn("{0} of {1} were transferred, send the rest {2} bytes right now.", e.BytesTransferred, count, queue.Sum(x => x.Count));
                 ClearPrevSendState(e);
                 Send(queue);
                 return;

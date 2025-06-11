@@ -46,7 +46,7 @@ namespace TestClient
 
         public void Update()
         {
-            _netPeer?.Update();
+            _netPeer?.Tick();
         }
 
         public void Send(IProtocolData protocol)
@@ -119,6 +119,13 @@ namespace TestClient
                         case "echo":
                             for (var i = 0; i < 10 - 1; i++) NetPeerManager.Instance.Send(new ProtocolData.C2S.Echo { Str = splits[1], Bytes = Encoding.UTF8.GetBytes(splits[1]), Time = DateTime.Now});
                             break;
+                        case "test":
+                        {
+                            var bytes = new byte[2000];
+                            for (var i = 0; i < bytes.Length; i++) bytes[i] = 0x1;
+                            NetPeerManager.Instance.Send(new ProtocolData.C2S.Echo { Str = "test", Bytes = bytes, Time = DateTime.Now });
+                            break;
+                        }
                         case "exit":
                             NetPeerManager.Instance.Stop();
                             break;

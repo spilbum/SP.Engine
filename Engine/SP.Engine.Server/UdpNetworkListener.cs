@@ -1,15 +1,16 @@
 ﻿using System;
+using System.Buffers;
 using System.Net;
 using System.Net.Sockets;
 using SP.Engine.Runtime;
 
 namespace SP.Engine.Server
 {
-    internal class UdpSocketListener(ListenerInfo listenerInfo) : BaseSocketListener(listenerInfo)
+    internal class UdpNetworkListener(ListenerInfo listenerInfo) : BaseNetworkListener(listenerInfo)
     {
-        private readonly object _lock = new object();
+        private readonly object _lock = new();
         private Socket _listenSocket;
-        private SocketAsyncEventArgs _socketEventArgsReceive;
+        private SocketAsyncEventArgs _receiveEventArgs;
 
         public override bool Start()
         {
@@ -19,24 +20,25 @@ namespace SP.Engine.Server
                 _listenSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
                 _listenSocket.Bind(EndPoint);
 
-                // 원격지 소켓이 닫힌 경우 발생하는 에러를 무시합니다.
-                const uint iocIn = 0x80000000;
-                const int iocVendor = 0x18000000;
-                const uint sioUdpConnReset = iocIn | iocVendor | 12;
+                if (OperatingSystem.IsWindows())
+                {
+                    const uint iocIn = 0x80000000;
+                    const int iocVendor = 0x18000000;
+                    const uint sioUdpConnReset = iocIn | iocVendor | 12;
 
-                var optionInValue = new[] { Convert.ToByte(false) };
-                var optionOutValue = new byte[4];
-                _listenSocket.IOControl(unchecked((int)sioUdpConnReset), optionInValue, optionOutValue);
+                    var optionInValue = new[] { Convert.ToByte(false) };
+                    var optionOutValue = new byte[4];
+                    _listenSocket.IOControl(unchecked((int)sioUdpConnReset), optionInValue, optionOutValue);
+                }
 
                 var eventArgs = new SocketAsyncEventArgs();
-                _socketEventArgsReceive = eventArgs;
+                _receiveEventArgs = eventArgs;
 
                 eventArgs.Completed += OnReceiveCompleted;
                 eventArgs.RemoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
 
-                const int bufferSize = 1200; // mtu
-                var buffer = new byte[bufferSize];
-                eventArgs.SetBuffer(buffer, 0, bufferSize);
+                var buffer = new byte[ushort.MaxValue];
+                eventArgs.SetBuffer(buffer, 0, buffer.Length);
 
                 _listenSocket.ReceiveFromAsync(eventArgs);
                 return true;
@@ -53,13 +55,12 @@ namespace SP.Engine.Server
             if (e.SocketError != SocketError.Success)
             {
                 var errorCode = (int)e.SocketError;
-                if (errorCode is 995 or 10004 or 10038)
-                    return;
-
-                OnError(new SocketException(errorCode));
+                if (errorCode is not (995 or 10004 or 10038))
+                    OnError(new SocketException(errorCode));
+                return;
             }
 
-            if (e.LastOperation != SocketAsyncOperation.ReceiveFrom) 
+            if (e.LastOperation != SocketAsyncOperation.ReceiveFrom || e.BytesTransferred == 0) 
                 return;
             
             try
@@ -67,21 +68,22 @@ namespace SP.Engine.Server
                 if (null == e.RemoteEndPoint)
                     throw new Exception("RemoteEndPoint is null");
 
-                var buffer = e.Buffer.AsSpan(e.Offset, e.BytesTransferred);
-                OnNewClientAccepted(_listenSocket, new object[] { buffer.ToArray(), e.RemoteEndPoint });
+                var segment = new ArraySegment<byte>(e.Buffer!, e.Offset, e.BytesTransferred);
+                OnNewClientAccepted(_listenSocket, (segment, (IPEndPoint)e.RemoteEndPoint));
             }
             catch (Exception ex)
             {
                 OnError(new Exception($"[UDP] Error receiving data from {e.RemoteEndPoint}: {ex.Message}", ex));
             }
-                
+            
             try
             {
-                _listenSocket?.ReceiveFromAsync(e);
+                if (!_listenSocket.ReceiveFromAsync(e))
+                    OnReceiveCompleted(this, e);
             }
             catch (Exception ex)
             {
-                OnError(new Exception($"[UDP] Error receiving data from {e.RemoteEndPoint}: {ex.Message}", ex));
+                OnError(new Exception("[UDP] ReceiveFromAsync failed. Remote={e.RemoteEndPoint}, Bytes={e.BytesTransferred}, Error={ex.Message}", ex));
             }
         }
 
@@ -95,11 +97,11 @@ namespace SP.Engine.Server
                 if (null == _listenSocket)
                     return;
 
-                if (null != _socketEventArgsReceive)
+                if (null != _receiveEventArgs)
                 {
-                    _socketEventArgsReceive.Completed -= OnReceiveCompleted;
-                    _socketEventArgsReceive.Dispose();
-                    _socketEventArgsReceive = null;
+                    _receiveEventArgs.Completed -= OnReceiveCompleted;
+                    _receiveEventArgs.Dispose();
+                    _receiveEventArgs = null;
                 }
 
                 _listenSocket.SafeClose();             

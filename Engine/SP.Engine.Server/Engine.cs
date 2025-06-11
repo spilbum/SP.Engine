@@ -17,7 +17,7 @@ using SP.Engine.Server.ProtocolHandler;
 
 namespace SP.Engine.Server
 {
-    public abstract class Engine<TPeer> : BaseEngine<Session<TPeer>>
+    public abstract class Engine<TPeer> : BaseEngine<ClientSession<TPeer>>
         where TPeer : BasePeer, IPeer
     {
         private sealed class WaitingReconnectPeer(TPeer peer, int timeOutSec)
@@ -30,12 +30,12 @@ namespace SP.Engine.Server
         private readonly ConcurrentDictionary<EPeerId, TPeer> _peerDict = new();
         private readonly List<IServerConnector> _connectors = [];
         private readonly List<ThreadFiber> _updatePeerFibers = [];
-        private readonly Dictionary<EProtocolId, IHandler<Session<TPeer>, IMessage>> _engineHandlerDict = new();
+        private readonly Dictionary<EProtocolId, IHandler<ClientSession<TPeer>, IMessage>> _engineHandlerDict = new();
         private readonly Dictionary<EProtocolId, IHandler<TPeer, IMessage>> _handlerDict = new();
         private ThreadFiber _fiber;
         
         public IFiberScheduler Scheduler => _fiber;
-
+        
         public override bool Initialize(string name, IEngineConfig config)
         {
             if (!base.Initialize(name, config))
@@ -106,6 +106,8 @@ namespace SP.Engine.Server
                 _engineHandlerDict[EngineProtocol.C2S.Close] = new Close<TPeer>();
                 _engineHandlerDict[EngineProtocol.C2S.Ping] = new Ping<TPeer>();
                 _engineHandlerDict[EngineProtocol.C2S.MessageAck] = new MessageAck<TPeer>();
+                _engineHandlerDict[EngineProtocol.C2S.UdpHelloReq] = new UdpHelloReq<TPeer>();
+                _engineHandlerDict[EngineProtocol.C2S.UdpKeepAlive] = new UdpKeepAlive<TPeer>();
                 return DiscoverHandlers().All(RegisterHandler);
             }
             catch (Exception e)
@@ -148,7 +150,7 @@ namespace SP.Engine.Server
             return handler;
         }
         
-        internal void ExecuteMessage(Session<TPeer> session, IMessage message)
+        internal void ExecuteMessage(ClientSession<TPeer> session, IMessage message)
         {
             var handler = GetHandler(message.ProtocolId);
             if (handler != null)
@@ -162,15 +164,14 @@ namespace SP.Engine.Server
                 }
                 
                 session.SendMessageAck(message.SequenceNumber);
-                foreach (var pendingMessage in peer.DrainInOrderReceivedMessages(message))
-                {
-                    GetHandler(pendingMessage.ProtocolId).ExecuteMessage(peer, pendingMessage);
-                }
+                peer.ExecuteMessage(message);
             }
             else
             {
                 if (_engineHandlerDict.TryGetValue(message.ProtocolId, out var engineHandler))
+                {
                     engineHandler.ExecuteMessage(session, message);
+                }
                 else
                 {
                     Logger.Error("Unknown message: {0} Session: {1}/{2}", message.ProtocolId, session.SessionId, session.RemoteEndPoint);
@@ -178,7 +179,24 @@ namespace SP.Engine.Server
                 }
             }
         }
-        
+
+        public override void ExecuteHandler(IPeer peer, IMessage message)
+        {
+            var handler = GetHandler(message.ProtocolId);
+            if (handler == null)
+            {
+                Logger.Error("Not found handler: {0}", message.ProtocolId);
+                return;
+            }
+            
+            handler.ExecuteMessage((TPeer)peer, message);
+        }
+
+        public override IPeer GetPeer(EPeerId peerId)
+        {
+            return FindPeer(peerId);
+        }
+
         public override bool Start()
         {
             if (!base.Start())
@@ -299,7 +317,7 @@ namespace SP.Engine.Server
                 peer.Update();
         }
 
-        public abstract TPeer CreatePeer(ISession<TPeer> session, DhKeySize dhKeySize, byte[] dhPublicKey);
+        public abstract TPeer CreatePeer(IClientSession<TPeer> iClientSession, DhKeySize dhKeySize, byte[] dhPublicKey);
         protected abstract IServerConnector CreateConnector(string name);
 
         public TPeer FindPeer(EPeerId peerId)
@@ -337,15 +355,15 @@ namespace SP.Engine.Server
             return false;
         }
 
-        protected override void OnSessionClosed(Session<TPeer> session, ECloseReason reason)
+        protected override void OnSessionClosed(ClientSession<TPeer> clientSession, ECloseReason reason)
         {
-            base.OnSessionClosed(session, reason);
+            base.OnSessionClosed(clientSession, reason);
 
-            var peer = session.Peer;
+            var peer = clientSession.Peer;
             if (null == peer)
                 return;
 
-            if (session.IsClosing)
+            if (clientSession.IsClosing)
             {
                 LeavePeer(peer, reason);
                 return;
@@ -363,11 +381,11 @@ namespace SP.Engine.Server
             peer.Offline(reason);
         }
 
-        internal void OnlinePeer(TPeer peer, ISession<TPeer> session)
+        internal void OnlinePeer(TPeer peer, IClientSession<TPeer> clientSession)
         {
             RemoveWaitingReconnectPeer(peer);
             AddOrUpdatePeer(peer);
-            peer.Online(session);
+            peer.Online(clientSession);
         }
 
         internal void JoinPeer(TPeer peer)

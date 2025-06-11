@@ -165,7 +165,7 @@ namespace SP.Engine.Server.Connector
             var netPeer = _netPeer;
             if (netPeer == null) return;
             
-            netPeer.Update();
+            netPeer.Tick();
             switch (netPeer.State)
             {
                 case ENetPeerState.None:

@@ -6,12 +6,10 @@ namespace SP.Engine.Runtime.Protocol
     public class ProtocolDataAttribute : Attribute
     {
         public EProtocolId ProtocolId { get; }
-        public bool IsEncrypt { get; }
 
-        public ProtocolDataAttribute(EProtocolId protocolId, bool isEncrypt = false)
+        public ProtocolDataAttribute(EProtocolId protocolId)
         {
             ProtocolId = protocolId;
-            IsEncrypt = isEncrypt;
         }
     }
 }

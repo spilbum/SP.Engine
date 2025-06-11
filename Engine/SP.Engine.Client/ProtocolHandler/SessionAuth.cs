@@ -13,7 +13,7 @@ namespace SP.Engine.Client.ProtocolHandler
             {
                 // 인증 실패로 종료 함
                 session.OnError(protocol.ErrorCode);
-                session.Close();
+                session.CloseWithoutHandshake();
                 return;
             }
             
@@ -41,7 +41,7 @@ namespace SP.Engine.Client.ProtocolHandler
                 session.PackOptions.CompressionThresholdPercent = protocol.CompressionThresholdPercent;
             }
             
-            session.OnOpened(protocol.PeerId, protocol.SessionId);
+            session.OnOpened(protocol.PeerId, protocol.SessionId, protocol.UdpOpenPort);
         }
     }
 }

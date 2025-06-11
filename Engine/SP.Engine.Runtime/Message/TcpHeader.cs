@@ -1,10 +1,9 @@
 using System;
-using SP.Common.Buffer;
 using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Runtime.Message
 {
-    public class TcpHeader
+    public readonly struct TcpHeader
     {
         private const int SequenceNumberOffset = 0;
         private const int ProtocolIdOffset = SequenceNumberOffset + sizeof(long);
@@ -12,21 +11,16 @@ namespace SP.Engine.Runtime.Message
         private const int PayloadLengthOffset = FlagsOffset + sizeof(byte);
         public const int HeaderSize = PayloadLengthOffset + sizeof(int);
         
-        public long SequenceNumber { get; set; }
-        public EProtocolId ProtocolId { get; set; }
-        public EMessageFlags Flags { get; set; }
-        public int PayloadLength { get; set; }
+        public long SequenceNumber { get; }
+        public EProtocolId ProtocolId { get; }
+        public EHeaderFlags Flags { get; }
+        public int PayloadLength { get; }
 
-        public TcpHeader()
-        {
-            
-        }
-        
-        private TcpHeader(long sequenceNumber, ushort protocolId, byte flags, int payloadLength)
+        public TcpHeader(long sequenceNumber, EProtocolId protocolId, EHeaderFlags flags, int payloadLength)
         {
             SequenceNumber = sequenceNumber;
-            ProtocolId = (EProtocolId)protocolId;
-            Flags = (EMessageFlags)flags;
+            ProtocolId = protocolId;
+            Flags = flags;
             PayloadLength = payloadLength;
         }
 
@@ -38,43 +32,63 @@ namespace SP.Engine.Runtime.Message
             span.WriteInt32(PayloadLengthOffset, PayloadLength);
         }
         
-        public static bool TryParse(BinaryBuffer buffer, out TcpHeader header)
+        public static bool TryParse(ReadOnlySpan<byte> span, out TcpHeader header)
         {
-            header = null;
+            header = default;
             
-            if (buffer.RemainSize < HeaderSize)
+            if (span.Length < HeaderSize)
                 return false;
 
-            var span = buffer.Read(HeaderSize);
-            var sequenceNumber = span.ReadInt64(SequenceNumberOffset);
-            var protocolId = span.ReadUInt16(ProtocolIdOffset);
-            var flags = span[FlagsOffset];
-            if ((flags & ~(byte)EMessageFlags.All) != 0)
-                return false;
-            
-            var payloadLength = span.ReadInt32(PayloadLengthOffset);
-            header = new TcpHeader(sequenceNumber, protocolId, flags, payloadLength);
+            header = new TcpHeader(
+                span.ReadInt64(SequenceNumberOffset),
+                (EProtocolId)span.ReadUInt16(ProtocolIdOffset),
+                (EHeaderFlags)span[FlagsOffset],
+                span.ReadInt32(PayloadLengthOffset));
             return true;
+        }
+    }
+
+    public class TcpHeaderBuilder
+    {
+        private long _sequenceNumber;
+        private EProtocolId _protocolId;
+        private EHeaderFlags _flags;
+        private int _payloadLength;
+
+        public TcpHeaderBuilder From(TcpHeader header)
+        {
+            _sequenceNumber = header.SequenceNumber;
+            _protocolId = header.ProtocolId;
+            _flags = header.Flags;
+            _payloadLength = header.PayloadLength;
+            return this;
+        }
+
+        public TcpHeaderBuilder WithSequenceNumber(long sequenceNumber)
+        {
+            _sequenceNumber = sequenceNumber;
+            return this;
+        }
+
+        public TcpHeaderBuilder WithProtocolId(EProtocolId protocolId)
+        {
+            _protocolId = protocolId;
+            return this;
+        }
+
+        public TcpHeaderBuilder AddFlag(EHeaderFlags flags)
+        {
+            _flags |= flags;
+            return this;
+        }
+
+        public TcpHeaderBuilder WithPayloadLength(int payloadLength)
+        {
+            _payloadLength = payloadLength;
+            return this;
         }
         
-        public static bool TryValidateLength(BinaryBuffer buffer, out int totalLength)
-        {
-            totalLength = 0;
-            
-            if (buffer.RemainSize < HeaderSize)
-                return false;
-            
-            var span = buffer.Peek(HeaderSize);
-            var payloadLength = span.ReadInt32(PayloadLengthOffset);
-            if (payloadLength > int.MaxValue - HeaderSize)
-                return false;
-            
-            var length = HeaderSize + payloadLength; 
-            if (buffer.RemainSize < length)
-                return false;
-            
-            totalLength = length;
-            return true;
-        }
+        public TcpHeader Build()
+            => new TcpHeader(_sequenceNumber, _protocolId, _flags, _payloadLength);
     }
 }

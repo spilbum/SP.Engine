@@ -54,6 +54,47 @@ namespace SP.Engine.Client
             return false;
         }
 
+        public bool Enqueue(List<T> items)
+        {
+            if (items.Count == 0)
+                return false;
+
+            bool isFull;
+            while (true)
+            {
+                if (TryEnqueue(out isFull, items))
+                    break;
+            }
+
+            return !isFull;
+        }
+
+        private bool TryEnqueue(out bool isFull, List<T> items)
+        {
+            isFull = false;
+            var entity = _entity;
+            var array = _entity.Array;
+            var count = entity.Count;
+
+            if (array == null)
+                return false;
+            
+            if (count + items.Count > array.Length)
+            {
+                isFull = true;
+                return false;
+            }
+
+            var oldCount = Interlocked.CompareExchange(ref entity.Count, count + items.Count, count);
+            if (oldCount != count)
+                return false;
+
+            for (var i = 0; i < items.Count; i++)
+                array[count + i] = items[i];
+            
+            return true;
+        }
+
         private bool TryEnqueue(T item, out bool isFull)
         {
             isFull = false;
@@ -80,7 +121,7 @@ namespace SP.Engine.Client
             return true;
         }
 
-        public bool TryDequeue(ref List<T> items)
+        public bool TryDequeue(List<T> items)
         {
             var entity = _entity;
             var array = _entity.Array;

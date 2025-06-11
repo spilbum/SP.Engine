@@ -4,12 +4,12 @@ using System.Net.Sockets;
 namespace SP.Engine.Server
 {
 
-    internal class SocketAsyncEventArgsProxy
+    public class SocketReceiveContext
     {
         public SocketAsyncEventArgs SocketEventArgs { get; } 
         public int OriginOffset { get; private set; }
 
-        public SocketAsyncEventArgsProxy(SocketAsyncEventArgs e)
+        public SocketReceiveContext(SocketAsyncEventArgs e)
         {
             SocketEventArgs = e;
             OriginOffset = e.Offset;
@@ -18,18 +18,18 @@ namespace SP.Engine.Server
 
         private static void OnReceiveCompleted(object sender, SocketAsyncEventArgs e)
         {
-            if (e.UserToken is not ITcpAsyncSocketSession socketSession)
+            if (e.UserToken is not ITcpNetworkSession networkSession)
                 return;
 
             if (e.LastOperation == SocketAsyncOperation.Receive)
-                socketSession.AsyncRun(() => socketSession.ProcessReceive(e));
+                networkSession.AsyncRun(() => networkSession.ProcessReceive(e));
             else
                 throw new ArgumentException("The last operation completed on the socket was not a receive");
         }
 
-        public void Initialize(ITcpAsyncSocketSession socketSession)
+        public void Initialize(ITcpNetworkSession networkSession)
         {
-            SocketEventArgs.UserToken = socketSession;
+            SocketEventArgs.UserToken = networkSession;
         }
 
         public void Reset()

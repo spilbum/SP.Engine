@@ -7,7 +7,7 @@ namespace SP.Engine.Runtime.Protocol
 {
     public abstract class BaseProtocolData : IProtocolData
     {
-        private static readonly Dictionary<Type, EProtocolId> Cache = new Dictionary<Type, EProtocolId>();
+        private static readonly Dictionary<Type, ProtocolDataAttribute> Cache = new Dictionary<Type, ProtocolDataAttribute>();
         
         [IgnoreMember]
         public EProtocolId ProtocolId { get; }
@@ -15,16 +15,14 @@ namespace SP.Engine.Runtime.Protocol
         protected BaseProtocolData()
         {
             var type = GetType();
-            if (Cache.TryGetValue(type, out var protocolId))
-                ProtocolId = protocolId;
-            else
+            if (!Cache.TryGetValue(type, out var attr))
             {
-                var attr = type.GetCustomAttribute<ProtocolDataAttribute>()
+                attr = type.GetCustomAttribute<ProtocolDataAttribute>()
                            ?? throw new InvalidCastException($"Invalid protocol data attribute: {type.FullName}");
-                Cache[type] = attr.ProtocolId;
-                ProtocolId = attr.ProtocolId;
+                Cache[type] = attr;
             }
             
+            ProtocolId = attr.ProtocolId;
         }
     }
 

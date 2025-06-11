@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using SP.Common.Logging;
 using SP.Engine.Runtime;
+using SP.Engine.Runtime.Message;
 using SP.Engine.Server.Configuration;
 using SP.Engine.Server.Logging;
 
@@ -18,8 +19,11 @@ namespace SP.Engine.Server
         bool Initialize(string name, IEngineConfig config);
         bool Start();
         void Stop();
-        ISession CreateSession(ISocketSession socketSession);   
-        bool RegisterSession(ISession session);
+        IClientSession CreateSession(TcpNetworkSession networkSession);   
+        bool RegisterSession(IClientSession clientSession);
+        IClientSession GetSession(string sessionId);
+        IPeer GetPeer(EPeerId peerId);
+        void ExecuteHandler(IPeer peer, IMessage message);
     }
 
     public interface ISocketServerAccessor
@@ -48,7 +52,7 @@ namespace SP.Engine.Server
     }
 
     public abstract class BaseEngine<TSession> : IEngine, ISocketServerAccessor, IDisposable
-        where TSession : BaseSession<TSession>, ISession, new()
+        where TSession : BaseClientSession<TSession>, IClientSession, new()
     {
         private SocketServer _socketServer;
         private ListenerInfo[] _listenerInfos;
@@ -58,6 +62,9 @@ namespace SP.Engine.Server
         public string Name { get; private set; }
         public ILogger Logger { get; private set; }
         public IEngineConfig Config { get; private set; }
+        
+        public abstract void ExecuteHandler(IPeer peer, IMessage message);
+        public abstract IPeer GetPeer(EPeerId peerId);
         
         public virtual bool Initialize(string name, IEngineConfig config)
         {
@@ -154,7 +161,18 @@ namespace SP.Engine.Server
             Logger.Debug("The server instance {0} has been stopped!", Name);
         }
 
-        public TSession GetSession(string sessionId)
+        public int GetOpenPort(ESocketMode mode)
+        {
+            foreach (var info in _listenerInfos)
+            {
+                if (info.Mode == mode)
+                    return info.EndPoint.Port;
+            }
+
+            return -1;
+        }
+
+        public IClientSession GetSession(string sessionId)
         {
             _sessionDict.TryGetValue(sessionId, out var session);
             return session;
@@ -227,41 +245,38 @@ namespace SP.Engine.Server
         {
             if (string.IsNullOrEmpty(ip) || "Any".Equals(ip, StringComparison.OrdinalIgnoreCase))
                 return IPAddress.Any;
-            else if ("IPv6Any".Equals(ip, StringComparison.OrdinalIgnoreCase))
-                return IPAddress.IPv6Any;
-            else
-                return IPAddress.Parse(ip);
+            return "IPv6Any".Equals(ip, StringComparison.OrdinalIgnoreCase) ? IPAddress.IPv6Any : IPAddress.Parse(ip);
         }
 
-        ISession IEngine.CreateSession(ISocketSession socketSession)
+        IClientSession IEngine.CreateSession(TcpNetworkSession networkSession)
         {
             var session = new TSession();
-            session.Initialize(this, socketSession);
+            session.Initialize(this, networkSession);
             return session;
         }
 
-        bool IEngine.RegisterSession(ISession session)
+        bool IEngine.RegisterSession(IClientSession clientSession)
         {
-            if (session is not TSession tSession)
+            if (clientSession is not TSession session)
                 return false;
 
-            if (!_sessionDict.TryAdd(tSession.SessionId, tSession))
+            if (!_sessionDict.TryAdd(session.SessionId, session))
             {
-                Logger.Error("The session is refused because the it's ID already exists. sessionId={0}", tSession.SessionId);
+                Logger.Error("The session is refused because the it's ID already exists. sessionId={0}", session.SessionId);
                 return false;
             }
 
-            tSession.SocketSession.Closed += OnSocketSessionClosed;
+            ((IClientSession)session).TcpSession.Closed += OnNetworkSessionClosed;
 
             // 인증 해드쉐이크 대기 등록
-            EnqueueAuthHandshakePendingQueue(tSession);
-            Logger.Debug("A new session connected. sessionId={0}, remoteEndPoint={1}", tSession.SessionId, tSession.RemoteEndPoint);
+            EnqueueAuthHandshakePendingQueue(session);
+            Logger.Debug("A new session connected. sessionId={0}, remoteEndPoint={1}", session.SessionId, session.RemoteEndPoint);
             return true;
         }
 
-        private void OnSocketSessionClosed(ISocketSession socketSession, ECloseReason reason)
+        private void OnNetworkSessionClosed(INetworkSession networkSession, ECloseReason reason)
         {
-            if (socketSession.Session is not TSession session) 
+            if (networkSession.ClientSession is not TSession session) 
                 return;
          
             session.IsConnected = false;
@@ -280,7 +295,7 @@ namespace SP.Engine.Server
         }
 
         private Timer _clearIdleSessionTimer;
-        private readonly object _clearIdleSessionLock = new object();
+        private readonly object _clearIdleSessionLock = new();
 
         private void StartClearIdleSessionTimer()
         {

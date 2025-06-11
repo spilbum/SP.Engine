@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading.Tasks;
+using SP.Common.Logging;
 
 namespace SP.Engine.Server
 {
@@ -28,7 +30,7 @@ namespace SP.Engine.Server
         void Stop();
     }
 
-    internal abstract class BaseSocketListener(ListenerInfo info) : ISocketListener, IDisposable
+    internal abstract class BaseNetworkListener(ListenerInfo info) : ISocketListener, IDisposable
     {
         public ESocketMode Mode { get; set; } = info.Mode;
         public IPEndPoint EndPoint { get; } = info.EndPoint;
@@ -44,16 +46,18 @@ namespace SP.Engine.Server
         protected void OnStopped() => Stopped?.Invoke(this, EventArgs.Empty);
         protected void OnError(Exception e) => Error?.Invoke(this, e);
 
-        protected virtual void OnNewClientAccepted(Socket socket, object state)
+        protected void OnNewClientAccepted(Socket socket, object state)
         {
             var handler = NewClientAccepted;
+            if (handler == null) return;
+            
             switch (Mode)
             {
                 case ESocketMode.Tcp:
-                    handler?.Invoke(this, socket, state);
+                    handler.Invoke(this, socket, state);
                     break;
                 case ESocketMode.Udp:
-                    handler?.BeginInvoke(this, socket, state, null, null);
+                    Task.Run(() => handler.Invoke(this, socket, state));
                     break;
             }
         }

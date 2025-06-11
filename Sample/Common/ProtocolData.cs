@@ -8,6 +8,7 @@ namespace Common
         public static class C2S
         {
             [ProtocolData(Protocol.C2S.Echo)]
+            [Transport(ETransport.Udp)]
             public class Echo : BaseProtocolData
             {
                 public string? Str;
@@ -19,6 +20,7 @@ namespace Common
         public static class S2C
         {
             [ProtocolData(Protocol.S2C.Echo)]
+            [Transport(ETransport.Udp)]
             public class Echo : BaseProtocolData
             {
                 public string? Str;
