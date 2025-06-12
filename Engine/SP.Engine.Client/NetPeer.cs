@@ -118,6 +118,7 @@ namespace SP.Engine.Client
         public ENetPeerState State => (ENetPeerState)_stateCode;
         public byte[] DhSharedKey => _diffieHelman.SharedKey;
         public string SessionId { get; private set; }
+        public bool IsConnected => State.HasFlag(ENetPeerState.Open);
 
         public PackOptions PackOptions { get; }
         
@@ -256,11 +257,6 @@ namespace SP.Engine.Client
             return Send(message);
         }
         
-        private long _nextUdpSequenceNumber = 1;
-        
-        private long GetNextUdpSequenceNumber()
-            => Interlocked.Increment(ref _nextUdpSequenceNumber);
-        
         private IMessage PackMessage(IProtocolData data)
         {
             var transport = TransportHelper.Resolve(data);
@@ -290,7 +286,6 @@ namespace SP.Engine.Client
                     }
                     else
                     {
-                        message.SetSequenceNumber(GetNextUdpSequenceNumber());
                         message.SetPeerId(PeerId);
                         message.Pack(data, _diffieHelman.SharedKey, PackOptions);
                     }
@@ -310,7 +305,7 @@ namespace SP.Engine.Client
                     if (tcpMessage.ProtocolId.IsEngineProtocol())
                         return _session.Send(tcpMessage);
                     
-                    if (State == ENetPeerState.Open)
+                    if (!IsConnected)
                     {
                         EnqueuePendingMessage(tcpMessage);
                         return true;
@@ -492,7 +487,7 @@ namespace SP.Engine.Client
         public void Tick()
         {
             _timer?.Update();
-            _udpSocket?.CheckKeepAlive();
+            _udpSocket?.Tick();
             
             // 수신된 메시지 처리
             DequeueReceivedMessage();
@@ -537,13 +532,13 @@ namespace SP.Engine.Client
 
             if (PeerId != header.PeerId)
                 return;
-
+            
             IMessage message = null;
             if (header.IsFragmentation)
             {
                 var span = e.Data.AsSpan(e.Offset, e.Length);
                 if (UdpFragment.TryParse(span, out var fragment) &&
-                    _udpSocket.Assembler.TryAssemble(header.SequenceNumber, fragment, out var payload))
+                    _udpSocket.Assembler.TryAssemble(fragment, out var payload))
                 {
                     message = new UdpMessage(header, payload);
                 }
@@ -711,14 +706,13 @@ namespace SP.Engine.Client
         private void ConnectUdpSocket(int port)
         {
             _udpSocket = CreateNewUdpSocket();
-            if (!_udpSocket.Connect(this, _ip, port))
+            if (!_udpSocket.Connect(this, _ip, port, UdpMtu))
             {
                 Logger.Error("Failed to connect to UDP socket. ip={0}, port={1}", _ip, port);
                 return;
             }
 
             SendUdpHandshake();
-            Logger.Debug("UDP socket initialized. ip={0}, port={1}, mtu={2}", _ip, port, UdpMtu);
         }
 
         private void SendUdpHandshake()

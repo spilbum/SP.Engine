@@ -117,12 +117,11 @@ namespace TestClient
                     switch (splits[0])
                     {
                         case "echo":
-                            for (var i = 0; i < 10 - 1; i++) NetPeerManager.Instance.Send(new ProtocolData.C2S.Echo { Str = splits[1], Bytes = Encoding.UTF8.GetBytes(splits[1]), Time = DateTime.Now});
+                            for (var i = 0; i < 5; i++) NetPeerManager.Instance.Send(new ProtocolData.C2S.Echo { Str = splits[1], Bytes = Encoding.UTF8.GetBytes(splits[1]), Time = DateTime.Now});
                             break;
                         case "test":
                         {
-                            var bytes = new byte[2000];
-                            for (var i = 0; i < bytes.Length; i++) bytes[i] = 0x1;
+                            var bytes = GenerateRandomBytes(int.Parse(splits[1]));
                             NetPeerManager.Instance.Send(new ProtocolData.C2S.Echo { Str = "test", Bytes = bytes, Time = DateTime.Now });
                             break;
                         }
@@ -141,7 +140,14 @@ namespace TestClient
             }
         }
 
-    
+        private static readonly Random Random = new();
+
+        private static byte[] GenerateRandomBytes(int length)
+        {
+            var buffer = new byte[length];
+            Random.NextBytes(buffer);
+            return buffer;
+        }
     }
 }
 

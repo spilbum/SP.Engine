@@ -238,7 +238,7 @@ namespace SP.Engine.Server
             var newQueue = _sendingQueue;
             if (IsInClosingOrClosed)
             {
-                if (newQueue != null && newQueue.Count == 0 && !TryValidateClosedBySocket(out var _))
+                if (newQueue is { Count: 0 } && !TryValidateClosedBySocket(out var _))
                 {
                     StartSend(newQueue, newQueue.TrackId, false);
                     return;

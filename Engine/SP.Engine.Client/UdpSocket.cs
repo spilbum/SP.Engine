@@ -12,21 +12,6 @@ using SP.Engine.Runtime.Message;
 
 namespace SP.Engine.Client
 {
-    public static class ExtensionMethod
-    {
-        public static IEnumerable<PooledSegment> ToSegments(this UdpMessage message, ushort mtu)
-        {
-            if (message.Length <= mtu)
-            {
-                yield return PooledSegment.FromMessage(message);
-                yield break;
-            }
-
-            foreach (var fragment in message.ToSplit(mtu))
-                yield return PooledSegment.FromFragment(fragment);
-        }
-    }
-    
     public class PostList<T> : List<T>
     {
         public int Position { get; set; }
@@ -44,17 +29,20 @@ namespace SP.Engine.Client
         private int _isSending;
         private NetPeer _netPeer;
         private DateTime? _nextKeepAliveTime;
+        private ushort _mtu;
+        private long _nextFragmentId;
         
         public UdpFragmentAssembler Assembler { get; } = new UdpFragmentAssembler();
 
         public event EventHandler<DataEventArgs> DataReceived;
         public event EventHandler<ErrorEventArgs> Error;
 
-        public bool Connect(NetPeer netPeer, string ip, int port)
+        public bool Connect(NetPeer netPeer, string ip, int port, ushort mtu)
         {
             try
             {
                 _netPeer = netPeer;
+                _mtu = mtu;
                 _remoteEndPoint = new IPEndPoint(IPAddress.Parse(ip), port);
                 _sendingQueue = new ConcurrentBatchQueue<PooledSegment>(300);
                 _receiveBuffer = new byte[ushort.MaxValue];
@@ -77,7 +65,7 @@ namespace SP.Engine.Client
             }
         }
 
-        public void CheckKeepAlive()
+        private void CheckKeepAlive()
         {
             if (_nextKeepAliveTime != null && DateTime.UtcNow < _nextKeepAliveTime)
                 return;
@@ -88,6 +76,11 @@ namespace SP.Engine.Client
             message.SetPeerId(_netPeer.PeerId);
             message.Pack(keepAlive, null, null);
             Send(message);
+        }
+
+        public void Tick()
+        {
+            //CheckKeepAlive();
         }
         
         public void Close()
@@ -119,12 +112,26 @@ namespace SP.Engine.Client
         
         public bool Send(UdpMessage message)
         {
-            var items = message.ToSegments(_netPeer.UdpMtu).ToList();
+            var items = ToSegments(message);
             if (!_sendingQueue.Enqueue(items))
                 return false;
             
             DequeueSend();
             return true;
+        }
+        
+        private List<PooledSegment> ToSegments(UdpMessage message)
+        {
+            var segments = new List<PooledSegment>();
+            if (message.Length <= _mtu)
+            {
+                segments.Add(PooledSegment.FromMessage(message));
+                return segments;
+            }
+
+            var fragmentId = (uint)Interlocked.Increment(ref _nextFragmentId);
+            segments.AddRange(message.ToSplit(_mtu, fragmentId).Select(PooledSegment.FromFragment));
+            return segments;
         }
 
         private void OnSendCompleted(object sender, SocketAsyncEventArgs e)
@@ -138,7 +145,8 @@ namespace SP.Engine.Client
             var pooled = _sendingItems[_sendingItems.Position];
             pooled.Dispose();
 
-            if (++_sendingItems.Position < _sendingItems.Count)
+            _sendingItems.Position++;
+            if (_sendingItems.Position < _sendingItems.Count)
             {
                 Send(_sendingItems);
                 return;
@@ -203,8 +211,7 @@ namespace SP.Engine.Client
 
             try
             {
-                var data = new ArraySegment<byte>(e.Buffer, e.Offset, e.BytesTransferred);
-                OnDataReceived(data);
+                OnDataReceived(e.Buffer, e.Offset, e.BytesTransferred);
             }
             catch (Exception ex)
             {
@@ -213,20 +220,21 @@ namespace SP.Engine.Client
             finally
             {
                 e.SetBuffer(0, _receiveBuffer.Length);
-                _socket?.ReceiveFromAsync(e);
+                if (!_socket.ReceiveFromAsync(e))
+                    OnReceiveCompleted(this, e);
             }
         }
 
         private void OnError(Exception e) 
             => Error?.Invoke(this, new ErrorEventArgs(e));
         
-        private void OnDataReceived(ArraySegment<byte> data)
+        private void OnDataReceived(byte[] data, int offset, int length)
         {
             DataReceived?.Invoke(this, new DataEventArgs
             {
-                Data = data.Array,
-                Offset = data.Offset,
-                Length = data.Count
+                Data = data,
+                Offset = offset,
+                Length = length
             });
         }
     }

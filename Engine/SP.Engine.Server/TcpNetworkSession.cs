@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Threading;
 using SP.Common.Logging;
 using SP.Engine.Runtime;
+using SP.Engine.Runtime.Message;
 
 namespace SP.Engine.Server
 {
@@ -48,6 +49,13 @@ namespace SP.Engine.Server
             
             e.Dispose();
             base.OnClosed(reason);
+        }
+
+        public bool TrySend(TcpMessage message)
+        {
+            var buffer = new byte[message.Length];
+            message.WriteTo(buffer.AsSpan());
+            return TrySend(new ArraySegment<byte>(buffer));
         }
 
         private void StartReceive(SocketAsyncEventArgs e)

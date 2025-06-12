@@ -102,12 +102,12 @@ namespace SP.Common
                 {
                     var mean = Avg;
                     var stdDev = StdDev;
-                    var lowerBound = mean - (OutlierThreshold * stdDev);
-                    var upperBound = mean + (OutlierThreshold * stdDev);
+                    var lowerBound = Math.Max(0, mean - OutlierThreshold * stdDev);
+                    var upperBound = mean + OutlierThreshold * stdDev;
 
                     if (doubleValue < lowerBound || doubleValue > upperBound)
                     {
-                        Console.WriteLine($"[Warning] Outlier detected: {doubleValue} (Threshold: {lowerBound} ~ {upperBound})");
+                        //Console.WriteLine($"[Warning] Outlier detected: {doubleValue} (Threshold: {lowerBound} ~ {upperBound})");
                         return;
                     }
                 }

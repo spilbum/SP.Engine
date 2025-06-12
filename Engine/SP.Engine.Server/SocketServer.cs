@@ -182,16 +182,16 @@ namespace SP.Engine.Server
         
         private void ProcessUdpClient(Socket socket, object state)
         {
-            if (state is not (ArraySegment<byte> segment, IPEndPoint remoteEndPoint))
+            if (state is not (byte[] buffer, IPEndPoint remoteEndPoint))
                 return;
 
-            var headerSpan = segment.AsSpan();
+            var headerSpan = buffer.AsSpan();
             if (!UdpHeader.TryParse(headerSpan, out var header))
             {
-                Engine.Logger.Warn($"Failed to parse UdpHeader: {segment.Count} bytes");
+                Engine.Logger.Warn($"Failed to parse UdpHeader: {buffer.Length} bytes");
                 return;
             }
-
+            
             var peer = Engine.GetPeer(header.PeerId);
             var session = peer?.Session;
             if (session == null)
@@ -201,19 +201,22 @@ namespace SP.Engine.Server
 
             if (header.IsFragmentation)
             {
-                if (!UdpFragment.TryParse(segment, out var fragment) ||
-                    !peer.Assembler.TryAssemble(header.SequenceNumber, fragment, out var payload))
+                if (!UdpFragment.TryParse(buffer, out var fragment))
                 {
-                    Engine.Logger.Warn($"Failed to parse fragmentation: {segment.Count} bytes");
+                    Engine.Logger.Warn($"Failed to parse fragmentation: {buffer.Length} bytes");
                     return;
                 }
+
+                if (!peer.Assembler.TryAssemble(fragment, out var payload))
+                    return;
                 
                 var message = new UdpMessage(header, payload);
                 session.ProcessMessage(message);
             }
             else
             {
-                var message = new UdpMessage(header, segment);
+                var payload = new ArraySegment<byte>(buffer);
+                var message = new UdpMessage(header, payload);
                 session.ProcessMessage(message);
             }
         }

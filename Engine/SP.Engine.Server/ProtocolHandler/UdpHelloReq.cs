@@ -20,7 +20,6 @@ internal class UdpHelloReq<TPeer> : BaseEngineHandler<ClientSession<TPeer>, Engi
             return;
         }
         
-        session.Logger.Info("Udp connected: {0}({1})", session.Peer.PeerId, session.SessionId);
         resposne.ErrorCode = EEngineErrorCode.Success;
         session.Send(resposne);
     }

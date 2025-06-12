@@ -1,5 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Reflection;
 using SP.Common.Accessor;
 
@@ -7,7 +7,7 @@ namespace SP.Engine.Runtime.Protocol
 {
     public abstract class BaseProtocolData : IProtocolData
     {
-        private static readonly Dictionary<Type, ProtocolDataAttribute> Cache = new Dictionary<Type, ProtocolDataAttribute>();
+        private static readonly ConcurrentDictionary<Type, ProtocolDataAttribute> Cache = new ConcurrentDictionary<Type, ProtocolDataAttribute>();
         
         [IgnoreMember]
         public EProtocolId ProtocolId { get; }

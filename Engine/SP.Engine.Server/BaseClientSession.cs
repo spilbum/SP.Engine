@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Sockets;
 using SP.Common.Buffer;
 using SP.Common.Logging;
+using SP.Engine.Client;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Message;
 using SP.Engine.Server.Configuration;
@@ -14,22 +15,6 @@ namespace SP.Engine.Server
 {
     public static class ExtenstionMethod
     {
-        public static IEnumerable<ArraySegment<byte>> ToSegments(this UdpMessage message, ushort mtu)
-        {
-            if (message.Length <= mtu)
-            {
-                yield return message.Payload;
-                yield break;
-            }
-
-            foreach (var fragment in message.ToSplit(mtu))
-            {
-                var buffer = new byte[UdpHeader.HeaderSize + fragment.Length];
-                message.Header.WriteTo(buffer);
-                fragment.WriteTo(buffer);
-                yield return new ArraySegment<byte>(buffer, 0, buffer.Length);
-            }
-        }
 
         public static ArraySegment<byte> ToSegment(this TcpMessage message)
         {
@@ -47,7 +32,7 @@ namespace SP.Engine.Server
         IEngineConfig Config { get; }
         IEngine Engine { get; }
         TcpNetworkSession TcpSession { get; }
-        UdpSocket UdpSocket { get; }
+        UdpNetworkSession UdpSession { get; }
 
         bool Send(IMessage message);
         void EnsureUdpSocket(Socket socket, IPEndPoint remoteEndPoint, ushort mtu);
@@ -78,7 +63,7 @@ namespace SP.Engine.Server
         public string RejectDetailReason { get; private set; }
 
         public TcpNetworkSession TcpSession { get; private set; }
-        public UdpSocket UdpSocket { get; private set; }
+        public UdpNetworkSession UdpSession { get; private set; }
 
         protected BaseClientSession()
         {
@@ -114,15 +99,14 @@ namespace SP.Engine.Server
             {
                 case TcpMessage tcpMessage:
                 {
-                    if (!TcpSession.TrySend(tcpMessage.ToSegment()))
+                    if (!TcpSession.TrySend(tcpMessage))
                         return false;
                     
                     break;
                 }
                 case UdpMessage udpMessage:
                 {
-                    var segments = udpMessage.ToSegments(UdpSocket.Mtu);
-                    if (segments.Any(segment => !UdpSocket.TrySend(segment)))
+                    if (UdpSession.TrySend(udpMessage))
                         return false;
 
                     break;
@@ -137,14 +121,14 @@ namespace SP.Engine.Server
         {
             lock (this)
             {
-                if (UdpSocket == null)
+                if (UdpSession == null)
                 {
-                    UdpSocket = new UdpSocket(socket, remoteEndPoint, mtu);
-                    UdpSocket.Attach(this);
+                    UdpSession = new UdpNetworkSession(socket, remoteEndPoint, mtu);
+                    UdpSession.Attach(this);
                 }
                 else
                 {
-                    UdpSocket.UpdateRemoteEndPoint(remoteEndPoint);
+                    UdpSession.UpdateRemoteEndPoint(remoteEndPoint);
                 }
             }
         }
@@ -225,7 +209,7 @@ namespace SP.Engine.Server
         public virtual void Close(ECloseReason reason)
         {
             TcpSession.Close(reason);
-            UdpSocket.Close(reason);
+            UdpSession.Close(reason);
         }
 
         public virtual void Close()

@@ -78,7 +78,6 @@ namespace SP.Engine.Server
         private bool _disposed;
         private readonly DiffieHellman _diffieHellman;
         private readonly PackOptions _packOptions;
-        private long _nextUdpSequenceNumber = 1;
 
         public UdpFragmentAssembler Assembler { get; } = new();
         public EPeerState State => (EPeerState)_stateCode;
@@ -196,7 +195,6 @@ namespace SP.Engine.Server
                 case ETransport.Udp:
                 {
                     var message = new UdpMessage();
-                    message.SetSequenceNumber(GetNextUdpSequenceNumber());
                     message.SetPeerId(PeerId);
                     message.Pack(data, _diffieHellman.SharedKey, _packOptions);
                     return Session.Send(message);
@@ -206,9 +204,6 @@ namespace SP.Engine.Server
             }
         }
         
-        private long GetNextUdpSequenceNumber()
-            => Interlocked.Increment(ref _nextUdpSequenceNumber);
-
         private bool Send(IMessage message)
         {
             if (!IsConnected)

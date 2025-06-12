@@ -10,17 +10,19 @@ namespace SP.Engine.Runtime.Message
     public class UdpMessage : IMessage
     {
         private UdpHeader _header;
-        private ArraySegment<byte> _payload;
+        private ArraySegment<byte> _buffer;
 
         public long SequenceNumber => _header.SequenceNumber;
         public EProtocolId ProtocolId => _header.ProtocolId;
-        public int Length => _payload.Count;
+        public int Length => _buffer.Count;
         public UdpHeader Header => _header;
-        public ArraySegment<byte> Payload => _payload;
+        public ArraySegment<byte> Payload => _buffer;
         private bool IsEncrypted => _header.Flags.HasFlag(EHeaderFlags.Encrypted);
         private bool IsCompressed => _header.Flags.HasFlag(EHeaderFlags.Compressed);
-        private byte[] Body => _payload.AsSpan(UdpHeader.HeaderSize, _payload.Count - UdpHeader.HeaderSize).ToArray();
 
+        private byte[] GetBody()
+            => _buffer.AsSpan(UdpHeader.HeaderSize, _buffer.Count - UdpHeader.HeaderSize).ToArray();
+        
         public UdpMessage()
         {
             
@@ -29,7 +31,7 @@ namespace SP.Engine.Runtime.Message
         public UdpMessage(UdpHeader header, ArraySegment<byte> payload)
         {
             _header = header;
-            _payload = payload;
+            _buffer = payload;
         }
 
         public void SetSequenceNumber(long sequenceNumber)
@@ -80,19 +82,17 @@ namespace SP.Engine.Runtime.Message
                 .WithPayloadLength(body.Length)
                 .AddFlag(flags)
                 .Build();
-            
             _header = header;
             
             var buffer = new byte[UdpHeader.HeaderSize + body.Length];
             header.WriteTo(buffer.AsSpan(0, UdpHeader.HeaderSize));
             body.CopyTo(buffer.AsSpan(UdpHeader.HeaderSize));
-            
-            _payload = new ArraySegment<byte>(buffer, 0, buffer.Length);
+            _buffer = new ArraySegment<byte>(buffer, 0, buffer.Length);
         }
 
-        public IProtocolData Unpack(Type type, byte[] sharedKey = null)
+        public IProtocolData Unpack(Type type, byte[] sharedKey)
         {
-            var body = Body;
+            var body = GetBody();
             if (IsEncrypted)
             {
                 if (sharedKey == null)
@@ -107,33 +107,34 @@ namespace SP.Engine.Runtime.Message
 
         public void WriteTo(Span<byte> buffer)
         {
-            if (buffer.Length < _payload.Count)
+            if (buffer.Length > _buffer.Count)
                 throw new ArgumentException("Buffer too small.", nameof(buffer));
-            _payload.AsSpan().CopyTo(buffer);
+            _buffer.AsSpan().CopyTo(buffer);
         }
 
-        public IEnumerable<UdpFragment> ToSplit(ushort mtu)
+        public IEnumerable<UdpFragment> ToSplit(ushort mtu, uint fragmentId)
         {
-            if (mtu < 256)
-                throw new ArgumentOutOfRangeException(nameof(mtu), "MTU must be at least 256");
+            const int overhead = UdpHeader.HeaderSize + UdpFragmentHeader.HeaderSize;
+            if (mtu <= overhead)
+                throw new ArgumentOutOfRangeException(nameof(mtu), $"mtu({mtu}) <= overhead({overhead})");
+
+            var maxSize = mtu - overhead;
+            var body = GetBody();
             
-            var body = Body;
-            if (body.Length <= mtu)
-                yield break;
-            
+            var totalCount = (byte)Math.Ceiling(body.Length / (float)maxSize);
             var header = new UdpHeaderBuilder()
                 .From(_header)
                 .AddFlag(EHeaderFlags.Fragmentation)
                 .Build();
       
-            var totalCount = (byte)Math.Ceiling(body.Length / (float)mtu);
             for (byte i = 0; i < totalCount; i++)
             {
-                var offset = i * mtu;
-                var size = (ushort)Math.Min(mtu, body.Length - offset);
-                var fragHeader = new UdpFragment.Header(i, totalCount, size);
-                var fragPayload = new ArraySegment<byte>(body, offset, size);
-                yield return new UdpFragment(header, fragHeader, fragPayload);
+                var offset = i * maxSize;
+                var size = (ushort)Math.Min(maxSize, body.Length - offset);
+                yield return new UdpFragment(
+                    header,
+                    new UdpFragmentHeader(fragmentId, i, totalCount, size),
+                    new ArraySegment<byte>(body, offset, size));
             }
         }
     }

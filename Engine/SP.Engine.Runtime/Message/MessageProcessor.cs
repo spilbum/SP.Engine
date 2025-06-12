@@ -143,6 +143,9 @@ namespace SP.Engine.Runtime.Message
 
         protected IEnumerable<IMessage> DrainInOrderReceivedMessages(IMessage message)
         {
+            if (message.SequenceNumber == 0)
+                yield return message;
+            
             if (message.SequenceNumber <= _expectedReceiveSequenceNumber || !_pendingReceiveMessages.TryAdd(message.SequenceNumber, message))
             {
                 // 이미 처리했거나 대기 중인 메시지임

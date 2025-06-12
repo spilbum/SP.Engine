@@ -1,22 +1,51 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
 using SP.Engine.Runtime;
+using SP.Engine.Runtime.Message;
 
 namespace SP.Engine.Server
 {
-    public class UdpSocket : BaseNetworkSession
+    public class UdpNetworkSession : BaseNetworkSession
     {
-        public ushort Mtu { get; }
+        private uint _nextFragmentId;
+        private readonly ushort _mtu;
         
-        public UdpSocket(Socket client, IPEndPoint remoteEndPoint, ushort mtu)
+        public UdpNetworkSession(Socket client, IPEndPoint remoteEndPoint, ushort mtu)
             : base (ESocketMode.Udp, client)
         {
             RemoteEndPoint = remoteEndPoint;
             LocalEndPoint = (IPEndPoint)client.LocalEndPoint;
-            Mtu = mtu;
+            _mtu = mtu;
         }
 
+        public bool TrySend(UdpMessage message)
+        {
+            var segments = ToSegments(message);
+            return segments.All(TrySend);
+        }
+        
+        private IEnumerable<ArraySegment<byte>> ToSegments(UdpMessage message)
+        {
+            if (message.Length <= _mtu)
+            {
+                yield return message.Payload;
+                yield break;
+            }
+
+            var fragmentId = Interlocked.Increment(ref _nextFragmentId);
+            foreach (var fragment in message.ToSplit(_mtu, fragmentId))
+            {
+                var buffer = new byte[UdpHeader.HeaderSize + fragment.Length];
+                message.Header.WriteTo(buffer);
+                fragment.WriteTo(buffer);
+                yield return new ArraySegment<byte>(buffer, 0, buffer.Length);
+            }
+        }
+        
         public void UpdateRemoteEndPoint(IPEndPoint remoteEndPoint)
         {
             if (RemoteEndPoint != null && RemoteEndPoint.ToString() == remoteEndPoint.ToString())
