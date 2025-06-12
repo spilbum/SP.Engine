@@ -24,7 +24,7 @@ namespace SP.Engine.Client
         {
             var length = message.Length;
             var buffer = ArrayPool<byte>.Shared.Rent(length);
-            message.WriteTo(buffer.AsSpan(0, length));
+            message.WriteTo(buffer.AsSpan());
             return new PooledSegment(new ArraySegment<byte>(buffer, 0, length));
         }
         

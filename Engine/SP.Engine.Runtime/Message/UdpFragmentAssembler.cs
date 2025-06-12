@@ -12,6 +12,8 @@ namespace SP.Engine.Runtime.Message
         private readonly int _totalCount;
         private int _receivedCount;
 
+        public DateTime Created { get; } = DateTime.UtcNow;
+
         public FragmentBuffer(byte totalCount)
         {
             _fragments = new ArraySegment<byte>[totalCount];
@@ -52,31 +54,38 @@ namespace SP.Engine.Runtime.Message
     
     public class UdpFragmentAssembler
     {
-        private readonly Dictionary<long, FragmentBuffer> _buffers = new Dictionary<long, FragmentBuffer>();
+        private readonly ConcurrentDictionary<long, FragmentBuffer> _buffers = new ConcurrentDictionary<long, FragmentBuffer>();
         
         public bool TryAssemble(UdpFragment fragment, out ArraySegment<byte> payload)
         {
             payload = default;
 
-            lock (this)
+            var key = fragment.Id;
+            var buffer = _buffers.GetOrAdd(key, _ => new FragmentBuffer(fragment.TotalCount));
+            
+            lock (buffer)
             {
-                if (!_buffers.TryGetValue(fragment.Id, out var buffer))
-                {
-                    buffer = new FragmentBuffer(fragment.TotalCount);
-                    _buffers[fragment.Id] = buffer;
-                }
-                
                 if (!buffer.Add(fragment.Index, fragment.Payload))
                     return false;
             
                 if (!buffer.IsComplete) 
                     return false;
-            
+                
                 payload = buffer.Assemble(fragment.UdpHeader);
-                _buffers.Remove(fragment.Id);
             }
 
+            _buffers.TryRemove(key, out _);
             return true;
+        }
+
+        public void Cleanup(TimeSpan expiration)
+        {
+            var now = DateTime.UtcNow;
+            foreach (var (key, buffer) in _buffers)
+            {
+                if (now.Subtract(buffer.Created) >= expiration)
+                    _buffers.TryRemove(key, out _);
+            }
         }
     }
 }

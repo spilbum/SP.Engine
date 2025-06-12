@@ -139,9 +139,14 @@ namespace SP.Engine.Server
 
         private bool RegisterHandler(IHandler<TPeer, IMessage> handler)
         {
-            if (_handlerDict.TryAdd(handler.Id, handler)) return true;
-            Logger.Error("Handler '{0}' already exists.", handler.Id);
-            return false;
+            if (!_handlerDict.TryAdd(handler.Id, handler))
+            {
+                Logger.Error("Handler '{0}' already exists.", handler.Id);
+                return false;
+            }
+
+            Logger.Debug("Handler '{0}' registered.", handler.Id);
+            return true;
         }
 
         private IHandler<TPeer, IMessage> GetHandler(EProtocolId protocolId)
@@ -314,7 +319,7 @@ namespace SP.Engine.Server
                 .Where(x => x.Value.Peer != null && (int)x.Value.Peer.PeerId % _updatePeerFibers.Count == index)
                 .Select(x => x.Value.Peer);
             foreach (var peer in peers)
-                peer.Update();
+                peer.Tick();
         }
 
         public abstract TPeer CreatePeer(IClientSession<TPeer> iClientSession, DhKeySize dhKeySize, byte[] dhPublicKey);

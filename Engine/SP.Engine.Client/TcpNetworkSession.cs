@@ -248,11 +248,10 @@ namespace SP.Engine.Client
             try
             {
                 _sendEventArgs.SetBuffer(null, 0, 0);
-                
                 _sendBufferList.Clear();
                 foreach (var pooled in items)
                     _sendBufferList.Add(pooled.Segment);
-                
+
                 _sendEventArgs.BufferList = _sendBufferList;
                 
                 if (!_socket.SendAsync(_sendEventArgs))

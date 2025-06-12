@@ -144,7 +144,7 @@ namespace SP.Engine.Server
             _disposed = true;
         }
 
-        public virtual void Update()
+        public virtual void Tick()
         {
             if (!IsConnected)
                 return;
@@ -157,6 +157,8 @@ namespace SP.Engine.Server
 
             foreach (var message in GetPendingMessages())
                 Session.Send(message);
+            
+            Assembler.Cleanup(TimeSpan.FromSeconds(10));
         }
         
         protected override void OnMessageSendFailure(IMessage message)

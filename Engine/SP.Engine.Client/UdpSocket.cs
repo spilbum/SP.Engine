@@ -80,7 +80,8 @@ namespace SP.Engine.Client
 
         public void Tick()
         {
-            //CheckKeepAlive();
+            CheckKeepAlive();
+            Assembler.Cleanup(TimeSpan.FromSeconds(10));
         }
         
         public void Close()

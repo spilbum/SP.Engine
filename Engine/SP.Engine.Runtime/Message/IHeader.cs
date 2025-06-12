@@ -3,13 +3,11 @@ using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Runtime.Message
 {
-    public interface IMessage
+    public interface IHeader
     {
         long SequenceNumber { get; }
         EProtocolId ProtocolId { get; }
-        int Length { get; }
+        EHeaderFlags Flags { get; }
         void WriteTo(Span<byte> buffer);
-        void Pack(IProtocolData data, byte[] sharedKey, PackOptions options);
-        IProtocolData Unpack(Type type, byte[] sharedKey);
     }
 }

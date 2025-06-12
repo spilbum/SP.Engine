@@ -11,7 +11,7 @@ namespace SP.Engine.Server
 {
     public class UdpNetworkSession : BaseNetworkSession
     {
-        private uint _nextFragmentId;
+        private uint _fragmentId;
         private readonly ushort _mtu;
         
         public UdpNetworkSession(Socket client, IPEndPoint remoteEndPoint, ushort mtu)
@@ -36,11 +36,10 @@ namespace SP.Engine.Server
                 yield break;
             }
 
-            var fragmentId = Interlocked.Increment(ref _nextFragmentId);
+            var fragmentId = Interlocked.Increment(ref _fragmentId);
             foreach (var fragment in message.ToSplit(_mtu, fragmentId))
             {
-                var buffer = new byte[UdpHeader.HeaderSize + fragment.Length];
-                message.Header.WriteTo(buffer);
+                var buffer = new byte[fragment.Length];
                 fragment.WriteTo(buffer);
                 yield return new ArraySegment<byte>(buffer, 0, buffer.Length);
             }

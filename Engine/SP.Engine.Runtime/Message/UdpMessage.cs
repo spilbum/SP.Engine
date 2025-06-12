@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using SP.Engine.Runtime.Compression;
 using SP.Engine.Runtime.Protocol;
@@ -7,109 +8,32 @@ using SP.Engine.Runtime.Serialization;
 
 namespace SP.Engine.Runtime.Message
 {
-    public class UdpMessage : IMessage
+    public class UdpMessage : BaseMessage<UdpHeader>
     {
-        private UdpHeader _header;
-        private ArraySegment<byte> _buffer;
-
-        public long SequenceNumber => _header.SequenceNumber;
-        public EProtocolId ProtocolId => _header.ProtocolId;
-        public int Length => _buffer.Count;
-        public UdpHeader Header => _header;
-        public ArraySegment<byte> Payload => _buffer;
-        private bool IsEncrypted => _header.Flags.HasFlag(EHeaderFlags.Encrypted);
-        private bool IsCompressed => _header.Flags.HasFlag(EHeaderFlags.Compressed);
-
-        private byte[] GetBody()
-            => _buffer.AsSpan(UdpHeader.HeaderSize, _buffer.Count - UdpHeader.HeaderSize).ToArray();
-        
         public UdpMessage()
         {
             
         }
         
         public UdpMessage(UdpHeader header, ArraySegment<byte> payload)
+            : base(header, payload)
         {
-            _header = header;
-            _buffer = payload;
         }
 
         public void SetSequenceNumber(long sequenceNumber)
         {
-            _header = new UdpHeaderBuilder()
-                .From(_header)
+            Header = new UdpHeaderBuilder()
+                .From(Header)
                 .WithSequenceNumber(sequenceNumber)
                 .Build();
         }
-
+        
         public void SetPeerId(EPeerId peerId)
         {
-            _header = new UdpHeaderBuilder()
-                .From(_header)
+            Header = new UdpHeaderBuilder()
+                .From(Header)
                 .WithPeerId(peerId)
                 .Build();
-        }
-
-        public void Pack(IProtocolData data, byte[] sharedKey, PackOptions options)
-        {
-            var body = BinaryConverter.SerializeObject(data, data.GetType());
-            if (body == null || body.Length == 0)
-                throw new InvalidOperationException($"Failed to deserialize message: {data.ProtocolId}");
-
-            var flags = EHeaderFlags.None;
-            if (options?.UseCompression ?? false)
-            {
-                var compressed = Compressor.Compress(body);
-                var ratio = (double)compressed.Length / body.Length;
-                if (ratio < options.CompressionThreshold)
-                {
-                    body = compressed;
-                    flags |= EHeaderFlags.Compressed;
-                }
-            }
-
-            if (options?.UseEncryption ?? false)
-            {
-                if (sharedKey == null)
-                    throw new InvalidOperationException("SharedKey cannot be null when encryption is enabled.");
-                body = Encryptor.Encrypt(body, sharedKey);
-                flags |= EHeaderFlags.Encrypted;
-            }
-            
-            var header = new UdpHeaderBuilder()
-                .From(_header)
-                .WithProtocolId(data.ProtocolId)
-                .WithPayloadLength(body.Length)
-                .AddFlag(flags)
-                .Build();
-            _header = header;
-            
-            var buffer = new byte[UdpHeader.HeaderSize + body.Length];
-            header.WriteTo(buffer.AsSpan(0, UdpHeader.HeaderSize));
-            body.CopyTo(buffer.AsSpan(UdpHeader.HeaderSize));
-            _buffer = new ArraySegment<byte>(buffer, 0, buffer.Length);
-        }
-
-        public IProtocolData Unpack(Type type, byte[] sharedKey)
-        {
-            var body = GetBody();
-            if (IsEncrypted)
-            {
-                if (sharedKey == null)
-                    throw new InvalidOperationException("SharedKey cannot be null.");
-                body = Encryptor.Decrypt(body, sharedKey);
-            }
-
-            if (IsCompressed)
-                body = Compressor.Decompress(body);
-            return BinaryConverter.DeserializeObject(body, type) as IProtocolData;
-        }
-
-        public void WriteTo(Span<byte> buffer)
-        {
-            if (buffer.Length > _buffer.Count)
-                throw new ArgumentException("Buffer too small.", nameof(buffer));
-            _buffer.AsSpan().CopyTo(buffer);
         }
 
         public IEnumerable<UdpFragment> ToSplit(ushort mtu, uint fragmentId)
@@ -123,7 +47,7 @@ namespace SP.Engine.Runtime.Message
             
             var totalCount = (byte)Math.Ceiling(body.Length / (float)maxSize);
             var header = new UdpHeaderBuilder()
-                .From(_header)
+                .From(Header)
                 .AddFlag(EHeaderFlags.Fragmentation)
                 .Build();
       
@@ -136,6 +60,28 @@ namespace SP.Engine.Runtime.Message
                     new UdpFragmentHeader(fragmentId, i, totalCount, size),
                     new ArraySegment<byte>(body, offset, size));
             }
+        }
+        
+        protected override byte[] GetBody()
+            => Payload.AsSpan(UdpHeader.HeaderSize, Payload.Count - UdpHeader.HeaderSize).ToArray();
+
+        protected override UdpHeader CreateHeader(EProtocolId protocolId, EHeaderFlags flags, int payloadLength)
+        {
+            return new UdpHeaderBuilder()
+                .From(Header)
+                .WithProtocolId(protocolId)
+                .WithPayloadLength(payloadLength)
+                .AddFlag(flags)
+                .Build();
+        }
+
+        protected override ArraySegment<byte> BuildPayload(UdpHeader header, byte[] body)
+        {
+            var length = UdpHeader.HeaderSize + body.Length;
+            var payload = ArrayPool<byte>.Shared.Rent(length);
+            header.WriteTo(payload.AsSpan(0, UdpHeader.HeaderSize));
+            body.CopyTo(payload.AsSpan(UdpHeader.HeaderSize, body.Length));
+            return new ArraySegment<byte>(payload, 0, length);
         }
     }
 }

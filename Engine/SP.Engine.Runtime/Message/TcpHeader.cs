@@ -3,13 +3,19 @@ using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Runtime.Message
 {
-    public readonly struct TcpHeader
+    public readonly struct TcpHeader : IHeader
     {
+        private const int SequenceNumberSize = sizeof(long);
+        private const int ProtocolIdSize = sizeof(ushort);
+        private const int FlagsSize = sizeof(byte);
+        private const int PayloadLengthSize = sizeof(int);
+        
         private const int SequenceNumberOffset = 0;
-        private const int ProtocolIdOffset = SequenceNumberOffset + sizeof(long);
-        private const int FlagsOffset = ProtocolIdOffset + sizeof(ushort);
-        private const int PayloadLengthOffset = FlagsOffset + sizeof(byte);
-        public const int HeaderSize = PayloadLengthOffset + sizeof(int);
+        private const int ProtocolIdOffset = SequenceNumberOffset + SequenceNumberSize;
+        private const int FlagsOffset = ProtocolIdOffset + ProtocolIdSize;
+        private const int PayloadLengthOffset = FlagsOffset + FlagsSize;
+        
+        public const int HeaderSize = SequenceNumberSize + ProtocolIdSize + FlagsSize + PayloadLengthSize;
         
         public long SequenceNumber { get; }
         public EProtocolId ProtocolId { get; }

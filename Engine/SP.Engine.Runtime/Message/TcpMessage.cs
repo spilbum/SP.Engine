@@ -1,105 +1,49 @@
 ﻿using System;
-using SP.Engine.Runtime.Compression;
+using System.Buffers;
 using SP.Engine.Runtime.Protocol;
-using SP.Engine.Runtime.Security;
-using SP.Engine.Runtime.Serialization;
 
 namespace SP.Engine.Runtime.Message
 {
-    public class TcpMessage : IMessage
+    public class TcpMessage : BaseMessage<TcpHeader>
     {
-        private TcpHeader _header;
-        private ArraySegment<byte> _payload;
-
-        public long SequenceNumber => _header.SequenceNumber;
-        public EProtocolId ProtocolId => _header.ProtocolId;
-        public int Length => _payload.Count;
-        private bool IsEncrypted => _header.Flags.HasFlag(EHeaderFlags.Encrypted);
-        private bool IsCompressed => _header.Flags.HasFlag(EHeaderFlags.Compressed);
-        private byte[] Body => _payload.AsSpan(TcpHeader.HeaderSize, _payload.Count - TcpHeader.HeaderSize).ToArray();
         public TcpMessage()
         {
             
         }
 
         public TcpMessage(TcpHeader header, ArraySegment<byte> payload)
+            : base(header, payload)
         {
-            _header = header;
-            _payload = payload;
         }
         
         public void SetSequenceNumber(long sequenceNumber)
         {
-            _header = new TcpHeaderBuilder()
-                .From(_header)
+            Header = new TcpHeaderBuilder()
+                .From(Header)
                 .WithSequenceNumber(sequenceNumber)
                 .Build();
         }
+        
+        protected override byte[] GetBody()
+            => Payload.AsSpan(TcpHeader.HeaderSize, Payload.Count - TcpHeader.HeaderSize).ToArray();
 
-        public void Pack(IProtocolData data, byte[] sharedKey, PackOptions options)
+        protected override TcpHeader CreateHeader(EProtocolId protocolId, EHeaderFlags flags, int payloadLength)
         {
-            var body = BinaryConverter.SerializeObject(data, data.GetType());
-            if (body == null || body.Length == 0)
-                throw new InvalidOperationException($"Failed to serialize protocol of type {data.GetType().FullName}");
-
-            var flags = EHeaderFlags.None;
-            if (options?.UseCompression ?? false)
-            {
-                var compressed = Compressor.Compress(body);
-                var ratio = (double)compressed.Length / body.Length;
-                
-                if (ratio < options.CompressionThreshold)
-                {
-                    body = compressed;
-                    flags |= EHeaderFlags.Compressed;
-                }
-            }
-
-            if (options?.UseEncryption ?? false)
-            {
-                if (sharedKey == null)
-                    throw new InvalidOperationException("SharedKey cannot be null when encryption is enabled.");
-
-                body = Encryptor.Encrypt(body, sharedKey);
-                flags |= EHeaderFlags.Encrypted;
-            }
-
-            var header = new TcpHeaderBuilder()
-                .From(_header)
-                .WithProtocolId(data.ProtocolId)
-                .WithPayloadLength(body.Length)
+            return new TcpHeaderBuilder()
+                .From(Header)
+                .WithProtocolId(protocolId)
+                .WithPayloadLength(payloadLength)
                 .AddFlag(flags)
                 .Build();
-            
-            _header = header;
-            
-            var buffer = new byte[TcpHeader.HeaderSize + body.Length];
-            header.WriteTo(buffer.AsSpan(0, TcpHeader.HeaderSize));
-            body.CopyTo(buffer.AsSpan(TcpHeader.HeaderSize));
-            
-            _payload = new ArraySegment<byte>(buffer, 0, buffer.Length);
         }
-
-        public IProtocolData Unpack(Type type, byte[] sharedKey)
+        
+        protected override ArraySegment<byte> BuildPayload(TcpHeader header, byte[] body)
         {
-            var body = Body;
-            if (IsEncrypted)
-            {
-                if (sharedKey == null)
-                    throw new InvalidOperationException("SharedKey cannot be null.");
-                body = Encryptor.Decrypt(body, sharedKey);
-            }
-
-            if (IsCompressed)
-                body = Compressor.Decompress(body);
-            return BinaryConverter.DeserializeObject(body, type) as IProtocolData;
-        }
-
-        public void WriteTo(Span<byte> buffer)
-        {
-            if (buffer.Length < _payload.Count)
-                throw new ArgumentException("Buffer too small.", nameof(buffer));
-            _payload.AsSpan().CopyTo(buffer);
+            var length = TcpHeader.HeaderSize + body.Length;
+            var payload = ArrayPool<byte>.Shared.Rent(length);
+            header.WriteTo(payload.AsSpan(0, TcpHeader.HeaderSize));
+            body.CopyTo(payload.AsSpan(TcpHeader.HeaderSize, body.Length));
+            return new ArraySegment<byte>(payload, 0, length);
         }
     }
 }

@@ -8,22 +8,12 @@ using SP.Common.Logging;
 using SP.Engine.Client;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Message;
+using SP.Engine.Runtime.Protocol;
 using SP.Engine.Server.Configuration;
 using SP.Engine.Server.ProtocolHandler;
 
 namespace SP.Engine.Server
 {
-    public static class ExtenstionMethod
-    {
-
-        public static ArraySegment<byte> ToSegment(this TcpMessage message)
-        {
-            var buffer = new byte[message.Length];
-            message.WriteTo(buffer.AsSpan());
-            return new ArraySegment<byte>(buffer);
-        }
-    }
-    
     public interface IClientSession : ILogContext, IHandleContext
     {
         string SessionId { get; }
@@ -151,8 +141,9 @@ namespace SP.Engine.Server
 
         void IClientSession.ProcessBuffer(byte[] buffer, int offset, int length)
         {
-            _receiveBuffer.Write(buffer.AsSpan(offset, length));
-
+            var span = buffer.AsSpan(offset, length);
+            _receiveBuffer.Write(span);
+            
             try
             {
                 foreach (var message in Filter())
@@ -163,7 +154,7 @@ namespace SP.Engine.Server
                 Logger.Error(e);
             }
             finally
-            {
+            {  
                 if (_receiveBuffer.RemainSize < 1024)
                     _receiveBuffer.Trim();
             }
