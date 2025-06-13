@@ -52,11 +52,7 @@ namespace SP.Engine.Server
         }
 
         public bool TrySend(TcpMessage message)
-        {
-            var buffer = new byte[message.Length];
-            message.WriteTo(buffer.AsSpan());
-            return TrySend(new ArraySegment<byte>(buffer));
-        }
+            => TrySend(message.Payload);
 
         private void StartReceive(SocketAsyncEventArgs e)
         {

@@ -32,7 +32,7 @@ namespace SP.Engine.Client.ProtocolHandler
             if (protocol.UseEncryption)
             {
                 session.PackOptions.UseEncryption = true;
-                session.DeriveSharedKey(protocol.ServerPublicKey);
+                session.DiffieHelman.DeriveSharedKey(protocol.ServerPublicKey);
             }
 
             if (protocol.UseCompression)

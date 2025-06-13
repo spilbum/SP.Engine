@@ -1,14 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using SP.Common.Buffer;
 using SP.Common.Logging;
-using SP.Engine.Client;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Message;
-using SP.Engine.Runtime.Protocol;
 using SP.Engine.Server.Configuration;
 using SP.Engine.Server.ProtocolHandler;
 
@@ -22,7 +19,6 @@ namespace SP.Engine.Server
         IEngineConfig Config { get; }
         IEngine Engine { get; }
         TcpNetworkSession TcpSession { get; }
-        UdpNetworkSession UdpSession { get; }
 
         bool Send(IMessage message);
         void EnsureUdpSocket(Socket socket, IPEndPoint remoteEndPoint, ushort mtu);
@@ -53,7 +49,7 @@ namespace SP.Engine.Server
         public string RejectDetailReason { get; private set; }
 
         public TcpNetworkSession TcpSession { get; private set; }
-        public UdpNetworkSession UdpSession { get; private set; }
+        public UdpSocket UdpSocket { get; private set; }
 
         protected BaseClientSession()
         {
@@ -96,7 +92,7 @@ namespace SP.Engine.Server
                 }
                 case UdpMessage udpMessage:
                 {
-                    if (UdpSession.TrySend(udpMessage))
+                    if (UdpSocket.TrySend(udpMessage))
                         return false;
 
                     break;
@@ -111,14 +107,14 @@ namespace SP.Engine.Server
         {
             lock (this)
             {
-                if (UdpSession == null)
+                if (UdpSocket == null)
                 {
-                    UdpSession = new UdpNetworkSession(socket, remoteEndPoint, mtu);
-                    UdpSession.Attach(this);
+                    UdpSocket = new UdpSocket(socket, remoteEndPoint, mtu);
+                    UdpSocket.Attach(this);
                 }
                 else
                 {
-                    UdpSession.UpdateRemoteEndPoint(remoteEndPoint);
+                    UdpSocket.UpdateRemoteEndPoint(remoteEndPoint);
                 }
             }
         }
@@ -177,11 +173,12 @@ namespace SP.Engine.Server
                     Close(ECloseReason.ProtocolError);
                     yield break;
                 }
-                
-                if (_receiveBuffer.RemainSize < TcpHeader.HeaderSize + header.PayloadLength)
+
+                var payloadLength = header.Length + header.PayloadLength;
+                if (_receiveBuffer.RemainSize < payloadLength)
                     yield break;
 
-                var payload = _receiveBuffer.ReadBytes(TcpHeader.HeaderSize + header.PayloadLength);
+                var payload = _receiveBuffer.ReadBytes(payloadLength);
                 var message = new TcpMessage(header, new ArraySegment<byte>(payload));
                 yield return message;
             }
@@ -200,7 +197,7 @@ namespace SP.Engine.Server
         public virtual void Close(ECloseReason reason)
         {
             TcpSession.Close(reason);
-            UdpSession.Close(reason);
+            UdpSocket.Close(reason);
         }
 
         public virtual void Close()

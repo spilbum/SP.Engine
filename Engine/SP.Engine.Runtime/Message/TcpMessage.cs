@@ -24,9 +24,6 @@ namespace SP.Engine.Runtime.Message
                 .Build();
         }
         
-        protected override byte[] GetBody()
-            => Payload.AsSpan(TcpHeader.HeaderSize, Payload.Count - TcpHeader.HeaderSize).ToArray();
-
         protected override TcpHeader CreateHeader(EProtocolId protocolId, EHeaderFlags flags, int payloadLength)
         {
             return new TcpHeaderBuilder()
@@ -35,15 +32,6 @@ namespace SP.Engine.Runtime.Message
                 .WithPayloadLength(payloadLength)
                 .AddFlag(flags)
                 .Build();
-        }
-        
-        protected override ArraySegment<byte> BuildPayload(TcpHeader header, byte[] body)
-        {
-            var length = TcpHeader.HeaderSize + body.Length;
-            var payload = ArrayPool<byte>.Shared.Rent(length);
-            header.WriteTo(payload.AsSpan(0, TcpHeader.HeaderSize));
-            body.CopyTo(payload.AsSpan(TcpHeader.HeaderSize, body.Length));
-            return new ArraySegment<byte>(payload, 0, length);
         }
     }
 }

@@ -24,6 +24,7 @@ namespace SP.Engine.Runtime.Message
         public EProtocolId ProtocolId  { get; }
         public EHeaderFlags Flags { get; }
         public int PayloadLength { get; }
+        public int Length => HeaderSize;
         public bool IsFragmentation => Flags.HasFlag(EHeaderFlags.Fragmentation);
 
         public UdpHeader(long sequenceNumber, EPeerId peerId, EProtocolId protocolId, EHeaderFlags flags, int payloadLength)
@@ -42,6 +43,11 @@ namespace SP.Engine.Runtime.Message
             span.WriteUInt16(ProtocolIdOffset, (ushort)ProtocolId);
             span[FlagsOffset] = (byte)Flags;
             span.WriteInt32(PayloadLengthOffset, PayloadLength);
+        }
+
+        public override string ToString()
+        {
+            return $"sequenceNumber={SequenceNumber}, peerId={PeerId}, protocolId={ProtocolId}, flags={Flags}, payloadLength={PayloadLength}";
         }
 
         public static bool TryParse(ReadOnlySpan<byte> span, out UdpHeader header)

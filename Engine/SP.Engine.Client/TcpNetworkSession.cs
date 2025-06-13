@@ -15,16 +15,16 @@ namespace SP.Engine.Client
         private Socket _socket;
         private SocketAsyncEventArgs _receiveEventArgs; 
         private SocketAsyncEventArgs _sendEventArgs; 
-        private readonly ConcurrentBatchQueue<PooledSegment> _sendingQueue;
-        private readonly List<PooledSegment> _sendingItems = new List<PooledSegment>();
+        private readonly ConcurrentBatchQueue<ArraySegment<byte>> _sendQueue;
+        private readonly List<ArraySegment<byte>> _sendingItems = new List<ArraySegment<byte>>();
         private readonly List<ArraySegment<byte>> _sendBufferList = new List<ArraySegment<byte>>();
 
         private byte[] _receiveBuffer;
         private int _isSending;
         private bool _isConnecting;
 
-        private int _receiveBufferSize = 64 * 1096;
-        private int _sendingQueueSize = 256;
+        private int _receiveBufferSize = 64 * 1024;
+        private int _sendQueueCapacity = 256;
 
         public event EventHandler Opened;
         public event EventHandler Closed;
@@ -36,7 +36,7 @@ namespace SP.Engine.Client
 
         public TcpNetworkSession()
         {
-            _sendingQueue = new ConcurrentBatchQueue<PooledSegment>(_sendingQueueSize);
+            _sendQueue = new ConcurrentBatchQueue<ArraySegment<byte>>(_sendQueueCapacity);
         }
 
         public int ReceiveBufferSize
@@ -53,18 +53,18 @@ namespace SP.Engine.Client
             }
         }
 
-        public int SendingQueueSize
+        public int SendQueueCapacity
         {
-            get => _sendingQueueSize;
+            get => _sendQueueCapacity;
             set
             {
                 if (IsConnected)
-                    throw new InvalidOperationException("Cannot change send queue size while connected.");
+                    throw new InvalidOperationException("Cannot change send queue capacity while connected.");
                 if (value <= 0)
                     throw new ArgumentOutOfRangeException(nameof(value), "Queue size must be greater than zero.");
 
-                _sendingQueueSize = value;
-                _sendingQueue.Resize(_sendingQueueSize);
+                _sendQueueCapacity = value;
+                _sendQueue.Resize(_sendQueueCapacity);
             }
         }
         
@@ -126,7 +126,7 @@ namespace SP.Engine.Client
             _receiveEventArgs = e;
 
             OnConnected();
-            StartReceiving();
+            StartReceive(e);
         }
 
         public void Close()
@@ -158,14 +158,10 @@ namespace SP.Engine.Client
             return isOnClosed;
         }
 
-        private void StartReceiving()
+        private void StartReceive(SocketAsyncEventArgs e)
         {
             var socket = _socket;
             if (socket == null)
-                return;
-
-            var e = _receiveEventArgs;
-            if (e == null)
                 return;
 
             try
@@ -196,7 +192,7 @@ namespace SP.Engine.Client
                 }
 
                 OnDataReceived(e.Buffer, e.Offset, e.BytesTransferred);
-                StartReceiving();
+                StartReceive(e);
             }
             else
             {
@@ -214,8 +210,7 @@ namespace SP.Engine.Client
             if (!IsConnected)
                 return false;
             
-            var pooled = PooledSegment.FromMessage(message);
-            var enqueued = _sendingQueue.Enqueue(pooled);
+            var enqueued = _sendQueue.Enqueue(message.Payload);
             if (!enqueued)
                 return false;
 
@@ -228,7 +223,8 @@ namespace SP.Engine.Client
         
         private void DequeueSend()
         {
-            if (!_sendingQueue.TryDequeue(_sendingItems))
+            _sendQueue.DequeueAll(_sendingItems);
+            if (_sendingItems.Count == 0)
             {
                 _isSending = 0;
                 return;
@@ -237,7 +233,7 @@ namespace SP.Engine.Client
             Send(_sendingItems);
         }
 
-        private void Send(List<PooledSegment> items)
+        private void Send(List<ArraySegment<byte>> items)
         {
             if (_sendEventArgs == null)
             {
@@ -249,8 +245,8 @@ namespace SP.Engine.Client
             {
                 _sendEventArgs.SetBuffer(null, 0, 0);
                 _sendBufferList.Clear();
-                foreach (var pooled in items)
-                    _sendBufferList.Add(pooled.Segment);
+                foreach (var segment in items)
+                    _sendBufferList.Add(segment);
 
                 _sendEventArgs.BufferList = _sendBufferList;
                 
@@ -262,9 +258,6 @@ namespace SP.Engine.Client
                 OnError(new Exception(
                     $"Failed to send. Error: {ex.Message}, BufferList Count: {_sendEventArgs.BufferList?.Count ?? 0}",
                     ex));
-                
-                foreach (var pooled in items)
-                    pooled.Dispose();
                 
                 if (EnsureSocketClosed() && !IsIgnorableException(ex))
                     OnError(ex);
@@ -290,14 +283,12 @@ namespace SP.Engine.Client
 
         private void OnSendCompleted()
         {
-            foreach (var pooled in _sendingItems)
-                pooled.Dispose();
-            
             _sendingItems.Clear();
             
-            if (!_sendingQueue.TryDequeue(_sendingItems))
+            _sendQueue.DequeueAll(_sendingItems);
+            if (_sendingItems.Count == 0)
             {
-                _isSending = 0;
+                Interlocked.Exchange(ref _isSending, 0);
                 return;
             }
             

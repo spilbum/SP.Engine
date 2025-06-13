@@ -113,7 +113,7 @@ namespace SP.Engine.Server.Connector
         {
             try
             {
-                _netPeer?.Open(Host, Port);
+                _netPeer?.Connect(Host, Port);
             }
             catch (Exception ex)
             {
@@ -174,7 +174,7 @@ namespace SP.Engine.Server.Connector
                 case ENetPeerState.Closing:
                     break;
                 case ENetPeerState.Closed:
-                    netPeer.Open(Host, Port);
+                    netPeer.Connect(Host, Port);
                     break;
                 default:
                     throw new ArgumentOutOfRangeException();
@@ -190,7 +190,7 @@ namespace SP.Engine.Server.Connector
                 if (invoker == null)
                     throw new Exception("Unknown protocol: " + message.ProtocolId);
                 
-                invoker.Invoke(this, message, _netPeer.DhSharedKey);
+                invoker.Invoke(this, message, _netPeer.DiffieHelman.SharedKey);
             }
             catch (Exception ex)
             {

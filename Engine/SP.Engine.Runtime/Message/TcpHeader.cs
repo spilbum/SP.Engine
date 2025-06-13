@@ -21,6 +21,7 @@ namespace SP.Engine.Runtime.Message
         public EProtocolId ProtocolId { get; }
         public EHeaderFlags Flags { get; }
         public int PayloadLength { get; }
+        public int Length => HeaderSize;
 
         public TcpHeader(long sequenceNumber, EProtocolId protocolId, EHeaderFlags flags, int payloadLength)
         {

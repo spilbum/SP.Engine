@@ -22,9 +22,9 @@ namespace SP.Engine.Client
         private Socket _socket;
         private IPEndPoint _remoteEndPoint;
         private readonly SocketAsyncEventArgs _receiveEventArgs = new SocketAsyncEventArgs();
-        private readonly SocketAsyncEventArgs _sendEventArgs = new SocketAsyncEventArgs();
-        private readonly PostList<PooledSegment> _sendingItems = new PostList<PooledSegment>();
-        private ConcurrentBatchQueue<PooledSegment> _sendingQueue;
+        private SocketAsyncEventArgs _sendEventArgs;
+        private readonly PostList<ArraySegment<byte>> _sendingItems = new PostList<ArraySegment<byte>>();
+        private ConcurrentBatchQueue<ArraySegment<byte>> _sendQueue;
         private byte[] _receiveBuffer;
         private int _isSending;
         private NetPeer _netPeer;
@@ -44,7 +44,7 @@ namespace SP.Engine.Client
                 _netPeer = netPeer;
                 _mtu = mtu;
                 _remoteEndPoint = new IPEndPoint(IPAddress.Parse(ip), port);
-                _sendingQueue = new ConcurrentBatchQueue<PooledSegment>(300);
+                _sendQueue = new ConcurrentBatchQueue<ArraySegment<byte>>(300);
                 _receiveBuffer = new byte[ushort.MaxValue];
             
                 _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
@@ -54,8 +54,6 @@ namespace SP.Engine.Client
                 _receiveEventArgs.RemoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
                 _receiveEventArgs.Completed += OnReceiveCompleted;
                 _socket.ReceiveFromAsync(_receiveEventArgs);
-            
-                _sendEventArgs.Completed += OnSendCompleted;
                 return true;
             }
             catch (Exception e)
@@ -114,27 +112,65 @@ namespace SP.Engine.Client
         public bool Send(UdpMessage message)
         {
             var items = ToSegments(message);
-            if (!_sendingQueue.Enqueue(items))
+            if (!_sendQueue.Enqueue(items))
                 return false;
+            
+            if (Interlocked.CompareExchange(ref _isSending, 1, 0) != 0)
+                return true;
             
             DequeueSend();
             return true;
         }
         
-        private List<PooledSegment> ToSegments(UdpMessage message)
+        private void DequeueSend()
         {
-            var segments = new List<PooledSegment>();
+            _sendQueue.DequeueAll(_sendingItems);
+            if (_sendingItems.Count == 0)
+            {
+                _isSending = 0;
+                return;
+            }
+
+            Send(_sendingItems);
+        }
+        
+        private List<ArraySegment<byte>> ToSegments(UdpMessage message)
+        {
+            var segments = new List<ArraySegment<byte>>();
             if (message.Length <= _mtu)
             {
-                segments.Add(PooledSegment.FromMessage(message));
+                segments.Add(message.Payload);
                 return segments;
             }
 
             var fragmentId = (uint)Interlocked.Increment(ref _nextFragmentId);
-            segments.AddRange(message.ToSplit(_mtu, fragmentId).Select(PooledSegment.FromFragment));
+            segments.AddRange(message.ToSplit(_mtu, fragmentId).Select(f => f.Serialize()));
             return segments;
         }
 
+        private void Send(PostList<ArraySegment<byte>> items)
+        {
+            if (_sendEventArgs == null)
+            {
+                _sendEventArgs = new SocketAsyncEventArgs();
+                _sendEventArgs.Completed += OnSendCompleted;
+            }
+
+            try
+            {
+                var segment = items[items.Position];
+                _sendEventArgs.SetBuffer(segment.Array, segment.Offset, segment.Count);
+                _sendEventArgs.RemoteEndPoint = _remoteEndPoint;
+                
+                if (!_socket.SendAsync(_sendEventArgs))
+                    OnSendCompleted(this, _sendEventArgs);
+            }
+            catch (Exception e)
+            {
+                OnError(e);
+            }
+        }
+        
         private void OnSendCompleted(object sender, SocketAsyncEventArgs e)
         {
             if (e.SocketError != SocketError.Success || e.BytesTransferred <= 0)
@@ -142,17 +178,14 @@ namespace SP.Engine.Client
                 OnError(new SocketException((int)e.SocketError));
                 return;
             }
-
-            var pooled = _sendingItems[_sendingItems.Position];
-            pooled.Dispose();
-
+            
             _sendingItems.Position++;
             if (_sendingItems.Position < _sendingItems.Count)
             {
                 Send(_sendingItems);
                 return;
             }
-            
+
             OnSendCompleted();
         }
 
@@ -161,46 +194,17 @@ namespace SP.Engine.Client
             _sendingItems.Clear();
             _sendingItems.Position = 0;
             
-            if (!_sendingQueue.TryDequeue(_sendingItems))
+            _sendQueue.DequeueAll(_sendingItems);
+            if (_sendingItems.Count == 0)
             {
                 Interlocked.Exchange(ref _isSending, 0);
                 return;
             }
-            
+
             Send(_sendingItems);
         }
 
-        private void Send(PostList<PooledSegment> items)
-        {
-            if (items.Position >= items.Count)
-            {
-                Interlocked.Exchange(ref _isSending, 0);    
-                DequeueSend();
-                return;
-            }
-            
-            var segment = items[items.Position].Segment;
-            _sendEventArgs.SetBuffer(segment.Array, segment.Offset, segment.Count);
-            _sendEventArgs.RemoteEndPoint = _remoteEndPoint;
 
-            if (!_socket.SendAsync(_sendEventArgs))
-                OnSendCompleted(this, _sendEventArgs);
-        }
-
-        private void DequeueSend()
-        {
-            if (Interlocked.CompareExchange(ref _isSending, 1, 0) != 0)
-                return;
-
-            if (!_sendingQueue.TryDequeue(_sendingItems))
-            {
-                _isSending = 0;
-                return;
-            }
-
-            _sendingItems.Position = 0;
-            Send(_sendingItems);
-        }
 
         private void OnReceiveCompleted(object sender, SocketAsyncEventArgs e)
         {

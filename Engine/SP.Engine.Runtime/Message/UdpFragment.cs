@@ -22,6 +22,15 @@ namespace SP.Engine.Runtime.Message
             _payload = payload;
         }
 
+        public ArraySegment<byte> Serialize()
+        {
+            var buffer = new byte[UdpHeader.HeaderSize + UdpFragmentHeader.HeaderSize + _payload.Count];
+            _udpHeader.WriteTo(buffer.AsSpan(0, UdpHeader.HeaderSize));
+            _udpFragmentHeader.WriteTo(buffer.AsSpan(UdpHeader.HeaderSize, UdpFragmentHeader.HeaderSize));
+            _payload.CopyTo(buffer, UdpHeader.HeaderSize + UdpFragmentHeader.HeaderSize);
+            return new ArraySegment<byte>(buffer);
+        }
+
         public void WriteTo(Span<byte> buffer)
         {
             if (buffer.Length < Length)

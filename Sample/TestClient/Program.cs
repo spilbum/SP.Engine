@@ -1,10 +1,12 @@
 ﻿using System.Text;
+using System.Timers;
 using Common;
 using SP.Common;
 using SP.Common.Logging;
 using SP.Engine.Client;
 using SP.Engine.Runtime.Handler;
 using SP.Engine.Runtime.Protocol;
+using Timer = System.Threading.Timer;
 
 namespace TestClient
 {
@@ -25,7 +27,11 @@ namespace TestClient
             _logger = logger;
             _netPeer = new NetPeer(logger);
             _netPeer.ReconnectionIntervalSec = 3;
+            _netPeer.MaxConnectionAttempts = 3;
+            _netPeer.IsEnableAutoSendPing = true;
             _netPeer.AutoSendPingIntervalSec = 1;
+            _netPeer.MaxAllowedLength = 4096;
+            _netPeer.UdpMtu = 1400;
             _netPeer.Connected += OnConnected;
             _netPeer.Disconnected += OnDisconnected;
             _netPeer.Error += OnError;
@@ -35,7 +41,7 @@ namespace TestClient
             if (!ProtocolMethodInvoker.LoadInvokers(GetType()).All(invoker => _invokerDict.TryAdd(invoker.ProtocolId, invoker)))
                 return false;
             
-            _netPeer.Open(ip, port);
+            _netPeer.Connect(ip, port);
             return true;
         }
 
@@ -66,7 +72,7 @@ namespace TestClient
         {
             var message = e.Message;
             if (_invokerDict.TryGetValue(message.ProtocolId, out var invoker))
-                invoker.Invoke(this, message, _netPeer?.DhSharedKey);
+                invoker.Invoke(this, message, _netPeer?.DiffieHelman.SharedKey);
         }
 
         private void OnError(object? sender, ErrorEventArgs e)
@@ -82,10 +88,10 @@ namespace TestClient
         {
         }
 
-        [ProtocolMethod(Protocol.S2C.Echo)]
-        private void OnEchoMessage(ProtocolData.S2C.Echo protocol)
+        [ProtocolMethod(Protocol.S2C.EchoAck)]
+        private void OnEchoAck(ProtocolData.S2C.EchoAck protocol)
         {
-            _logger?.Info("Message received: {0}, bytes={1}, time={2}", protocol.Str, protocol.Bytes?.Length, protocol.Time.ToString("yyyy-MM-dd HH:mm:ss.fff"));
+            _logger?.Info("Message received: {0}, bytes={1}, sentTime={2}", protocol.Str, protocol.Bytes?.Length, protocol.SentTime);
         }
     }
     
@@ -117,12 +123,28 @@ namespace TestClient
                     switch (splits[0])
                     {
                         case "echo":
-                            for (var i = 0; i < 5; i++) NetPeerManager.Instance.Send(new ProtocolData.C2S.Echo { Str = splits[1], Bytes = Encoding.UTF8.GetBytes(splits[1]), Time = DateTime.Now});
+                            var message = splits[1];
+                            for (var i = 0; i < 5; i++) NetPeerManager.Instance.Send(new ProtocolData.C2S.EchoReq { Str = message, Bytes = Encoding.UTF8.GetBytes(message), SendTime = DateTime.UtcNow});
                             break;
-                        case "test":
+                        case "fragment":
                         {
                             var bytes = GenerateRandomBytes(int.Parse(splits[1]));
-                            NetPeerManager.Instance.Send(new ProtocolData.C2S.Echo { Str = "test", Bytes = bytes, Time = DateTime.Now });
+                            NetPeerManager.Instance.Send(new ProtocolData.C2S.EchoReq { Str = "fragment", Bytes = bytes, SendTime = DateTime.UtcNow });
+                            break;
+                        }
+                        case "test":
+                        {
+                            var cmd = splits[1];
+                            switch (cmd)
+                            {
+                                case "start":
+                                    _timer = new Timer(TestSend, null, TimeSpan.FromMilliseconds(16), TimeSpan.FromMilliseconds(16));
+                                    break;
+                                case "stop":
+                                    _timer?.Dispose();
+                                    break;
+                            }
+                            
                             break;
                         }
                         case "exit":
@@ -147,6 +169,18 @@ namespace TestClient
             var buffer = new byte[length];
             Random.NextBytes(buffer);
             return buffer;
+        }
+        
+        private static Timer? _timer;
+
+        private static void TestSend(object? state)
+        {
+            NetPeerManager.Instance.Send(new ProtocolData.C2S.EchoReq
+            {
+                Str = "test",
+                Bytes = "test"u8.ToArray(),
+                SendTime = DateTime.UtcNow
+            });
         }
     }
 }

@@ -8,6 +8,7 @@ namespace SP.Engine.Runtime.Message
         long SequenceNumber { get; }
         EProtocolId ProtocolId { get; }
         EHeaderFlags Flags { get; }
+        int Length { get; }
         void WriteTo(Span<byte> buffer);
     }
 }

@@ -121,12 +121,12 @@ namespace SP.Engine.Client
             return true;
         }
 
-        public bool TryDequeue(List<T> items)
+        public void DequeueAll(List<T> items)
         {
             var entity = _entity;
             var array = _entity.Array;
             if (entity.Count == 0 || array == null)
-                return false;
+                return;
 
             if (_backup.Array.Length != array.Length)
                 _backup = new Entity { Array = new T[array.Length] };
@@ -145,7 +145,6 @@ namespace SP.Engine.Client
 
             entity.Count = 0;
             Interlocked.Exchange(ref _count, 0);
-            return true;
         }
 
         /// <summary>

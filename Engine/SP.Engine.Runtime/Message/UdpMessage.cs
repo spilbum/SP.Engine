@@ -36,7 +36,7 @@ namespace SP.Engine.Runtime.Message
                 .Build();
         }
 
-        public IEnumerable<UdpFragment> ToSplit(ushort mtu, uint fragmentId)
+        public List<UdpFragment> ToSplit(ushort mtu, uint fragmentId)
         {
             const int overhead = UdpHeader.HeaderSize + UdpFragmentHeader.HeaderSize;
             if (mtu <= overhead)
@@ -51,20 +51,19 @@ namespace SP.Engine.Runtime.Message
                 .AddFlag(EHeaderFlags.Fragmentation)
                 .Build();
       
+            var fragments = new List<UdpFragment>();
             for (byte i = 0; i < totalCount; i++)
             {
                 var offset = i * maxSize;
                 var size = (ushort)Math.Min(maxSize, body.Length - offset);
-                yield return new UdpFragment(
+                fragments.Add(new UdpFragment(
                     header,
                     new UdpFragmentHeader(fragmentId, i, totalCount, size),
-                    new ArraySegment<byte>(body, offset, size));
+                    new ArraySegment<byte>(body, offset, size)));
             }
+            return fragments;
         }
         
-        protected override byte[] GetBody()
-            => Payload.AsSpan(UdpHeader.HeaderSize, Payload.Count - UdpHeader.HeaderSize).ToArray();
-
         protected override UdpHeader CreateHeader(EProtocolId protocolId, EHeaderFlags flags, int payloadLength)
         {
             return new UdpHeaderBuilder()
@@ -73,15 +72,6 @@ namespace SP.Engine.Runtime.Message
                 .WithPayloadLength(payloadLength)
                 .AddFlag(flags)
                 .Build();
-        }
-
-        protected override ArraySegment<byte> BuildPayload(UdpHeader header, byte[] body)
-        {
-            var length = UdpHeader.HeaderSize + body.Length;
-            var payload = ArrayPool<byte>.Shared.Rent(length);
-            header.WriteTo(payload.AsSpan(0, UdpHeader.HeaderSize));
-            body.CopyTo(payload.AsSpan(UdpHeader.HeaderSize, body.Length));
-            return new ArraySegment<byte>(payload, 0, length);
         }
     }
 }

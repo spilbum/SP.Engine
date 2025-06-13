@@ -9,12 +9,12 @@ using SP.Engine.Runtime.Message;
 
 namespace SP.Engine.Server
 {
-    public class UdpNetworkSession : BaseNetworkSession
+    public class UdpSocket : BaseNetworkSession
     {
-        private uint _fragmentId;
+        private uint _nextFragmentId;
         private readonly ushort _mtu;
         
-        public UdpNetworkSession(Socket client, IPEndPoint remoteEndPoint, ushort mtu)
+        public UdpSocket(Socket client, IPEndPoint remoteEndPoint, ushort mtu)
             : base (ESocketMode.Udp, client)
         {
             RemoteEndPoint = remoteEndPoint;
@@ -28,21 +28,18 @@ namespace SP.Engine.Server
             return segments.All(TrySend);
         }
         
-        private IEnumerable<ArraySegment<byte>> ToSegments(UdpMessage message)
+        private List<ArraySegment<byte>> ToSegments(UdpMessage message)
         {
+            var segments = new List<ArraySegment<byte>>();
             if (message.Length <= _mtu)
             {
-                yield return message.Payload;
-                yield break;
+                segments.Add(message.Payload);
+                return segments;
             }
 
-            var fragmentId = Interlocked.Increment(ref _fragmentId);
-            foreach (var fragment in message.ToSplit(_mtu, fragmentId))
-            {
-                var buffer = new byte[fragment.Length];
-                fragment.WriteTo(buffer);
-                yield return new ArraySegment<byte>(buffer, 0, buffer.Length);
-            }
+            var fragmentId = Interlocked.Increment(ref _nextFragmentId);
+            segments.AddRange(message.ToSplit(_mtu, fragmentId).Select(f => f.Serialize()));
+            return segments;
         }
         
         public void UpdateRemoteEndPoint(IPEndPoint remoteEndPoint)
