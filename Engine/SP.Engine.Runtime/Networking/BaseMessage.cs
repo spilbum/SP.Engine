@@ -4,7 +4,7 @@ using SP.Engine.Runtime.Protocol;
 using SP.Engine.Runtime.Security;
 using SP.Engine.Runtime.Serialization;
 
-namespace SP.Engine.Runtime.Message
+namespace SP.Engine.Runtime.Networking
 {
   public abstract class BaseMessage<THeader>: IMessage
         where THeader : IHeader

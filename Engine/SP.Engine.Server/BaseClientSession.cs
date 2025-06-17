@@ -5,7 +5,7 @@ using System.Net.Sockets;
 using SP.Common.Buffer;
 using SP.Common.Logging;
 using SP.Engine.Runtime;
-using SP.Engine.Runtime.Message;
+using SP.Engine.Runtime.Networking;
 using SP.Engine.Server.Configuration;
 using SP.Engine.Server.ProtocolHandler;
 

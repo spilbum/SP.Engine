@@ -9,6 +9,6 @@ internal class MessageAck<TPeer> : BaseEngineHandler<ClientSession<TPeer>, Engin
 {
     protected override void ExecuteProtocol(ClientSession<TPeer> session, EngineProtocolData.C2S.MessageAck protocol)
     {
-        session.Peer.ReceiveMessageAck(protocol.SequenceNumber);
+        session.Peer.OnMessageAck(protocol.SequenceNumber);
     }
 }

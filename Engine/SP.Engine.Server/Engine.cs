@@ -12,7 +12,7 @@ using SP.Engine.Runtime.Security;
 using SP.Engine.Server.Configuration;
 using SP.Engine.Server.Connector;
 using SP.Engine.Protocol;
-using SP.Engine.Runtime.Message;
+using SP.Engine.Runtime.Networking;
 using SP.Engine.Server.ProtocolHandler;
 
 namespace SP.Engine.Server

@@ -1,7 +1,7 @@
 ﻿using System;
 using SP.Engine.Runtime;
 using SP.Engine.Protocol;
-using SP.Engine.Runtime.Message;
+using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Server
@@ -18,8 +18,7 @@ namespace SP.Engine.Server
         public TPeer Peer { get; private set; }
         public Engine<TPeer> Engine { get; private set; }
         public bool IsClosing { get; private set; }
-        public int LatencyAverageMs { get; private set; }
-        public int LatencyStandardDeviationMs { get; private set; }
+
         
         public override void Initialize(IEngine engine, TcpNetworkSession networkSession)
         {
@@ -41,13 +40,6 @@ namespace SP.Engine.Server
         protected override void ExecuteMessage(IMessage message)
         {
             Engine.ExecuteMessage(this, message);
-        }
-        
-        public void OnPing(DateTime sentTime, int latencyAvgMs, int latencyStddevMs)
-        {
-            LatencyAverageMs = latencyAvgMs;
-            LatencyStandardDeviationMs = latencyStddevMs;
-            SendPong(sentTime);
         }
         
         internal bool Send(IProtocolData data)
@@ -73,13 +65,13 @@ namespace SP.Engine.Server
             }
         }
         
-        private void SendPong(DateTime sentTime)
+        internal void SendPong(DateTime sentTime)
         {
             var pong = new EngineProtocolData.S2C.Pong { SentTime = sentTime, ServerTime = DateTime.UtcNow };
             Send(pong);
         }
         
-        public void SendCloseHandshake()
+        internal void SendCloseHandshake()
         {
             if (!IsClosing)
             {

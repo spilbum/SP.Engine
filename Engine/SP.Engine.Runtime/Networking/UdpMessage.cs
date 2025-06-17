@@ -1,12 +1,8 @@
 using System;
-using System.Buffers;
 using System.Collections.Generic;
-using SP.Engine.Runtime.Compression;
 using SP.Engine.Runtime.Protocol;
-using SP.Engine.Runtime.Security;
-using SP.Engine.Runtime.Serialization;
 
-namespace SP.Engine.Runtime.Message
+namespace SP.Engine.Runtime.Networking
 {
     public class UdpMessage : BaseMessage<UdpHeader>
     {

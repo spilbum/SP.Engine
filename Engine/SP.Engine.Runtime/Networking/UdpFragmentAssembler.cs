@@ -1,9 +1,8 @@
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Linq;
 
-namespace SP.Engine.Runtime.Message
+namespace SP.Engine.Runtime.Networking
 {
     internal class FragmentBuffer
     {

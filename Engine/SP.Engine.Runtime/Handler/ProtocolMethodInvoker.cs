@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using SP.Engine.Runtime.Message;
+using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Runtime.Handler

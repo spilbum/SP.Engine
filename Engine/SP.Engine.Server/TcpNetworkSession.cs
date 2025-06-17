@@ -4,7 +4,7 @@ using System.Net.Sockets;
 using System.Threading;
 using SP.Common.Logging;
 using SP.Engine.Runtime;
-using SP.Engine.Runtime.Message;
+using SP.Engine.Runtime.Networking;
 
 namespace SP.Engine.Server
 {

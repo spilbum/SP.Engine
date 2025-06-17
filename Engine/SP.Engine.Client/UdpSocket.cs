@@ -8,7 +8,7 @@ using System.Net.Sockets;
 using System.Threading;
 using SP.Common.Fiber;
 using SP.Engine.Protocol;
-using SP.Engine.Runtime.Message;
+using SP.Engine.Runtime.Networking;
 
 namespace SP.Engine.Client
 {
@@ -204,8 +204,6 @@ namespace SP.Engine.Client
             Send(_sendingItems);
         }
 
-
-
         private void OnReceiveCompleted(object sender, SocketAsyncEventArgs e)
         {
             if (e.SocketError != SocketError.Success || e.BytesTransferred <= 0)
@@ -222,11 +220,16 @@ namespace SP.Engine.Client
             {
                 OnError(ex);
             }
-            finally
+
+            try
             {
                 e.SetBuffer(0, _receiveBuffer.Length);
                 if (!_socket.ReceiveFromAsync(e))
                     OnReceiveCompleted(this, e);
+            }
+            catch (Exception ex)
+            {
+                OnError(ex);
             }
         }
 

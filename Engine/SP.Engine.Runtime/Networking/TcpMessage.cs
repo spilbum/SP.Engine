@@ -1,8 +1,7 @@
 ﻿using System;
-using System.Buffers;
 using SP.Engine.Runtime.Protocol;
 
-namespace SP.Engine.Runtime.Message
+namespace SP.Engine.Runtime.Networking
 {
     public class TcpMessage : BaseMessage<TcpHeader>
     {

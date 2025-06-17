@@ -8,7 +8,7 @@ using System.Runtime.InteropServices;
 using SP.Common.Buffer;
 using SP.Engine.Protocol;
 using SP.Engine.Runtime;
-using SP.Engine.Runtime.Message;
+using SP.Engine.Runtime.Networking;
 using SP.Engine.Server.Configuration;
 
 namespace SP.Engine.Server

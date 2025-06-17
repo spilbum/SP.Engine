@@ -50,8 +50,8 @@ namespace SP.Engine.Protocol
                 [ProtocolData(EngineProtocol.C2S.Ping)]
                 public class Ping : BaseProtocolData
                 {
-                    public int LatencyAverageMs;
-                    public int LatencyStandardDeviationMs;
+                    public double LatencyAvg;
+                    public double LatencyStdDev;
                     public DateTime SendTime;
                 }
             

@@ -8,7 +8,9 @@ namespace SP.Common
     public class EwmaTracker
     {
         /// <summary>
-        /// 최신 값에 반영할 가중치 계수
+        /// 최신 값에 반영할 가중치 계수 (0 ~ 1)
+        /// 값이 클수록 최신 값 반영이 빠름
+        /// 값이 작을수록 변화 반응이 느림
         /// </summary>
         public double Alpha { get; }
         
@@ -42,7 +44,7 @@ namespace SP.Common
             }
             else
             {
-                Estimated = Math.Round((1 - Alpha) * Estimated + Alpha * newValue, 2);
+                Estimated = (1 - Alpha) * Estimated + Alpha * newValue;
             }
         }
 
@@ -50,10 +52,10 @@ namespace SP.Common
         /// 예측값을 초기화합니다.
         /// </summary>
         /// <param name="initialValue">초기값</param>
-        public void Reset(double initialValue)
+        public void Initialize(double initialValue)
         {
             Estimated = initialValue;
-            IsInitialized = false;
+            IsInitialized = true;
         }
 
         /// <summary>
@@ -66,8 +68,6 @@ namespace SP.Common
         }
 
         public override string ToString()
-        {
-            return IsInitialized ? Estimated.ToString("F2") : "(uninitialized)";
-        }
+            => IsInitialized ? Estimated.ToString("F2") : "(uninitialized)";
     }
 }

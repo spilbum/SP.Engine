@@ -2,6 +2,7 @@
 using System.Net;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using SP.Common;
@@ -10,7 +11,7 @@ using SP.Common.Logging;
 using SP.Engine.Client.ProtocolHandler;
 using SP.Engine.Protocol;
 using SP.Engine.Runtime;
-using SP.Engine.Runtime.Message;
+using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Runtime.Security;
 
@@ -55,23 +56,28 @@ namespace SP.Engine.Client
         private int _reconnectionAttempts;
         private TickTimer _timer;
         private bool _isReconnecting;
-        private readonly DataSampler<int> _latencySampler = new DataSampler<int>(1024);
         private readonly BinaryBuffer _receiveBuffer = new BinaryBuffer();
         private readonly ConcurrentQueue<IMessage> _sendingMessageQueue = new ConcurrentQueue<IMessage>();
         private readonly ConcurrentQueue<IMessage> _receivedMessageQueue = new ConcurrentQueue<IMessage>();
         private readonly Dictionary<EProtocolId, IHandler<NetPeer, IMessage>> _engineHandlerDict =
             new Dictionary<EProtocolId, IHandler<NetPeer, IMessage>>();
+        private readonly LatencyStats _latencyStats = new LatencyStats();
+        
         
         public DiffieHellman DiffieHelman { get; } = new DiffieHellman(DhKeySize.Bit2048);
         public EndPoint RemoteEndPoint { get; private set; }
         public EPeerId PeerId { get; private set; }   
         public DateTime LastSendPingTime { get; private set; }
-        public int AvgLatencyMs => (int)_latencySampler.Avg;
-        public int LatencyStdDevMs => (int)_latencySampler.StdDev;
         public ENetPeerState State => (ENetPeerState)_stateCode;
         public string SessionId { get; private set; }
         public PackOptions PackOptions { get; }
         public bool IsConnected => State.HasFlag(ENetPeerState.Open);
+        
+        public double LatencyAvg => _latencyStats.Avg;
+        public double LatencyStdDev => _latencyStats.StdDev;
+        public double LatencyMin => _latencyStats.Min;
+        public double LatencyMax => _latencyStats.Max;
+        
         public DateTime ServerTime
         {
             get
@@ -112,6 +118,95 @@ namespace SP.Engine.Client
         {
             Dispose(false);
         }
+        
+        public void Connect(string ip, int port)
+        {
+            if (null != _session)
+                throw new InvalidOperationException("Already opened");
+
+            if (string.IsNullOrEmpty(ip) || 0 >= port)
+                throw new ArgumentException("Invalid ip or port");
+            
+            _ip = ip;
+            _port = port;
+            RemoteEndPoint = ResolveEndPoint(ip, port);
+            StartConnection();
+        }
+        
+        public void Tick()
+        {
+            _timer?.Tick();
+            _udpSocket?.Tick();
+            
+            // 수신된 메시지 처리
+            DequeueReceivedMessage();
+
+            // 전송 메시지 처리
+            DequeueSendingMessage();
+
+            // 재 전송 메시지 체크
+            CheckReSendMessages();
+        }
+        
+        public bool Send(IProtocolData data)
+        {
+            var transport = TransportHelper.Resolve(data);
+            switch (transport)
+            {
+                case ETransport.Tcp:
+                {
+                    var message = new TcpMessage();
+                    if (data.ProtocolId.IsEngineProtocol())
+                    {
+                        message.Pack(data, null, null);
+                    }
+                    else
+                    {
+                        message.SetSequenceNumber(GetNextSendSequenceNumber());
+                        message.Pack(data, DiffieHelman.SharedKey, PackOptions);
+                    }
+                    return Send(message);
+                }
+                case ETransport.Udp:
+                {
+                    var message = new UdpMessage();
+                    if (data.ProtocolId.IsEngineProtocol())
+                    {
+                        message.SetPeerId(PeerId);
+                        message.Pack(data, null, null);
+                    }
+                    else
+                    {
+                        message.SetPeerId(PeerId);
+                        message.Pack(data, DiffieHelman.SharedKey, PackOptions);
+                    }
+                    return Send(message);
+                }
+                default:
+                    throw new Exception($"Unknown transport: {transport}");
+            }
+        }
+        
+        public void SendPing()
+        {
+            var now = DateTime.UtcNow;
+            var ping = new EngineProtocolData.C2S.Ping
+            {
+                SendTime = now,
+                LatencyAvg = LatencyAvg,
+                LatencyStdDev = LatencyStdDev,
+            };
+
+            try
+            {
+                if (!Send(ping))
+                    Logger.Warn("Ping failed");
+            }
+            finally
+            {
+                LastSendPingTime = now;
+            }
+        }
 
         private bool TrySetState(ENetPeerState expected, ENetPeerState next)
         {
@@ -149,20 +244,6 @@ namespace SP.Engine.Client
             var intervalSec = AutoSendPingIntervalSec > 0 ? AutoSendPingIntervalSec : 60;
             SetTimer(_ => SendPing(), null, intervalSec * 1000, intervalSec * 1000);
         }
-        
-        public void Connect(string ip, int port)
-        {
-            if (null != _session)
-                throw new InvalidOperationException("Already opened");
-
-            if (string.IsNullOrEmpty(ip) || 0 >= port)
-                throw new ArgumentException("Invalid ip or port");
-            
-            _ip = ip;
-            _port = port;
-            RemoteEndPoint = ResolveEndPoint(ip, port);
-            StartConnection();
-        }
 
         private void StartConnection()
         {
@@ -177,7 +258,7 @@ namespace SP.Engine.Client
 
             try
             {
-                _session.Connect(RemoteEndPoint);
+                session.Connect(RemoteEndPoint);
             }
             catch (Exception e)
             {
@@ -221,44 +302,7 @@ namespace SP.Engine.Client
             }
         }
         
-        public bool Send(IProtocolData data)
-        {
-            var transport = TransportHelper.Resolve(data);
-            switch (transport)
-            {
-                case ETransport.Tcp:
-                {
-                    var message = new TcpMessage();
-                    if (data.ProtocolId.IsEngineProtocol())
-                    {
-                        message.Pack(data, null, null);
-                    }
-                    else
-                    {
-                        message.SetSequenceNumber(GetNextSendSequenceNumber());
-                        message.Pack(data, DiffieHelman.SharedKey, PackOptions);
-                    }
-                    return Send(message);
-                }
-                case ETransport.Udp:
-                {
-                    var message = new UdpMessage();
-                    if (data.ProtocolId.IsEngineProtocol())
-                    {
-                        message.SetPeerId(PeerId);
-                        message.Pack(data, null, null);
-                    }
-                    else
-                    {
-                        message.SetPeerId(PeerId);
-                        message.Pack(data, DiffieHelman.SharedKey, PackOptions);
-                    }
-                    return Send(message);
-                }
-                default:
-                    throw new Exception($"Unknown transport: {transport}");
-            }
-        }
+
 
         private bool Send(IMessage message)
         {
@@ -298,26 +342,6 @@ namespace SP.Engine.Client
         private void EnqueueSendingMessage(IMessage message)
         {
             _sendingMessageQueue.Enqueue(message);
-        }
-        
-        public void SendPing()
-        {
-            var ping = new EngineProtocolData.C2S.Ping
-            {
-                SendTime = DateTime.UtcNow,
-                LatencyAverageMs = AvgLatencyMs,
-                LatencyStandardDeviationMs = LatencyStdDevMs,
-            };
-
-            try
-            {
-                if (!Send(ping))
-                    Logger.Warn("Ping failed");
-            }
-            finally
-            {
-                LastSendPingTime = ping.SendTime;
-            }
         }
 
         private void SendAuthHandshake()
@@ -385,21 +409,6 @@ namespace SP.Engine.Client
                 CloseWithoutHandshake();
             }, null, 5000, Timeout.Infinite);
         }
-        
-        public void Tick()
-        {
-            _timer?.Tick();
-            _udpSocket?.Tick();
-            
-            // 수신된 메시지 처리
-            DequeueReceivedMessage();
-
-            // 전송 메시지 처리
-            DequeueSendingMessage();
-
-            // 재 전송 메시지 체크
-            CheckReSendMessages();
-        }
 
         private void DequeueReceivedMessage()
         {
@@ -414,7 +423,7 @@ namespace SP.Engine.Client
                     case TcpMessage tcpMessage:
                     {
                         // 순서대로 처리하기위해 대기 중인 메시지들을 확인함
-                        var messages = DrainInOrderReceivedMessages(tcpMessage);
+                        var messages = DrainInOrderMessages(tcpMessage);
                         foreach (var message in messages)
                             OnMessageReceived(message);
 
@@ -446,7 +455,7 @@ namespace SP.Engine.Client
             if (!IsConnected)
                 return;
             
-            foreach (var message in GetTimedOutMessages())
+            foreach (var message in GetResendableMessages())
                 EnqueueSendingMessage(message);
         }
         
@@ -699,12 +708,18 @@ namespace SP.Engine.Client
         internal void OnPong(DateTime sentTime, DateTime serverTime)
         {
             // 네트워크 레이턴시 계산
-            var latencyMs = (int)Math.Round(DateTime.UtcNow.Subtract(sentTime).TotalMilliseconds, MidpointRounding.AwayFromZero);
-            _latencySampler.Add(latencyMs);
+            var laytency = Math.Round((DateTime.UtcNow - sentTime).TotalMilliseconds, 2);
+            _latencyStats.Update(laytency);
+            Logger.Debug("Latency stats: {0}", _latencyStats.ToSummaryString());
+            
             // 네트워크 레이턴시를 고려해 서버 시간 설정
-            _lastServerTime = serverTime.AddMilliseconds(latencyMs / 2.0f);
+            _lastServerTime = serverTime.AddMilliseconds(laytency / 2.0f);
             _serverUpdateTime = DateTime.UtcNow;
-            //Logger.Debug("latencyMs={0}, avgMs={1}, stddevMs={2}, serverTime={3:yyyy-MM-dd hh:mm:ss.fff}", latencyMs, AvgLatencyMs, LatencyStdDevMs, _lastServerTime);
+        }
+        
+        internal void OnMessageAck(long sequenceNumber)
+        {
+            OnAckReceived(sequenceNumber);
         }
 
         public void Dispose()
@@ -742,7 +757,7 @@ namespace SP.Engine.Client
                     _udpSocket = null;
                 }
 
-                _latencySampler.Clear();
+                _latencyStats.Clear();
                 CancelTimer();
                 ResetMessageProcessor();
             }
@@ -754,11 +769,6 @@ namespace SP.Engine.Client
         {
             OnError(new Exception($"The message resend limit has been exceeded: {message.ProtocolId} ({message.SequenceNumber})"));
             Close();
-        }
-        
-        protected override void OnRttSpikeDetected(long sequenceNumber, double rawRtt, double estimatedRtt)
-        {
-            Logger.Warn($"RTT spike detected: Seq={sequenceNumber}, Raw={rawRtt:F2}ms, Est={estimatedRtt:F2}ms");
         }
     }
 }

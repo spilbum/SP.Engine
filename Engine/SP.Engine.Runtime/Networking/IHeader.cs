@@ -1,7 +1,7 @@
 using System;
 using SP.Engine.Runtime.Protocol;
 
-namespace SP.Engine.Runtime.Message
+namespace SP.Engine.Runtime.Networking
 {
     public interface IHeader
     {

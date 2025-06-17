@@ -6,7 +6,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using SP.Engine.Runtime;
-using SP.Engine.Runtime.Message;
+using SP.Engine.Runtime.Networking;
 
 namespace SP.Engine.Client
 {
@@ -22,9 +22,8 @@ namespace SP.Engine.Client
         private byte[] _receiveBuffer;
         private int _isSending;
         private bool _isConnecting;
-
-        private int _receiveBufferSize = 64 * 1024;
-        private int _sendQueueCapacity = 256;
+        private readonly int _receiveBufferSize = 64 * 1024;
+        private readonly int _sendQueueCapacity = 256;
 
         public event EventHandler Opened;
         public event EventHandler Closed;
@@ -39,35 +38,6 @@ namespace SP.Engine.Client
             _sendQueue = new ConcurrentBatchQueue<ArraySegment<byte>>(_sendQueueCapacity);
         }
 
-        public int ReceiveBufferSize
-        {
-            get => _receiveBufferSize;
-            set
-            {
-                if (IsConnected)
-                    throw new InvalidOperationException("Cannot change buffer size while connected.");
-                if (value <= 0)
-                    throw new ArgumentOutOfRangeException(nameof(value), "Buffer size must be greater than zero.");
-
-                _receiveBufferSize = value;
-            }
-        }
-
-        public int SendQueueCapacity
-        {
-            get => _sendQueueCapacity;
-            set
-            {
-                if (IsConnected)
-                    throw new InvalidOperationException("Cannot change send queue capacity while connected.");
-                if (value <= 0)
-                    throw new ArgumentOutOfRangeException(nameof(value), "Queue size must be greater than zero.");
-
-                _sendQueueCapacity = value;
-                _sendQueue.Resize(_sendQueueCapacity);
-            }
-        }
-        
         public void Connect(EndPoint remoteEndPoint)
         {
             if (_isConnecting)
@@ -101,12 +71,12 @@ namespace SP.Engine.Client
             if (null == e)
                 e = new SocketAsyncEventArgs();
             e.Completed += OnReceiveCompleted;
-
+            
             _socket = socket;
-
+            
             try
             {
-                _socket.ReceiveBufferSize = ReceiveBufferSize;
+                _socket.ReceiveBufferSize = _receiveBufferSize;
             }
             catch (Exception exception)
             {
@@ -122,7 +92,7 @@ namespace SP.Engine.Client
             if (null == _receiveBuffer)
                 _receiveBuffer = ArrayPool<byte>.Shared.Rent(_receiveBufferSize);
 
-            e.SetBuffer(_receiveBuffer, 0, ReceiveBufferSize);
+            e.SetBuffer(_receiveBuffer, 0, _receiveBufferSize);
             _receiveEventArgs = e;
 
             OnConnected();

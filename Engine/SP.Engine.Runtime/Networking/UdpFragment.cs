@@ -1,6 +1,6 @@
 using System;
 
-namespace SP.Engine.Runtime.Message
+namespace SP.Engine.Runtime.Networking
 {
     public readonly struct UdpFragment
     {
@@ -13,7 +13,6 @@ namespace SP.Engine.Runtime.Message
         public byte TotalCount => _udpFragmentHeader.TotalCount;
         public UdpHeader UdpHeader => _udpHeader;
         public ArraySegment<byte> Payload => _payload;
-        public int Length => UdpHeader.HeaderSize + UdpFragmentHeader.HeaderSize + _payload.Count;
 
         public UdpFragment(UdpHeader udpHeader, UdpFragmentHeader udpFragmentHeader, ArraySegment<byte> payload)
         {
@@ -31,18 +30,6 @@ namespace SP.Engine.Runtime.Message
             return new ArraySegment<byte>(buffer);
         }
 
-        public void WriteTo(Span<byte> buffer)
-        {
-            if (buffer.Length < Length)
-                throw new ArgumentException("Destination buffer is too small", nameof(buffer));
-            var offset = 0;
-            _udpHeader.WriteTo(buffer.Slice(offset, UdpHeader.HeaderSize));
-            offset += UdpHeader.HeaderSize;
-            _udpFragmentHeader.WriteTo(buffer.Slice(offset, UdpFragmentHeader.HeaderSize));
-            offset += UdpFragmentHeader.HeaderSize;
-            _payload.AsSpan().CopyTo(buffer.Slice(offset, _payload.Count));
-        }
-        
         public static bool TryParse(ReadOnlySpan<byte> span, out UdpFragment fragment)
         {
             fragment = default;

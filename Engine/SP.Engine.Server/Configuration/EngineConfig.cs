@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Threading;
-using SP.Engine.Runtime.Message;
+using SP.Engine.Runtime.Networking;
 
 namespace SP.Engine.Server.Configuration
 {

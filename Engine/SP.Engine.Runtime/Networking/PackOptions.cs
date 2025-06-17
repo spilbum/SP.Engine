@@ -1,4 +1,4 @@
-namespace SP.Engine.Runtime.Message
+namespace SP.Engine.Runtime.Networking
 {
     public class PackOptions
     {

@@ -5,7 +5,7 @@ using System.Diagnostics;
 using System.Threading;
 using SP.Common;
 
-namespace SP.Engine.Runtime.Message
+namespace SP.Engine.Runtime.Networking
 {
     public abstract class MessageProcessor
     {
@@ -49,16 +49,12 @@ namespace SP.Engine.Runtime.Message
             }
         }
 
-        private const int InitialRttMs = 100;
-        private const double Alpha = 0.125;
-        private const double RttClampRangeFactor = 2.0;
-        
         private readonly ConcurrentDictionary<long, IMessage> _pendingReceiveMessages = new ConcurrentDictionary<long, IMessage>();
         private long _nextSendSequenceNumber;
         private long _expectedReceiveSequenceNumber;
         private readonly ConcurrentDictionary<long, SendingMessageState> _sendingMessageStates = new ConcurrentDictionary<long, SendingMessageState>();
         private readonly ConcurrentQueue<IMessage> _pendingMessages = new ConcurrentQueue<IMessage>();
-        private readonly EwmaTracker _rttTracker;
+        private readonly EwmaTracker _ewmaTracker = new EwmaTracker(0.125);
         
         protected int SendTimeOutMs { get; private set; }
         protected int MaxReSendCnt { get; private set; }
@@ -66,12 +62,6 @@ namespace SP.Engine.Runtime.Message
         public void SetSendTimeOutMs(int sendTimeOutMs) => SendTimeOutMs = sendTimeOutMs;
         public void SetMaxReSendCnt(int maxReSendCnt) => MaxReSendCnt = maxReSendCnt;
 
-        protected MessageProcessor()
-        {
-            _rttTracker = new EwmaTracker(Alpha);
-            _rttTracker.Reset(InitialRttMs);
-        }
-        
         protected long GetNextSendSequenceNumber()
             => Interlocked.Increment(ref _nextSendSequenceNumber);
 
@@ -81,7 +71,8 @@ namespace SP.Engine.Runtime.Message
             return _sendingMessageStates.TryAdd(message.SequenceNumber, state);
         }
 
-        protected void EnqueuePendingMessage(IMessage message) => _pendingMessages.Enqueue(message);
+        protected void EnqueuePendingMessage(IMessage message) 
+            => _pendingMessages.Enqueue(message);
 
         protected IEnumerable<IMessage> GetPendingMessages()
         {
@@ -89,34 +80,31 @@ namespace SP.Engine.Runtime.Message
                 yield return message;
         }
 
-        public void ReceiveMessageAck(long sequenceNumber)
+        protected void OnAckReceived(long sequenceNumber)
         {
-            if (!_sendingMessageStates.TryRemove(sequenceNumber, out var state)) return;
+            if (!_sendingMessageStates.TryRemove(sequenceNumber, out var state))
+                return;
+
             var rawRtt = GetElapsedMilliseconds(state.LastSendTime);
-            if (rawRtt > 0)
+            if (_ewmaTracker.IsInitialized)
             {
-                var estimated = _rttTracker.Estimated;
-                var clamped = Math.Clamp(rawRtt, estimated / RttClampRangeFactor, estimated * RttClampRangeFactor);
-                if (rawRtt > clamped)
-                    OnRttSpikeDetected(sequenceNumber, rawRtt, estimated);
-
-                _rttTracker.Update(clamped);
+                var estimated = _ewmaTracker.Estimated;
+                var clamped = Math.Clamp(rawRtt, estimated / 2.0, estimated * 2.0);
+                _ewmaTracker.Update(clamped);
             }
-
-            state.UpdateTimeout(_rttTracker.Estimated);
+            else
+            {
+                _ewmaTracker.Initialize(rawRtt);
+            }
+            
+            state.UpdateTimeout(_ewmaTracker.Estimated);
         }
 
-        private static double GetElapsedMilliseconds(long startTimestamp)
-            => (Stopwatch.GetTimestamp() - startTimestamp) * 1000.0 / Stopwatch.Frequency;
+        private static double GetElapsedMilliseconds(long timestamp)
+            => (Stopwatch.GetTimestamp() - timestamp) * 1000.0 / Stopwatch.Frequency;
         
-        protected virtual void OnRttSpikeDetected(long sequenceNumber, double rawRtt, double estimatedRtt)
+        protected IEnumerable<IMessage> GetResendableMessages()
         {
-        }
-        
-        protected IEnumerable<IMessage> GetTimedOutMessages()
-        {
-            var result = new List<IMessage>();
-
             foreach (var (key, state) in _sendingMessageStates)
             {
                 if (!state.HasExpired)
@@ -125,32 +113,27 @@ namespace SP.Engine.Runtime.Message
                 if (state.ReSendCnt < state.MaxReSendCnt)
                 {
                     state.IncrementReSendCnt();
-                    result.Add(state.Message);
+                    yield return state.Message;
                 }
                 else
                 {
-                    OnMessageSendFailure(state.Message);
                     _sendingMessageStates.TryRemove(key, out _);
+                    OnMessageSendFailure(state.Message);
                 }
             }
-
-            return result;
         }
 
         protected virtual void OnMessageSendFailure(IMessage message)
         {
         }
 
-        protected IEnumerable<IMessage> DrainInOrderReceivedMessages(IMessage message)
+        protected IEnumerable<IMessage> DrainInOrderMessages(IMessage message)
         {
             if (message.SequenceNumber == 0)
                 yield return message;
             
             if (message.SequenceNumber <= _expectedReceiveSequenceNumber || !_pendingReceiveMessages.TryAdd(message.SequenceNumber, message))
-            {
-                // 이미 처리했거나 대기 중인 메시지임
                 yield break;
-            }
             
             while (_pendingReceiveMessages.TryRemove(_expectedReceiveSequenceNumber + 1, out var pending))
             {
@@ -172,6 +155,7 @@ namespace SP.Engine.Runtime.Message
             _expectedReceiveSequenceNumber = 0;
             _sendingMessageStates.Clear();
             _pendingReceiveMessages.Clear();
+            _ewmaTracker.Clear();
         }
     }
 }

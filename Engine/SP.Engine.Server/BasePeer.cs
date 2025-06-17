@@ -5,7 +5,7 @@ using System.Net;
 using System.Threading;
 using SP.Common.Logging;
 using SP.Engine.Runtime;
-using SP.Engine.Runtime.Message;
+using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Runtime.Security;
 using SP.Engine.Server.ProtocolHandler;
@@ -86,7 +86,9 @@ namespace SP.Engine.Server
         public EPeerType PeerType { get; } 
         public ILogger Logger { get; }
         public ushort UdpMtu { get; private set; }
-
+        public double LatencyAvg { get; private set; }
+        public double LatencyStdDev { get; private set; }
+        
         public IPEndPoint LocalEndPoint => Session.LocalEndPoint;
         public IPEndPoint RemoteEndPoint => Session.RemoteEndPoint;
         public bool IsConnected => _stateCode == PeerStateConst.Authorized || _stateCode == PeerStateConst.Online;
@@ -149,7 +151,7 @@ namespace SP.Engine.Server
             if (!IsConnected)
                 return;
 
-            foreach (var message in GetTimedOutMessages())
+            foreach (var message in GetResendableMessages())
             {
                 if (!Session.Send(message))
                     Logger.Warn("Message send failed: {0}({1})", message.ProtocolId, message.SequenceNumber);
@@ -161,15 +163,21 @@ namespace SP.Engine.Server
             Assembler.Cleanup(TimeSpan.FromSeconds(10));
         }
         
+        internal void OnPing(double latencyAvg, double latencyStdDev)
+        {
+            LatencyAvg = latencyAvg;
+            LatencyStdDev = latencyStdDev;
+        }
+        
+        internal void OnMessageAck(long sequenceNumber)
+        {
+            OnAckReceived(sequenceNumber);
+        }
+        
         protected override void OnMessageSendFailure(IMessage message)
         {
             Logger.Warn("The message resend limit has been exceeded: {0} ({1})", message.ProtocolId, message.SequenceNumber);
             Close(ECloseReason.LimitExceededReSend);
-        }
-
-        protected override void OnRttSpikeDetected(long sequenceNumber, double rawRtt, double estimatedRtt)
-        {
-            Logger.Warn($"RTT spike detected: Seq={sequenceNumber}, Raw={rawRtt:F2}ms, Est={estimatedRtt:F2}ms");
         }
 
         public void Reject(ERejectReason reason, string detailReason = null)
@@ -222,7 +230,7 @@ namespace SP.Engine.Server
 
         internal void ExecuteMessage(IMessage message)
         {
-            foreach (var ordered in DrainInOrderReceivedMessages(message))
+            foreach (var ordered in DrainInOrderMessages(message))
                 Session.Engine.ExecuteHandler(this, ordered);
         }
 

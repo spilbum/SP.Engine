@@ -7,7 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using SP.Common.Logging;
 using SP.Engine.Runtime;
-using SP.Engine.Runtime.Message;
+using SP.Engine.Runtime.Networking;
 using SP.Engine.Server.Configuration;
 using SP.Engine.Server.Logging;
 
