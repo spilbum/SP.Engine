@@ -50,9 +50,11 @@ namespace SP.Engine.Protocol
                 [ProtocolData(EngineProtocol.C2S.Ping)]
                 public class Ping : BaseProtocolData
                 {
-                    public double LatencyAvg;
-                    public double LatencyStdDev;
-                    public DateTime SendTime;
+                    public double RawRttMs;
+                    public double AvgRttMs;
+                    public double JitterMs;
+                    public float PacketLossRate;
+                    public long SendTimeMs;
                 }
             
                 [ProtocolData(EngineProtocol.C2S.Close)]
@@ -100,8 +102,8 @@ namespace SP.Engine.Protocol
             [ProtocolData(EngineProtocol.S2C.Pong)]
             public class Pong : BaseProtocolData
             {
-                public DateTime ServerTime;
-                public DateTime SentTime;
+                public long SendTimeMs;
+                public long ServerTimeMs;
             }
 
             [ProtocolData(EngineProtocol.S2C.MessageAck)]

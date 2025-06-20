@@ -29,7 +29,7 @@ namespace TestClient
             _netPeer.ReconnectionIntervalSec = 3;
             _netPeer.MaxConnectionAttempts = 3;
             _netPeer.IsEnableAutoSendPing = true;
-            _netPeer.AutoSendPingIntervalSec = 1;
+            _netPeer.AutoSendPingIntervalSec = 2;
             _netPeer.MaxAllowedLength = 4096;
             _netPeer.UdpMtu = 1400;
             _netPeer.Connected += OnConnected;
@@ -82,10 +82,24 @@ namespace TestClient
 
         private void OnDisconnected(object? sender, EventArgs e)
         {
+            _logger?.Info("Disconnected");
         }
 
         private void OnConnected(object? sender, EventArgs e)
         {
+            _logger?.Info("OnConnected");
+        }
+
+        public void PrintNetowrkQuality()
+        {
+            var sb = new StringBuilder();
+            if (_netPeer != null)
+            {
+                sb.Append(
+                    $"RTT: {_netPeer.SmoothedRttMs:F1}ms | Avg: {_netPeer.AverageRttMs:F1} Min: {_netPeer.MinRttMs:F1} | Max: {_netPeer.MaxRttMs:F1} | Jitter: {_netPeer.JitterMs:F1} | PackLossRate: {_netPeer.PacketLossRate:F1}");
+            }
+            
+            _logger?.Info("[NetowrkQuality] {0}", sb.ToString());
         }
 
         [ProtocolMethod(Protocol.S2C.EchoAck)]
@@ -94,7 +108,7 @@ namespace TestClient
             _logger?.Info("Message received: {0}, bytes={1}, sentTime={2}", protocol.Str, protocol.Bytes?.Length, protocol.SentTime);
         }
     }
-    
+
     internal static class Program
     {
         public static void Main(string[] args)
@@ -157,11 +171,18 @@ namespace TestClient
                     
                     
                 }
+
+                if (_nextPrintNetowrkQuality == null || DateTime.UtcNow > _nextPrintNetowrkQuality)
+                {
+                    _nextPrintNetowrkQuality = DateTime.UtcNow.AddSeconds(5);
+                    NetPeerManager.Instance.PrintNetowrkQuality();
+                }
                 
                 Thread.Sleep(50);
             }
         }
 
+        private static DateTime? _nextPrintNetowrkQuality;
         private static readonly Random Random = new();
 
         private static byte[] GenerateRandomBytes(int length)

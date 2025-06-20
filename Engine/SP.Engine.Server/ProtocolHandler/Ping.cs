@@ -9,7 +9,7 @@ internal class Ping<TPeer> : BaseEngineHandler<ClientSession<TPeer>, EngineProto
 {
     protected override void ExecuteProtocol(ClientSession<TPeer> session, EngineProtocolData.C2S.Ping protocol)
     {
-        session.Peer.OnPing(protocol.LatencyAvg, protocol.LatencyStdDev);
-        session.SendPong(protocol.SendTime);
+        session.Peer.OnPing(protocol.RawRttMs, protocol.AvgRttMs, protocol.JitterMs, protocol.PacketLossRate);
+        session.SendPong(protocol.SendTimeMs);
     }
 }

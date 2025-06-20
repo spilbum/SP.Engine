@@ -23,7 +23,7 @@ namespace SP.Engine.Client.ProtocolHandler
                     
             // 전송 타임아웃 시간 설정
             if (0 < protocol.SendTimeOutMs)
-                session.SetSendTimeOutMs(protocol.SendTimeOutMs);
+                session.SetInitialSendTimeoutMs(protocol.SendTimeOutMs);
             
             // 최대 재 전송 횟수 설정
             if (0 < protocol.MaxReSendCnt)

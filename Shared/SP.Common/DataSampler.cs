@@ -19,78 +19,10 @@ namespace SP.Common
         public bool EnableOutlierFilter { get; set; } = true;
         public double OutlierThreshold { get; set; } = 3.0;
 
-        public int Count
-        {
-            get
-            {
-                lock (_lock)
-                {
-                    return _samples.Count;
-                }
-            }
-        }
-
-        public double Avg
-        {
-            get
-            {
-                lock (_lock)
-                {
-                    return _samples.Count == 0 ? 0 : _sum / _samples.Count;
-                }
-            }
-        }
-
-        public double Min
-        {
-            get
-            {
-                lock (_lock)
-                {
-                    return _samples.Count == 0 ? 0 : _min;
-                }
-            }
-        }
-
-        public double Max
-        {
-            get
-            {
-                lock (_lock)
-                {
-                    return _samples.Count == 0 ? 0 : _max;
-                }
-            }
-        }
-        
-        public double StdDev
-        {
-            get
-            {
-                lock (_lock)
-                {
-                    if (_samples.Count == 0) return 0.0;
-                    var mean = Avg;
-                    return Math.Sqrt(_samples.Average(v => Math.Pow(v - mean, 2)));
-                }
-            }
-        }
-        
-        public double Jitter
-        {
-            get
-            {
-                lock (_lock)
-                {
-                    if (_samples.Count < 2) return 0.0;
-                    var arr = _samples.ToArray();
-                    double sumDelta = 0;
-                    for (var i = 1; i < arr.Length; i++)
-                        sumDelta += Math.Abs(arr[i] - arr[i - 1]);
-                    return sumDelta / (arr.Length - 1);
-                }
-            }
-        }
+        public double Avg => _samples.Count == 0 ? 0 : _sum / _samples.Count;
+        public double Min => _samples.Count == 0 ? 0 : _min;
+        public double Max => _samples.Count == 0 ? 0 : _max;
+        public double StdDev => _samples.Count == 0 ? 0 : GetStdDev();
         
         public DataSampler(int capacity = 100)
         {
@@ -100,7 +32,7 @@ namespace SP.Common
             _capacity = capacity;
             _samples = new Queue<double>(capacity);
         }
-        
+
         public void Add(double value)
         {
             lock (_lock)
@@ -117,7 +49,6 @@ namespace SP.Common
                 {
                     var removed = _samples.Dequeue();
                     _sum -= removed;
-
                     if (NearlyEquals(removed, _min) || NearlyEquals(removed, _max))
                     {
                         var arr = _samples.ToArray();
@@ -125,7 +56,15 @@ namespace SP.Common
                         _max = arr.Max();
                     }
                 }
+
             }
+        }
+
+        private double GetStdDev()
+        {
+            var avg = Avg;
+            var variance = _samples.Sum(x => Math.Pow(x - avg, 2)) / _samples.Count;
+            return Math.Sqrt(variance);
         }
 
         private bool IsOutlier(double value)
@@ -134,7 +73,7 @@ namespace SP.Common
                 return false;
             
             var mean = Avg;
-            var stdDev = StdDev;
+            var stdDev = GetStdDev();
             var lower = Math.Max(0, mean - OutlierThreshold * stdDev);
             var upper = mean + OutlierThreshold * stdDev;
             return value < lower || value > upper;
@@ -151,15 +90,6 @@ namespace SP.Common
             }
         }
         
-        
-        public double[] ToArray()
-        {
-            lock (_lock)
-            {
-                return _samples.ToArray();
-            }
-        }
-
         private static bool NearlyEquals(double a, double b, double epsilon = 0.01)
             => Math.Abs(a - b) < epsilon;
     }

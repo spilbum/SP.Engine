@@ -36,7 +36,7 @@ namespace SP.Engine.Client
         Closed = 4,
     }
 
-    public sealed class NetPeer : MessageProcessor, IDisposable
+    public sealed class NetPeer : ReliableMessageProcessor, IDisposable
     {
         private static EndPoint ResolveEndPoint(string ip, int port)
         {
@@ -47,12 +47,8 @@ namespace SP.Engine.Client
         
         private int _stateCode;
         private bool _disposed;
-        private string _ip;
-        private int _port;
         private TcpNetworkSession _session;
         private UdpSocket _udpSocket;
-        private DateTime _serverUpdateTime;
-        private DateTime _lastServerTime;
         private int _reconnectionAttempts;
         private TickTimer _timer;
         private bool _isReconnecting;
@@ -62,30 +58,27 @@ namespace SP.Engine.Client
         private readonly Dictionary<EProtocolId, IHandler<NetPeer, IMessage>> _engineHandlerDict =
             new Dictionary<EProtocolId, IHandler<NetPeer, IMessage>>();
         private readonly LatencyStats _latencyStats = new LatencyStats();
-        
+
+        private double _lastRttMs;
+        private double _serverTimeOffsetMs;
+        public long LastSendPingTime { get; private set; }
         
         public DiffieHellman DiffieHelman { get; } = new DiffieHellman(DhKeySize.Bit2048);
         public EndPoint RemoteEndPoint { get; private set; }
-        public EPeerId PeerId { get; private set; }   
-        public DateTime LastSendPingTime { get; private set; }
-        public ENetPeerState State => (ENetPeerState)_stateCode;
         public string SessionId { get; private set; }
+        public EPeerId PeerId { get; private set; }   
         public PackOptions PackOptions { get; }
+        public ILogger Logger { get; }
+        
+        public ENetPeerState State => (ENetPeerState)_stateCode;
         public bool IsConnected => State.HasFlag(ENetPeerState.Open);
-        
-        public double LatencyAvg => _latencyStats.Avg;
-        public double LatencyStdDev => _latencyStats.StdDev;
-        public double LatencyMin => _latencyStats.Min;
-        public double LatencyMax => _latencyStats.Max;
-        
-        public DateTime ServerTime
-        {
-            get
-            {
-                var elapsedTimeMs = Math.Max(0, (int)Math.Round(DateTime.UtcNow.Subtract(_serverUpdateTime).TotalMilliseconds, MidpointRounding.AwayFromZero));
-                return _lastServerTime.AddMilliseconds(elapsedTimeMs);
-            }
-        }        
+
+        public double SmoothedRttMs => _latencyStats.SmoothedRttMs;
+        public double AverageRttMs => _latencyStats.AvgRttMs;
+        public double MinRttMs => _latencyStats.MinRttMs;
+        public double MaxRttMs => _latencyStats.MaxRttMs;
+        public double JitterMs => _latencyStats.JitterMs;
+        public float PacketLossRate => _latencyStats.PacketLossRate;
         
         public bool IsEnableAutoSendPing { get; set; } = true;
         public int AutoSendPingIntervalSec { get; set; } = 30;
@@ -100,8 +93,6 @@ namespace SP.Engine.Client
         public event EventHandler<ErrorEventArgs> Error;
         public event EventHandler<MessageEventArgs> MessageReceived;
         public event Action<ENetPeerState> StateChanged;
-        
-        public ILogger Logger { get; }
         
         public NetPeer(ILogger logger = null)
         {
@@ -118,6 +109,15 @@ namespace SP.Engine.Client
         {
             Dispose(false);
         }
+
+        private static long GetCurrentTimeMs()
+            => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        public DateTime GetServerTime()
+        {
+            var estimateMs = GetCurrentTimeMs() + (long)_serverTimeOffsetMs;
+            return DateTimeOffset.FromUnixTimeMilliseconds(estimateMs).UtcDateTime;
+        }
         
         public void Connect(string ip, int port)
         {
@@ -127,8 +127,6 @@ namespace SP.Engine.Client
             if (string.IsNullOrEmpty(ip) || 0 >= port)
                 throw new ArgumentException("Invalid ip or port");
             
-            _ip = ip;
-            _port = port;
             RemoteEndPoint = ResolveEndPoint(ip, port);
             StartConnection();
         }
@@ -162,7 +160,7 @@ namespace SP.Engine.Client
                     }
                     else
                     {
-                        message.SetSequenceNumber(GetNextSendSequenceNumber());
+                        message.SetSequenceNumber(GetNextSequenceNumber());
                         message.Pack(data, DiffieHelman.SharedKey, PackOptions);
                     }
                     return Send(message);
@@ -189,18 +187,20 @@ namespace SP.Engine.Client
         
         public void SendPing()
         {
-            var now = DateTime.UtcNow;
+            var now = GetCurrentTimeMs();
             var ping = new EngineProtocolData.C2S.Ping
             {
-                SendTime = now,
-                LatencyAvg = LatencyAvg,
-                LatencyStdDev = LatencyStdDev,
+                SendTimeMs = now,
+                RawRttMs = _lastRttMs,
+                AvgRttMs = _latencyStats.AvgRttMs,
+                JitterMs = _latencyStats.JitterMs,
+                PacketLossRate = _latencyStats.PacketLossRate
             };
 
             try
             {
-                if (!Send(ping))
-                    Logger.Warn("Ping failed");
+                Send(ping);
+                _latencyStats.OnPingSent();
             }
             finally
             {
@@ -301,8 +301,6 @@ namespace SP.Engine.Client
                 Close();
             }
         }
-        
-
 
         private bool Send(IMessage message)
         {
@@ -315,11 +313,11 @@ namespace SP.Engine.Client
                     
                     if (!IsConnected)
                     {
-                        EnqueuePendingMessage(tcpMessage);
+                        EnqueuePendingSend(tcpMessage);
                         return true;
                     }
                     
-                    RegisterSendingMessage(tcpMessage);
+                    StartSendingMessage(tcpMessage);
                     if (!_session.Send(tcpMessage))
                         return false;
                     
@@ -416,22 +414,21 @@ namespace SP.Engine.Client
             if (!IsConnected)
                 return;
             
-            while (_receivedMessageQueue.TryDequeue(out var receivedMessage))
+            while (_receivedMessageQueue.TryDequeue(out var message))
             {
-                switch (receivedMessage)
+                switch (message)
                 {
-                    case TcpMessage tcpMessage:
+                    case TcpMessage _:
                     {
                         // 순서대로 처리하기위해 대기 중인 메시지들을 확인함
-                        var messages = DrainInOrderMessages(tcpMessage);
-                        foreach (var message in messages)
-                            OnMessageReceived(message);
+                        foreach (var msg in ProcessReceivedMessage(message))
+                            OnMessageReceived(msg);
 
                         break;
                     }
-                    case UdpMessage udpMessage:
+                    case UdpMessage _:
                     {
-                        OnMessageReceived(udpMessage);
+                        OnMessageReceived(message);
                         break;
                     }
                 }
@@ -455,11 +452,9 @@ namespace SP.Engine.Client
             if (!IsConnected)
                 return;
             
-            foreach (var message in GetResendableMessages())
+            foreach (var message in GetResendCandidates())
                 EnqueueSendingMessage(message);
         }
-        
-   
 
         private void OnSessionDataReceived(object sender, DataEventArgs e)
         {
@@ -572,7 +567,7 @@ namespace SP.Engine.Client
 
         private void OnClosed()
         {
-            switch ((ENetPeerState)_stateCode)
+            switch (State)
             {
                 case ENetPeerState.Open:
                 {
@@ -601,10 +596,11 @@ namespace SP.Engine.Client
             var socket = new UdpSocket();
             socket.Error += OnUdpSocketError;
             socket.DataReceived += OnUdpSocketDataReceived;
-            
-            if (!socket.Connect(this, _ip, port, UdpMtu))
+
+            var ipAddress = ((IPEndPoint)RemoteEndPoint).Address;
+            if (!socket.Connect(this, ipAddress.ToString(), port, UdpMtu))
             {
-                Logger.Error("Failed to connect to UDP socket. ip={0}, port={1}", _ip, port);
+                Logger.Error("Failed to connect to UDP socket. ip={0}, port={1}", ipAddress.ToString(), port);
                 return;
             }
 
@@ -681,8 +677,7 @@ namespace SP.Engine.Client
             StartPingTimer();
             
             // 대기 중인 메시지 전송
-            var messages = GetPendingMessages();
-            foreach (var message in messages)
+            foreach (var message in DequeuePendingSend())
                 EnqueueSendingMessage(message);
             
             ConnectUdpSocket(udpPort);
@@ -691,12 +686,8 @@ namespace SP.Engine.Client
 
         private void OnOffline()
         {            
-            // 전송 메시지 상태 초기화
-            ResetAllSendingStates();
-            
-            // 재 연결 시작
+            ResetProcessorState();
             StartReconnection();
-            
             Offline?.Invoke(this, EventArgs.Empty);
         }
         
@@ -705,16 +696,15 @@ namespace SP.Engine.Client
             MessageReceived?.Invoke(this, new MessageEventArgs(message));
         }
 
-        internal void OnPong(DateTime sentTime, DateTime serverTime)
+        internal void OnPong(long sendTimeMs, long serverTimeMs)
         {
-            // 네트워크 레이턴시 계산
-            var laytency = Math.Round((DateTime.UtcNow - sentTime).TotalMilliseconds, 2);
-            _latencyStats.Update(laytency);
-            Logger.Debug("Latency stats: {0}", _latencyStats.ToSummaryString());
-            
-            // 네트워크 레이턴시를 고려해 서버 시간 설정
-            _lastServerTime = serverTime.AddMilliseconds(laytency / 2.0f);
-            _serverUpdateTime = DateTime.UtcNow;
+            var now = GetCurrentTimeMs();
+            _lastRttMs = now - sendTimeMs;
+            _latencyStats.OnPongReceived(_lastRttMs);
+            RecordRttSample(_lastRttMs);
+
+            var estimatedServerTime = serverTimeMs + _lastRttMs / 2.0;
+            _serverTimeOffsetMs = estimatedServerTime - now;
         }
         
         internal void OnMessageAck(long sequenceNumber)
@@ -759,16 +749,10 @@ namespace SP.Engine.Client
 
                 _latencyStats.Clear();
                 CancelTimer();
-                ResetMessageProcessor();
+                ResetProcessorState();
             }
 
             _disposed = true;
-        }
-        
-        protected override void OnMessageSendFailure(IMessage message)
-        {
-            OnError(new Exception($"The message resend limit has been exceeded: {message.ProtocolId} ({message.SequenceNumber})"));
-            Close();
         }
     }
 }

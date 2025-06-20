@@ -64,6 +64,9 @@ namespace SP.Engine.Server
             return true;
         }
         
+        public long GetServerTimeMs()
+            => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        
         private ThreadFiber CreateFiber()
         {
             var fiber = new ThreadFiber(logger: Logger);

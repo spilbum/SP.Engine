@@ -8,7 +8,7 @@ namespace SP.Engine.Client.ProtocolHandler
     {
         protected override void ExecuteProtocol(NetPeer session, EngineProtocolData.S2C.Pong protocol)
         {
-            session.OnPong(protocol.SentTime, protocol.ServerTime);
+            session.OnPong(protocol.SendTimeMs, protocol.ServerTimeMs);
         }
     }
 }

@@ -50,7 +50,7 @@ namespace SP.Engine.Server
         void Reject(ERejectReason reason, string detailReason = null);
     }
     
-    public abstract class BasePeer : MessageProcessor, IPeer, IHandleContext, IDisposable
+    public abstract class BasePeer : ReliableMessageProcessor, IPeer, IHandleContext, IDisposable
     {
         private static class PeerIdGenerator
         {
@@ -86,9 +86,10 @@ namespace SP.Engine.Server
         public EPeerType PeerType { get; } 
         public ILogger Logger { get; }
         public ushort UdpMtu { get; private set; }
-        public double LatencyAvg { get; private set; }
-        public double LatencyStdDev { get; private set; }
-        
+        public double LatencyAvgMs { get; private set; }
+        public double LatencyJitterMs { get; private set; }
+        public float PacketLossRate { get; private set; }
+
         public IPEndPoint LocalEndPoint => Session.LocalEndPoint;
         public IPEndPoint RemoteEndPoint => Session.RemoteEndPoint;
         public bool IsConnected => _stateCode == PeerStateConst.Authorized || _stateCode == PeerStateConst.Online;
@@ -100,7 +101,7 @@ namespace SP.Engine.Server
             PeerId = PeerIdGenerator.Generate();
             PeerType = peerType;
             Logger = session.Logger;
-            SetSendTimeOutMs(session.Config.SendTimeOutMs);
+            SetInitialSendTimeoutMs(session.Config.SendTimeOutMs);
             SetMaxReSendCnt(session.Config.MaxReSendCnt);
             Session = session;
             _packOptions = session.Config.ToPackOptions();
@@ -114,7 +115,7 @@ namespace SP.Engine.Server
             PeerType = other.PeerType;
             Logger = other.Logger;
             Session = other.Session;
-            SetSendTimeOutMs(other.SendTimeOutMs);
+            SetInitialSendTimeoutMs(other.InitialSendTimeoutMs);
             SetMaxReSendCnt(other.MaxReSendCnt);
             _diffieHellman = other._diffieHellman;
         }
@@ -139,8 +140,7 @@ namespace SP.Engine.Server
             {
                 PeerIdGenerator.Free(PeerId);
                 PeerId = EPeerId.None;
-                
-                ResetMessageProcessor();
+                ResetProcessorState();
             }
 
             _disposed = true;
@@ -151,22 +151,27 @@ namespace SP.Engine.Server
             if (!IsConnected)
                 return;
 
-            foreach (var message in GetResendableMessages())
+            foreach (var message in GetResendCandidates())
             {
+                if (message == null)
+                {
+                    Close(ECloseReason.LimitExceededReSend);
+                    return;
+                }
+
                 if (!Session.Send(message))
                     Logger.Warn("Message send failed: {0}({1})", message.ProtocolId, message.SequenceNumber);
             }
-
-            foreach (var message in GetPendingMessages())
-                Session.Send(message);
             
             Assembler.Cleanup(TimeSpan.FromSeconds(10));
         }
         
-        internal void OnPing(double latencyAvg, double latencyStdDev)
+        internal void OnPing(double rawRttMs, double avgRttMs, double jitterMs, float packetLossRate)
         {
-            LatencyAvg = latencyAvg;
-            LatencyStdDev = latencyStdDev;
+            RecordRttSample(rawRttMs);
+            LatencyAvgMs = avgRttMs;
+            LatencyJitterMs = jitterMs;
+            PacketLossRate = packetLossRate;
         }
         
         internal void OnMessageAck(long sequenceNumber)
@@ -174,12 +179,6 @@ namespace SP.Engine.Server
             OnAckReceived(sequenceNumber);
         }
         
-        protected override void OnMessageSendFailure(IMessage message)
-        {
-            Logger.Warn("The message resend limit has been exceeded: {0} ({1})", message.ProtocolId, message.SequenceNumber);
-            Close(ECloseReason.LimitExceededReSend);
-        }
-
         public void Reject(ERejectReason reason, string detailReason = null)
         {
             Session.Reject(reason, detailReason);
@@ -198,7 +197,7 @@ namespace SP.Engine.Server
                 case ETransport.Tcp:
                 {
                     var message = new TcpMessage();
-                    message.SetSequenceNumber(GetNextSendSequenceNumber());
+                    message.SetSequenceNumber(GetNextSequenceNumber());
                     message.Pack(data, _diffieHellman.SharedKey, _packOptions);
                     return Send(message);
                 }
@@ -217,10 +216,10 @@ namespace SP.Engine.Server
         private bool Send(IMessage message)
         {
             if (!IsConnected)
-                EnqueuePendingMessage(message);
+                EnqueuePendingSend(message);
             else
             {
-                RegisterSendingMessage(message);
+                StartSendingMessage(message);
                 if (!Session.Send(message))
                     return false;
             }
@@ -230,8 +229,8 @@ namespace SP.Engine.Server
 
         internal void ExecuteMessage(IMessage message)
         {
-            foreach (var ordered in DrainInOrderMessages(message))
-                Session.Engine.ExecuteHandler(this, ordered);
+            foreach (var received in ProcessReceivedMessage(message))
+                Session.Engine.ExecuteHandler(this, received);
         }
 
         internal void JoinServer()
@@ -246,17 +245,21 @@ namespace SP.Engine.Server
             OnJoinServer();
         }
 
-        internal void Online(IClientSession clientSession)
+        internal void Online(IClientSession session)
         {
             Interlocked.Exchange(ref _stateCode, PeerStateConst.Online);
-            Session = clientSession;
-            ResetAllSendingStates();
+            Session = session;
+            
+            foreach (var message in DequeuePendingSend())
+                Session.Send(message);
+            
             OnOnline();
         }
 
         internal void Offline(ECloseReason reason)
         {
             Interlocked.Exchange(ref _stateCode, PeerStateConst.Offline);
+            ResetProcessorState();
             OnOffline(reason);
         }
 

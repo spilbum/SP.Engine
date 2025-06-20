@@ -65,10 +65,13 @@ namespace SP.Engine.Server
             }
         }
         
-        internal void SendPong(DateTime sentTime)
+        internal void SendPong(long sendTimeMs)
         {
-            var pong = new EngineProtocolData.S2C.Pong { SentTime = sentTime, ServerTime = DateTime.UtcNow };
-            Send(pong);
+            Send(new EngineProtocolData.S2C.Pong
+            {
+                SendTimeMs = sendTimeMs, 
+                ServerTimeMs = Engine.GetServerTimeMs()
+            });
         }
         
         internal void SendCloseHandshake()
