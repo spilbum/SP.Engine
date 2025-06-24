@@ -267,6 +267,7 @@ namespace SP.Engine.Client
 
         private void OnConnected()
         {
+            _isConnecting = false;
             IsConnected = true;
             Opened?.Invoke(this, EventArgs.Empty);
         }

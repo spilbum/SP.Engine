@@ -69,12 +69,6 @@ namespace SP.Engine.Protocol
                     public string? SessionId;
                     public EPeerId PeerId;
                 }
-
-                [ProtocolData(EngineProtocol.C2S.UdpKeepAlive)]
-                [Transport(ETransport.Udp)]
-                public class UdpKeepAlive : BaseProtocolData
-                {
-                }
         }
 
         public static class S2C

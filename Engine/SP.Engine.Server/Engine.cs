@@ -110,7 +110,6 @@ namespace SP.Engine.Server
                 _engineHandlerDict[EngineProtocol.C2S.Ping] = new Ping<TPeer>();
                 _engineHandlerDict[EngineProtocol.C2S.MessageAck] = new MessageAck<TPeer>();
                 _engineHandlerDict[EngineProtocol.C2S.UdpHelloReq] = new UdpHelloReq<TPeer>();
-                _engineHandlerDict[EngineProtocol.C2S.UdpKeepAlive] = new UdpKeepAlive<TPeer>();
                 return DiscoverHandlers().All(RegisterHandler);
             }
             catch (Exception e)

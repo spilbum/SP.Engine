@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 
 namespace SP.Engine.Client
@@ -10,9 +11,10 @@ namespace SP.Engine.Client
         private readonly int _intervalMs;
         private readonly object _state;
         private Action<object> _callback;
-        private bool _isRunning;
         private bool _isFirstExecution;
         
+        public bool IsRunning { get; private set; }
+
         public TickTimer(Action<object> callback, object state, int dueTimeMs, int intervalMs)
         {
             _callback = callback ?? throw new ArgumentNullException(nameof(callback));
@@ -21,12 +23,12 @@ namespace SP.Engine.Client
             _intervalMs = intervalMs;
             _lastExecutionTime = DateTime.UtcNow;
             _isFirstExecution = true;
-            _isRunning = true;
+            IsRunning = true;
         }
 
         public void Tick()
         {
-            if (!_isRunning) 
+            if (!IsRunning) 
                 return;
 
             var now = DateTime.UtcNow;
@@ -60,7 +62,7 @@ namespace SP.Engine.Client
 
         public void Dispose()
         {
-            _isRunning = false;
+            IsRunning = false;
             _callback = null;
         }
     }

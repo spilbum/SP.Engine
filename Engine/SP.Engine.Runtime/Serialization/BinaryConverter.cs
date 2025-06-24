@@ -133,12 +133,18 @@ namespace SP.Engine.Runtime.Serialization
 
                 case EDataType.ByteArray:
                 {
+                    if (buffer.Read<bool>()) 
+                        return null;
+                    
                     var length = buffer.Read<int>();
                     return buffer.ReadBytes(length);
                 }
 
                 case EDataType.DateTime:
                 {
+                    if (buffer.Read<bool>()) 
+                        return null;
+                    
                     var kind = (DateTimeKind)buffer.Read<byte>();
                     var ticks = buffer.Read<long>();
                     return new DateTime(ticks, kind);
@@ -250,17 +256,29 @@ namespace SP.Engine.Runtime.Serialization
 
                 case EDataType.ByteArray:
                 {
-                    var bytes = (byte[])obj;
-                    buffer.Write(bytes.Length);
-                    buffer.Write(bytes);
+                    var isNull = obj == null;
+                    buffer.Write(isNull);
+
+                    if (!isNull)
+                    {
+                        var bytes = (byte[])obj;
+                        buffer.Write(bytes.Length);
+                        buffer.Write(bytes);   
+                    }
                     break;
                 }
 
                 case EDataType.DateTime:
                 {
-                    var dt = (DateTime)obj;
-                    buffer.Write((byte)dt.Kind);
-                    buffer.Write(dt.Ticks);
+                    var isNull = obj == null;
+                    buffer.Write(isNull);
+
+                    if (!isNull)
+                    {
+                        var dt = (DateTime)obj;
+                        buffer.Write((byte)dt.Kind);
+                        buffer.Write(dt.Ticks);
+                    }
                     break;
                 }
 

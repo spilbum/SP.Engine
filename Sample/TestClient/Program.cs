@@ -26,12 +26,14 @@ namespace TestClient
             
             _logger = logger;
             _netPeer = new NetPeer(logger);
-            _netPeer.ReconnectionIntervalSec = 3;
-            _netPeer.MaxConnectionAttempts = 3;
+            _netPeer.ReconnectIntervalSec = 3;
+            _netPeer.MaxReconnectAttempts = 3;
             _netPeer.IsEnableAutoSendPing = true;
             _netPeer.AutoSendPingIntervalSec = 2;
             _netPeer.MaxAllowedLength = 4096;
             _netPeer.UdpMtu = 1400;
+            _netPeer.MaxConnectAttempts = 2;
+            _netPeer.ConnectIntervalSec = 10;
             _netPeer.Connected += OnConnected;
             _netPeer.Disconnected += OnDisconnected;
             _netPeer.Error += OnError;
@@ -60,12 +62,14 @@ namespace TestClient
             _netPeer?.Send(protocol);
         }
         
-        private void OnStateChanged(ENetPeerState obj)
+        private void OnStateChanged(object? sender, StateChangedEventArgs e)
         {
+            _logger?.Debug("[OnStateChanged] {0} -> {1}", e.OldState, e.NewState);
         }
 
         private void OnOffline(object? sender, EventArgs e)
         {
+            _logger?.Debug("[OnOffline] Offline...");
         }
 
         private void OnMessageReceived(object? sender, MessageEventArgs e)
@@ -82,16 +86,19 @@ namespace TestClient
 
         private void OnDisconnected(object? sender, EventArgs e)
         {
-            _logger?.Info("Disconnected");
+            _logger?.Info("[OnDisconnected] Disconnected...");
         }
 
         private void OnConnected(object? sender, EventArgs e)
         {
-            _logger?.Info("OnConnected");
+            _logger?.Info("[OnConnected] Connected...");
         }
 
         public void PrintNetowrkQuality()
         {
+            if (!_netPeer?.IsConnected ?? false)
+                return;
+            
             var sb = new StringBuilder();
             if (_netPeer != null)
             {
@@ -99,7 +106,7 @@ namespace TestClient
                     $"RTT: {_netPeer.SmoothedRttMs:F1}ms | Avg: {_netPeer.AverageRttMs:F1} Min: {_netPeer.MinRttMs:F1} | Max: {_netPeer.MaxRttMs:F1} | Jitter: {_netPeer.JitterMs:F1} | PackLossRate: {_netPeer.PacketLossRate:F1}");
             }
             
-            _logger?.Info("[NetowrkQuality] {0}", sb.ToString());
+            _logger?.Info("Network Quality: {0}, ServerTime: {1:yyyy-MM-dd hh:mm:ss.fff}", sb.ToString(), _netPeer?.GetServerTime());
         }
 
         [ProtocolMethod(Protocol.S2C.EchoAck)]

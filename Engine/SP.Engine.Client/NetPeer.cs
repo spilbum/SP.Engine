@@ -2,10 +2,8 @@
 using System.Net;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Threading;
-using SP.Common;
 using SP.Common.Buffer;
 using SP.Common.Logging;
 using SP.Engine.Client.ProtocolHandler;
@@ -27,49 +25,74 @@ namespace SP.Engine.Client
         public IMessage Message { get; private set; }
     }
 
+    public class StateChangedEventArgs : EventArgs
+    {
+        public ENetPeerState OldState { get; private set; }
+        public ENetPeerState NewState { get; private set; }
+
+        public StateChangedEventArgs(ENetPeerState oldState, ENetPeerState newState)
+        {
+            OldState = oldState;
+            NewState = newState;
+        }
+    }
+
     public enum ENetPeerState
     {
         None = 0,
+        /// <summary>
+        /// 최초 연결 시도
+        /// </summary>
         Connecting = 1,
-        Open = 2,
-        Closing = 3,
-        Closed = 4,
+        /// <summary>
+        /// 인증 처리중
+        /// </summary>
+        Handshake = 2,
+        /// <summary>
+        /// 연결 유지중
+        /// </summary>
+        Open = 3,
+        /// <summary>
+        /// 재연결 시도
+        /// </summary>
+        Reconnecting = 4,
+        /// <summary>
+        /// 종료중
+        /// </summary>
+        Closing = 5,
+        /// <summary>
+        /// 종료됨
+        /// </summary>
+        Closed = 6,
     }
 
     public sealed class NetPeer : ReliableMessageProcessor, IDisposable
     {
-        private static EndPoint ResolveEndPoint(string ip, int port)
-        {
-            if (IPAddress.TryParse(ip, out var address))
-                return new IPEndPoint(address, port);
-            return new DnsEndPoint(ip, port);
-        }
-        
         private int _stateCode;
         private bool _disposed;
         private TcpNetworkSession _session;
         private UdpSocket _udpSocket;
-        private int _reconnectionAttempts;
+        private int _reconnectAttempts;
         private TickTimer _timer;
-        private bool _isReconnecting;
         private readonly BinaryBuffer _receiveBuffer = new BinaryBuffer();
         private readonly ConcurrentQueue<IMessage> _sendingMessageQueue = new ConcurrentQueue<IMessage>();
         private readonly ConcurrentQueue<IMessage> _receivedMessageQueue = new ConcurrentQueue<IMessage>();
         private readonly Dictionary<EProtocolId, IHandler<NetPeer, IMessage>> _engineHandlerDict =
             new Dictionary<EProtocolId, IHandler<NetPeer, IMessage>>();
-        private readonly LatencyStats _latencyStats = new LatencyStats();
 
+        private readonly LatencyStats _latencyStats = new LatencyStats();
         private double _lastRttMs;
         private double _serverTimeOffsetMs;
+        private int _connectAttempts;
+
         public long LastSendPingTime { get; private set; }
-        
         public DiffieHellman DiffieHelman { get; } = new DiffieHellman(DhKeySize.Bit2048);
         public EndPoint RemoteEndPoint { get; private set; }
         public string SessionId { get; private set; }
-        public EPeerId PeerId { get; private set; }   
+        public EPeerId PeerId { get; private set; }
         public PackOptions PackOptions { get; }
         public ILogger Logger { get; }
-        
+
         public ENetPeerState State => (ENetPeerState)_stateCode;
         public bool IsConnected => State.HasFlag(ENetPeerState.Open);
 
@@ -79,22 +102,50 @@ namespace SP.Engine.Client
         public double MaxRttMs => _latencyStats.MaxRttMs;
         public double JitterMs => _latencyStats.JitterMs;
         public float PacketLossRate => _latencyStats.PacketLossRate;
-        
+
+        /// <summary>
+        /// 자동 핑 활성화 여부
+        /// </summary>
         public bool IsEnableAutoSendPing { get; set; } = true;
+        /// <summary>
+        /// 자동 핑 간격(초)
+        /// </summary>
         public int AutoSendPingIntervalSec { get; set; } = 30;
+        /// <summary>
+        /// 수신 가능한 최대 허용 크기(바이트)
+        /// </summary>
         public int MaxAllowedLength { get; set; } = 4096;
-        public int MaxConnectionAttempts { get; set; } = 5;
-        public int ReconnectionIntervalSec { get; set; } = 30;
+        /// <summary>
+        /// 재연결 최대 시도 횟수
+        /// </summary>
+        public int MaxReconnectAttempts { get; set; } = 10;
+        /// <summary>
+        /// 재연결 시도 간격(초)
+        /// </summary>
+        public int ReconnectIntervalSec { get; set; } = 30;
+        /// <summary>
+        /// MTU 값
+        /// </summary>
         public ushort UdpMtu { get; set; } = 1400;
-        
+        /// <summary>
+        /// 최초 연결 최대 시도 횟수
+        /// </summary>
+        public int MaxConnectAttempts { get; set; } = 5;
+        /// <summary>
+        /// 최초 연결 시도 간격(초)
+        /// </summary>
+        public int ConnectIntervalSec { get; set; } = 2;
+
+
         public event EventHandler Connected;
         public event EventHandler Disconnected;
         public event EventHandler Offline;
         public event EventHandler<ErrorEventArgs> Error;
         public event EventHandler<MessageEventArgs> MessageReceived;
-        public event Action<ENetPeerState> StateChanged;
+        public event EventHandler<StateChangedEventArgs> StateChanged;
         
-        public NetPeer(ILogger logger = null)
+
+        public NetPeer(ILogger logger)
         {
             Logger = logger;
             PackOptions = PackOptions.Default;
@@ -118,7 +169,7 @@ namespace SP.Engine.Client
             var estimateMs = GetCurrentTimeMs() + (long)_serverTimeOffsetMs;
             return DateTimeOffset.FromUnixTimeMilliseconds(estimateMs).UtcDateTime;
         }
-        
+
         public void Connect(string ip, int port)
         {
             if (null != _session)
@@ -126,26 +177,45 @@ namespace SP.Engine.Client
 
             if (string.IsNullOrEmpty(ip) || 0 >= port)
                 throw new ArgumentException("Invalid ip or port");
-            
+
             RemoteEndPoint = ResolveEndPoint(ip, port);
             StartConnection();
         }
         
+        private static EndPoint ResolveEndPoint(string ip, int port)
+        {
+            if (IPAddress.TryParse(ip, out var address))
+                return new IPEndPoint(address, port);
+            return new DnsEndPoint(ip, port);
+        }
+
         public void Tick()
         {
             _timer?.Tick();
             _udpSocket?.Tick();
-            
+
             // 수신된 메시지 처리
             DequeueReceivedMessage();
 
             // 전송 메시지 처리
             DequeueSendingMessage();
 
+            // 대기 중인 메시지 전송
+            DequeuePendingMessage();
+
             // 재 전송 메시지 체크
             CheckReSendMessages();
         }
-        
+
+        private void DequeuePendingMessage()
+        {
+            if (!IsConnected)
+                return;
+
+            foreach (var message in DequeuePendingSend())
+                EnqueueSendingMessage(message);
+        }
+
         public bool Send(IProtocolData data)
         {
             var transport = TransportHelper.Resolve(data);
@@ -163,6 +233,7 @@ namespace SP.Engine.Client
                         message.SetSequenceNumber(GetNextSequenceNumber());
                         message.Pack(data, DiffieHelman.SharedKey, PackOptions);
                     }
+
                     return Send(message);
                 }
                 case ETransport.Udp:
@@ -178,13 +249,14 @@ namespace SP.Engine.Client
                         message.SetPeerId(PeerId);
                         message.Pack(data, DiffieHelman.SharedKey, PackOptions);
                     }
+
                     return Send(message);
                 }
                 default:
                     throw new Exception($"Unknown transport: {transport}");
             }
         }
-        
+
         public void SendPing()
         {
             var now = GetCurrentTimeMs();
@@ -208,21 +280,26 @@ namespace SP.Engine.Client
             }
         }
 
-        private bool TrySetState(ENetPeerState expected, ENetPeerState next)
+        private bool TrySetState(ENetPeerState compareState, ENetPeerState nextState)
         {
-            if (Interlocked.CompareExchange(ref _stateCode, (int)next, (int)expected) != (int)expected) return false;
-            Logger?.Info($"[NetPeer] State changed: {expected} -> {next}");
-            StateChanged?.Invoke(next);
+            if (Interlocked.CompareExchange(ref _stateCode, (int)nextState, (int)compareState) != (int)compareState)
+                return false;
+            
+            OnStateChanged(compareState, nextState);
             return true;
         }
 
-        private void SetState(ENetPeerState state)
+        private void SetState(ENetPeerState newState)
         {
-            Interlocked.Exchange(ref _stateCode, (int)state);
-            Logger?.Info($"[NetPeer] State changed: {state}");
-            StateChanged?.Invoke(state);
+            var oldState = (ENetPeerState)Interlocked.Exchange(ref _stateCode, (int)newState);
+            OnStateChanged(oldState, newState);
         }
-        
+
+        private void OnStateChanged(ENetPeerState oldState, ENetPeerState newState)
+        {
+            StateChanged?.Invoke(this, new StateChangedEventArgs(oldState, newState));
+        }
+
         private void SetTimer(Action<object> callback, object state, int dueTimeMs, int intervalMs)
         {
             _timer?.Dispose();
@@ -234,71 +311,83 @@ namespace SP.Engine.Client
             _timer?.Dispose();
             _timer = null;
         }
-        
+
         private void StartPingTimer()
         {
             // 자동 핑 on/off 여부
             if (!IsEnableAutoSendPing)
                 return;
 
-            var intervalSec = AutoSendPingIntervalSec > 0 ? AutoSendPingIntervalSec : 60;
-            SetTimer(_ => SendPing(), null, intervalSec * 1000, intervalSec * 1000);
+            SetTimer(_ => SendPing(), null, 0, AutoSendPingIntervalSec * 1000);
         }
 
         private void StartConnection()
         {
             SetState(ENetPeerState.Connecting);
 
-            var session = new TcpNetworkSession();
+            var session = _session;
+            session?.Close();
+
+            session = new TcpNetworkSession();
             session.Opened += OnSessionOpened;
             session.Closed += OnSessionClosed;
             session.Error += OnSessionError;
             session.DataReceived += OnSessionDataReceived;
             _session = session;
 
+            _connectAttempts = 0;
+            SetTimer(OnConnectTimerTick, null, 0, ConnectIntervalSec * 1000);
+        }
+
+        private void OnConnectTimerTick(object state)
+        {
+            _connectAttempts++;
+            if (_connectAttempts > MaxConnectAttempts)
+            {
+                Logger?.Warn("Max connect attempts exceeded");
+                Close();
+                return;
+            }
+
+            Logger?.Debug("Connecting...#{0}", _connectAttempts);
+            
             try
             {
-                session.Connect(RemoteEndPoint);
+                _session.Connect(RemoteEndPoint);
             }
             catch (Exception e)
             {
                 OnError(e);
-                Close();
             }
         }
 
         private void StartReconnection()
         {
-            if (_isReconnecting)
-            {
-                Logger.Warn("Already reconnecting");
-                return;
-            }
-            
-            _isReconnecting = true;
-            SetTimer(TryReconnection, _session, 0, ReconnectionIntervalSec * 1000);
+            SetState(ENetPeerState.Reconnecting);
+
+            _reconnectAttempts = 0;
+            SetTimer(OnReconnectTimerTick, null, 0, ReconnectIntervalSec * 1000);
         }
 
-        private void TryReconnection(object state)
+        private void OnReconnectTimerTick(object state)
         {
-            var session = (TcpNetworkSession)state;
-            if (MaxConnectionAttempts > 0 && _reconnectionAttempts >= MaxConnectionAttempts)
+            _reconnectAttempts++;
+            if (_reconnectAttempts > MaxReconnectAttempts)
             {
-                Logger?.Warn("Max connection attempts exceeded.");
+                Logger?.Warn("Max reconnect attempts exceeded.");
                 Close();
                 return;
             }
 
+            Logger?.Debug("Reconnecting...#{0}", _reconnectAttempts);
+            
             try
             {
-                _reconnectionAttempts++;
-                Logger?.Debug($"Reconnect attempt #{_reconnectionAttempts}");
-                session.Connect(RemoteEndPoint);
+                _session.Connect(RemoteEndPoint);
             }
             catch (Exception e)
             {
                 OnError(e);
-                Close();
             }
         }
 
@@ -310,17 +399,17 @@ namespace SP.Engine.Client
                 {
                     if (tcpMessage.ProtocolId.IsEngineProtocol())
                         return _session.Send(tcpMessage);
-                    
+
                     if (!IsConnected)
                     {
                         EnqueuePendingSend(tcpMessage);
                         return true;
                     }
-                    
+
                     StartSendingMessage(tcpMessage);
                     if (!_session.Send(tcpMessage))
                         return false;
-                    
+
                     break;
                 }
                 case UdpMessage udpMessage:
@@ -333,7 +422,7 @@ namespace SP.Engine.Client
                 default:
                     return false;
             }
-            
+
             return true;
         }
 
@@ -353,12 +442,12 @@ namespace SP.Engine.Client
                 UdpMtu = UdpMtu
             });
         }
-        
+
         private void SendCloseHandshake()
         {
             Send(new EngineProtocolData.C2S.Close());
         }
-        
+
         private void SendMessageAck(long sequenceNumber)
         {
             Send(new EngineProtocolData.C2S.MessageAck { SequenceNumber = sequenceNumber });
@@ -372,14 +461,14 @@ namespace SP.Engine.Client
 
         public void Close()
         {
-            if (TrySetState(ENetPeerState.None, ENetPeerState.Closed))
+            if (TrySetState(ENetPeerState.None, ENetPeerState.Closing))
             {
-                // 초기 상태에서 종료를 호출함
                 OnClosed();
                 return;
             }
 
-            if (TrySetState(ENetPeerState.Connecting, ENetPeerState.Closing))
+            if (TrySetState(ENetPeerState.Connecting, ENetPeerState.Closing) 
+                || TrySetState(ENetPeerState.Reconnecting, ENetPeerState.Closing))
             {
                 var session = _session;
                 if (session != null && session.IsConnected)
@@ -392,7 +481,7 @@ namespace SP.Engine.Client
                 OnClosed();
                 return;
             }
-
+            
             SetState(ENetPeerState.Closing);
 
             // 종료 요청
@@ -413,7 +502,8 @@ namespace SP.Engine.Client
             // 연결된 상태에서만 메시지를 처리함
             if (!IsConnected)
                 return;
-            
+
+            var count = 0;
             while (_receivedMessageQueue.TryDequeue(out var message))
             {
                 switch (message)
@@ -433,6 +523,8 @@ namespace SP.Engine.Client
                     }
                 }
 
+                if (++count >= 20)
+                    break;
             }
         }
 
@@ -442,8 +534,13 @@ namespace SP.Engine.Client
             if (State == ENetPeerState.Closing  || State == ENetPeerState.Closed)
                 return;
 
-            while (_sendingMessageQueue.TryDequeue(out var message)) 
+            var count = 0;
+            while (_sendingMessageQueue.TryDequeue(out var message))
+            {
                 Send(message);
+                if (++count >= 20)
+                    break;
+            }
         }
 
         private void CheckReSendMessages()
@@ -451,7 +548,7 @@ namespace SP.Engine.Client
             // 연결 상태일때만 체크함
             if (!IsConnected)
                 return;
-            
+
             foreach (var message in GetResendCandidates())
                 EnqueueSendingMessage(message);
         }
@@ -528,16 +625,13 @@ namespace SP.Engine.Client
 
         private void OnSessionClosed(object sender, EventArgs e)
         {
-            _isReconnecting = false;
-            
             OnClosed();
         }
 
         private void OnSessionOpened(object sender, EventArgs e)
         {
-            _isReconnecting = false;
-            
-            // 인증 요청
+            // 인증 시작
+            SetState(ENetPeerState.Handshake);
             SendAuthHandshake();
         }
         
@@ -569,25 +663,30 @@ namespace SP.Engine.Client
         {
             switch (State)
             {
+                case ENetPeerState.Connecting:
+                case ENetPeerState.Reconnecting:
+                    // 최초 연결 또는 재 연결 중일때는 타이머에서 종료 처리
+                    break;
                 case ENetPeerState.Open:
-                {
-                    // 오프라인으로 전환
+                    // 오프라인 전환
                     OnOffline();
                     break;
-                }
-                case ENetPeerState.Connecting:
-                {
-                    StartReconnection();
-                    break;
-                }
-                default:
+                case ENetPeerState.None:
+                case ENetPeerState.Handshake:
+                case ENetPeerState.Closing:
                 {
                     SetState(ENetPeerState.Closed);
                     CancelTimer();
-                    CloseWithoutHandshake();
+                    _session = null;
+                    _udpSocket = null;
                     Disconnected?.Invoke(this, EventArgs.Empty);
-                    break;   
+                    break;
                 }
+                case ENetPeerState.Closed:
+                    // 이미 종료됨
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException();
             }
         }
 
@@ -598,7 +697,7 @@ namespace SP.Engine.Client
             socket.DataReceived += OnUdpSocketDataReceived;
 
             var ipAddress = ((IPEndPoint)RemoteEndPoint).Address;
-            if (!socket.Connect(this, ipAddress.ToString(), port, UdpMtu))
+            if (!socket.Connect(ipAddress.ToString(), port, UdpMtu))
             {
                 Logger.Error("Failed to connect to UDP socket. ip={0}, port={1}", ipAddress.ToString(), port);
                 return;
@@ -616,6 +715,9 @@ namespace SP.Engine.Client
 
         private void OnUdpSocketDataReceived(object sender, DataEventArgs e)
         {
+            if (_udpSocket == null)
+                return;
+            
             var headerSpan = e.Data.AsSpan(e.Offset, e.Length);
             if (!UdpHeader.TryParse(headerSpan, out var header))
                 return;
@@ -668,27 +770,34 @@ namespace SP.Engine.Client
         internal void OnOpened(EPeerId peerId, string sessionId, int udpPort)
         {
             SetState(ENetPeerState.Open);
-            
-            _reconnectionAttempts = 0;
+
             PeerId = peerId;
             SessionId = sessionId;
             
             // 핑 타이머 시작
             StartPingTimer();
             
-            // 대기 중인 메시지 전송
-            foreach (var message in DequeuePendingSend())
-                EnqueueSendingMessage(message);
-            
             ConnectUdpSocket(udpPort);
             Connected?.Invoke(this, EventArgs.Empty);
         }
 
+        internal void OnUdpHelloAck(EEngineErrorCode errorCode)
+        {
+            if (errorCode != EEngineErrorCode.Success)
+            {
+                _udpSocket.Close();
+                _udpSocket = null;
+                return;
+            }
+            
+            Logger.Debug("Udp socket connected");
+        }
+        
         private void OnOffline()
-        {            
+        {
             ResetProcessorState();
-            StartReconnection();
             Offline?.Invoke(this, EventArgs.Empty);
+            StartReconnection();
         }
         
         private void OnMessageReceived(IMessage message)

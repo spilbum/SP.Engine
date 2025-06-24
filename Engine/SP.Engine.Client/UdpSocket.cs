@@ -1,13 +1,10 @@
 using System;
-using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
-using SP.Common.Fiber;
-using SP.Engine.Protocol;
 using SP.Engine.Runtime.Networking;
 
 namespace SP.Engine.Client
@@ -27,21 +24,18 @@ namespace SP.Engine.Client
         private ConcurrentBatchQueue<ArraySegment<byte>> _sendQueue;
         private byte[] _receiveBuffer;
         private int _isSending;
-        private NetPeer _netPeer;
-        private DateTime? _nextKeepAliveTime;
         private ushort _mtu;
         private long _nextFragmentId;
         
         public UdpFragmentAssembler Assembler { get; } = new UdpFragmentAssembler();
-
+        public bool IsRunning => _socket != null;
         public event EventHandler<DataEventArgs> DataReceived;
         public event EventHandler<ErrorEventArgs> Error;
 
-        public bool Connect(NetPeer netPeer, string ip, int port, ushort mtu)
+        public bool Connect(string ip, int port, ushort mtu)
         {
             try
             {
-                _netPeer = netPeer;
                 _mtu = mtu;
                 _remoteEndPoint = new IPEndPoint(IPAddress.Parse(ip), port);
                 _sendQueue = new ConcurrentBatchQueue<ArraySegment<byte>>(300);
@@ -58,27 +52,16 @@ namespace SP.Engine.Client
             }
             catch (Exception e)
             {
-                netPeer.Logger.Error(e);
+                OnError(e);
                 return false;
             }
         }
 
-        private void CheckKeepAlive()
-        {
-            if (_nextKeepAliveTime != null && DateTime.UtcNow < _nextKeepAliveTime)
-                return;
-            
-            _nextKeepAliveTime = DateTime.UtcNow.AddSeconds(5);
-            var keepAlive = new EngineProtocolData.C2S.UdpKeepAlive();
-            var message = new UdpMessage();
-            message.SetPeerId(_netPeer.PeerId);
-            message.Pack(keepAlive, null, null);
-            Send(message);
-        }
-
         public void Tick()
         {
-            CheckKeepAlive();
+            if (IsRunning)
+                return;
+            
             Assembler.Cleanup(TimeSpan.FromSeconds(10));
         }
         
@@ -86,9 +69,12 @@ namespace SP.Engine.Client
         {
             try
             {
-                _socket?.Close();
-                _socket?.Dispose();
-                _socket = null;
+                if (_socket != null)
+                {
+                    _socket.Close();
+                    _socket.Dispose();
+                    _socket = null;   
+                }
             }
             catch (Exception e)
             {
@@ -111,6 +97,9 @@ namespace SP.Engine.Client
         
         public bool Send(UdpMessage message)
         {
+            if (!IsRunning)
+                return false;
+            
             var items = ToSegments(message);
             if (!_sendQueue.Enqueue(items))
                 return false;

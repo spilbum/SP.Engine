@@ -91,15 +91,23 @@ namespace SP.Engine.Server.Connector
         {
             var netPeer = new NetPeer(Logger);
             netPeer.IsEnableAutoSendPing = true;
-            netPeer.AutoSendPingIntervalSec = 10;
-            netPeer.MaxConnectionAttempts = -1;
+            netPeer.AutoSendPingIntervalSec = 5;
+            netPeer.MaxReconnectAttempts = 1;
             netPeer.MaxAllowedLength = 64 * 1024;
+            netPeer.MaxConnectAttempts = 1;
+            netPeer.ConnectIntervalSec = 5;
             netPeer.Connected += OnConnected;
             netPeer.Error += OnError;
             netPeer.Offline += OnOffline;
             netPeer.Disconnected += OnDisconnect;
             netPeer.MessageReceived += OnMessageReceived;
+            netPeer.StateChanged += OnStateChanged;
             return netPeer;
+        }
+
+        private void OnStateChanged(object sender, StateChangedEventArgs e)
+        {
+            Log(ELogLevel.Info, "State Changed: {0} -> {1}", e.OldState, e.NewState);
         }
 
         private void OnOffline(object sender, EventArgs e)
