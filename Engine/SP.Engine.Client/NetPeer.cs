@@ -96,7 +96,6 @@ namespace SP.Engine.Client
         public ENetPeerState State => (ENetPeerState)_stateCode;
         public bool IsConnected => State.HasFlag(ENetPeerState.Open);
 
-        public double SmoothedRttMs => _latencyStats.SmoothedRttMs;
         public double AverageRttMs => _latencyStats.AvgRttMs;
         public double MinRttMs => _latencyStats.MinRttMs;
         public double MaxRttMs => _latencyStats.MaxRttMs;
@@ -159,6 +158,18 @@ namespace SP.Engine.Client
         ~NetPeer()
         {
             Dispose(false);
+        }
+
+        protected override void OnDebug(string format, params object[] args)
+        {
+            Logger?.Debug(format, args);
+        }
+
+        protected override void OnExceededResendCnt(IMessage message)
+        {
+            Logger?.Error("Message {0}({1}) exceeded max resend count.", message.SequenceNumber, message.ProtocolId);
+            // 재전송 횟수 초가로 종료함
+            Close();
         }
 
         private static long GetCurrentTimeMs()
@@ -461,6 +472,9 @@ namespace SP.Engine.Client
 
         public void Close()
         {
+            if (State == ENetPeerState.Closing || State == ENetPeerState.Closed)
+                return;
+            
             if (TrySetState(ENetPeerState.None, ENetPeerState.Closing))
             {
                 OnClosed();

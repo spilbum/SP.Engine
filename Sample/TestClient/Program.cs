@@ -103,7 +103,7 @@ namespace TestClient
             if (_netPeer != null)
             {
                 sb.Append(
-                    $"RTT: {_netPeer.SmoothedRttMs:F1}ms | Avg: {_netPeer.AverageRttMs:F1} Min: {_netPeer.MinRttMs:F1} | Max: {_netPeer.MaxRttMs:F1} | Jitter: {_netPeer.JitterMs:F1} | PackLossRate: {_netPeer.PacketLossRate:F1}");
+                    $"Avg: {_netPeer.AverageRttMs:F1} Min: {_netPeer.MinRttMs:F1} | Max: {_netPeer.MaxRttMs:F1} | Jitter: {_netPeer.JitterMs:F1} | PackLossRate: {_netPeer.PacketLossRate:F1}");
             }
             
             _logger?.Info("Network Quality: {0}, ServerTime: {1:yyyy-MM-dd hh:mm:ss.fff}", sb.ToString(), _netPeer?.GetServerTime());

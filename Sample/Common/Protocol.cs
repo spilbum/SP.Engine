@@ -21,7 +21,6 @@ namespace Common
         public static class C2S
         {
             [ProtocolData(Protocol.C2S.EchoReq)]
-            [Transport(ETransport.Udp)]
             public class EchoReq : BaseProtocolData
             {
                 public string? Str;
@@ -33,7 +32,6 @@ namespace Common
         public static class S2C
         {
             [ProtocolData(Protocol.S2C.EchoAck)]
-            [Transport(ETransport.Udp)]
             public class EchoAck : BaseProtocolData
             {
                 public string? Str;

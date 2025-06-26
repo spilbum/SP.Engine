@@ -45,7 +45,10 @@ internal static class Program
 }
 
 public class NetPeer(IClientSession clientSession, DhKeySize dhKeySize, byte[] dhPublicKey)
-    : BasePeer(EPeerType.User, clientSession, dhKeySize, dhPublicKey);
+    : BasePeer(EPeerType.User, clientSession, dhKeySize, dhPublicKey)
+{
+    
+}
 
 public class TestServer : Engine<NetPeer>
 {
