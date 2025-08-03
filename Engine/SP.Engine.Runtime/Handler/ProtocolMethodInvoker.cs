@@ -9,22 +9,22 @@ namespace SP.Engine.Runtime.Handler
 {
     public class ProtocolMethodInvoker
     {
-        private readonly Type _protocolType;
-        private readonly MethodInfo _methodInfo;
+        private readonly Type _type;
+        private readonly MethodInfo _method;
 
-        private ProtocolMethodInvoker(EProtocolId protocolId, Type protocolType, MethodInfo methodInfo)
+        private ProtocolMethodInvoker(EProtocolId protocolId, Type type, MethodInfo method)
         {
-            _protocolType = protocolType;
-            _methodInfo = methodInfo;
             ProtocolId = protocolId;
+            _type = type;
+            _method = method;
         }
 
         public EProtocolId ProtocolId { get; }
 
         public void Invoke(object instance, IMessage message, byte[] sharedKey = null)
         {
-            var protocol = message.Unpack(_protocolType, sharedKey);
-            _methodInfo.Invoke(instance, new object[] { protocol });
+            var protocol = message.Unpack(_type, sharedKey);
+            _method.Invoke(instance, new object[] { protocol });
         }
         
         public static IEnumerable<ProtocolMethodInvoker> LoadInvokers(Type type)

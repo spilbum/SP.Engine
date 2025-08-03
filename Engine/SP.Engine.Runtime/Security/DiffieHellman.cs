@@ -10,10 +10,10 @@ namespace SP.Engine.Runtime.Security
         private readonly DhPublicKey _publicKey;
         private readonly DhParameters _parameters;
 
-        public DhKeySize KeySize { get; }
+        public EDhKeySize KeySize { get; }
         public byte[] SharedKey { get; private set; }
 
-        public DiffieHellman(DhKeySize keySize)
+        public DiffieHellman(EDhKeySize keySize)
         {
             KeySize = keySize;
             _parameters = DhParameters.From(keySize);

@@ -6,35 +6,40 @@ namespace SP.Engine.Client
     public class LatencyStats
     {
         private readonly DataSampler _sampler;
-        private int _pingSent;
-        private int _pongReceived;
+        private readonly EwmaFilter _srtt;
+        private int _sentCount;
+        private int _receivedCount;
 
+        public double LastRttMs { get; private set; }
+        public double SmoothedRttMs => _srtt.Value;
         public double MinRttMs => _sampler.Min;
         public double MaxRttMs => _sampler.Max;
         public double AvgRttMs => _sampler.Avg;
         public double JitterMs => _sampler.StdDev;
-        public float PacketLossRate => _pingSent == 0 ? 0f : 1f - (float)_pongReceived / _pingSent;
+        public float PacketLossRate => _sentCount == 0 ? 0f : 1f - (float)_receivedCount / _sentCount;
         
         public LatencyStats(int windowSize = 20)
         {
             _sampler = new DataSampler(windowSize);
+            _srtt = new EwmaFilter(0.125);
         }
 
-        public void OnPingSent() => _pingSent++;
-        public void OnPongReceived(double rawRtt)
+        public void OnSent() => _sentCount++;
+        public void OnReceived(double rawRtt)
         {
-            _pongReceived++;
+            LastRttMs = rawRtt;
+            _receivedCount++;
             _sampler.Add(rawRtt);
+            _srtt.Update(rawRtt);
         }
 
         public void Clear()
         {
             _sampler.Clear();
-            _pingSent = 0;
-            _pongReceived = 0;
+            _srtt.Reset();
+            _sentCount = 0;
+            _receivedCount = 0;
+            LastRttMs = 0;
         }
-
-        public string ToSummaryString()
-            => $"Avg: {AvgRttMs:F1} Min: {MinRttMs:F1} | Max: {MaxRttMs:F1} | Jitter: {JitterMs:F1} | PackLossRate: {PacketLossRate:F1}";
-    }
+   }
 }

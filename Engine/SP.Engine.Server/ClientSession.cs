@@ -44,16 +44,15 @@ namespace SP.Engine.Server
         
         internal bool Send(IProtocolData data)
         {
-            var transport = TransportHelper.Resolve(data);
-            switch (transport)
+            switch (data.ProtocolType)
             {
-                case ETransport.Tcp:
+                case EProtocolType.Tcp:
                 {
                     var message = new TcpMessage();
                     message.Pack(data,null, null);
                     return Send(message);
                 }
-                case ETransport.Udp:
+                case EProtocolType.Udp:
                 {
                     var message = new UdpMessage();              
                     message.SetPeerId(Peer.PeerId);
@@ -61,7 +60,7 @@ namespace SP.Engine.Server
                     return Send(message);
                 }
                 default:
-                    throw new Exception($"Unknown transport: {transport}");
+                    throw new Exception($"Unknown protocol type: {data.ProtocolType}");
             }
         }
         

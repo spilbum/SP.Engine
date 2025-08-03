@@ -9,6 +9,7 @@ using SP.Engine.Runtime.Handler;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Server.Configuration;
 using SP.Engine.Server.ProtocolHandler;
+using EngineConfigBuilder = SP.Engine.Client.Configuration.EngineConfigBuilder;
 
 namespace SP.Engine.Server.Connector
 {
@@ -89,13 +90,15 @@ namespace SP.Engine.Server.Connector
 
         private NetPeer CreateNetPeer()
         {
-            var netPeer = new NetPeer(Logger);
-            netPeer.IsEnableAutoSendPing = true;
-            netPeer.AutoSendPingIntervalSec = 5;
-            netPeer.MaxReconnectAttempts = 1;
-            netPeer.MaxAllowedLength = 64 * 1024;
-            netPeer.MaxConnectAttempts = 1;
-            netPeer.ConnectIntervalSec = 5;
+            var config = EngineConfigBuilder.Create()
+                .WithAutoPing(false, 2)
+                .WithConnectAttempt(2, 5)
+                .WithReconnectAttempt(5, 15)
+                .WithUdpMtu(1200)
+                .WithUdpKeepAlive(false, 30)
+                .Build();
+            
+            var netPeer = new NetPeer(config, Logger);
             netPeer.Connected += OnConnected;
             netPeer.Error += OnError;
             netPeer.Offline += OnOffline;
@@ -198,7 +201,7 @@ namespace SP.Engine.Server.Connector
                 if (invoker == null)
                     throw new Exception("Unknown protocol: " + message.ProtocolId);
                 
-                invoker.Invoke(this, message, _netPeer.DiffieHelman.SharedKey);
+                invoker.Invoke(this, message, _netPeer.DiffieHellman.SharedKey);
             }
             catch (Exception ex)
             {

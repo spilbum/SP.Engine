@@ -76,7 +76,7 @@ namespace SP.Engine.Server
 
         private int _stateCode = PeerStateConst.NotAuthorized;
         private bool _disposed;
-        private readonly DiffieHellman _diffieHellman;
+        private DiffieHellman _diffieHellman;
         private readonly PackOptions _packOptions;
 
         public UdpFragmentAssembler Assembler { get; } = new();
@@ -96,7 +96,7 @@ namespace SP.Engine.Server
         public byte[] DhPublicKey => _diffieHellman.PublicKey;
         public byte[] DhSharedKey => _diffieHellman.SharedKey;
         
-        protected BasePeer(EPeerType peerType, IClientSession session, DhKeySize dhKeySize, byte[] dhPublicKey)
+        protected BasePeer(EPeerType peerType, IClientSession session)
         {
             PeerId = PeerIdGenerator.Generate();
             PeerType = peerType;
@@ -105,8 +105,6 @@ namespace SP.Engine.Server
             SetMaxReSendCnt(session.Config.MaxReSendCnt);
             Session = session;
             _packOptions = session.Config.ToPackOptions();
-            _diffieHellman = new DiffieHellman(dhKeySize);
-            _diffieHellman.DeriveSharedKey(dhPublicKey);
         }
 
         protected BasePeer(BasePeer other)
@@ -150,7 +148,7 @@ namespace SP.Engine.Server
             {
                 PeerIdGenerator.Free(PeerId);
                 PeerId = EPeerId.None;
-                ResetProcessorState();
+                ResetMessageProcessor();
             }
 
             _disposed = true;
@@ -201,17 +199,16 @@ namespace SP.Engine.Server
         
         public bool Send(IProtocolData data)
         {
-            var transport = TransportHelper.Resolve(data);
-            switch (transport)
+            switch (data.ProtocolType)
             {
-                case ETransport.Tcp:
+                case EProtocolType.Tcp:
                 {
                     var message = new TcpMessage();
                     message.SetSequenceNumber(GetNextSequenceNumber());
                     message.Pack(data, _diffieHellman.SharedKey, _packOptions);
                     return Send(message);
                 }
-                case ETransport.Udp:
+                case EProtocolType.Udp:
                 {
                     var message = new UdpMessage();
                     message.SetPeerId(PeerId);
@@ -219,7 +216,7 @@ namespace SP.Engine.Server
                     return Session.Send(message);
                 }
                 default:
-                    throw new Exception($"Unknown transport: {transport}");
+                    throw new Exception($"Unknown protocol type: {data.ProtocolType}");
             }
         }
         
@@ -268,8 +265,8 @@ namespace SP.Engine.Server
 
         internal void Offline(ECloseReason reason)
         {
+            ResetSendingMessageState();
             Interlocked.Exchange(ref _stateCode, PeerStateConst.Offline);
-            ResetProcessorState();
             OnOffline(reason);
         }
 
@@ -278,12 +275,19 @@ namespace SP.Engine.Server
             Interlocked.Exchange(ref _stateCode, PeerStateConst.Closed);
             PeerIdGenerator.Free(PeerId);
             PeerId = EPeerId.None;
+            ResetMessageProcessor();
             OnLeaveServer(reason);
         }
 
         internal void SetUdpMtu(ushort udpMtu)
         {
             UdpMtu = udpMtu;
+        }
+
+        internal void SetSecurity(EDhKeySize keySize, byte[] publicKey)
+        {
+            _diffieHellman = new DiffieHellman(keySize);
+            _diffieHellman.DeriveSharedKey(publicKey);
         }
 
         protected virtual void OnJoinServer()

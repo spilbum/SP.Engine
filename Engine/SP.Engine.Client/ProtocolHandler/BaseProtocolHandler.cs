@@ -8,7 +8,7 @@ namespace SP.Engine.Client.ProtocolHandler
     {
         public void ExecuteMessage(NetPeer session, IMessage message)
         {
-            var protocol = (TProtocol)message.Unpack(typeof(TProtocol), session.DiffieHelman.SharedKey);
+            var protocol = (TProtocol)message.Unpack(typeof(TProtocol), session.DiffieHellman.SharedKey);
             ExecuteProtocol(session, protocol);
         }
 

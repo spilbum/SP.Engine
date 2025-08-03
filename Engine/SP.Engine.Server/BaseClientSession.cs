@@ -92,7 +92,7 @@ namespace SP.Engine.Server
                 }
                 case UdpMessage udpMessage:
                 {
-                    if (UdpSocket.TrySend(udpMessage))
+                    if (!UdpSocket?.TrySend(udpMessage) ?? false)
                         return false;
 
                     break;
@@ -197,7 +197,7 @@ namespace SP.Engine.Server
         public virtual void Close(ECloseReason reason)
         {
             TcpSession.Close(reason);
-            UdpSocket.Close(reason);
+            UdpSocket?.Close(reason);
         }
 
         public virtual void Close()

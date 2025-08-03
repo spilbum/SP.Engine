@@ -12,20 +12,44 @@ internal static class Program
     {
         try
         {
-            if (args.Length != 2)
-                throw new ApplicationException("Expected 2 arguments");
+            var host = string.Empty;
+            var port = 0;
             
-            var ip = args[0];
-            var port = int.Parse(args[1]);
+            for (var i = 0; i < args.Length; i++)
+            {
+                switch (args[i])
+                {
+                    case "--host":
+                        if (i + 1 < args.Length)
+                            host = args[++i];
+                        break;
 
-            var config = new EngineConfig();
-            config.Listeners.Add(new ListenerConfig { Ip = ip, Port = port, Mode = ESocketMode.Tcp });
-            config.Listeners.Add(new ListenerConfig { Ip = ip, Port = 8080, Mode = ESocketMode.Udp });
-            config.UseEncryption = true;
-            config.UseCompression = true;
-            config.CompressionThresholdPercent = 5;
+                    case "--port":
+                        if (i + 1 < args.Length && int.TryParse(args[i + 1], out var parsedPort))
+                            port = parsedPort;
+                        i++;
+                        break;
+                }
+            }
+            
+            if (host == string.Empty || port == 0)
+                throw new ApplicationException("Invalid host or port argument");
             
             using var server = new TestServer();
+
+            var config = EngineConfigBuilder.Create()
+                .WithLimitConnectionCount(100)
+                .WithSendTimeout(3000)
+                .WithKeepAlive(false, 10, 2)
+                .WithClearIdleSession(false, 60, 180)
+                .WithEncryption(true)
+                .WithCompression(true, 20)
+                .AddListener(new ListenerConfig { Ip = host, Port = port, Mode = ESocketMode.Tcp })
+                .AddListener(new ListenerConfig { Ip = host, Port = 10000, Mode = ESocketMode.Udp })
+                .WithPeerUpdateInterval(50)
+                .WithConnectorUpdateInterval(30)
+                .Build();
+            
             if (!server.Initialize("TestServer", config))
                 throw new Exception("Failed to initialize server");
         
@@ -44,17 +68,16 @@ internal static class Program
     }
 }
 
-public class NetPeer(IClientSession clientSession, DhKeySize dhKeySize, byte[] dhPublicKey)
-    : BasePeer(EPeerType.User, clientSession, dhKeySize, dhPublicKey)
+public class NetPeer(IClientSession clientSession) : BasePeer(EPeerType.User, clientSession)
 {
     
 }
 
 public class TestServer : Engine<NetPeer>
 {
-    public override NetPeer CreatePeer(IClientSession<NetPeer> iClientSession, DhKeySize dhKeySize, byte[] dhPublicKey)
+    protected override NetPeer CreatePeer(IClientSession<NetPeer> session)
     {
-        return new NetPeer(iClientSession, dhKeySize, dhPublicKey);
+        return new NetPeer(session);
     }
 
     protected override IServerConnector CreateConnector(string name)

@@ -3,41 +3,33 @@ using SP.Engine.Runtime.Protocol;
 
 namespace Common
 {
-    public static class Protocol
+    public static class C2SProtocol
     {
-        public static class C2S
-        {
-            public const EProtocolId EchoReq = (EProtocolId)1000;
-        }
+        public const EProtocolId UdpEchoReq = (EProtocolId)10000;
+    }
 
-        public static class S2C
+    public static class S2CProtocol
+    {
+        public const EProtocolId UdpEchoAck = (EProtocolId)20000;
+    }
+
+    public static class C2SProtocolData
+    {
+        [ProtocolData(C2SProtocol.UdpEchoReq, EProtocolType.Udp)]
+        public class UdpEchoReq : BaseProtocolData
         {
-            public const EProtocolId EchoAck = (EProtocolId)2000;
+            public float SendTime;
+            public byte[] Data;
         }
     }
 
-    public static class ProtocolData
+    public static class S2CProtocolData
     {
-        public static class C2S
+        [ProtocolData(S2CProtocol.UdpEchoAck, EProtocolType.Udp)]
+        public class UdpEchoAck : BaseProtocolData
         {
-            [ProtocolData(Protocol.C2S.EchoReq)]
-            public class EchoReq : BaseProtocolData
-            {
-                public string? Str;
-                public byte[]? Bytes;
-                public DateTime SendTime;
-            }
-        }
-
-        public static class S2C
-        {
-            [ProtocolData(Protocol.S2C.EchoAck)]
-            public class EchoAck : BaseProtocolData
-            {
-                public string? Str;
-                public byte[]? Bytes;
-                public DateTime SentTime;
-            }
+            public float SentTime;
+            public byte[] Data;
         }
     }
 }

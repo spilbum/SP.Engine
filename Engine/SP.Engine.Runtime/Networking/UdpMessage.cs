@@ -32,13 +32,13 @@ namespace SP.Engine.Runtime.Networking
                 .Build();
         }
 
-        public List<UdpFragment> ToSplit(ushort mtu, uint fragmentId)
+        public List<UdpFragment> ToSplit(int maxPayloadSize, uint fragmentId)
         {
             const int overhead = UdpHeader.HeaderSize + UdpFragmentHeader.HeaderSize;
-            if (mtu <= overhead)
-                throw new ArgumentOutOfRangeException(nameof(mtu), $"mtu({mtu}) <= overhead({overhead})");
+            if (maxPayloadSize <= overhead)
+                throw new ArgumentOutOfRangeException(nameof(maxPayloadSize), $"mtu({maxPayloadSize}) <= overhead({overhead})");
 
-            var maxSize = mtu - overhead;
+            var maxSize = maxPayloadSize - overhead;
             var body = GetBody();
             
             var totalCount = (byte)Math.Ceiling(body.Length / (float)maxSize);

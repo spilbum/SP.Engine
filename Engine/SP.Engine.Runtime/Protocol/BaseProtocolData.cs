@@ -11,6 +11,8 @@ namespace SP.Engine.Runtime.Protocol
         
         [IgnoreMember]
         public EProtocolId ProtocolId { get; }
+        [IgnoreMember]
+        public EProtocolType ProtocolType { get; }
         
         protected BaseProtocolData()
         {
@@ -23,6 +25,7 @@ namespace SP.Engine.Runtime.Protocol
             }
             
             ProtocolId = attr.ProtocolId;
+            ProtocolType = attr.ProtocolType;
         }
     }
 

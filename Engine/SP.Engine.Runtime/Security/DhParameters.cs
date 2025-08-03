@@ -3,7 +3,7 @@ using System.Numerics;
 
 namespace SP.Engine.Runtime.Security
 {
-    public enum DhKeySize : byte
+    public enum EDhKeySize : byte
     {
         Bit512 = 0x01,
         Bit2048 = 0x02
@@ -22,17 +22,17 @@ namespace SP.Engine.Runtime.Security
 
         public int PublicKeyByteLength => (GetBitLength(P) + 7) / 8;
 
-        public static DhParameters From(DhKeySize keySize)
+        public static DhParameters From(EDhKeySize keySize)
         {
             return keySize switch
             {
-                DhKeySize.Bit512 => new DhParameters(
+                EDhKeySize.Bit512 => new DhParameters(
                     ParseUnsignedBigEndian("FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD1"
                                            + "29024E088A67CC74020BBEA63B139B22514A08798E3404DD"
                                            + "EF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245"
                                            + "E485B576625E7EC6F44C42E9A63A36210000000000090563"),
                     new BigInteger(2)),
-                DhKeySize.Bit2048 => new DhParameters(
+                EDhKeySize.Bit2048 => new DhParameters(
                     ParseUnsignedBigEndian("FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E08"
                                            + "8A67CC74020BBEA63B139B22514A08798E3404DD"
                                            + "EF9519B3CD3A431B302B0A6DF25F14374FE1356D6"

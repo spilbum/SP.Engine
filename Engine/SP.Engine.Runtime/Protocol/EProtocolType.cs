@@ -1,6 +1,6 @@
 namespace SP.Engine.Runtime.Protocol
 {
-    public enum ETransport
+    public enum EProtocolType
     {
         Tcp,
         Udp

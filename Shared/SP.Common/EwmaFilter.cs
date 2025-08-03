@@ -5,19 +5,19 @@ namespace SP.Common
     /// <summary>
     /// EWMA (Expoential Weighted Moving Average) 기반 예측기
     /// </summary>
-    public class EwmaTracker
+    public class EwmaFilter
     {
         /// <summary>
         /// 최신 값에 반영할 가중치 계수 (0 ~ 1)
         /// 값이 클수록 최신 값 반영이 빠름
         /// 값이 작을수록 변화 반응이 느림
         /// </summary>
-        private double _alpha;
-        
-        public double Estimated { get; private set; }
-        public bool IsInitialized { get; private set; }
+        private readonly double _alpha;
 
-        public EwmaTracker(double alpha)
+        public bool IsInitialized { get; private set; }
+        public double Value { get; private set; }
+
+        public EwmaFilter(double alpha)
         {
             if (alpha <= 0 || alpha > 1)
                 throw new ArgumentOutOfRangeException(nameof(alpha), "Alpha must be between (0, 1].");
@@ -28,25 +28,15 @@ namespace SP.Common
         {
             if (!IsInitialized)
             {
-                Estimated = value;
+                Value = value;
                 IsInitialized = true;
             }
             else
             {
-                Estimated = (1 - _alpha) * Estimated + _alpha * value;
+                Value = (1 - _alpha) * Value + _alpha * value;
             }
         }
-        
-        public void Initialize(double initialValue)
-        {
-            Estimated = initialValue;
-            IsInitialized = true;
-        }
-        
-        public void Clear()
-        {
-            Estimated = 0;
-            IsInitialized = false;
-        }
+
+        public void Reset() => IsInitialized = false;
     }
 }

@@ -51,7 +51,7 @@ internal class SessionAuth<TPeer> : BaseEngineHandler<ClientSession<TPeer>, Engi
                 if (null != peer)
                     return;
 
-                peer = engine.CreatePeer(session, protocol.KeySize, protocol.ClientPublicKey);
+                peer = engine.CreateNewPeer(session, protocol.KeySize, protocol.ClientPublicKey);
                 if (null == peer)
                     return;
 

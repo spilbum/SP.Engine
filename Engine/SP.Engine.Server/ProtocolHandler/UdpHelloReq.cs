@@ -1,4 +1,5 @@
 
+using System.Net;
 using SP.Engine.Protocol;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Handler;
@@ -19,6 +20,8 @@ internal class UdpHelloReq<TPeer> : BaseEngineHandler<ClientSession<TPeer>, Engi
             session.Send(resposne);
             return;
         }
+
+        session.Logger.Debug("UDP hello - {0} ({1}) - {2}", session.Peer.PeerId, session.SessionId, session.UdpSocket.RemoteEndPoint);
         
         resposne.ErrorCode = EEngineErrorCode.Success;
         session.Send(resposne);

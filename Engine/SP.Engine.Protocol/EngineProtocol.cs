@@ -36,7 +36,7 @@ namespace SP.Engine.Protocol
                 {
                     public string? SessionId;
                     public EPeerId PeerId;
-                    public DhKeySize KeySize;
+                    public EDhKeySize KeySize;
                     public byte[]? ClientPublicKey;
                     public ushort UdpMtu;
                 }
@@ -62,12 +62,16 @@ namespace SP.Engine.Protocol
                 {
                 }
 
-                [ProtocolData(EngineProtocol.C2S.UdpHelloReq)]
-                [Transport(ETransport.Udp)]
+                [ProtocolData(EngineProtocol.C2S.UdpHelloReq, EProtocolType.Udp)]
                 public class UdpHelloReq : BaseProtocolData
                 {
                     public string? SessionId;
                     public EPeerId PeerId;
+                }
+
+                [ProtocolData(EngineProtocol.C2S.UdpKeepAlive, EProtocolType.Udp)]
+                public class UdpKeepAlive : BaseProtocolData
+                {
                 }
         }
 
@@ -111,8 +115,7 @@ namespace SP.Engine.Protocol
             {
             }
 
-            [ProtocolData(EngineProtocol.S2C.UdpHelloAck)]
-            [Transport(ETransport.Udp)]
+            [ProtocolData(EngineProtocol.S2C.UdpHelloAck, EProtocolType.Udp)]
             public class UdpHelloAck : BaseProtocolData
             {
                 public EEngineErrorCode ErrorCode;

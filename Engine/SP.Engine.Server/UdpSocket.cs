@@ -63,7 +63,7 @@ namespace SP.Engine.Server
             
             var item = queue[queue.Position];
             e.SetBuffer(item.Array, item.Offset, item.Count);
-
+            
             var client = Client;
             if (client == null)
             {

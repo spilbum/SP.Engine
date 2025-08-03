@@ -63,13 +63,17 @@ namespace SP.Engine.Server
                     var socket = e.AcceptSocket;
                     if (null == socket)
                         throw new SocketException((int)SocketError.SocketError);
-                    
+
                     OnNewClientAccepted(socket, null);
                 }
                 else
                 {
                     throw new SocketException((int)e.SocketError);
                 }
+            }
+            catch (SocketException ex)
+            {
+                OnError(new Exception($"SocketError: {ex.Message} ({ex.ErrorCode})"));
             }
             catch (Exception ex)
             {

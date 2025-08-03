@@ -19,7 +19,7 @@ namespace SP.Engine.Client.ProtocolHandler
             
             // 허용되는 최대 데이터 크기 설정
             if (0 < protocol.MaxAllowedLength)
-                session.MaxAllowedLength = protocol.MaxAllowedLength;
+                session.SetMaxAllowedLength(protocol.MaxAllowedLength);
                     
             // 전송 타임아웃 시간 설정
             if (0 < protocol.SendTimeOutMs)
@@ -32,7 +32,7 @@ namespace SP.Engine.Client.ProtocolHandler
             if (protocol.UseEncryption)
             {
                 session.PackOptions.UseEncryption = true;
-                session.DiffieHelman.DeriveSharedKey(protocol.ServerPublicKey);
+                session.DiffieHellman.DeriveSharedKey(protocol.ServerPublicKey);
             }
 
             if (protocol.UseCompression)
@@ -41,7 +41,7 @@ namespace SP.Engine.Client.ProtocolHandler
                 session.PackOptions.CompressionThresholdPercent = protocol.CompressionThresholdPercent;
             }
             
-            session.OnOpened(protocol.PeerId, protocol.SessionId, protocol.UdpOpenPort);
+            session.OnAuthHandshaked(protocol.PeerId, protocol.SessionId, protocol.UdpOpenPort);
         }
     }
 }

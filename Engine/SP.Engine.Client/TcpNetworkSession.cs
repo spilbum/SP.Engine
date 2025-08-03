@@ -2,10 +2,11 @@ using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
-using SP.Engine.Runtime;
+using SP.Common.Logging;
 using SP.Engine.Runtime.Networking;
 
 namespace SP.Engine.Client
@@ -18,12 +19,14 @@ namespace SP.Engine.Client
         private readonly ConcurrentBatchQueue<ArraySegment<byte>> _sendQueue;
         private readonly List<ArraySegment<byte>> _sendingItems = new List<ArraySegment<byte>>();
         private readonly List<ArraySegment<byte>> _sendBufferList = new List<ArraySegment<byte>>();
-
         private byte[] _receiveBuffer;
         private int _isSending;
         private bool _isConnecting;
         private readonly int _receiveBufferSize = 64 * 1024;
         private readonly int _sendQueueCapacity = 256;
+
+        private long _totalSentBytes;
+        private long _totalReceivedBytes;
 
         public event EventHandler Opened;
         public event EventHandler Closed;
@@ -31,11 +34,28 @@ namespace SP.Engine.Client
         public event EventHandler<DataEventArgs> DataReceived;
 
         public bool IsConnected { get; private set; }
-        public IPEndPoint RemoteEndPoint { get; private set; }
+        public EndPoint RemoteEndPoint { get; private set; }
+        public ILogger Logger { get; private set; }
 
-        public TcpNetworkSession()
+        public TcpNetworkSession(ILogger logger)
         {
+            Logger = logger;
             _sendQueue = new ConcurrentBatchQueue<ArraySegment<byte>>(_sendQueueCapacity);
+        }
+
+        public (int totalSentBytes, int totalReceivedBytes) GetTraffic()
+        {
+            return ((int)Interlocked.Read(ref _totalSentBytes), (int)Interlocked.Read(ref _totalReceivedBytes));
+        }
+
+        private void AddSentBytes(int bytesCount)
+        {
+            Interlocked.Add(ref _totalSentBytes, bytesCount);
+        }
+
+        private void AddReceivedBytes(int bytesCount)
+        {
+            Interlocked.Add(ref _totalReceivedBytes, bytesCount);
         }
 
         public void Connect(EndPoint remoteEndPoint)
@@ -49,7 +69,7 @@ namespace SP.Engine.Client
             _isConnecting = true;
             remoteEndPoint.ResolveAndConnectAsync(ProcessConnect, null);
         }
-
+        
         private void ProcessConnect(Socket socket, object state, SocketAsyncEventArgs e, Exception error)
         {
             if (error != null)
@@ -68,6 +88,8 @@ namespace SP.Engine.Client
                 return;
             }
 
+            _isConnecting = false;
+
             if (null == e)
                 e = new SocketAsyncEventArgs();
             e.Completed += OnReceiveCompleted;
@@ -83,7 +105,7 @@ namespace SP.Engine.Client
                 Console.WriteLine(exception);
             }
 
-            RemoteEndPoint = (IPEndPoint)e.RemoteEndPoint;
+            RemoteEndPoint = e.RemoteEndPoint;
             GetSocket(e);
         }
 
@@ -124,7 +146,26 @@ namespace SP.Engine.Client
                 _isSending = 0;
             }
 
-            socket.SafeClose();
+            try
+            {
+                socket.Shutdown(SocketShutdown.Both);
+            }
+            catch
+            {
+                // ignored
+            }
+            finally
+            {
+                try
+                {
+                    socket.Close();
+                }
+                catch
+                {
+                    // ignored
+                }
+            }
+            
             return isOnClosed;
         }
 
@@ -161,6 +202,7 @@ namespace SP.Engine.Client
                     return;
                 }
 
+                AddReceivedBytes(e.BytesTransferred);
                 OnDataReceived(e.Buffer, e.Offset, e.BytesTransferred);
                 StartReceive(e);
             }
@@ -215,13 +257,20 @@ namespace SP.Engine.Client
             {
                 _sendEventArgs.SetBuffer(null, 0, 0);
                 _sendBufferList.Clear();
+
+                var bytesCount = 0;
                 foreach (var segment in items)
+                {
                     _sendBufferList.Add(segment);
+                    bytesCount += segment.Count;
+                }
 
                 _sendEventArgs.BufferList = _sendBufferList;
                 
                 if (!_socket.SendAsync(_sendEventArgs))
                     OnSendCompleted(null, _sendEventArgs);
+
+                AddSentBytes(bytesCount);
             }
             catch (Exception ex)
             {

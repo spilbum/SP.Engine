@@ -4,6 +4,7 @@ using Common;
 using SP.Common;
 using SP.Common.Logging;
 using SP.Engine.Client;
+using SP.Engine.Client.Configuration;
 using SP.Engine.Runtime.Handler;
 using SP.Engine.Runtime.Protocol;
 using Timer = System.Threading.Timer;
@@ -19,21 +20,13 @@ namespace TestClient
         private ILogger? _logger;
         private readonly Dictionary<EProtocolId, ProtocolMethodInvoker> _invokerDict = new();
         
-        public bool Start(string ip, int port, ILogger? logger = null)
+        public bool Start(string ip, int port, EngineConfig config, ILogger? logger = null)
         {
             if (_netPeer?.State is ENetPeerState.Connecting or ENetPeerState.Open)
                 throw new InvalidOperationException("Already connecting...");
-            
+
             _logger = logger;
-            _netPeer = new NetPeer(logger);
-            _netPeer.ReconnectIntervalSec = 3;
-            _netPeer.MaxReconnectAttempts = 3;
-            _netPeer.IsEnableAutoSendPing = true;
-            _netPeer.AutoSendPingIntervalSec = 2;
-            _netPeer.MaxAllowedLength = 4096;
-            _netPeer.UdpMtu = 1400;
-            _netPeer.MaxConnectAttempts = 2;
-            _netPeer.ConnectIntervalSec = 10;
+            _netPeer = new NetPeer(config, logger);
             _netPeer.Connected += OnConnected;
             _netPeer.Disconnected += OnDisconnected;
             _netPeer.Error += OnError;
@@ -76,7 +69,7 @@ namespace TestClient
         {
             var message = e.Message;
             if (_invokerDict.TryGetValue(message.ProtocolId, out var invoker))
-                invoker.Invoke(this, message, _netPeer?.DiffieHelman.SharedKey);
+                invoker.Invoke(this, message, _netPeer?.DiffieHellman.SharedKey);
         }
 
         private void OnError(object? sender, ErrorEventArgs e)
@@ -100,19 +93,21 @@ namespace TestClient
                 return;
             
             var sb = new StringBuilder();
-            if (_netPeer != null)
+            if (_netPeer?.LatencyStats != null)
             {
+                var stats = _netPeer.LatencyStats;
                 sb.Append(
-                    $"Avg: {_netPeer.AverageRttMs:F1} Min: {_netPeer.MinRttMs:F1} | Max: {_netPeer.MaxRttMs:F1} | Jitter: {_netPeer.JitterMs:F1} | PackLossRate: {_netPeer.PacketLossRate:F1}");
+                    $"SRTT: {stats.SmoothedRttMs}Avg: {stats.AvgRttMs:F1} Min: {stats.MinRttMs:F1} | Max: {stats.MaxRttMs:F1} | Jitter: {stats.JitterMs:F1} | PackLossRate: {stats.PacketLossRate:F1}");
             }
             
-            _logger?.Info("Network Quality: {0}, ServerTime: {1:yyyy-MM-dd hh:mm:ss.fff}", sb.ToString(), _netPeer?.GetServerTime());
+            //_logger?.Info("Network Quality: {0}, ServerTime: {1:yyyy-MM-dd hh:mm:ss.fff}", sb.ToString(), _netPeer?.GetServerTime());
         }
-
-        [ProtocolMethod(Protocol.S2C.EchoAck)]
-        private void OnEchoAck(ProtocolData.S2C.EchoAck protocol)
+        
+        [ProtocolMethod(S2CProtocol.UdpEchoAck)]
+        private void OnEchoAck(S2CProtocolData.UdpEchoAck data)
         {
-            _logger?.Info("Message received: {0}, bytes={1}, sentTime={2}", protocol.Str, protocol.Bytes?.Length, protocol.SentTime);
+            var rawRtt = Program.GetUnixTimestamp() - data.SentTime;
+            _logger?.Debug($"[OnEchoAck] {rawRtt:F1} ms");
         }
     }
 
@@ -126,8 +121,17 @@ namespace TestClient
             var ip = args[0];
             var port = int.Parse(args[1]);
 
+            var config = EngineConfigBuilder.Create()
+                .WithAutoPing(false, 2)
+                .WithConnectAttempt(2, 15)
+                .WithReconnectAttempt(5, 30)
+                .WithUdpMtu(1200)
+                .WithUdpKeepAlive(false, 30)
+                .Build();
+
             var logger = new ConsoleLogger("TestClient");
-            if (!NetPeerManager.Instance.Start(ip, port, logger))
+            
+            if (!NetPeerManager.Instance.Start(ip, port, config, logger))
                 throw new Exception("Failed to initialize");
             
             while (true)
@@ -144,28 +148,18 @@ namespace TestClient
                     switch (splits[0])
                     {
                         case "echo":
-                            var message = splits[1];
-                            for (var i = 0; i < 5; i++) NetPeerManager.Instance.Send(new ProtocolData.C2S.EchoReq { Str = message, Bytes = Encoding.UTF8.GetBytes(message), SendTime = DateTime.UtcNow});
-                            break;
-                        case "fragment":
                         {
-                            var bytes = GenerateRandomBytes(int.Parse(splits[1]));
-                            NetPeerManager.Instance.Send(new ProtocolData.C2S.EchoReq { Str = "fragment", Bytes = bytes, SendTime = DateTime.UtcNow });
-                            break;
-                        }
-                        case "test":
-                        {
-                            var cmd = splits[1];
-                            switch (cmd)
+                            if (splits.Length != 4)
                             {
-                                case "start":
-                                    _timer = new Timer(TestSend, null, TimeSpan.FromMilliseconds(16), TimeSpan.FromMilliseconds(16));
-                                    break;
-                                case "stop":
-                                    _timer?.Dispose();
-                                    break;
+                                logger.Error("Invalid number of arguments");
+                                continue;
                             }
                             
+                            var sizeBytes = int.Parse(splits[1]);
+                            var sendIntervalMs = int.Parse(splits[2]);
+                            var durationTimeSec = int.Parse(splits[3]);
+                            _endTime = DateTime.UtcNow.AddSeconds(durationTimeSec);
+                            _timer = new Timer(_ => SendEcho(sizeBytes), null, 0, sendIntervalMs);
                             break;
                         }
                         case "exit":
@@ -189,26 +183,33 @@ namespace TestClient
             }
         }
 
+        private static DateTime _endTime;
         private static DateTime? _nextPrintNetowrkQuality;
-        private static readonly Random Random = new();
 
         private static byte[] GenerateRandomBytes(int length)
         {
             var buffer = new byte[length];
-            Random.NextBytes(buffer);
+            var rng = new Random();
+            rng.NextBytes(buffer);
             return buffer;
         }
+
+        public static long GetUnixTimestamp()
+            => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         
         private static Timer? _timer;
 
-        private static void TestSend(object? state)
+        private static void SendEcho(int sizeBytes)
         {
-            NetPeerManager.Instance.Send(new ProtocolData.C2S.EchoReq
+            if (_endTime < DateTime.UtcNow)
             {
-                Str = "test",
-                Bytes = "test"u8.ToArray(),
-                SendTime = DateTime.UtcNow
-            });
+                _timer?.Dispose();
+                _timer = null;
+                return;
+            }
+            
+            var echoReq = new C2SProtocolData.UdpEchoReq { SendTime = GetUnixTimestamp(), Data = GenerateRandomBytes(sizeBytes) };
+            NetPeerManager.Instance.Send(echoReq);
         }
     }
 }

@@ -85,11 +85,12 @@ namespace SP.Engine.Server
         {
             try
             {
+                var isKeepAlive = config.IsDisableKeepAlive ? 0 : 1; 
                 var keepAliveTime = (uint)config.KeepAliveTimeSec * 1000;
                 var keepAliveInterval = (uint)config.KeepAliveIntervalSec * 1000;
                 const uint dummy = 0;
                 _keepAliveOptionValues = new byte[Marshal.SizeOf(dummy) * 3];
-                BitConverter.GetBytes((uint)1).CopyTo(_keepAliveOptionValues, 0); // 활성화 (1=true)
+                BitConverter.GetBytes((uint)isKeepAlive).CopyTo(_keepAliveOptionValues, 0); // 활성화 (1=true)
                 BitConverter.GetBytes(keepAliveTime).CopyTo(_keepAliveOptionValues, Marshal.SizeOf(dummy)); // 유휴 시간 (ms)
                 BitConverter.GetBytes(keepAliveInterval).CopyTo(_keepAliveOptionValues, Marshal.SizeOf(dummy) * 2); // Keep-Alive 패킷 간격 (ms)
                 return true;

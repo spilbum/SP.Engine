@@ -43,14 +43,13 @@ namespace SP.Engine.Server
 
             // 스케줄러 생성
             _fiber = CreateFiber();
-            _fiber.Schedule(ScheduleUpdateConnectors, 16, 16);
+            _fiber.Schedule(ScheduleUpdateConnectors, config.ConnectorUpdateIntervalMs, config.ConnectorUpdateIntervalMs);
             
-            // 파이버 하나당 300명 계산. 최대 8개 생성함
-            var fiberCnt = Math.Max(config.LimitConnectionCount / 300, 8);
+            var fiberCnt = Math.Max(config.LimitConnectionCount / 300, 10);
             for (var index = 0; index < fiberCnt; index++)
             {
                 var fiber = CreateFiber();
-                fiber.Schedule(ScheduleUpdatePeers, index, 16, 16);
+                fiber.Schedule(ScheduleUpdatePeers, index, config.PeerUpdateIntervalMs, config.PeerUpdateIntervalMs);
                 _updatePeerFibers.Add(fiber);
             }
             
@@ -110,6 +109,7 @@ namespace SP.Engine.Server
                 _engineHandlerDict[EngineProtocol.C2S.Ping] = new Ping<TPeer>();
                 _engineHandlerDict[EngineProtocol.C2S.MessageAck] = new MessageAck<TPeer>();
                 _engineHandlerDict[EngineProtocol.C2S.UdpHelloReq] = new UdpHelloReq<TPeer>();
+                _engineHandlerDict[EngineProtocol.C2S.UdpKeepAlive] = new UdpKeepAlive<TPeer>();
                 return DiscoverHandlers().All(RegisterHandler);
             }
             catch (Exception e)
@@ -165,12 +165,14 @@ namespace SP.Engine.Server
                 var peer = session.Peer;
                 if (peer == null)
                 {
-                    Logger.Error("Peer is null.");
+                    Logger.Warn("Invalid peer. sessionId={0}", session.SessionId);
                     session.Close();
                     return;
                 }
                 
-                session.SendMessageAck(message.SequenceNumber);
+                if (message.SequenceNumber > 0)
+                    session.SendMessageAck(message.SequenceNumber);
+                
                 peer.ExecuteMessage(message);
             }
             else
@@ -323,8 +325,15 @@ namespace SP.Engine.Server
             foreach (var peer in peers)
                 peer.Tick();
         }
+        
+        internal TPeer CreateNewPeer(IClientSession<TPeer> session, EDhKeySize keySize, byte[] clientPublicKey)
+        {
+            var peer = CreatePeer(session);
+            peer.SetSecurity(keySize, clientPublicKey);
+            return peer;
+        }
 
-        public abstract TPeer CreatePeer(IClientSession<TPeer> iClientSession, DhKeySize dhKeySize, byte[] dhPublicKey);
+        protected abstract TPeer CreatePeer(IClientSession<TPeer> session);
         protected abstract IServerConnector CreateConnector(string name);
 
         public TPeer FindPeer(EPeerId peerId)
