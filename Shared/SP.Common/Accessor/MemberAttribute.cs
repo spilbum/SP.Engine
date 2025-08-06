@@ -6,6 +6,6 @@ namespace SP.Common.Accessor
     public abstract class MemberAttribute : Attribute
     {
         public string Name { get; set; }
-        public MemberAttribute(string name) => Name = name;
+        protected MemberAttribute(string name) => Name = name;
     }
 }

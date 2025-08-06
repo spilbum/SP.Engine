@@ -13,21 +13,24 @@ namespace SP.Common.Accessor
 
         public IReadOnlyList<IMemberAccessor> Members { get; }
 
+        private readonly Dictionary<string, IMemberAccessor> _memberMap;
+
         private RuntimeTypeAccessor(Type type)
         {
-            var list = new List<IMemberAccessor>();
-            foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
-            {
-                if (!property.CanRead && !property.CanWrite) continue;
-                list.Add(new PropertyAccessor(property));
-            }
+            // 프로퍼티 검색
+            var list = (from property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                where property.CanRead || property.CanWrite
+                select new PropertyAccessor(property)).Cast<IMemberAccessor>().ToList();
+            
+            // 필드 검색
+            list.AddRange(type.GetFields(BindingFlags.Public | BindingFlags.Instance)
+                .Select(field => new FieldAccessor(field)));
 
-            foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.Instance))
-            {
-                list.Add(new FieldAccessor(field));
-            }
+            if (list.Count == 0)
+                throw new InvalidOperationException($"Invalid type: {type.FullName}");
             
             Members = list;
+            _memberMap = list.ToDictionary(m => m.Name);
         }
 
         public static RuntimeTypeAccessor GetOrCreate(Type type)
@@ -35,8 +38,16 @@ namespace SP.Common.Accessor
         
         public object this[object instance, string name]
         {
-            get => Members.First(x => x.Name == name).GetValue(instance);
-            set => Members.First(x => x.Name == name).SetValue(instance, value);
+            get => _memberMap.TryGetValue(name, out var accessor)
+                ? accessor.GetValue(instance)
+                : throw new KeyNotFoundException($"No such member: {name}");
+            set
+            {
+                if (_memberMap.TryGetValue(name, out var accessor))
+                    accessor.SetValue(instance, value);
+                else
+                    throw new KeyNotFoundException($"No such member: {name}");
+            }
         }
     }
 }

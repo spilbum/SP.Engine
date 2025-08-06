@@ -27,9 +27,20 @@ namespace SP.Common.Accessor
             if (CanRead) _getter = CreateGetter(propertyInfo);
             if (CanWrite) _setter = CreateSetter(propertyInfo);
         }
-        
-        public object GetValue(object instance) => _getter(instance);
-        public void SetValue(object instance, object value) => _setter(instance, value);
+
+        public object GetValue(object instance)
+        {
+            if (_getter == null)
+                throw new InvalidOperationException($"Property '{Name}' is not readable");
+            return _getter(instance);
+        }
+
+        public void SetValue(object instance, object value)
+        {
+            if (_setter == null)
+                throw new InvalidOperationException($"Property '{Name}' is not writable.");
+            _setter(instance, value);
+        }
         
         private static Func<object, object> CreateGetter(PropertyInfo property)
         {

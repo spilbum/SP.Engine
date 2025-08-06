@@ -12,4 +12,14 @@ namespace SP.Common.Accessor
         object GetValue(object instance);
         void SetValue(object instance, object value);
     }
+
+    public static class MemberAccessorExtensions
+    {
+        public static bool IsNullable(this IMemberAccessor accessor)
+        {
+            if (!accessor.Type.IsValueType)
+                return true;
+            return Nullable.GetUnderlyingType(accessor.Type) != null;
+        }
+    }
 }
