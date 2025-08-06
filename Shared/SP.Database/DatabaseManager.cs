@@ -1,11 +1,11 @@
 
 namespace SP.Database;
 
-public class DatabaseManager(IDatabaseConnectionFactory databaseConnectionFactory)
+public class DatabaseManager(IDatabaseConnectionFactory factory, IDatabaseEngineAdapter adapter)
 {
     private readonly Dictionary<string, DatabaseConfig> _configs = new();
     private readonly IDatabaseConnectionFactory _factory =
-        databaseConnectionFactory ?? throw new ArgumentNullException(nameof(databaseConnectionFactory));
+        factory ?? throw new ArgumentNullException(nameof(factory));
 
     public void AddConfig(DatabaseConfig config)
     {
@@ -36,7 +36,7 @@ public class DatabaseManager(IDatabaseConnectionFactory databaseConnectionFactor
         {
             var dbConn = _factory.GetConnection(cs)
                 ?? throw new InvalidOperationException("Factory returned null connection.");
-            var connection = new DatabaseConnection(dbConn);
+            var connection = new DatabaseConnection(dbConn, adapter);
             connection.Open();
             return connection;
         }
@@ -56,7 +56,7 @@ public class DatabaseManager(IDatabaseConnectionFactory databaseConnectionFactor
         {
             var dbConn = _factory.GetConnection(cs)
                          ?? throw new InvalidOperationException("Factory returned null connection.");
-            var connection = new DatabaseConnection(dbConn);
+            var connection = new DatabaseConnection(dbConn, adapter);
             await connection.OpenAsync().WaitAsync(ct).ConfigureAwait(false);
             return connection;
         }

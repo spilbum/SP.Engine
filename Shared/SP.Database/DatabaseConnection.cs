@@ -3,7 +3,7 @@ using System.Data.Common;
 
 namespace SP.Database;
 
-public sealed class DatabaseConnection(DbConnection connection) : IDisposable
+public sealed class DatabaseConnection(DbConnection connection, IDatabaseEngineAdapter adapter) : IDisposable
 {
     private readonly DbConnection _connection = connection ?? throw new ArgumentNullException(nameof(connection));
     private DbTransaction? _transaction;
@@ -131,6 +131,6 @@ public sealed class DatabaseConnection(DbConnection connection) : IDisposable
         var command = _connection.CreateCommand();
         command.CommandType = (CommandType)commandType;
         command.CommandText = commandText;
-        return new DatabaseCommand(command);
+        return new DatabaseCommand(command, adapter);
     }
 }

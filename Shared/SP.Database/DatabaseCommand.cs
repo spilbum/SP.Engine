@@ -1,59 +1,22 @@
 ﻿using System.Collections;
 using System.Data;
 using System.Data.Common;
-using Newtonsoft.Json;
 using Microsoft.Data.SqlClient;
 using SP.Common.Accessor;
 
 namespace SP.Database;
 
-public class DatabaseCommand(DbCommand command) : IDisposable
+public class DatabaseCommand(DbCommand command, IDatabaseEngineAdapter adapter) : IDisposable
     {
         private readonly DbCommand _command = command ?? throw new ArgumentNullException(nameof(command));
+        private readonly IDatabaseEngineAdapter _adapter = adapter ?? throw new ArgumentNullException(nameof(adapter));
         private bool _disposed;
-        
-        public EDatabaseEngine GetEngine() => DbUtil.DetectEngine(_command);
 
-        public DbParameter AddWithDataTable(string name, IList list, Type? type = null)
+        public DbParameter AddWithList(string name, IList list, Type elementType)
         {
-            if (list == null || list.Count == 0)
-                throw new ArgumentException("List is null or empty.", nameof(list));
-            
-            var itemType = type ?? list[0]!.GetType();
-            var accessor = RuntimeTypeAccessor.GetOrCreate(itemType);
-            var dataTable = new DataTable(name);
-
-            foreach (var member in accessor.Members)
-            {
-                dataTable.Columns.Add(member.Name, member.Type).AllowDBNull = member.IsNullable();
-            }
-
-            foreach (var item in list)
-            {
-                var row = dataTable.NewRow();
-                foreach (var member in accessor.Members)
-                {
-                    var value = accessor[item, member.Name] ?? DBNull.Value;
-                    row[member.Name] = value;
-                }
-                dataTable.Rows.Add(row);
-            }
-            
-            var param = _command.CreateParameter();
-            param.ParameterName = name;
-            param.Value = dataTable;
-
-            if (param is SqlParameter sqlParam)
-                sqlParam.SqlDbType = SqlDbType.Structured;
-            
-            _command.Parameters.Add(param);
-            return param;
-        }
-
-        public DbParameter AddWithJson(string name, IList list)
-        {
-            var json = JsonConvert.SerializeObject(list);
-            return AddWithValue(name, json, DbType.String);
+            if (!_adapter.SupportsListParameter)
+                throw new NotSupportedException("List parameters are not supported by this database engine.");
+            return _adapter.AddWithList(_command, name, list, elementType);
         }
         
         public DbParameter AddWithValue(string name, object? value, DbType? dbType = null, int? size = null)

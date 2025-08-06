@@ -49,20 +49,7 @@ public abstract class BaseDatabaseRecord
                 var elementType = GetElementType(member.Type);
                 if (elementType == null)
                     throw new InvalidOperationException($"Unsupported list type '{member.Type}'");
-                
-                var engine = command.GetEngine();
-                switch (engine)
-                {
-                    case EDatabaseEngine.SqlServer:
-                        command.AddWithDataTable(member.Name, list, elementType);
-                        break;
-                    case EDatabaseEngine.MySql:
-                        command.AddWithJson(member.Name, list);
-                        break;
-                    case EDatabaseEngine.Unknown:
-                    default:
-                        throw new NotSupportedException($"Invalid database engine: {engine}");
-                }
+                command.AddWithList(member.Name, list, elementType);
             }
             else
             {
