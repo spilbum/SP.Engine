@@ -9,7 +9,12 @@
 
     <ItemGroup>
       <ProjectReference Include="..\..\Engine\SP.Engine.Server\SP.Engine.Server.csproj" />
+      <ProjectReference Include="..\..\Shared\SP.Database\SP.Database.csproj" />
       <ProjectReference Include="..\Common\Common.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="MySql.Data" Version="9.4.0" />
     </ItemGroup>
 
 </Project>

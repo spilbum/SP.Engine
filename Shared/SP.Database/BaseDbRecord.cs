@@ -20,7 +20,7 @@ public static class DbDataReaderExtensions
     }
 }
 
-public abstract class BaseDatabaseRecord
+public abstract class BaseDbRecord
 {
     public void ReadData(DbDataReader reader)
     {
@@ -37,34 +37,14 @@ public abstract class BaseDatabaseRecord
         }
     }
 
-    public void WriteData(DatabaseCommand command)
+    public void WriteData(DbCmd command)
     {
         var type = GetType();
         var accessor = RuntimeTypeAccessor.GetOrCreate(type);
         foreach (var member in accessor.Members)
         {
             var value = accessor[this, member.Name];
-            if (value is IList { Count: > 0 } list)
-            {
-                var elementType = GetElementType(member.Type);
-                if (elementType == null)
-                    throw new InvalidOperationException($"Unsupported list type '{member.Type}'");
-                command.AddWithList(member.Name, list, elementType);
-            }
-            else
-            {
-                command.AddWithValue(member.Name, value);
-            }
+            command.AddWithValue(member.Name, value);
         }
-    }
-
-    private static Type? GetElementType(Type type)
-    {
-        if (type.IsArray) return type.GetElementType();
-        if (type.IsGenericType && typeof(IEnumerable<>).IsAssignableFrom(type.GetGenericTypeDefinition())) 
-            return type.GetGenericArguments()[0];
-        if (typeof(IEnumerable).IsAssignableFrom(type) && type.IsGenericType)
-            return type.GetGenericArguments()[0];
-        return null;
     }
 }

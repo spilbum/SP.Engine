@@ -3,7 +3,7 @@ using System.Data.Common;
 
 namespace SP.Database;
 
-public sealed class DatabaseConnection(DbConnection connection, IDatabaseEngineAdapter adapter) : IDisposable
+public sealed class DbConn(DbConnection connection, IDatabaseProvider provider) : IDisposable
 {
     private readonly DbConnection _connection = connection ?? throw new ArgumentNullException(nameof(connection));
     private DbTransaction? _transaction;
@@ -11,7 +11,7 @@ public sealed class DatabaseConnection(DbConnection connection, IDatabaseEngineA
 
     public string ConnectionString => _connection.ConnectionString;
 
-    ~DatabaseConnection()
+    ~DbConn()
     {
         Dispose(false);
     }
@@ -45,15 +45,10 @@ public sealed class DatabaseConnection(DbConnection connection, IDatabaseEngineA
         _disposed = true;
     }
 
-    public DatabaseTransactionScope BeginTransactionScope()
-    {
-        return new DatabaseTransactionScope(this);
-    }
-
     private void ThrowIfDisposed()
     {
         if (_disposed)
-            throw new ObjectDisposedException(nameof(DatabaseConnection), "Connection is already disposed.");
+            throw new ObjectDisposedException(nameof(DbConn), "Connection is already disposed.");
     }
 
     public void Open()
@@ -124,13 +119,13 @@ public sealed class DatabaseConnection(DbConnection connection, IDatabaseEngineA
         _transaction = null;
     }
 
-    public DatabaseCommand CreateCommand(ECommandType commandType, string commandText)
+    public DbCmd CreateCommand(CommandType commandType, string commandText)
     {
         ThrowIfDisposed();
 
         var command = _connection.CreateCommand();
-        command.CommandType = (CommandType)commandType;
+        command.CommandType = commandType;
         command.CommandText = commandText;
-        return new DatabaseCommand(command, adapter);
+        return new DbCmd(command, provider);
     }
 }

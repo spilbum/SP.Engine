@@ -11,6 +11,7 @@ namespace SP.Common.Accessor
         private static readonly ConcurrentDictionary<Type, RuntimeTypeAccessor> Cached =
             new ConcurrentDictionary<Type, RuntimeTypeAccessor>();
 
+        public string Name { get; }
         public IReadOnlyList<IMemberAccessor> Members { get; }
 
         private readonly Dictionary<string, IMemberAccessor> _memberMap;
@@ -28,7 +29,8 @@ namespace SP.Common.Accessor
 
             if (list.Count == 0)
                 throw new InvalidOperationException($"Invalid type: {type.FullName}");
-            
+
+            Name = type.Name.Replace("C", "");
             Members = list;
             _memberMap = list.ToDictionary(m => m.Name);
         }

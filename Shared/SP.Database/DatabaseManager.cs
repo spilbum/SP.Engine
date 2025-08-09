@@ -1,79 +1,96 @@
 
 namespace SP.Database;
 
-public class DatabaseManager(IDatabaseConnectionFactory factory, IDatabaseEngineAdapter adapter)
+public static class DatabaseManager
 {
-    private readonly Dictionary<string, DatabaseConfig> _configs = new();
-    private readonly IDatabaseConnectionFactory _factory =
-        factory ?? throw new ArgumentNullException(nameof(factory));
-
-    public void AddConfig(DatabaseConfig config)
+    private class DbConnectionInfo
     {
-        if (config == null) throw new ArgumentNullException(nameof(config));
-        if (string.IsNullOrWhiteSpace(config.DatabaseType))
-            throw new ArgumentException("DatabaseType must be provided.", nameof(config));
-        
-        if (!_configs.TryAdd(config.DatabaseType, config))
-            throw new ArgumentException($"DatabaseType '{config.DatabaseType}' is already registered.");
-    }
+        public string DbType { get; }
+        public string? PrivateConnectionString { get; }
+        public string? PublicConnectionString { get; }
 
-    private DatabaseConfig RequireConfig(string databaseType)
-    {
-        if (string.IsNullOrWhiteSpace(databaseType))
-            throw new ArgumentException("DatabaseType must be provided.", nameof(databaseType));
-
-        if (!_configs.TryGetValue(databaseType, out var config))
-            throw new ArgumentException($"Unknown databaseType '{databaseType}'. {string.Join(", ", _configs.Keys)}");
-        return config;
-    }
-
-    public DatabaseConnection Open(string databaseType, bool isPublic = false)
-    {
-        var config = RequireConfig(databaseType);
-        var cs = ResolveConnectionString(config, isPublic);
-        
-        try
+        public DbConnectionInfo(
+            string dbType,
+            string? privateConnectionString,
+            string? publicConnectionString)
         {
-            var dbConn = _factory.GetConnection(cs)
-                ?? throw new InvalidOperationException("Factory returned null connection.");
-            var connection = new DatabaseConnection(dbConn, adapter);
-            connection.Open();
-            return connection;
-        }
-        catch (Exception e)
-        {
-            throw new InvalidOperationException(
-                $"Failed to open database connection. Type={databaseType}, IsPublic={isPublic}, ConnectionString={cs}\r\nexception={e.Message}\r\nstackTrace={e.StackTrace}");
-        }
-    }
+            if (string.IsNullOrEmpty(dbType))
+                throw new ArgumentException($"Invalid DbType={dbType}", nameof(dbType));
 
-    public async Task<DatabaseConnection> OpenAsync(string databaseType, bool isPublic = false, CancellationToken ct = default)
-    {
-        var config = RequireConfig(databaseType);
-        var cs = ResolveConnectionString(config, isPublic);
+            if (string.IsNullOrEmpty(privateConnectionString) && string.IsNullOrEmpty(publicConnectionString))
+                throw new ArgumentException("ConnectionString is empty or null.");
 
-        try
-        {
-            var dbConn = _factory.GetConnection(cs)
-                         ?? throw new InvalidOperationException("Factory returned null connection.");
-            var connection = new DatabaseConnection(dbConn, adapter);
-            await connection.OpenAsync().WaitAsync(ct).ConfigureAwait(false);
-            return connection;
+            DbType = dbType;
+            PrivateConnectionString = privateConnectionString;
+            PublicConnectionString = publicConnectionString;
         }
-        catch (Exception e)
-        {
-            throw new InvalidOperationException(
-                $"Failed to open database connection. Type={databaseType}, IsPublic={isPublic}, ConnectionString={cs}\r\nexception={e.Message}\r\nstackTrace={e.StackTrace}");
-        }
-    }
-
-    private static string ResolveConnectionString(DatabaseConfig config, bool isPublic)
-    {
-        var cs = isPublic ? config.PublicConnectionString : config.PrivateConnectionString;
-        if (string.IsNullOrWhiteSpace(cs))
-            throw new ArgumentException(
-                $"ConnectionString is not set. DatabaseType='{config.DatabaseType}', IsPublic={isPublic}");
-        return cs;
     }
     
+    private static readonly Dictionary<string, (DbConnectionInfo, IDatabaseProvider)> Infos = new();
+
+    public static void Register(string dbType, IDatabaseProvider provider, string privateConnectionString, string publicConnectionString)
+    {
+        if (Infos.ContainsKey(dbType))
+            throw new InvalidOperationException($"DatabaseType '{dbType}' is already registered.");
+        
+        var info = new DbConnectionInfo(dbType, privateConnectionString, publicConnectionString);
+        Infos[dbType] = (info, provider);
+    }
+
+    public static DbConn Open(string dbType, bool isPublic = false)
+    {
+        if (!Infos.TryGetValue(dbType, out var info))
+            throw new Exception($"Invalid DbType={dbType}");
+                
+        var cs = ResolveConnectionString(info.Item1, isPublic);
+        
+        try
+        {
+            var conn = info.Item2.CreateConnection(cs)
+                       ?? throw new InvalidOperationException("Factory returned null connection.");
+            
+            var dbConn = new DbConn(conn, info.Item2);
+            dbConn.Open();
+            return dbConn;
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(
+                $"Failed to open DB connection. DbType={dbType}, IsPublic={isPublic}, ConnectionString={cs}", ex);
+        }
+    }
+
+    public static async Task<DbConn> OpenAsync(string dbType, bool isPublic = false, CancellationToken ct = default)
+    {
+        if (!Infos.TryGetValue(dbType, out var info))
+            throw new Exception($"Invalid DbType={dbType}");
+        
+        var cs = ResolveConnectionString(info.Item1, isPublic);
+
+        try
+        {
+            var conn = info.Item2.CreateConnection(cs)
+                       ?? throw new InvalidOperationException("Factory returned null connection.");
+            
+            var dbConn = new DbConn(conn, info.Item2);
+            await dbConn.OpenAsync().WaitAsync(ct).ConfigureAwait(false);
+            return dbConn;
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(
+                $"Failed to open database connection. Type={dbType}, IsPublic={isPublic}, ConnectionString={cs}", ex);
+        }
+    }
+
+    private static string ResolveConnectionString(DbConnectionInfo info, bool isPublic)
+    {
+        var cs = isPublic ? info.PublicConnectionString : info.PrivateConnectionString;
+        if (string.IsNullOrEmpty(cs))
+            throw new ArgumentException(
+                $"ConnectionString is not set. DbType='{info.DbType}', IsPublic={isPublic}");
+        return cs;
+    }
 }
+
+
