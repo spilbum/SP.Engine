@@ -4,10 +4,10 @@ namespace SP.Common.Logging
 {
     public interface ILogger
     {
-        void Log(ELogLevel level, string message);
-        void Log(ELogLevel level, string format, params object[] args);
-        void Log(ELogLevel level, Exception ex);
-        void Log(ELogLevel level, Exception ex, string format, params object[] args);
+        void Log(LogLevel level, string message);
+        void Log(LogLevel level, string format, params object[] args);
+        void Log(LogLevel level, Exception ex);
+        void Log(LogLevel level, Exception ex, string format, params object[] args);
 
         void Debug(string message);
         void Debug(string format, params object[] args);
@@ -27,6 +27,6 @@ namespace SP.Common.Logging
         void Fatal(string format, params object[] args);
         void Fatal(Exception ex);
         void Fatal(Exception ex, string format, params object[] args);
-    }    
+    }
 }
 

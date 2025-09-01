@@ -1,6 +1,6 @@
 namespace SP.Common.Logging
 {
-    public enum ELogLevel
+    public enum LogLevel
     {
         Debug = 0,
         Info,

@@ -20,7 +20,11 @@ public static class DbDataReaderExtensions
     }
 }
 
-public abstract class BaseDbRecord
+public interface IDbRecord
+{
+}
+
+public abstract class BaseDbRecord : IDbRecord
 {
     public void ReadData(DbDataReader reader)
     {

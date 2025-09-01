@@ -110,13 +110,13 @@ namespace SP.Engine.Server.Connector
 
         private void OnStateChanged(object sender, StateChangedEventArgs e)
         {
-            Log(ELogLevel.Info, "State Changed: {0} -> {1}", e.OldState, e.NewState);
+            Log(LogLevel.Info, "State Changed: {0} -> {1}", e.OldState, e.NewState);
         }
 
         private void OnOffline(object sender, EventArgs e)
         {
             _isOffline = true;
-            Log(ELogLevel.Info, "Connection to server {0}:{1} has been lost.", Host, Port);
+            Log(LogLevel.Info, "Connection to server {0}:{1} has been lost.", Host, Port);
             Offline?.Invoke();
         }
 
@@ -211,7 +211,7 @@ namespace SP.Engine.Server.Connector
 
         private void OnDisconnect(object sender, EventArgs e)
         {
-            Log(ELogLevel.Info, "Disconnected from server {0}:{1}", Host, Port);
+            Log(LogLevel.Info, "Disconnected from server {0}:{1}", Host, Port);
             Disconnected?.Invoke();
         }
         
@@ -223,14 +223,14 @@ namespace SP.Engine.Server.Connector
 
         private void OnConnected(object sender, EventArgs e)
         {
-            Log(ELogLevel.Info, "Connected to server {0}:{1}. peerId={2}", Host, Port, PeerId);
+            Log(LogLevel.Info, "Connected to server {0}:{1}. peerId={2}", Host, Port, PeerId);
             if (_isOffline)
                 _isOffline = false;
             else
                 Connected?.Invoke();
         }
 
-        private void Log(ELogLevel level, string format, params object[] args)
+        private void Log(LogLevel level, string format, params object[] args)
         {
             Logger.Log(level, format, args);
         }

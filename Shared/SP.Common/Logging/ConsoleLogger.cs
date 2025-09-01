@@ -14,19 +14,19 @@ namespace SP.Common.Logging
             _category = category;
         }
 
-        public void Log(ELogLevel level, string message)
+        public void Log(LogLevel level, string message)
             => Write(level, message);
 
-        public void Log(ELogLevel level, string format, params object[] args)
+        public void Log(LogLevel level, string format, params object[] args)
             => Write(level, string.Format(format, args));
 
-        public void Log(ELogLevel level, Exception ex)
+        public void Log(LogLevel level, Exception ex)
             => Write(level, ex.ToString());
 
-        public void Log(ELogLevel level, Exception ex, string format, params object[] args)
+        public void Log(LogLevel level, Exception ex, string format, params object[] args)
             => Write(level, string.Format(format, args) + "\n" + ex);
 
-        private void Write(ELogLevel level, string message)
+        private void Write(LogLevel level, string message)
         {
             lock (_lock)
             {
@@ -34,24 +34,24 @@ namespace SP.Common.Logging
             }
         }
 
-        public void Debug(string message) => Log(ELogLevel.Debug, message);
-        public void Debug(string format, params object[] args) => Log(ELogLevel.Debug, format, args);
+        public void Debug(string message) => Log(LogLevel.Debug, message);
+        public void Debug(string format, params object[] args) => Log(LogLevel.Debug, format, args);
 
-        public void Info(string message) => Log(ELogLevel.Info, message);
-        public void Info(string format, params object[] args) => Log(ELogLevel.Info, format, args);
+        public void Info(string message) => Log(LogLevel.Info, message);
+        public void Info(string format, params object[] args) => Log(LogLevel.Info, format, args);
 
-        public void Warn(string message) => Log(ELogLevel.Warning, message);
-        public void Warn(string format, params object[] args) => Log(ELogLevel.Warning, format, args);
+        public void Warn(string message) => Log(LogLevel.Warning, message);
+        public void Warn(string format, params object[] args) => Log(LogLevel.Warning, format, args);
 
-        public void Error(string message) => Log(ELogLevel.Error, message);
-        public void Error(string format, params object[] args) => Log(ELogLevel.Error, format, args);
-        public void Error(Exception ex) => Log(ELogLevel.Error, ex);
-        public void Error(Exception ex, string format, params object[] args) => Log(ELogLevel.Error, ex, format, args);
+        public void Error(string message) => Log(LogLevel.Error, message);
+        public void Error(string format, params object[] args) => Log(LogLevel.Error, format, args);
+        public void Error(Exception ex) => Log(LogLevel.Error, ex);
+        public void Error(Exception ex, string format, params object[] args) => Log(LogLevel.Error, ex, format, args);
 
-        public void Fatal(string message) => Log(ELogLevel.Fatal, message);
-        public void Fatal(string format, params object[] args) => Log(ELogLevel.Fatal, format, args);
-        public void Fatal(Exception ex) => Log(ELogLevel.Fatal, ex);
-        public void Fatal(Exception ex, string format, params object[] args) => Log(ELogLevel.Fatal, ex, format, args);
+        public void Fatal(string message) => Log(LogLevel.Fatal, message);
+        public void Fatal(string format, params object[] args) => Log(LogLevel.Fatal, format, args);
+        public void Fatal(Exception ex) => Log(LogLevel.Fatal, ex);
+        public void Fatal(Exception ex, string format, params object[] args) => Log(LogLevel.Fatal, ex, format, args);
 
     }
 

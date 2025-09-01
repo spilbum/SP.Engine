@@ -38,6 +38,9 @@ namespace SP.Common.Accessor
         public static RuntimeTypeAccessor GetOrCreate(Type type)
             => Cached.GetOrAdd(type, t => new RuntimeTypeAccessor(t));
         
+        public bool HasMember(string name)
+            => _memberMap.ContainsKey(name);
+        
         public object this[object instance, string name]
         {
             get => _memberMap.TryGetValue(name, out var accessor)

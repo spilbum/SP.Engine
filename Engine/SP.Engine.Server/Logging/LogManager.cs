@@ -61,7 +61,7 @@ namespace SP.Engine.Server.Logging
             }
         }
 
-        private static void Log(ELogLevel level, string category, string message)
+        private static void Log(LogLevel level, string category, string message)
         {
             var logger = GetLogger(category);
             var method = new StackFrame(2, false).GetMethod();
@@ -69,7 +69,7 @@ namespace SP.Engine.Server.Logging
             Enqueue(() => logger.Log(level, prefix + message));
         }
 
-        private static void Log(ELogLevel level, string category, string format, params object[] args)
+        private static void Log(LogLevel level, string category, string format, params object[] args)
         {
             var logger = GetLogger(category);
             var method = new StackFrame(2, false).GetMethod();
@@ -77,14 +77,14 @@ namespace SP.Engine.Server.Logging
             Enqueue(() => logger.Log(level, prefix + string.Format(format, args)));
         }
 
-        private static void Log(ELogLevel level, ILogContext context, string format, params object[] args)
+        private static void Log(LogLevel level, ILogContext context, string format, params object[] args)
         {
             var method = new StackFrame(2, false).GetMethod();
             var prefix = method != null ? $"[{method.DeclaringType?.Name}.{method.Name}] " : string.Empty;
             Enqueue(() => context.Logger.Log(level, prefix + string.Format(format, args)));
         }
 
-        private static void LogDefault(ELogLevel level, string format, params object[] args)
+        private static void LogDefault(LogLevel level, string format, params object[] args)
         {
             if (string.IsNullOrWhiteSpace(_defaultCategory))
                 throw new InvalidOperationException("Default log category is not set.");
@@ -92,40 +92,40 @@ namespace SP.Engine.Server.Logging
         }
 
         public static void Debug(string category, string format, params object[] args) =>
-            Log(ELogLevel.Debug, category, format, args);
+            Log(LogLevel.Debug, category, format, args);
 
         public static void Info(string category, string format, params object[] args) =>
-            Log(ELogLevel.Info, category, format, args);
+            Log(LogLevel.Info, category, format, args);
 
         public static void Warn(string category, string format, params object[] args) =>
-            Log(ELogLevel.Warning, category, format, args);
+            Log(LogLevel.Warning, category, format, args);
 
         public static void Error(string category, string format, params object[] args) =>
-            Log(ELogLevel.Error, category, format, args);
+            Log(LogLevel.Error, category, format, args);
 
         public static void Fatal(string category, string format, params object[] args) =>
-            Log(ELogLevel.Fatal, category, format, args);
+            Log(LogLevel.Fatal, category, format, args);
 
         public static void Debug(ILogContext context, string format, params object[] args) =>
-            Log(ELogLevel.Debug, context, format, args);
+            Log(LogLevel.Debug, context, format, args);
 
         public static void Info(ILogContext context, string format, params object[] args) =>
-            Log(ELogLevel.Info, context, format, args);
+            Log(LogLevel.Info, context, format, args);
 
         public static void Warn(ILogContext context, string format, params object[] args) =>
-            Log(ELogLevel.Warning, context, format, args);
+            Log(LogLevel.Warning, context, format, args);
 
         public static void Error(ILogContext context, string format, params object[] args) =>
-            Log(ELogLevel.Error, context, format, args);
+            Log(LogLevel.Error, context, format, args);
 
         public static void Fatal(ILogContext context, string format, params object[] args) =>
-            Log(ELogLevel.Fatal, context, format, args);
+            Log(LogLevel.Fatal, context, format, args);
 
-        public static void Debug(string format, params object[] args) => LogDefault(ELogLevel.Debug, format, args);
-        public static void Info(string format, params object[] args) => LogDefault(ELogLevel.Info, format, args);
-        public static void Warn(string format, params object[] args) => LogDefault(ELogLevel.Warning, format, args);
-        public static void Error(string format, params object[] args) => LogDefault(ELogLevel.Error, format, args);
-        public static void Fatal(string format, params object[] args) => LogDefault(ELogLevel.Fatal, format, args);
+        public static void Debug(string format, params object[] args) => LogDefault(LogLevel.Debug, format, args);
+        public static void Info(string format, params object[] args) => LogDefault(LogLevel.Info, format, args);
+        public static void Warn(string format, params object[] args) => LogDefault(LogLevel.Warning, format, args);
+        public static void Error(string format, params object[] args) => LogDefault(LogLevel.Error, format, args);
+        public static void Fatal(string format, params object[] args) => LogDefault(LogLevel.Fatal, format, args);
 
         public static void Error(string category, Exception ex)
         {
