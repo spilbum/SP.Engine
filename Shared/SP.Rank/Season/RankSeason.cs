@@ -6,15 +6,6 @@ using SP.Database;
 
 namespace SP.Rank.Season;
 
-public abstract class RankSeasonDbRecord : BaseDbRecord
-{
-    public int SeasonId { get; set; }
-    public int SeasonNum { get; set; }
-    public byte State { get; set; }
-    public DateTimeOffset StartTime { get; set; }
-    public DateTimeOffset EndTime { get; set; }
-}
-
 public interface IRankSeason : IDisposable
 {
     string Name { get; }
@@ -24,7 +15,8 @@ public interface IRankSeason : IDisposable
     DateTimeOffset EndTime { get; }
     RankSeasonState State { get; }
 
-    bool Initialize<TDbRecord>(TDbRecord data, RankSeasonOptions options) where TDbRecord : RankSeasonDbRecord;
+    bool Initialize(int seasonId, int seasonNum, DateTimeOffset startTime, DateTimeOffset endTime,
+        RankSeasonState state, RankSeasonOptions options);
     void Start();
     void Stop();
 }
@@ -36,10 +28,10 @@ public abstract class RankSeason<TEntry, TComparer> : IRankSeason
     private const int WorkerBatchCount = 100;
 
     public string Name { get; }
-    public int SeasonId { get; protected set; }
-    public int SeasonNum { get; protected set; }
-    public DateTimeOffset StartTime { get; protected set; }
-    public DateTimeOffset EndTime { get; protected set; }
+    public int SeasonId { get; private set; }
+    public int SeasonNum { get; private set; }
+    public DateTimeOffset StartTime { get; private set; }
+    public DateTimeOffset EndTime { get; private set; }
     public RankSeasonState State => (RankSeasonState)Volatile.Read(ref _stateValue);
 
     private MemoryRankCache<long, TEntry, TComparer>? _cache;
@@ -47,11 +39,13 @@ public abstract class RankSeason<TEntry, TComparer> : IRankSeason
     private readonly List<ThreadFiber> _workers = new();
     private readonly ConcurrentQueue<TEntry> _updateQueue = new();
     private bool _running;
-    private bool _disposed;
+    private int _disposed;
+    private int _initialized;
     private int _stateValue = (int)RankSeasonState.None;
     private int _pendingStateValue = -1;
     private int _inChangeState;
     private ILogger? _logger;
+    private bool IsDisposed => Volatile.Read(ref _disposed) == 1;
 
     protected RankSeason(string name, ILogger? logger = null)
     {
@@ -59,9 +53,12 @@ public abstract class RankSeason<TEntry, TComparer> : IRankSeason
         _logger = logger;
     }
 
-    public virtual bool Initialize<TDbRecord>(TDbRecord data, RankSeasonOptions options)
-        where TDbRecord : RankSeasonDbRecord
+    public virtual bool Initialize(int seasonId, int seasonNum, DateTimeOffset startTime, DateTimeOffset endTime,
+        RankSeasonState state, RankSeasonOptions options)
     {
+        if (Interlocked.Exchange(ref _initialized, 1) == 1)
+            throw new InvalidOperationException("Already initialized");
+        
         try
         {
             _cache = new MemoryRankCache<long, TEntry, TComparer>(
@@ -83,14 +80,13 @@ public abstract class RankSeason<TEntry, TComparer> : IRankSeason
                 _workers.Add(worker);
             }
 
-            SeasonId = data.SeasonId;
-            SeasonNum = data.SeasonNum;
-            StartTime = data.StartTime.ToUniversalTime();
-            EndTime = data.EndTime.ToUniversalTime();
+            SeasonId = seasonId;
+            SeasonNum = seasonNum;
+            StartTime = startTime.ToUniversalTime();
+            EndTime = endTime.ToUniversalTime();
             if (EndTime <= StartTime)
                 throw new ArgumentException("EndTime must be after StartTime (UTC).");
 
-            var state = (RankSeasonState)data.State;
             Interlocked.Exchange(ref _stateValue, (int)state);
             OnEnter(state);
             return true;
@@ -104,7 +100,7 @@ public abstract class RankSeason<TEntry, TComparer> : IRankSeason
 
     public virtual void Start()
     {
-        if (Volatile.Read(ref _disposed)) return;
+        if (IsDisposed) return;
         
         if (_scheduler == null || _workers.Count == 0)
             throw new InvalidOperationException("Initialize must be called before Start.");
@@ -121,11 +117,27 @@ public abstract class RankSeason<TEntry, TComparer> : IRankSeason
         Dispose();
     }
 
+    protected bool TryUpdateSeasonInfo(int seasonNum, DateTimeOffset start, DateTimeOffset end)
+    {
+        if (IsDisposed) return false;
+        if (State is not RankSeasonState.Scheduled and not RankSeasonState.Break) 
+            return false;
+        
+        if (seasonNum <= 0) return false;
+        
+        var s = start.ToUniversalTime();
+        var e = end.ToUniversalTime();
+        if (e <= s) return false;
+        
+        SeasonNum = seasonNum;
+        StartTime = s;
+        EndTime = e;
+        return true;
+    }
+
     public void Dispose()
     {
-        if (Volatile.Read(ref _disposed)) return;
-        Volatile.Write(ref _disposed, true);
-        
+        if (Interlocked.Exchange(ref _disposed, 1) == 1) return;
         Volatile.Write(ref _running, false);
         
         _scheduler?.Dispose();
@@ -143,7 +155,7 @@ public abstract class RankSeason<TEntry, TComparer> : IRankSeason
 
     public bool Enqueue(TEntry entry)
     {
-        if (Volatile.Read(ref _disposed)) return false;
+        if (IsDisposed) return false;
         if (!Volatile.Read(ref _running)) return false;
         if (State != RankSeasonState.Running) return false;
         _updateQueue.Enqueue(entry);
@@ -152,20 +164,25 @@ public abstract class RankSeason<TEntry, TComparer> : IRankSeason
     
     protected bool RequestStateChange(RankSeasonState state)
     {
+        if (IsDisposed) return false;
         if (State == state) return false;
         return Interlocked.CompareExchange(ref _pendingStateValue, (int)state, -1) == -1;
     }
     
-    private bool TryChangeState(RankSeasonState expected, RankSeasonState next)
+    private void ChangeState(RankSeasonState expected, RankSeasonState next)
     {
         var prev = (RankSeasonState)Interlocked.CompareExchange(ref _stateValue, (int)next, (int)expected);
         if (prev != expected)
         {
-            _logger?.Warn($"TryChangeState refused: {prev} -> {next}, expected={expected}");
-            return false;
+            _logger?.Warn("ChangeState refused: {0} -> {1}, expected={2}", prev, next, expected);
+            return;
         }
 
-        if (Interlocked.Exchange(ref _inChangeState, 1) == 1) return true;
+        if (Interlocked.Exchange(ref _inChangeState, 1) == 1)
+        {
+            _logger?.Warn("Re-entrant state change suppressed: {0} -> {1}", expected, next);
+            return;
+        }
 
         try
         {
@@ -182,13 +199,12 @@ public abstract class RankSeason<TEntry, TComparer> : IRankSeason
             Volatile.Write(ref _inChangeState, 0);
         }
         
-        _logger?.Info("State changed: {0} -> {1}", prev, next);
-        return true;
+        _logger?.Debug("State changed: {0} -> {1}", prev, next);
     }
 
     private void SchedulerTick()
     {
-        if (Volatile.Read(ref _disposed)) return;
+        if (IsDisposed) return;
         if (!Volatile.Read(ref _running)) return;
         var now = DateTimeOffset.UtcNow;
         UpdateState();
@@ -201,12 +217,12 @@ public abstract class RankSeason<TEntry, TComparer> : IRankSeason
         if (req == -1) return;
         var cur = State;
         var next = (RankSeasonState)req;
-        TryChangeState(cur, next);
+        ChangeState(cur, next);
     }
 
     private void WorkerTick()
     {
-        if (Volatile.Read(ref _disposed)) return;
+        if (IsDisposed) return;
         if (!Volatile.Read(ref _running)) return;
         if (State != RankSeasonState.Running) return;
         
@@ -269,20 +285,32 @@ public abstract class RankSeason<TEntry, TComparer> : IRankSeason
         record = null;
         return _cache?.RemoveRecord(key, out record) ?? false;
     }
-    
+
     public List<(TEntry record, int rank)> GetTop(int count)
-        => _cache?.GetTop(count) ?? new List<(TEntry, int)>();
-    
+    {
+        if (IsDisposed) return [];
+        return _cache?.GetTop(count) ?? [];
+    }
+
     public List<(TEntry record, int rank)> GetRange(int startRank, int count)
-        => _cache?.GetRange(startRank, count) ?? new List<(TEntry, int)>();
-    
+    {
+        if (IsDisposed) return [];
+        return _cache?.GetRange(startRank, count) ?? [];
+    }
+
     public List<TInfo> GetTopInfo<TInfo>(int count, IRankFormatter<TEntry, TInfo> formatter)
-        => _cache?.GetTopInfos(count, formatter) ?? new List<TInfo>();
-    
+    {
+        if (IsDisposed) return [];
+        return _cache?.GetTopInfos(count, formatter) ?? [];
+    }
+
     public List<TInfo> GetRangeInfo<TInfo>(int startRank, int count, IRankFormatter<TEntry, TInfo> formatter)
-        => _cache?.GetRangeInfos(startRank, count, formatter) ?? new List<TInfo>();
+    {
+        if (IsDisposed) return [];
+        return _cache?.GetRangeInfos(startRank, count, formatter) ?? [];
+    }
     
     public void Clear(bool includeOutOfRank = true) => _cache?.Clear(includeOutOfRank);
-    public int Count => _cache?.Count ?? 0;
-    public int TotalCount => _cache?.TotalCount ?? 0;
+    public int Count => IsDisposed ? 0 : _cache?.Count ?? 0;
+    public int TotalCount => IsDisposed ? 0 : _cache?.TotalCount ?? 0;
 }
