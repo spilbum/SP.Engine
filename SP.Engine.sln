@@ -22,11 +22,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tools", "Tools", "{B31B4670
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Samples", "Samples", "{2C5B588F-105D-4424-900A-30CBC9837EB9}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GameClient", "Sample\GameClient\GameClient.csproj", "{77C8AD9A-287B-4600-866B-68589BF31302}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GameClient", "Samples\GameClient\GameClient.csproj", "{77C8AD9A-287B-4600-866B-68589BF31302}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GameServer", "Sample\GameServer\GameServer.csproj", "{0766C0DF-4352-4196-9601-0284993AC8EB}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GameServer", "Samples\GameServer\GameServer.csproj", "{0766C0DF-4352-4196-9601-0284993AC8EB}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Common", "Sample\Common\Common.csproj", "{6EF356FE-FC8E-4BB6-862C-02FF06CEE6DA}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Common", "Samples\Common\Common.csproj", "{6EF356FE-FC8E-4BB6-862C-02FF06CEE6DA}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SP.Database", "Shared\SP.Database\SP.Database.csproj", "{C5C42F6B-5C4E-495B-A868-31903660B4BB}"
 EndProject
