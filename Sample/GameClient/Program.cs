@@ -9,7 +9,7 @@ using SP.Engine.Runtime.Handler;
 using SP.Engine.Runtime.Protocol;
 using Timer = System.Threading.Timer;
 
-namespace TestClient
+namespace GameClient
 {
     public class NetPeerManager
     {
@@ -129,7 +129,7 @@ namespace TestClient
                 .WithUdpKeepAlive(false, 30)
                 .Build();
 
-            var logger = new ConsoleLogger("TestClient");
+            var logger = new ConsoleLogger("GameClient");
             
             if (!NetPeerManager.Instance.Start(ip, port, config, logger))
                 throw new Exception("Failed to initialize");

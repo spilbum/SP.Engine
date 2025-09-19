@@ -1,6 +1,6 @@
 using SP.Engine.Server.Connector;
 
-namespace TestServer;
+namespace GameServer;
 
 public class DummyConnector(string name) : BaseConnector(name)
 {

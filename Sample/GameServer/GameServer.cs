@@ -1,7 +1,7 @@
 using SP.Engine.Server;
 using SP.Engine.Server.Connector;
 
-namespace TestServer;
+namespace GameServer;
 
 public class GameServer : Engine<GamePeer>
 {

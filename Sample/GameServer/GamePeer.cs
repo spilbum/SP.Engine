@@ -1,7 +1,7 @@
 using SP.Engine.Runtime;
 using SP.Engine.Server;
 
-namespace TestServer;
+namespace GameServer;
 
 public class GamePeer(IClientSession session) : BasePeer(EPeerType.User, session)
 {

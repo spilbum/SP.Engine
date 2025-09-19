@@ -1,14 +1,7 @@
-﻿using System.Data.Common;
-using MySql.Data.MySqlClient;
-using SP.Database;
-using SP.Engine.Runtime;
-using SP.Engine.Runtime.Security;
-using SP.Engine.Server;
+﻿using SP.Engine.Server;
 using SP.Engine.Server.Configuration;
-using SP.Engine.Server.Connector;
-using TestServer.DatabaseHandler;
 
-namespace TestServer;
+namespace GameServer;
 
 internal static class Program
 {

@@ -2,7 +2,7 @@ using Common;
 using SP.Engine.Runtime.Handler;
 using SP.Engine.Server.ProtocolHandler;
 
-namespace TestServer.ProtocolHandler;
+namespace GameServer.ProtocolHandler;
 
 [ProtocolHandler(C2SProtocol.UdpEchoReq)]
 public class EchoReq : BaseProtocolHandler<GamePeer, C2SProtocolData.UdpEchoReq>
