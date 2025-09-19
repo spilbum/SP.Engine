@@ -47,7 +47,6 @@ internal static class Program
                 })
                 .AddListener(new ListenerConfig { Ip = host, Port = port, Mode = ESocketMode.Tcp, BackLog = 128 })
                 .AddListener(new ListenerConfig { Ip = host, Port = port + 1, Mode = ESocketMode.Udp, BackLog = 128 })
-                .AddConnector(new ConnectorConfig { Host = host, Port = port, Name = "Dummy" })
                 .Build();
             
             using var server = new GameServer();
