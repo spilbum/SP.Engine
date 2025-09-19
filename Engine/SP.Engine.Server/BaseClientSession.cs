@@ -16,7 +16,7 @@ namespace SP.Engine.Server
         string SessionId { get; }
         IPEndPoint LocalEndPoint { get; }
         IPEndPoint RemoteEndPoint { get; }
-        IEngineConfig Config { get; }
+        EngineConfig Config { get; }
         IEngine Engine { get; }
         TcpNetworkSession TcpSession { get; }
 
@@ -35,7 +35,7 @@ namespace SP.Engine.Server
         private BaseEngine<TSession> Engine { get; set; }
 
         IEngine IClientSession.Engine => Engine;
-        public IEngineConfig Config => Engine.Config;
+        public EngineConfig Config => Engine.Config;
         public ILogger Logger => Engine.Logger;
         public IPEndPoint LocalEndPoint => TcpSession.LocalEndPoint;
         public IPEndPoint RemoteEndPoint => TcpSession.RemoteEndPoint;
@@ -62,7 +62,7 @@ namespace SP.Engine.Server
             Engine = (BaseEngine<TSession>)engine;
             TcpSession = networkSession;
             SessionId = networkSession.SessionId;
-            _receiveBuffer = new BinaryBuffer(engine.Config.MaxAllowedLength);
+            _receiveBuffer = new BinaryBuffer(engine.Config.Network.ReceiveBufferSize);
             networkSession.Attach(this);
             IsConnected = true;
 
@@ -151,36 +151,53 @@ namespace SP.Engine.Server
             }
             finally
             {  
-                if (_receiveBuffer.RemainSize < 1024)
+                if (_receiveBuffer.AvailableBytes < 1024)
                     _receiveBuffer.Trim();
             }
         }
         
-        private IEnumerable<TcpMessage> Filter() 
+        private IEnumerable<TcpMessage> Filter()
         {
-            while (true)
+            const int maxFramePerTick = 128;
+            var produced = 0;
+            while (produced < maxFramePerTick)
             {
-                if (_receiveBuffer.RemainSize < TcpHeader.HeaderSize)
+                if (_receiveBuffer.AvailableBytes < TcpHeader.HeaderSize)
                     yield break;
                 
                 var headerSpan = _receiveBuffer.Peek(TcpHeader.HeaderSize);
-                if (!TcpHeader.TryParse(headerSpan, out var header))
-                    yield break;
+                var result = TcpHeader.TryParse(headerSpan, out var header);
                 
-                if (header.PayloadLength > Config.MaxAllowedLength)
+                switch (result)
                 {
-                    Logger.Warn("Max allowed length. maxAllowedLength={0}, payloadLength={1}", Config.MaxAllowedLength, header.PayloadLength);
-                    Close(ECloseReason.ProtocolError);
-                    yield break;
+                    case TcpHeader.ParseResult.Success:
+                    {
+                        long frameLen = header.Length + header.PayloadLength;
+                        if (frameLen <= 0 || frameLen > Config.Network.MaxFrameBytes)
+                        {
+                            Logger.Warn("Frame too large/small. max={0}, got={1}, (protocolId={2})", 
+                                Config.Network.MaxFrameBytes, frameLen, header.ProtocolId);
+                            Close(ECloseReason.ProtocolError);
+                            yield break;
+                        }
+
+                        var len = (int)frameLen;
+                        if (_receiveBuffer.AvailableBytes < len)
+                            yield break;
+                
+                        var frameBytes = _receiveBuffer.ReadBytes(len);
+                        yield return new TcpMessage(header, new ArraySegment<byte>(frameBytes));
+                        produced++;
+                        break;
+                    }
+                    case TcpHeader.ParseResult.Invalid:
+                        Close(ECloseReason.ProtocolError);
+                        yield break;
+                    case TcpHeader.ParseResult.NeedMore:
+                        yield break;
+                    default:
+                        throw new ArgumentOutOfRangeException();
                 }
-
-                var payloadLength = header.Length + header.PayloadLength;
-                if (_receiveBuffer.RemainSize < payloadLength)
-                    yield break;
-
-                var payload = _receiveBuffer.ReadBytes(payloadLength);
-                var message = new TcpMessage(header, new ArraySegment<byte>(payload));
-                yield return message;
             }
         }
 

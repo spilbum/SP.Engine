@@ -35,13 +35,14 @@ namespace SP.Engine.Runtime.Networking
         protected byte[] GetBody()
             => Payload.AsSpan(Header.Length, Length - Header.Length).ToArray();
         
-        public void Pack(IProtocolData data, byte[] sharedKey, PackOptions options)
+        public void Pack(IProtocolData data, IEncryptor encryptor, PackOptions options)
         {
             var body = BinaryConverter.SerializeObject(data, data.GetType());
             if (body == null || body.Length == 0)
                 throw new InvalidOperationException($"Failed to serialize protocol of type {data.GetType().FullName}");
 
             var flags = EHeaderFlags.None;
+            
             if (options?.UseCompression ?? false)
             {
                 var compressed = Compressor.Compress(body);
@@ -57,10 +58,10 @@ namespace SP.Engine.Runtime.Networking
 
             if (options?.UseEncryption ?? false)
             {
-                if (sharedKey == null)
-                    throw new InvalidOperationException("SharedKey cannot be null when encryption is enabled.");
+                if (encryptor == null)
+                    throw new InvalidOperationException("Encryptor cannot be null when encryption is enabled.");
 
-                body = Encryptor.Encrypt(body, sharedKey);
+                body = encryptor.Encrypt(body);
                 flags |= EHeaderFlags.Encrypted;
             }
 
@@ -73,18 +74,19 @@ namespace SP.Engine.Runtime.Networking
             Payload = new ArraySegment<byte>(payload);
         }
 
-        public IProtocolData Unpack(Type type, byte[] sharedKey)
+        public IProtocolData Unpack(Type type, IEncryptor encryptor)
         {
             var body = GetBody();
             if (IsEncrypted)
             {
-                if (sharedKey == null)
-                    throw new InvalidOperationException("SharedKey cannot be null.");
-                body = Encryptor.Decrypt(body, sharedKey);
+                if (encryptor == null)
+                    throw new InvalidOperationException("Encryptor cannot be null.");
+                body = encryptor.Decrypt(body);
             }
 
             if (IsCompressed)
                 body = Compressor.Decompress(body);
+            
             return BinaryConverter.DeserializeObject(body, type) as IProtocolData;
         }
     }

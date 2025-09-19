@@ -18,21 +18,20 @@ namespace SP.Engine.Client.ProtocolHandler
             }
             
             // 허용되는 최대 데이터 크기 설정
-            if (0 < protocol.MaxAllowedLength)
-                session.SetMaxAllowedLength(protocol.MaxAllowedLength);
+            if (0 < protocol.MaxFrameBytes)
+                session.SetMaxAllowedLength(protocol.MaxFrameBytes);
                     
             // 전송 타임아웃 시간 설정
-            if (0 < protocol.SendTimeOutMs)
-                session.SetInitialSendTimeoutMs(protocol.SendTimeOutMs);
+            if (0 < protocol.SendTimeoutMs)
+                session.SetInitialSendTimeoutMs(protocol.SendTimeoutMs);
             
             // 최대 재 전송 횟수 설정
-            if (0 < protocol.MaxReSendCnt)
-                session.SetMaxReSendCnt(protocol.MaxReSendCnt);
+            if (0 < protocol.MaxResendCount)
+                session.SetMaxResendCnt(protocol.MaxResendCount);
 
             if (protocol.UseEncryption)
             {
-                session.PackOptions.UseEncryption = true;
-                session.DiffieHellman.DeriveSharedKey(protocol.ServerPublicKey);
+                session.SetupEncyptor(protocol.ServerPublicKey);
             }
 
             if (protocol.UseCompression)

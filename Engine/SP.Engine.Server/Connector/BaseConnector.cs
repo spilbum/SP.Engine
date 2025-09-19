@@ -26,7 +26,7 @@ namespace SP.Engine.Server.Connector
         void Send(IProtocolData protocol);
     }
     
-    public abstract class BaseServerConnector(string name) : IHandleContext, IServerConnector, IDisposable
+    public abstract class BaseConnector(string name) : IHandleContext, IServerConnector, IDisposable
     {
         private bool _isDisposed;
         private bool _isOffline;        
@@ -60,8 +60,7 @@ namespace SP.Engine.Server.Connector
 
             try
             {
-                _netPeer = CreateNetPeer();
-
+                _netPeer = CreateNetPeer(config);
                 if (!ProtocolMethodInvoker.LoadInvokers(GetType()).All(RegisterInvoker))
                     return false;
                 
@@ -88,17 +87,15 @@ namespace SP.Engine.Server.Connector
             return invoker;
         }
 
-        private NetPeer CreateNetPeer()
+        private NetPeer CreateNetPeer(ConnectorConfig config)
         {
-            var config = EngineConfigBuilder.Create()
-                .WithAutoPing(false, 2)
-                .WithConnectAttempt(2, 5)
-                .WithReconnectAttempt(5, 15)
-                .WithUdpMtu(1200)
-                .WithUdpKeepAlive(false, 30)
+            var engineConfig = EngineConfigBuilder.Create()
+                .WithAutoPing(config.EnableAutoPing, config.AutoPingIntervalSec)
+                .WithConnectAttempt(config.MaxConnectAttempts, config.ConnectAttemptIntervalSec)
+                .WithReconnectAttempt(config.MaxReconnectAttempts, config.ReconnectAttemptIntervalSec)
                 .Build();
             
-            var netPeer = new NetPeer(config, Logger);
+            var netPeer = new NetPeer(engineConfig, Logger);
             netPeer.Connected += OnConnected;
             netPeer.Error += OnError;
             netPeer.Offline += OnOffline;
@@ -179,16 +176,9 @@ namespace SP.Engine.Server.Connector
             netPeer.Tick();
             switch (netPeer.State)
             {
-                case ENetPeerState.None:
-                case ENetPeerState.Connecting:
-                case ENetPeerState.Open:
-                case ENetPeerState.Closing:
-                    break;
                 case ENetPeerState.Closed:
                     netPeer.Connect(Host, Port);
                     break;
-                default:
-                    throw new ArgumentOutOfRangeException();
             }
         }
 
@@ -201,7 +191,7 @@ namespace SP.Engine.Server.Connector
                 if (invoker == null)
                     throw new Exception("Unknown protocol: " + message.ProtocolId);
                 
-                invoker.Invoke(this, message, _netPeer.DiffieHellman.SharedKey);
+                invoker.Invoke(this, message, _netPeer.Encryptor);
             }
             catch (Exception ex)
             {

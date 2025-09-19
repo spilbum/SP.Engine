@@ -15,8 +15,8 @@ namespace SP.Engine.Server
 {
     public interface IEngine : ILogContext
     {
-        IEngineConfig Config { get; }
-        bool Initialize(string name, IEngineConfig config);
+        EngineConfig Config { get; }
+        bool Initialize(string name, EngineConfig config);
         bool Start();
         void Stop();
         IClientSession CreateSession(TcpNetworkSession networkSession);   
@@ -61,12 +61,12 @@ namespace SP.Engine.Server
         ISocketServer ISocketServerAccessor.SocketServer => _socketServer;
         public string Name { get; private set; }
         public ILogger Logger { get; private set; }
-        public IEngineConfig Config { get; private set; }
+        public EngineConfig Config { get; private set; }
         
         public abstract void ExecuteHandler(IPeer peer, IMessage message);
         public abstract IPeer GetPeer(EPeerId peerId);
         
-        public virtual bool Initialize(string name, IEngineConfig config)
+        public virtual bool Initialize(string name, EngineConfig config)
         {
             if (Interlocked.CompareExchange(ref _stateCode, ServerStateConst.Initializing, ServerStateConst.NotInitialized)
                 != ServerStateConst.NotInitialized)
@@ -101,19 +101,20 @@ namespace SP.Engine.Server
 
             if (null == _socketServer || !_socketServer.Start())
             {
+                Logger.Fatal("Failed to start socket server.");
                 _stateCode = ServerStateConst.NotStarted;
                 return false;
             }
 
             _stateCode = ServerStateConst.Running;
 
-            if (!Config.IsDisableSessionSnapshot)
-                StartSessionsSnapshotTimer();
+            if (Config.Session.EnableSessionSnapshot)
+                StartSessionSnapshotTimer();
 
-            if (!Config.IsDisableClearIdleSession)
+            if (Config.Session.EnableClearIdleSession)
                 StartClearIdleSessionTimer();
 
-            StartHandshakePendingQueueTimer();
+            StartHandshakePendingTimer();
             
             try
             {
@@ -139,10 +140,10 @@ namespace SP.Engine.Server
             _socketServer?.Stop();
             _stateCode = ServerStateConst.NotStarted;
 
-            _sessionsSnapshot = null;
-            StopSessionsSnapshotTimer();
+            _sessionSnapshot = null;
+            StopSessionSnapshotTimer();
             StopClearIdleSessionTimer();
-            StopHandshakePendingQueueTimer();
+            StopHandshakePendingTimer();
             LogManager.Dispose();
             
             var sessions = _sessionDict.ToArray();
@@ -214,7 +215,7 @@ namespace SP.Engine.Server
             return true;
         }
 
-        private bool SetupListeners(IEngineConfig config)
+        private bool SetupListeners(EngineConfig config)
         {
             if (null == config.Listeners || 0 == config.Listeners.Count)
             {
@@ -269,7 +270,7 @@ namespace SP.Engine.Server
             ((IClientSession)session).TcpSession.Closed += OnNetworkSessionClosed;
 
             // 인증 해드쉐이크 대기 등록
-            EnqueueAuthHandshakePendingQueue(session);
+            EnqueueAuthHandshakePending(session);
             Logger.Debug("A new session connected. sessionId={0}, remoteEndPoint={1}", session.SessionId, session.RemoteEndPoint);
             return true;
         }
@@ -299,7 +300,7 @@ namespace SP.Engine.Server
 
         private void StartClearIdleSessionTimer()
         {
-            var intervalMs = Config.ClearIdleSessionIntervalSec * 1000;
+            var intervalMs = Config.Session.ClearIdleSessionIntervalSec * 1000;
             _clearIdleSessionTimer = new Timer(ClearIdleSession, null, intervalMs, intervalMs);
         }
 
@@ -326,7 +327,7 @@ namespace SP.Engine.Server
                 
                 // 비활성된 시간 체크
                 var sessions = source
-                    .Where(x => x.Value.LastActiveTime <= now.AddSeconds(-config.IdleSessionTimeOutSec))
+                    .Where(x => x.Value.LastActiveTime <= now.AddSeconds(-config.Session.IdleSessionTimeoutSec))
                     .Select(x => x.Value);
                 
                 var options = new ParallelOptions() { MaxDegreeOfParallelism = Environment.ProcessorCount };
@@ -356,37 +357,38 @@ namespace SP.Engine.Server
         {
             get
             {
-                if (Config.IsDisableSessionSnapshot)
-                    return [.. _sessionDict];
-                else
-                    return Interlocked.CompareExchange(ref _sessionsSnapshot, null, null) ?? [];
+                if (!Config.Session.EnableSessionSnapshot) return _sessionSnapshot;
+                var snap = Volatile.Read(ref _sessionSnapshot);
+                return snap ?? [];
+
             }
         }
 
-        private Timer _sessionsSnapshotTimer;
-        private KeyValuePair<string, TSession>[] _sessionsSnapshot;
-        private readonly object _snapshotLock = new object();        
+        private Timer _sessionSnapshotTimer;
+        private KeyValuePair<string, TSession>[] _sessionSnapshot;
+        private readonly object _snapshotLock = new();        
         private readonly ConcurrentDictionary<string, TSession> _sessionDict = new(Environment.ProcessorCount, 3000, StringComparer.OrdinalIgnoreCase);        
 
-        private void StartSessionsSnapshotTimer()
+        private void StartSessionSnapshotTimer()
         {
-            _sessionsSnapshotTimer = new Timer(TakeSessionsSnapshot, null, TimeSpan.FromSeconds(Config.SessionsSnapshotIntervalSec), TimeSpan.FromSeconds(Config.SessionsSnapshotIntervalSec));
+            var ts = TimeSpan.FromSeconds(Config.Session.SessionSnapshotIntervalSec);
+            _sessionSnapshotTimer = new Timer(TakeSessionSnapshot, null, ts, ts);
         }
 
-        private void StopSessionsSnapshotTimer()
+        private void StopSessionSnapshotTimer()
         {
-            _sessionsSnapshotTimer?.Dispose();
-            _sessionsSnapshotTimer = null;
+            _sessionSnapshotTimer?.Dispose();
+            _sessionSnapshotTimer = null;
         }
 
-        private void TakeSessionsSnapshot(object state)
+        private void TakeSessionSnapshot(object state)
         {
             if (!Monitor.TryEnter(_snapshotLock))
                 return; 
 
             try
             { 
-                Interlocked.Exchange(ref _sessionsSnapshot, _sessionDict.ToArray());
+                Interlocked.Exchange(ref _sessionSnapshot, _sessionDict.ToArray());
             }
             finally
             {
@@ -416,31 +418,28 @@ namespace SP.Engine.Server
             _disposed = true;
         }
 
-        private Timer _handshakePendingQueueTimer;
-        private readonly ConcurrentQueue<TSession> _authHandshakePendingQueue = new ConcurrentQueue<TSession>();
-        private readonly ConcurrentQueue<TSession> _closeHandshakePendingQueue = new ConcurrentQueue<TSession>();
+        private Timer _handshakePendingTimer;
+        private readonly ConcurrentQueue<TSession> _authHandshakePendingQueue = new();
+        private readonly ConcurrentQueue<TSession> _closeHandshakePendingQueue = new();
         
-        private void StartHandshakePendingQueueTimer()
+        private void StartHandshakePendingTimer()
         {
-            _handshakePendingQueueTimer = 
-                new Timer(CheckHandshakePendingQueueCallback
-                    , null
-                    , TimeSpan.FromSeconds(Config.HandshakePendingQueueTimerIntervalSec)
-                    , TimeSpan.FromSeconds(Config.HandshakePendingQueueTimerIntervalSec));
+            var ts = TimeSpan.FromSeconds(Config.Session.HandshakePendingTimerIntervalSec);
+            _handshakePendingTimer = new Timer(CheckHandshakePendingCallback, null, ts, ts);
         }
 
-        private void StopHandshakePendingQueueTimer()
+        private void StopHandshakePendingTimer()
         {
-            _handshakePendingQueueTimer?.Dispose();
-            _handshakePendingQueueTimer = null;
+            _handshakePendingTimer?.Dispose();
+            _handshakePendingTimer = null;
         }
 
-        private void CheckHandshakePendingQueueCallback(object state)
+        private void CheckHandshakePendingCallback(object state)
         {
-            if (null == _handshakePendingQueueTimer)
+            if (null == _handshakePendingTimer)
                 return;
             
-            _handshakePendingQueueTimer.Change(Timeout.Infinite, Timeout.Infinite);   
+            _handshakePendingTimer.Change(Timeout.Infinite, Timeout.Infinite);   
             
             try
             {   
@@ -454,7 +453,7 @@ namespace SP.Engine.Server
                     }
                 
                     // 타임 아웃 체크
-                    if (DateTime.UtcNow < session.StartTime.AddSeconds(Config.AuthHandshakeTimeOutSec))
+                    if (DateTime.UtcNow < session.StartTime.AddSeconds(Config.Session.AuthHandshakeTimeoutSec))
                         continue;
                 
                     // 인증 타임 아웃
@@ -472,7 +471,7 @@ namespace SP.Engine.Server
                     }
 
                     // 타임 아웃 체크
-                    if (DateTime.UtcNow < session.StartClosingTime.AddSeconds(Config.CloseHandshakeTimeOutSec))
+                    if (DateTime.UtcNow < session.StartClosingTime.AddSeconds(Config.Session.CloseHandshakeTimeoutSec))
                         continue;
 
                     Logger.Debug("Client terminated due to timeout. sessionId={0}", session.SessionId);
@@ -488,16 +487,17 @@ namespace SP.Engine.Server
             }
             finally
             {
-                _handshakePendingQueueTimer.Change(TimeSpan.FromSeconds(Config.HandshakePendingQueueTimerIntervalSec), TimeSpan.FromSeconds(Config.HandshakePendingQueueTimerIntervalSec));
+                var ts = TimeSpan.FromSeconds(Config.Session.HandshakePendingTimerIntervalSec);
+                _handshakePendingTimer.Change(ts, ts);
             }
         }
 
-        private void EnqueueAuthHandshakePendingQueue(TSession session)
+        private void EnqueueAuthHandshakePending(TSession session)
         {
             _authHandshakePendingQueue.Enqueue(session);
         }
         
-        internal void EnqueueCloseHandshakePendingQueue(TSession session)
+        internal void EnqueueCloseHandshakePending(TSession session)
         {
             _closeHandshakePendingQueue.Enqueue(session);
         }

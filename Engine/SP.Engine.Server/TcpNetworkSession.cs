@@ -62,7 +62,7 @@ namespace SP.Engine.Server
             {
                 var offset = ReceiveContext.OriginOffset;
                 if (e.Offset != offset)
-                    e.SetBuffer(offset, Config.ReceiveBufferSize);
+                    e.SetBuffer(offset, Config.Network.ReceiveBufferSize);
 
                 if (!OnReceiveStarted())
                 {

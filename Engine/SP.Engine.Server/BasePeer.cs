@@ -89,22 +89,22 @@ namespace SP.Engine.Server
         public double LatencyAvgMs { get; private set; }
         public double LatencyJitterMs { get; private set; }
         public float PacketLossRate { get; private set; }
+        public IEncryptor Encryptor { get; private set; }
 
         public IPEndPoint LocalEndPoint => Session.LocalEndPoint;
         public IPEndPoint RemoteEndPoint => Session.RemoteEndPoint;
         public bool IsConnected => _stateCode == PeerStateConst.Authorized || _stateCode == PeerStateConst.Online;
         public byte[] DhPublicKey => _diffieHellman.PublicKey;
-        public byte[] DhSharedKey => _diffieHellman.SharedKey;
         
         protected BasePeer(EPeerType peerType, IClientSession session)
         {
             PeerId = PeerIdGenerator.Generate();
             PeerType = peerType;
             Logger = session.Logger;
-            SetInitialSendTimeoutMs(session.Config.SendTimeOutMs);
-            SetMaxReSendCnt(session.Config.MaxReSendCnt);
+            SetInitialSendTimeoutMs(session.Config.Network.SendTimeoutMs);
+            SetMaxResendCnt(session.Config.Session.MaxResendCount);
             Session = session;
-            _packOptions = session.Config.ToPackOptions();
+            _packOptions = session.Config.PackOptions;
         }
 
         protected BasePeer(BasePeer other)
@@ -114,7 +114,7 @@ namespace SP.Engine.Server
             Logger = other.Logger;
             Session = other.Session;
             SetInitialSendTimeoutMs(other.InitialSendTimeoutMs);
-            SetMaxReSendCnt(other.MaxReSendCnt);
+            SetMaxResendCnt(other.MaxReSendCnt);
             _diffieHellman = other._diffieHellman;
         }
 
@@ -148,6 +148,8 @@ namespace SP.Engine.Server
             {
                 PeerIdGenerator.Free(PeerId);
                 PeerId = EPeerId.None;
+                Encryptor?.Dispose();
+                Encryptor = null;
                 ResetMessageProcessor();
             }
 
@@ -205,14 +207,14 @@ namespace SP.Engine.Server
                 {
                     var message = new TcpMessage();
                     message.SetSequenceNumber(GetNextSequenceNumber());
-                    message.Pack(data, _diffieHellman.SharedKey, _packOptions);
+                    message.Pack(data, Encryptor, _packOptions);
                     return Send(message);
                 }
                 case EProtocolType.Udp:
                 {
                     var message = new UdpMessage();
                     message.SetPeerId(PeerId);
-                    message.Pack(data, _diffieHellman.SharedKey, _packOptions);
+                    message.Pack(data, Encryptor, _packOptions);
                     return Session.Send(message);
                 }
                 default:
@@ -284,10 +286,11 @@ namespace SP.Engine.Server
             UdpMtu = udpMtu;
         }
 
-        internal void SetSecurity(EDhKeySize keySize, byte[] publicKey)
+        internal void SetupEncryptor(EDhKeySize keySize, byte[] publicKey)
         {
             _diffieHellman = new DiffieHellman(keySize);
-            _diffieHellman.DeriveSharedKey(publicKey);
+            var sharedKey = _diffieHellman.DeriveSharedKey(publicKey);
+            Encryptor = new Encryptor(sharedKey);
         }
 
         protected virtual void OnJoinServer()

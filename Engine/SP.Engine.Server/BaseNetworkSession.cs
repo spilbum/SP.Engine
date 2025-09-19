@@ -34,7 +34,7 @@ namespace SP.Engine.Server
         IPEndPoint LocalEndPoint { get; }
         IPEndPoint RemoteEndPoint { get; }
         IClientSession ClientSession { get; }
-        IEngineConfig Config { get; }
+        EngineConfig Config { get; }
         event Action<INetworkSession, ECloseReason> Closed;
         void Attach(IClientSession clientSession);
         void Close(ECloseReason reason);
@@ -57,7 +57,7 @@ namespace SP.Engine.Server
         public Socket Client => _client;
         public ESocketMode Mode { get; private set; } = mode;
         public IClientSession ClientSession => _clientSession ?? throw new InvalidOperationException("Session is not initialized.");
-        public IEngineConfig Config { get; private set; }
+        public EngineConfig Config { get; private set; }
         public string SessionId { get; }
         public IPEndPoint LocalEndPoint { get; protected set; }
         public IPEndPoint RemoteEndPoint { get; protected set; }
@@ -449,7 +449,7 @@ namespace SP.Engine.Server
 
         protected void LogError(int socketErrorCode, [CallerMemberName] string caller = "", [CallerFilePath] string filePath = "", [CallerLineNumber] int lineNumber = -1)
         {
-            if (!Config.IsLogAllSocketError && IsIgnoreSocketError(socketErrorCode))
+            if (!Config.Network.LogAllSocketError && IsIgnoreSocketError(socketErrorCode))
                 return;
 
             ClientSession.Logger.Error(string.Format(SocketErrorFormat, socketErrorCode) + Environment.NewLine + string.Format(CallerFormat, caller, filePath, lineNumber));

@@ -1,11 +1,11 @@
-namespace SP.Engine.Server.Configuration
+using System.ComponentModel.DataAnnotations;
+
+namespace SP.Engine.Server.Configuration;
+
+public sealed record ListenerConfig
 {
-    public class ListenerConfig
-    {
-        public string Ip { get; set; } = "Any";
-        public int Port { get; set; }
-        public int BackLog { get; set;} = 100;
-        public ESocketMode Mode { get; set; } = ESocketMode.Tcp;
-    }
-    
+    public string Ip { get; init; } = "Any";
+    public int Port { get; init; }
+    public int BackLog { get; init; } = 1024;
+    public ESocketMode Mode { get; init; }
 }

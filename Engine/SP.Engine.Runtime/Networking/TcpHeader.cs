@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.CompilerServices;
 using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Runtime.Networking
@@ -38,20 +39,31 @@ namespace SP.Engine.Runtime.Networking
             span[FlagsOffset] = (byte)Flags;
             span.WriteInt32(PayloadLengthOffset, PayloadLength);
         }
+
+        public enum ParseResult
+        {
+            Success,
+            Invalid,
+            NeedMore,
+        }
         
-        public static bool TryParse(ReadOnlySpan<byte> span, out TcpHeader header)
+        public static ParseResult TryParse(ReadOnlySpan<byte> span, out TcpHeader header)
         {
             header = default;
             
             if (span.Length < HeaderSize)
-                return false;
+                return ParseResult.NeedMore;
 
-            header = new TcpHeader(
-                span.ReadInt64(SequenceNumberOffset),
-                (EProtocolId)span.ReadUInt16(ProtocolIdOffset),
-                (EHeaderFlags)span[FlagsOffset],
-                span.ReadInt32(PayloadLengthOffset));
-            return true;
+            var sequenceNumber = span.ReadInt64(SequenceNumberOffset);
+            var protocolId = (EProtocolId)span.ReadUInt16(ProtocolIdOffset);
+            var flags = (EHeaderFlags)span[FlagsOffset];
+            var payloadLength = span.ReadInt32(PayloadLengthOffset);
+            
+            if (protocolId <= 0 || payloadLength < 0)
+                return ParseResult.Invalid;
+            
+            header = new TcpHeader(sequenceNumber, protocolId, flags, payloadLength);
+            return ParseResult.Success;
         }
     }
 

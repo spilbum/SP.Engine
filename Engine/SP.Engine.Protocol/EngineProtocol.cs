@@ -90,9 +90,9 @@ namespace SP.Engine.Protocol
                 public bool UseCompression;
                 public int CompressionThresholdPercent;
 
-                public int MaxAllowedLength;
-                public int SendTimeOutMs;
-                public int MaxReSendCnt;
+                public int MaxFrameBytes;
+                public int SendTimeoutMs;
+                public int MaxResendCount;
 
                 public int UdpOpenPort;
             }

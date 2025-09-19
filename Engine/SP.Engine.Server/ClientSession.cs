@@ -79,7 +79,7 @@ namespace SP.Engine.Server
             {
                 IsClosing = true;
                 StartClosingTime = DateTime.UtcNow;    
-                Engine?.EnqueueCloseHandshakePendingQueue(this);
+                Engine?.EnqueueCloseHandshakePending(this);
             }
 
             var close = new EngineProtocolData.S2C.Close();

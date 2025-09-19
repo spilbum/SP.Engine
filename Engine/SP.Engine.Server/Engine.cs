@@ -36,27 +36,27 @@ namespace SP.Engine.Server
         
         public IFiberScheduler Scheduler => _fiber;
         
-        public override bool Initialize(string name, IEngineConfig config)
+        public override bool Initialize(string name, EngineConfig config)
         {
             if (!base.Initialize(name, config))
                 return false;
 
             // 스케줄러 생성
             _fiber = CreateFiber();
-            _fiber.Schedule(ScheduleUpdateConnectors, config.ConnectorUpdateIntervalMs, config.ConnectorUpdateIntervalMs);
+            _fiber.Schedule(ScheduleUpdateConnectors, config.Session.ConnectorUpdateIntervalMs, config.Session.ConnectorUpdateIntervalMs);
             
-            var fiberCnt = Math.Max(config.LimitConnectionCount / 300, 10);
+            var fiberCnt = Math.Max(config.Network.LimitConnectionCount / 300, 10);
             for (var index = 0; index < fiberCnt; index++)
             {
                 var fiber = CreateFiber();
-                fiber.Schedule(ScheduleUpdatePeers, index, config.PeerUpdateIntervalMs, config.PeerUpdateIntervalMs);
+                fiber.Schedule(ScheduleUpdatePeers, index, config.Session.PeerUpdateIntervalMs, config.Session.PeerUpdateIntervalMs);
                 _updatePeerFibers.Add(fiber);
             }
             
             if (!SetupHandler())
                 return false;
 
-            if (!SetupConnector(config))
+            if (!SetupConnector(config.Connectors))
                 return false;
             
             Logger.Info("The server {0} is initialized.", name);
@@ -72,9 +72,9 @@ namespace SP.Engine.Server
             return fiber;
         }
 
-        private bool SetupConnector(IEngineConfig config)
+        private bool SetupConnector(IReadOnlyList<ConnectorConfig> connectors)
         {
-            foreach (var connectorConfig in config.Connectors)
+            foreach (var connectorConfig in connectors)
             {
                 var connector = CreateConnector(connectorConfig.Name);
                 if (null == connector)
@@ -219,7 +219,7 @@ namespace SP.Engine.Server
             foreach (var connector in _connectors)
                 connector.Connect();
             
-            StartWaitingReconnectPeerCheckingTimer();
+            StartWaitingReconnectCheckingTimer();
 
             return true;
         }
@@ -235,7 +235,7 @@ namespace SP.Engine.Server
             foreach (var connector in _connectors)
                 connector.Close();
             
-            StopWaitingReconnectPeerCheckingTimer();
+            StopWaitingReconnectCheckingTimer();
             
             base.Stop();
         }
@@ -268,26 +268,26 @@ namespace SP.Engine.Server
             return _connectors.FirstOrDefault(x => x.Name == name && x.Host == host && x.Port == port);
         }
 
-        private Timer _waitingReconnectPeerCheckingTimer;
+        private Timer _waitingReconnectCheckingTimer;
 
-        private void StartWaitingReconnectPeerCheckingTimer()
+        private void StartWaitingReconnectCheckingTimer()
         {
-            _waitingReconnectPeerCheckingTimer = 
-                new Timer(OnCheckWaitingReconnectPeerCallback, null, TimeSpan.FromSeconds(Config.WaitingReconnectPeerTimerIntervalSec), TimeSpan.FromSeconds(Config.WaitingReconnectPeerTimerIntervalSec));
+            var ts = TimeSpan.FromSeconds(Config.Session.WaitingReconnectTimerIntervalSec);
+            _waitingReconnectCheckingTimer = new Timer(OnCheckWaitingReconnectCallback, null, ts, ts);
         }
 
-        private void StopWaitingReconnectPeerCheckingTimer()
+        private void StopWaitingReconnectCheckingTimer()
         {
-            _waitingReconnectPeerCheckingTimer?.Dispose();
-            _waitingReconnectPeerCheckingTimer = null;
+            _waitingReconnectCheckingTimer?.Dispose();
+            _waitingReconnectCheckingTimer = null;
         }
         
-        private void OnCheckWaitingReconnectPeerCallback(object state)
+        private void OnCheckWaitingReconnectCallback(object state)
         {
-            if (null == _waitingReconnectPeerCheckingTimer)
+            if (null == _waitingReconnectCheckingTimer)
                 return;
             
-            _waitingReconnectPeerCheckingTimer.Change(Timeout.Infinite, Timeout.Infinite);
+            _waitingReconnectCheckingTimer.Change(Timeout.Infinite, Timeout.Infinite);
 
             try
             {
@@ -312,7 +312,8 @@ namespace SP.Engine.Server
             }
             finally
             {
-                _waitingReconnectPeerCheckingTimer.Change(TimeSpan.FromSeconds(Config.WaitingReconnectPeerTimerIntervalSec), TimeSpan.FromSeconds(Config.WaitingReconnectPeerTimerIntervalSec));
+                var ts = TimeSpan.FromSeconds(Config.Session.WaitingReconnectTimerIntervalSec);
+                _waitingReconnectCheckingTimer.Change(ts, ts);
             }
         }
 
@@ -329,7 +330,7 @@ namespace SP.Engine.Server
         internal TPeer CreateNewPeer(IClientSession<TPeer> session, EDhKeySize keySize, byte[] clientPublicKey)
         {
             var peer = CreatePeer(session);
-            peer.SetSecurity(keySize, clientPublicKey);
+            peer.SetupEncryptor(keySize, clientPublicKey);
             return peer;
         }
 
@@ -429,7 +430,7 @@ namespace SP.Engine.Server
             if (!TryRemovePeer(peer.PeerId, out _))
                 return;
 
-            if (!_waitingReconnectPeerDict.TryAdd(peer.PeerId, new WaitingReconnectPeer(peer, Config.WaitingReconnectPeerTimeOutSec)))
+            if (!_waitingReconnectPeerDict.TryAdd(peer.PeerId, new WaitingReconnectPeer(peer, Config.Session.WaitingReconnectTimeoutSec)))
                 return;
             
             Logger.Debug("Peer waiting reconnect registered. peerId={0}", peer.PeerId);

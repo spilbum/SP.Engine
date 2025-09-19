@@ -81,18 +81,19 @@ namespace SP.Engine.Client
             new Dictionary<EProtocolId, IHandler<NetPeer, IMessage>>();
         private double _serverTimeOffsetMs;
         private TickTimer _udpKeepAliveTimer;
+        private readonly DiffieHellman _dh = new DiffieHellman(EDhKeySize.Bit2048);
         
         public int ConnectAttempts { get; private set; }
         public int ReconnectAttempts { get; private set; }
         public long LastSendPingTime { get; private set; }
-        public DiffieHellman DiffieHellman { get; } = new DiffieHellman(EDhKeySize.Bit2048);
+        public IEncryptor Encryptor { get; private set; }
         public EndPoint RemoteEndPoint { get; private set; }
         public string SessionId { get; private set; }
         public EPeerId PeerId { get; private set; }
         public PackOptions PackOptions { get; }
         public ILogger Logger { get; }
         public EngineConfig Config { get; }
-        public int MaxAllowedLength { get; private set; }
+        public int MaxFrameBytes { get; private set; }
         public LatencyStats LatencyStats { get; }
         public ENetPeerState State => (ENetPeerState)_stateCode;
         public bool IsConnected => State.HasFlag(ENetPeerState.Open);
@@ -112,7 +113,7 @@ namespace SP.Engine.Client
             Config = config;
             Logger = logger;
             PackOptions = PackOptions.Default;
-            MaxAllowedLength = 32 * 1024;
+            MaxFrameBytes = 32 * 1024;
             LatencyStats = new LatencyStats(config.LatencySampleWindowSize);
             
             _engineHandlerDict[EngineProtocol.S2C.SessionAuthAck] = new SessionAuth();
@@ -168,7 +169,14 @@ namespace SP.Engine.Client
 
         public void SetMaxAllowedLength(int length)
         {
-            MaxAllowedLength = length;
+            MaxFrameBytes = length;
+        }
+
+        internal void SetupEncyptor(byte[] otherPublicKey)
+        {
+            PackOptions.UseEncryption = true;
+            var sharedKey = _dh.DeriveSharedKey(otherPublicKey);
+            Encryptor = new Encryptor(sharedKey);
         }
 
         public void Connect(string ip, int port)
@@ -235,7 +243,7 @@ namespace SP.Engine.Client
                     else
                     {
                         message.SetSequenceNumber(GetNextSequenceNumber());
-                        message.Pack(data, DiffieHellman.SharedKey, PackOptions);
+                        message.Pack(data, Encryptor, PackOptions);
                     }
 
                     return Send(message);
@@ -251,7 +259,7 @@ namespace SP.Engine.Client
                     else
                     {
                         message.SetPeerId(PeerId);
-                        message.Pack(data, DiffieHellman.SharedKey, PackOptions);
+                        message.Pack(data, Encryptor, PackOptions);
                     }
 
                     return Send(message);
@@ -319,9 +327,7 @@ namespace SP.Engine.Client
         private void StartPingTimer()
         {
             // 자동 핑 on/off 여부
-            if (Config.IsDisableAutoPing)
-                return;
-
+            if (!Config.EnableAutoPing) return;
             SetTimer(_ => SendPing(), null, 0, Config.AutoPingIntervalSec * 1000);
         }
 
@@ -445,8 +451,8 @@ namespace SP.Engine.Client
                 {
                     SessionId = SessionId,
                     PeerId = PeerId,
-                    ClientPublicKey = DiffieHellman.PublicKey,
-                    KeySize = DiffieHellman.KeySize,
+                    ClientPublicKey = _dh.PublicKey,
+                    KeySize = _dh.KeySize,
                     UdpMtu = Config.UdpMtu
                 });
             }
@@ -580,26 +586,7 @@ namespace SP.Engine.Client
             try
             {
                 foreach (var message in Filter())
-                {
-                    try
-                    {
-                        if (_engineHandlerDict.TryGetValue(message.ProtocolId, out var handler))
-                        {
-                            handler.ExecuteMessage(this, message);
-                        }
-                        else
-                        {
-                            if (message.SequenceNumber > 0)
-                                SendMessageAck(message.SequenceNumber);
-                            
-                            EnqueueReceivedMessage(message);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        OnError(ex);
-                    }
-                }
+                    ProcessMessage(message);
             }
             catch (Exception ex)
             {
@@ -607,36 +594,69 @@ namespace SP.Engine.Client
             }
             finally
             {
-                if (_receiveBuffer.RemainSize < 1024)
+                if (_receiveBuffer.AvailableBytes < 1024)
                     _receiveBuffer.Trim();
             }
         }
-        
-        private IEnumerable<TcpMessage> Filter() 
+
+        private void ProcessMessage(IMessage message)
         {
-            while (true)
+            if (_engineHandlerDict.TryGetValue(message.ProtocolId, out var handler))
             {
-                if (_receiveBuffer.RemainSize < TcpHeader.HeaderSize)
+                handler.ExecuteMessage(this, message);
+            }
+            else
+            {
+                if (message.SequenceNumber > 0)
+                    SendMessageAck(message.SequenceNumber);
+                            
+                EnqueueReceivedMessage(message);
+            }
+        }
+        
+        private IEnumerable<TcpMessage> Filter()
+        {
+            const int maxFramesPerTick = 128;
+            var produced = 0;
+            
+            while (produced < maxFramesPerTick)
+            {
+                if (_receiveBuffer.AvailableBytes < TcpHeader.HeaderSize)
                     yield break;
                 
                 var headerSpan = _receiveBuffer.Peek(TcpHeader.HeaderSize);
-                if (!TcpHeader.TryParse(headerSpan, out var header))
-                    yield break;
-                
-                if (header.PayloadLength > MaxAllowedLength)
+                var result = TcpHeader.TryParse(headerSpan, out var header);
+
+                switch (result)
                 {
-                    Logger.Warn("Max allowed length. maxAllowedLength={0}, payloadLength={1}", MaxAllowedLength, header.PayloadLength);
-                    Close();
-                    yield break;
+                    case TcpHeader.ParseResult.NeedMore:
+                        yield break;
+                    case TcpHeader.ParseResult.Invalid:
+                        Close(); 
+                        yield break;
+                    case TcpHeader.ParseResult.Success:
+                    {
+                        long frameLen = header.Length + header.PayloadLength;
+                        if (frameLen <= 0 || frameLen > MaxFrameBytes)
+                        {
+                            Logger.Warn("Frame too large/small. max={0}, got={1}, (protocolId={2})", 
+                                MaxFrameBytes, frameLen, header.ProtocolId);
+                            Close();
+                            yield break;
+                        }
+
+                        var len = (int)frameLen;
+                        if (_receiveBuffer.AvailableBytes < len)
+                            yield break;
+
+                        var frameBytes = _receiveBuffer.ReadBytes(len);
+                        yield return new TcpMessage(header, new ArraySegment<byte>(frameBytes));
+                        produced++;
+                        break;
+                    }
+                    default:
+                        throw new ArgumentOutOfRangeException();
                 }
-
-                var payloadLength = header.Length + header.PayloadLength;
-                if (_receiveBuffer.RemainSize < payloadLength)
-                    yield break;
-
-                var payload = _receiveBuffer.ReadBytes(payloadLength);
-                var message = new TcpMessage(header, new ArraySegment<byte>(payload));
-                yield return message;
             }
         }
 
@@ -826,7 +846,7 @@ namespace SP.Engine.Client
             
             UdpOpened?.Invoke(this, EventArgs.Empty);
             
-            if (!Config.IsDisableUdpKeepAlive)
+            if (Config.EnableUdpKeepAlive)
                 _udpKeepAliveTimer = new TickTimer(SendUdpKeepAlive, null, Config.UdpKeepAliveIntervalSec * 1000, Config.UdpKeepAliveIntervalSec * 1000);
         }
         
@@ -901,6 +921,9 @@ namespace SP.Engine.Client
                     _udpSocket.Close();
                     _udpSocket = null;
                 }
+                
+                _dh.Dispose();
+                Encryptor?.Dispose();
 
                 PeerId = EPeerId.None;
                 SessionId = null;

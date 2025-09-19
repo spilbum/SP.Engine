@@ -85,25 +85,25 @@ internal class SessionAuth<TPeer> : BaseEngineHandler<ClientSession<TPeer>, Engi
             if (errorCode == EEngineErrorCode.Success)
             {
                 sessionAuthAck.SessionId = session.SessionId;
-                sessionAuthAck.MaxAllowedLength = session.Config.MaxAllowedLength;
-                sessionAuthAck.SendTimeOutMs = session.Config.SendTimeOutMs;
-                sessionAuthAck.MaxReSendCnt = session.Config.MaxReSendCnt;
+                sessionAuthAck.MaxFrameBytes = session.Config.Network.MaxFrameBytes;
+                sessionAuthAck.SendTimeoutMs = session.Config.Network.SendTimeoutMs;
+                sessionAuthAck.MaxResendCount = session.Config.Session.MaxResendCount;
                 sessionAuthAck.UdpOpenPort = session.Engine.GetOpenPort(ESocketMode.Udp);
                 
                 if (null != peer)
                 {
                     sessionAuthAck.PeerId = peer.PeerId;
                     
-                    if (session.Config.UseEncryption)
+                    if (session.Config.Security.UseEncryption)
                     {
                         sessionAuthAck.UseEncryption = true;
                         sessionAuthAck.ServerPublicKey = peer.DhPublicKey;
                     }
 
-                    if (session.Config.UseCompression)
+                    if (session.Config.Security.UseCompression)
                     {
                         sessionAuthAck.UseCompression = true;
-                        sessionAuthAck.CompressionThresholdPercent = session.Config.CompressionThresholdPercent;
+                        sessionAuthAck.CompressionThresholdPercent = session.Config.Security.CompressionThresholdPercent;
                     }
                 }
             }

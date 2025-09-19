@@ -63,7 +63,7 @@ namespace SP.Common.Buffer
         private bool _disposed;
         private const int MaxBufferSize = 1024 * 1024 * 1024;
         
-        public int RemainSize => _writeIndex - _readIndex;
+        public int AvailableBytes => _writeIndex - _readIndex;
         
         public BinaryBuffer(int size = 4096)
         {
@@ -84,7 +84,7 @@ namespace SP.Common.Buffer
 
         public ReadOnlySpan<byte> Peek(int length)
         {
-            if (RemainSize < length)
+            if (AvailableBytes < length)
                 throw new InvalidOperationException("Insufficient data");
             return _memory.Span.Slice(_readIndex, length);
         }
@@ -108,7 +108,7 @@ namespace SP.Common.Buffer
         public T Read<T>() where T : struct
         {
             var size = Marshal.SizeOf<T>();
-            if (RemainSize < size)
+            if (AvailableBytes < size)
                 throw new InvalidOperationException("Insufficient data");
             
             var span = _memory.Span.Slice(_readIndex, size);
@@ -118,7 +118,7 @@ namespace SP.Common.Buffer
         
         public ReadOnlySpan<byte> Read(int length)
         {
-            if (RemainSize < length)
+            if (AvailableBytes < length)
                 throw new InvalidOperationException("Insufficient data");
             var span = _memory.Span.Slice(_readIndex, length);
             _readIndex += length;
@@ -202,7 +202,7 @@ namespace SP.Common.Buffer
             }
 
             var span = _memory.Span;
-            span.Slice(_readIndex, RemainSize).CopyTo(span);
+            span.Slice(_readIndex, AvailableBytes).CopyTo(span);
             _writeIndex -= _readIndex;
             _readIndex = 0;
         }
@@ -216,7 +216,7 @@ namespace SP.Common.Buffer
             newSize = Math.Min(newSize, MaxBufferSize);
             
             var newOwner = MemoryPool<byte>.Shared.Rent(newSize);
-            _memory.Span.Slice(_readIndex, RemainSize).CopyTo(newOwner.Memory.Span);
+            _memory.Span.Slice(_readIndex, AvailableBytes).CopyTo(newOwner.Memory.Span);
 
             _writeIndex -= _readIndex;
             _readIndex = 0;
@@ -227,7 +227,7 @@ namespace SP.Common.Buffer
         }
         
         public byte[] ToArray() => AsSpan().ToArray();
-        public Span<byte> AsSpan() => _memory.Span.Slice(_readIndex, RemainSize);
+        public Span<byte> AsSpan() => _memory.Span.Slice(_readIndex, AvailableBytes);
 
         public void Dispose()
         {

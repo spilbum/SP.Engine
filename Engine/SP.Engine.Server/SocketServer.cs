@@ -41,9 +41,9 @@ namespace SP.Engine.Server
             var logger = Engine.Logger;
 
             var sendingQueuePool = new ExpandablePool<SegmentQueue>();
-            sendingQueuePool.Initialize(Math.Max(config.LimitConnectionCount / 6, 256)
-                , Math.Max(config.LimitConnectionCount * 2, 256)
-                , new SendingQueueSegmentCreator(config.SendingQueueSize));
+            sendingQueuePool.Initialize(Math.Max(config.Network.LimitConnectionCount / 6, 256)
+                , Math.Max(config.Network.LimitConnectionCount * 2, 256)
+                , new SendingQueueSegmentCreator(config.Network.SendingQueueSize));
 
             SendingQueuePool = sendingQueuePool;
 
@@ -81,13 +81,13 @@ namespace SP.Engine.Server
             return true;
         }
 
-        private bool SetupKeepAlive(IEngineConfig config)
+        private bool SetupKeepAlive(EngineConfig config)
         {
             try
             {
-                var isKeepAlive = config.IsDisableKeepAlive ? 0 : 1; 
-                var keepAliveTime = (uint)config.KeepAliveTimeSec * 1000;
-                var keepAliveInterval = (uint)config.KeepAliveIntervalSec * 1000;
+                var isKeepAlive = config.Network.EnableKeepAlive ? 1 : 0; 
+                var keepAliveTime = (uint)config.Network.KeepAliveTimeSec * 1000;
+                var keepAliveInterval = (uint)config.Network.KeepAliveIntervalSec * 1000;
                 const uint dummy = 0;
                 _keepAliveOptionValues = new byte[Marshal.SizeOf(dummy) * 3];
                 BitConverter.GetBytes((uint)isKeepAlive).CopyTo(_keepAliveOptionValues, 0); // 활성화 (1=true)
@@ -102,15 +102,16 @@ namespace SP.Engine.Server
             }
         }
 
-        private bool SetupSocketEventArgsPool(IEngineConfig config)
+        private bool SetupSocketEventArgsPool(EngineConfig config)
         {
-            var totalBytes = config.ReceiveBufferSize * config.LimitConnectionCount;
+            var bufferSize = config.Network.ReceiveBufferSize;
+            var limitCount = config.Network.LimitConnectionCount;
+            var totalBytes = bufferSize * limitCount;
             var buffer = new byte[totalBytes];
-            var bufferSize = config.ReceiveBufferSize;
 
             var currentOffset = 0;
-            var contexts = new List<SocketReceiveContext>(config.LimitConnectionCount);
-            for (var i = 0; i < config.LimitConnectionCount; i++)
+            var contexts = new List<SocketReceiveContext>(limitCount);
+            for (var i = 0; i < limitCount; i++)
             {
                 var socketEventArgs = new SocketAsyncEventArgs();
                 if (totalBytes - bufferSize < currentOffset)
@@ -227,7 +228,7 @@ namespace SP.Engine.Server
             if (!_socketReceiveContextPool.TryPop(out var context))
             {
                 Engine.AsyncRun(client.SafeClose);
-                Engine.Logger.Error("Limit connection count {0} was reached.", Engine.Config.LimitConnectionCount);
+                Engine.Logger.Error("Limit connection count {0} was reached.", Engine.Config.Network.LimitConnectionCount);
                 return;
             }
 
@@ -265,14 +266,14 @@ namespace SP.Engine.Server
         private IClientSession CreateSession(Socket client, TcpNetworkSession networkSession)
         {
             var config = Engine.Config;
-            if (0 < config.SendTimeOutMs)
-                client.SendTimeout = config.SendTimeOutMs;
+            if (0 < config.Network.SendTimeoutMs)
+                client.SendTimeout = config.Network.SendTimeoutMs;
 
-            if (0 < config.ReceiveBufferSize)
-                client.ReceiveBufferSize = config.ReceiveBufferSize;
+            if (0 < config.Network.ReceiveBufferSize)
+                client.ReceiveBufferSize = config.Network.ReceiveBufferSize;
 
-            if (0 < config.SendBufferSize)
-                client.SendBufferSize = config.SendBufferSize;
+            if (0 < config.Network.SendBufferSize)
+                client.SendBufferSize = config.Network.SendBufferSize;
 
             client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, _keepAliveOptionValues);
 

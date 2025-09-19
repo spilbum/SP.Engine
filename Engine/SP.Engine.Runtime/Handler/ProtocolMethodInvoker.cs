@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
+using SP.Engine.Runtime.Security;
 
 namespace SP.Engine.Runtime.Handler
 {
@@ -21,9 +22,9 @@ namespace SP.Engine.Runtime.Handler
 
         public EProtocolId ProtocolId { get; }
 
-        public void Invoke(object instance, IMessage message, byte[] sharedKey = null)
+        public void Invoke(object instance, IMessage message, IEncryptor encryptor)
         {
-            var protocol = message.Unpack(_type, sharedKey);
+            var protocol = message.Unpack(_type, encryptor);
             _method.Invoke(instance, new object[] { protocol });
         }
         

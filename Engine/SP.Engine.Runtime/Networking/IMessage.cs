@@ -1,5 +1,6 @@
 using System;
 using SP.Engine.Runtime.Protocol;
+using SP.Engine.Runtime.Security;
 
 namespace SP.Engine.Runtime.Networking
 {
@@ -8,7 +9,7 @@ namespace SP.Engine.Runtime.Networking
         long SequenceNumber { get; }
         EProtocolId ProtocolId { get; }
         int Length { get; }
-        void Pack(IProtocolData data, byte[] sharedKey, PackOptions options);
-        IProtocolData Unpack(Type type, byte[] sharedKey);
+        void Pack(IProtocolData data, IEncryptor encryptor, PackOptions options);
+        IProtocolData Unpack(Type type, IEncryptor encryptor);
     }
 }

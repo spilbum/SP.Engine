@@ -3,9 +3,9 @@ namespace SP.Engine.Client.Configuration
     public class EngineConfig
     {
         /// <summary>
-        /// 자동 핑 비활성화 여부(기본값: false)
+        /// 자동 핑 활성화 여부(기본값: true)
         /// </summary>
-        public bool IsDisableAutoPing { get; set; }
+        public bool EnableAutoPing { get; set; } = true;
         /// <summary>
         /// 자동 핑 간격(기본값: 30초)
         /// </summary>
@@ -23,10 +23,11 @@ namespace SP.Engine.Client.Configuration
         /// Udp 데이터의 조각화를 위해 사용함
         /// </summary>
         public ushort UdpMtu { get; set; } = 1200;
+
         /// <summary>
-        /// Udp KeepAlive 비활성화 여부(기본값: false)
+        /// Udp KeepAlive 활성화 여부(기본값: true)
         /// </summary>
-        public bool IsDisableUdpKeepAlive { get; set; }
+        public bool EnableUdpKeepAlive { get; set; } = true;
         /// <summary>
         /// Udp KeepAlive 주기(기본값: 30초)
         /// NAT 매핑 유지를 위해 일정 주기로 전송함
@@ -52,9 +53,9 @@ namespace SP.Engine.Client.Configuration
 
         public static EngineConfigBuilder Create() => new EngineConfigBuilder();
 
-        public EngineConfigBuilder WithAutoPing(bool disable, int intervalSec)
+        public EngineConfigBuilder WithAutoPing(bool enable, int intervalSec)
         {
-            _config.IsDisableAutoPing = disable;
+            _config.EnableAutoPing = enable;
             _config.AutoPingIntervalSec = intervalSec;
             return this;
         }
@@ -72,9 +73,9 @@ namespace SP.Engine.Client.Configuration
             return this;
         }
 
-        public EngineConfigBuilder WithUdpKeepAlive(bool disable, int intervalSec)
+        public EngineConfigBuilder WithUdpKeepAlive(bool enable, int intervalSec)
         {
-            _config.IsDisableUdpKeepAlive = disable;
+            _config.EnableUdpKeepAlive = enable;
             _config.UdpKeepAliveIntervalSec = intervalSec;
             return this;
         }
