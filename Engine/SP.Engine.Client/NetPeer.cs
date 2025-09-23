@@ -69,6 +69,7 @@ namespace SP.Engine.Client
 
     public sealed class NetPeer : ReliableMessageProcessor, IDisposable
     {
+        private const int TrimThreshold = 4 * 1024;
         private int _stateCode;
         private bool _disposed;
         private TcpNetworkSession _session;
@@ -96,7 +97,7 @@ namespace SP.Engine.Client
         public int MaxFrameBytes { get; private set; }
         public LatencyStats LatencyStats { get; }
         public ENetPeerState State => (ENetPeerState)_stateCode;
-        public bool IsConnected => State.HasFlag(ENetPeerState.Open);
+        public bool IsConnected => State == ENetPeerState.Open;
         public bool IsUseUdp => _udpSocket != null;
 
         public event EventHandler Connected;
@@ -172,7 +173,7 @@ namespace SP.Engine.Client
             MaxFrameBytes = length;
         }
 
-        internal void SetupEncyptor(byte[] otherPublicKey)
+        internal void SetupEncryptor(byte[] otherPublicKey)
         {
             PackOptions.UseEncryption = true;
             var sharedKey = _dh.DeriveSharedKey(otherPublicKey);
@@ -344,7 +345,7 @@ namespace SP.Engine.Client
             var session = _session;
             session?.Close();
             
-            session = new TcpNetworkSession(Logger);
+            session = new TcpNetworkSession(Logger, Config.SendQueueSize, Config.SendBufferSize, Config.ReceiveBufferSize);
             session.Opened += OnSessionOpened;
             session.Closed += OnSessionClosed;
             session.Error += OnSessionError;
@@ -452,8 +453,7 @@ namespace SP.Engine.Client
                     SessionId = SessionId,
                     PeerId = PeerId,
                     ClientPublicKey = _dh.PublicKey,
-                    KeySize = _dh.KeySize,
-                    UdpMtu = Config.UdpMtu
+                    KeySize = _dh.KeySize
                 });
             }
             catch (Exception e)
@@ -594,8 +594,11 @@ namespace SP.Engine.Client
             }
             finally
             {
-                if (_receiveBuffer.AvailableBytes < 1024)
+                if (_receiveBuffer.ReadableBytes == 0 ||
+                    _receiveBuffer.ReadableBytes < TrimThreshold)
+                {
                     _receiveBuffer.Trim();
+                }
             }
         }
 
@@ -621,7 +624,7 @@ namespace SP.Engine.Client
             
             while (produced < maxFramesPerTick)
             {
-                if (_receiveBuffer.AvailableBytes < TcpHeader.HeaderSize)
+                if (_receiveBuffer.ReadableBytes < TcpHeader.HeaderSize)
                     yield break;
                 
                 var headerSpan = _receiveBuffer.Peek(TcpHeader.HeaderSize);
@@ -646,7 +649,7 @@ namespace SP.Engine.Client
                         }
 
                         var len = (int)frameLen;
-                        if (_receiveBuffer.AvailableBytes < len)
+                        if (_receiveBuffer.ReadableBytes < len)
                             yield break;
 
                         var frameBytes = _receiveBuffer.ReadBytes(len);
@@ -816,7 +819,8 @@ namespace SP.Engine.Client
             Send(new EngineProtocolData.C2S.UdpHelloReq
             {
                 SessionId = SessionId,
-                PeerId = PeerId
+                PeerId = PeerId,
+                Mtu = Config.UdpMtu
             });
         }
 
@@ -845,9 +849,9 @@ namespace SP.Engine.Client
             }
             
             UdpOpened?.Invoke(this, EventArgs.Empty);
-            
+
             if (Config.EnableUdpKeepAlive)
-                _udpKeepAliveTimer = new TickTimer(SendUdpKeepAlive, null, Config.UdpKeepAliveIntervalSec * 1000, Config.UdpKeepAliveIntervalSec * 1000);
+                _udpKeepAliveTimer = new TickTimer(SendUdpKeepAlive, null, 0, Config.UdpKeepAliveIntervalSec * 1000);
         }
         
         private void SendUdpKeepAlive(object state)

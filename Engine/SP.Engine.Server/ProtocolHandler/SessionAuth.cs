@@ -61,7 +61,6 @@ internal class SessionAuth<TPeer> : BaseEngineHandler<ClientSession<TPeer>, Engi
             if (peer == null)
                 throw new Exception("peer is null.");
 
-            peer.SetUdpMtu(protocol.UdpMtu);
             session.SetPeer(peer);
             session.SetAuthorized();
             errorCode = EEngineErrorCode.Success;

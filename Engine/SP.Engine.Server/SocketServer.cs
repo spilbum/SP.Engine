@@ -199,7 +199,7 @@ namespace SP.Engine.Server
             if (session == null)
                 return;
             
-            session.EnsureUdpSocket(socket, remoteEndPoint, peer.UdpMtu);
+            session.EnsureUdpSocket(socket, remoteEndPoint);
 
             if (header.IsFragmentation)
             {

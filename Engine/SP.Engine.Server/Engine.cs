@@ -184,7 +184,6 @@ namespace SP.Engine.Server
                 else
                 {
                     Logger.Error("Unknown message: {0} Session: {1}/{2}", message.ProtocolId, session.SessionId, session.RemoteEndPoint);
-                    session.Close();
                 }
             }
         }

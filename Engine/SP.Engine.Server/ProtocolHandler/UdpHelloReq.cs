@@ -24,6 +24,7 @@ internal class UdpHelloReq<TPeer> : BaseEngineHandler<ClientSession<TPeer>, Engi
         session.Logger.Debug("UDP hello - {0} ({1}) - {2}", session.Peer.PeerId, session.SessionId, session.UdpSocket.RemoteEndPoint);
         
         resposne.ErrorCode = EEngineErrorCode.Success;
+        session.UdpSocket.SetMtu(protocol.Mtu);
         session.Send(resposne);
     }
 }

@@ -12,16 +12,15 @@ namespace SP.Engine.Server
     public class UdpSocket : BaseNetworkSession
     {
         private uint _nextFragmentId;
-        private readonly ushort _mtu;
+        private ushort _mtu;
         
-        public UdpSocket(Socket client, IPEndPoint remoteEndPoint, ushort mtu)
+        public UdpSocket(Socket client, IPEndPoint remoteEndPoint)
             : base (ESocketMode.Udp, client)
         {
             RemoteEndPoint = remoteEndPoint;
             LocalEndPoint = (IPEndPoint)client.LocalEndPoint;
-            _mtu = mtu;
         }
-
+        
         public bool TrySend(UdpMessage message)
         {
             var segments = ToSegments(message);
@@ -40,6 +39,11 @@ namespace SP.Engine.Server
             var fragmentId = Interlocked.Increment(ref _nextFragmentId);
             segments.AddRange(message.ToSplit(_mtu, fragmentId).Select(f => f.Serialize()));
             return segments;
+        }
+
+        public void SetMtu(ushort mtu)
+        {
+            _mtu = mtu;
         }
         
         public void UpdateRemoteEndPoint(IPEndPoint remoteEndPoint)

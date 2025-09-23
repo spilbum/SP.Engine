@@ -21,7 +21,7 @@ namespace SP.Engine.Server
         TcpNetworkSession TcpSession { get; }
 
         bool Send(IMessage message);
-        void EnsureUdpSocket(Socket socket, IPEndPoint remoteEndPoint, ushort mtu);
+        void EnsureUdpSocket(Socket socket, IPEndPoint remoteEndPoint);
         void ProcessMessage(IMessage message);
         void ProcessBuffer(byte[] buffer, int offset, int length);
         void Reject(ERejectReason reason, string detailReason = null);
@@ -103,13 +103,13 @@ namespace SP.Engine.Server
             return true;
         }
 
-        void IClientSession.EnsureUdpSocket(Socket socket, IPEndPoint remoteEndPoint, ushort mtu)
+        void IClientSession.EnsureUdpSocket(Socket socket, IPEndPoint remoteEndPoint)
         {
             lock (this)
             {
                 if (UdpSocket == null)
                 {
-                    UdpSocket = new UdpSocket(socket, remoteEndPoint, mtu);
+                    UdpSocket = new UdpSocket(socket, remoteEndPoint);
                     UdpSocket.Attach(this);
                 }
                 else
@@ -151,7 +151,7 @@ namespace SP.Engine.Server
             }
             finally
             {  
-                if (_receiveBuffer.AvailableBytes < 1024)
+                if (_receiveBuffer.ReadableBytes < 1024)
                     _receiveBuffer.Trim();
             }
         }
@@ -162,7 +162,7 @@ namespace SP.Engine.Server
             var produced = 0;
             while (produced < maxFramePerTick)
             {
-                if (_receiveBuffer.AvailableBytes < TcpHeader.HeaderSize)
+                if (_receiveBuffer.ReadableBytes < TcpHeader.HeaderSize)
                     yield break;
                 
                 var headerSpan = _receiveBuffer.Peek(TcpHeader.HeaderSize);
@@ -182,7 +182,7 @@ namespace SP.Engine.Server
                         }
 
                         var len = (int)frameLen;
-                        if (_receiveBuffer.AvailableBytes < len)
+                        if (_receiveBuffer.ReadableBytes < len)
                             yield break;
                 
                         var frameBytes = _receiveBuffer.ReadBytes(len);

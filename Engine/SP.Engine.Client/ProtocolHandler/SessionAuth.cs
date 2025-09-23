@@ -31,7 +31,7 @@ namespace SP.Engine.Client.ProtocolHandler
 
             if (protocol.UseEncryption)
             {
-                session.SetupEncyptor(protocol.ServerPublicKey);
+                session.SetupEncryptor(protocol.ServerPublicKey);
             }
 
             if (protocol.UseCompression)

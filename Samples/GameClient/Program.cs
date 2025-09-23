@@ -11,181 +11,110 @@ using Timer = System.Threading.Timer;
 
 namespace GameClient
 {
-    public class NetPeerManager
-    {
-        private static NetPeerManager? _instance;
-        public static NetPeerManager Instance => _instance ??= new NetPeerManager();
-        
-        private NetPeer? _netPeer;
-        private ILogger? _logger;
-        private readonly Dictionary<EProtocolId, ProtocolMethodInvoker> _invokerDict = new();
-        
-        public bool Start(string ip, int port, EngineConfig config, ILogger? logger = null)
-        {
-            if (_netPeer?.State is ENetPeerState.Connecting or ENetPeerState.Open)
-                throw new InvalidOperationException("Already connecting...");
-
-            _logger = logger;
-            _netPeer = new NetPeer(config, logger);
-            _netPeer.Connected += OnConnected;
-            _netPeer.Disconnected += OnDisconnected;
-            _netPeer.Error += OnError;
-            _netPeer.MessageReceived += OnMessageReceived;
-            _netPeer.Offline += OnOffline;
-            _netPeer.StateChanged += OnStateChanged;
-            if (!ProtocolMethodInvoker.LoadInvokers(GetType()).All(invoker => _invokerDict.TryAdd(invoker.ProtocolId, invoker)))
-                return false;
-            
-            _netPeer.Connect(ip, port);
-            return true;
-        }
-
-        public void Stop()
-        {
-            _netPeer?.Close();
-        }
-
-        public void Update()
-        {
-            _netPeer?.Tick();
-        }
-
-        public void Send(IProtocolData protocol)
-        {
-            _netPeer?.Send(protocol);
-        }
-        
-        private void OnStateChanged(object? sender, StateChangedEventArgs e)
-        {
-            _logger?.Debug("[OnStateChanged] {0} -> {1}", e.OldState, e.NewState);
-        }
-
-        private void OnOffline(object? sender, EventArgs e)
-        {
-            _logger?.Debug("[OnOffline] Offline...");
-        }
-
-        private void OnMessageReceived(object? sender, MessageEventArgs e)
-        {
-            var message = e.Message;
-            if (_invokerDict.TryGetValue(message.ProtocolId, out var invoker))
-                invoker.Invoke(this, message, _netPeer?.Encryptor);
-        }
-
-        private void OnError(object? sender, ErrorEventArgs e)
-        {
-            _logger?.Error(e.GetException());
-        }
-
-        private void OnDisconnected(object? sender, EventArgs e)
-        {
-            _logger?.Info("[OnDisconnected] Disconnected...");
-        }
-
-        private void OnConnected(object? sender, EventArgs e)
-        {
-            _logger?.Info("[OnConnected] Connected...");
-        }
-
-        public void PrintNetowrkQuality()
-        {
-            if (!_netPeer?.IsConnected ?? false)
-                return;
-            
-            var sb = new StringBuilder();
-            if (_netPeer?.LatencyStats != null)
-            {
-                var stats = _netPeer.LatencyStats;
-                sb.Append(
-                    $"SRTT: {stats.SmoothedRttMs}Avg: {stats.AvgRttMs:F1} Min: {stats.MinRttMs:F1} | Max: {stats.MaxRttMs:F1} | Jitter: {stats.JitterMs:F1} | PackLossRate: {stats.PacketLossRate:F1}");
-            }
-            
-            //_logger?.Info("Network Quality: {0}, ServerTime: {1:yyyy-MM-dd hh:mm:ss.fff}", sb.ToString(), _netPeer?.GetServerTime());
-        }
-        
-        [ProtocolMethod(S2CProtocol.UdpEchoAck)]
-        private void OnEchoAck(S2CProtocolData.UdpEchoAck data)
-        {
-            var rawRtt = Program.GetUnixTimestamp() - data.SentTime;
-            _logger?.Debug($"[OnEchoAck] {rawRtt:F1} ms");
-        }
-    }
-
     internal static class Program
     {
+        private static GameClient? _client;
         public static void Main(string[] args)
         {
-            if (args.Length != 2)
-                throw new Exception("Invalid number of arguments");
-            
-            var ip = args[0];
-            var port = int.Parse(args[1]);
+            var host = string.Empty;
+            var port = 0;
+
+            for (var i = 0; i < args.Length; i++)
+            {
+                switch (args[i])
+                {
+                    case "--host": host = args[++i]; break;
+                    case "--port": port = int.Parse(args[++i]); break;
+                }
+            }
 
             var config = EngineConfigBuilder.Create()
-                .WithAutoPing(false, 2)
+                .WithAutoPing(true, 2)
                 .WithConnectAttempt(2, 15)
                 .WithReconnectAttempt(5, 30)
                 .WithUdpMtu(1200)
-                .WithUdpKeepAlive(false, 30)
+                .WithKeepAlive(true, 30, 2)
+                .WithUdpKeepAlive(true, 30)
+                .WithLatencySampleWindowSize(20)
                 .Build();
 
             var logger = new ConsoleLogger("GameClient");
-            
-            if (!NetPeerManager.Instance.Start(ip, port, config, logger))
-                throw new Exception("Failed to initialize");
-            
+            _client = new GameClient(logger, config);
+            _client.Open(host, port);
+
+            var nextStatsPrint = DateTime.UtcNow;
             while (true)
             {
-                NetPeerManager.Instance.Update();
+                _client.Tick();
 
                 if (Console.KeyAvailable)
                 {
-                    var str = Console.ReadLine();
-                    var splits = str?.Split(' ');
-                    if (splits == null)
-                        continue;
-                    
-                    switch (splits[0])
-                    {
-                        case "echo":
-                        {
-                            if (splits.Length != 4)
-                            {
-                                logger.Error("Invalid number of arguments");
-                                continue;
-                            }
-                            
-                            var sizeBytes = int.Parse(splits[1]);
-                            var sendIntervalMs = int.Parse(splits[2]);
-                            var durationTimeSec = int.Parse(splits[3]);
-                            _endTime = DateTime.UtcNow.AddSeconds(durationTimeSec);
-                            _timer = new Timer(_ => SendEcho(sizeBytes), null, 0, sendIntervalMs);
-                            break;
-                        }
-                        case "exit":
-                            NetPeerManager.Instance.Stop();
-                            break;
-                        default:
-                            logger.Error("Unknown command: {0}", str);
-                            break;
-                    }
-                    
-                    
+                    var line = Console.ReadLine();
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+                    HandleCommand(line.Trim());
                 }
 
-                if (_nextPrintNetowrkQuality == null || DateTime.UtcNow > _nextPrintNetowrkQuality)
+                if (DateTime.UtcNow >= nextStatsPrint)
                 {
-                    _nextPrintNetowrkQuality = DateTime.UtcNow.AddSeconds(5);
-                    NetPeerManager.Instance.PrintNetowrkQuality();
+                    nextStatsPrint = DateTime.UtcNow.AddSeconds(5);
+                    PrintStats();
                 }
-                
+
                 Thread.Sleep(50);
             }
         }
 
-        private static DateTime _endTime;
-        private static DateTime? _nextPrintNetowrkQuality;
+        private static void HandleCommand(string line)
+        {
+            var sp = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var cmd = sp[0].ToLowerInvariant();
 
+            switch (cmd)
+            {
+                case "help":
+                {
+                    Console.WriteLine(@"
+commands:
+    help            - show this
+    ping            - send ping once (manual)
+    tcp <bytes>     - send TCP echo payload with given size
+    udp <bytes>     - send UDP echo payload with given size
+    spam <proto> <bytes> <intervalMs> <seconds>
+                    - spam tcp|udp echo for given duration
+    stats           - print traffic/latency
+    quit / exit     - close and exit
+");
+                    break;
+                }
+                case "ping":
+                    _client?.SendPing();
+                    _client?.Logger.Info("[Ping] sent");
+                    break;
+                
+                case "tcp":
+                    if (sp.Length < 2) 
+                    { 
+                        Console.WriteLine("usage: tcp <bytes>");
+                        break;
+                    }
+                    SendEcho(sp[1], false);
+                    break;
+                
+                case "udp":
+                    if (sp.Length < 2) 
+                    { 
+                        Console.WriteLine("usage: udp <bytes>");
+                        break;
+                    }
+                    SendEcho(sp[1], true);
+                    break;
+                
+                case "stats":
+                    PrintStats();
+                    break;
+            }
+        }
+        
         private static byte[] GenerateRandomBytes(int length)
         {
             var buffer = new byte[length];
@@ -197,19 +126,43 @@ namespace GameClient
         public static long GetUnixTimestamp()
             => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         
-        private static Timer? _timer;
-
-        private static void SendEcho(int sizeBytes)
+        private static void SendEcho(string bytesStr, bool isUdp)
         {
-            if (_endTime < DateTime.UtcNow)
+            var size = int.Parse(bytesStr);
+            var payload = GenerateRandomBytes(size);
+            var now = GetUnixTimestamp();
+
+            if (isUdp)
             {
-                _timer?.Dispose();
-                _timer = null;
-                return;
+                var req = new C2SProtocolData.UdpEchoReq
+                {
+                    SendTime = now,
+                    Data = payload
+                };
+                _client?.Send(req);
             }
+            else
+            {
+                var req = new C2SProtocolData.TcpEchoReq
+                {
+                    SendTime = now,
+                    Data = payload
+                };
+                _client?.Send(req);
+            }
+        }
+
+        private static void PrintStats()
+        {
+            if (_client == null)
+                return;
             
-            var echoReq = new C2SProtocolData.UdpEchoReq { SendTime = GetUnixTimestamp(), Data = GenerateRandomBytes(sizeBytes) };
-            NetPeerManager.Instance.Send(echoReq);
+            var (ts, tr) = _client.GetTcpTrafficInfo();
+            var (us, ur) = _client.GetUdpTrafficInfo();
+            var ls = _client.GetLatencyStats();
+
+            _client.Logger.Info($"[Stats] TCP sent/recv={ts}/{tr} bytes | UDP sent/recv={us}/{ur} bytes | " +
+                         $"RTT last={ls.LastRttMs:F1}ms avg={ls.AvgRttMs:F1}ms jitter={ls.JitterMs:F1}ms loss={ls.PacketLossRate:F2}%");
         }
     }
 }

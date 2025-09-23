@@ -38,7 +38,6 @@ namespace SP.Engine.Protocol
                     public EPeerId PeerId;
                     public EDhKeySize KeySize;
                     public byte[]? ClientPublicKey;
-                    public ushort UdpMtu;
                 }
             
                 [ProtocolData(EngineProtocol.C2S.MessageAck)]
@@ -67,6 +66,7 @@ namespace SP.Engine.Protocol
                 {
                     public string? SessionId;
                     public EPeerId PeerId;
+                    public ushort Mtu;
                 }
 
                 [ProtocolData(EngineProtocol.C2S.UdpKeepAlive, EProtocolType.Udp)]

@@ -44,7 +44,6 @@ namespace SP.Engine.Server
         EPeerState State { get; }
         IClientSession Session { get; }
         UdpFragmentAssembler Assembler { get; }
-        ushort UdpMtu { get; }
         byte[] DhPublicKey { get; }
         bool Send(IProtocolData data);
         void Reject(ERejectReason reason, string detailReason = null);
@@ -85,7 +84,6 @@ namespace SP.Engine.Server
         public EPeerId PeerId { get; private set; }
         public EPeerType PeerType { get; } 
         public ILogger Logger { get; }
-        public ushort UdpMtu { get; private set; }
         public double LatencyAvgMs { get; private set; }
         public double LatencyJitterMs { get; private set; }
         public float PacketLossRate { get; private set; }
@@ -279,11 +277,6 @@ namespace SP.Engine.Server
             PeerId = EPeerId.None;
             ResetMessageProcessor();
             OnLeaveServer(reason);
-        }
-
-        internal void SetUdpMtu(ushort udpMtu)
-        {
-            UdpMtu = udpMtu;
         }
 
         internal void SetupEncryptor(EDhKeySize keySize, byte[] publicKey)
