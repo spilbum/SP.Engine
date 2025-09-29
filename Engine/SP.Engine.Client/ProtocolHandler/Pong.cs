@@ -3,12 +3,12 @@ using SP.Engine.Protocol;
 
 namespace SP.Engine.Client.ProtocolHandler
 {
-    [ProtocolHandler(EngineProtocol.S2C.Pong)]
-    public class Pong : BaseProtocolHandler<EngineProtocolData.S2C.Pong>
+    [ProtocolHandler(S2CEngineProtocolId.Pong)]
+    public class Pong : BaseProtocolHandler<S2CEngineProtocolData.Pong>
     {
-        protected override void ExecuteProtocol(NetPeer session, EngineProtocolData.S2C.Pong protocol)
+        protected override void ExecuteProtocol(NetPeer peer, S2CEngineProtocolData.Pong data)
         {
-            session.OnPong(protocol.SendTimeMs, protocol.ServerTimeMs);
+            peer.OnPong(data.SendTimeMs, data.ServerTimeMs);
         }
     }
 }

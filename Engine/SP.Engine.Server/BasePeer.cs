@@ -1,25 +1,26 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Net;
 using System.Threading;
 using SP.Common.Logging;
 using SP.Engine.Runtime;
+using SP.Engine.Runtime.Channel;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Runtime.Security;
+using SP.Engine.Server.Configuration;
 using SP.Engine.Server.ProtocolHandler;
 
 namespace SP.Engine.Server
 {
-    public enum EPeerType : byte
+    public enum PeerKind : byte
     {
         None = 0,
         User,
         Server,
     }
     
-    public enum EPeerState
+    public enum PeerState
     {
         NotAuthorized = PeerStateConst.NotAuthorized,
         Authorized = PeerStateConst.Authorized,
@@ -39,36 +40,34 @@ namespace SP.Engine.Server
     
     public interface IPeer
     {
-        EPeerId PeerId { get; }
-        EPeerType PeerType { get; }
-        EPeerState State { get; }
+        PeerId Id { get; }
+        PeerKind Kind { get; }
+        PeerState State { get; }
         IClientSession Session { get; }
-        UdpFragmentAssembler Assembler { get; }
-        byte[] DhPublicKey { get; }
-        bool Send(IProtocolData data);
-        void Reject(ERejectReason reason, string detailReason = null);
+        bool Send<TProtocol>(TProtocol data) where TProtocol : IProtocol;
+        void Close(CloseReason reason);
     }
     
     public abstract class BasePeer : ReliableMessageProcessor, IPeer, IHandleContext, IDisposable
     {
         private static class PeerIdGenerator
         {
-            private static readonly ConcurrentQueue<EPeerId> FreePeerIdPool = new ConcurrentQueue<EPeerId>();
+            private static readonly ConcurrentQueue<PeerId> FreePeerIdPool = new();
             private static int _latestPeerId;
 
-            public static EPeerId Generate()
+            public static PeerId Generate()
             {
                 if (_latestPeerId >= int.MaxValue)
                     throw new InvalidOperationException("ID overflow detected");
 
                 if (FreePeerIdPool.TryDequeue(out var peerId))
                     return peerId;
-                return (EPeerId)Interlocked.Increment(ref _latestPeerId);
+                return (PeerId)Interlocked.Increment(ref _latestPeerId);
             }
 
-            public static void Free(EPeerId peerId)
+            public static void Free(PeerId peerId)
             {
-                if (EPeerId.None != peerId)
+                if (Runtime.PeerId.None != peerId)
                     FreePeerIdPool.Enqueue(peerId);
             }
         }
@@ -76,42 +75,43 @@ namespace SP.Engine.Server
         private int _stateCode = PeerStateConst.NotAuthorized;
         private bool _disposed;
         private DiffieHellman _diffieHellman;
-        private readonly PackOptions _packOptions;
+        private Encryptor _encryptor;
+        private IPolicyView _policyView = new SnapshotPolicyView(in PolicyDefaults.Globals);
 
-        public UdpFragmentAssembler Assembler { get; } = new();
-        public EPeerState State => (EPeerState)_stateCode;
+        public PeerState State => (PeerState)_stateCode;
         public IClientSession Session { get; private set; }
-        public EPeerId PeerId { get; private set; }
-        public EPeerType PeerType { get; } 
+        public EngineConfig Config { get; }
+        public PeerId Id { get; private set; }
+        public PeerKind Kind { get; } 
         public ILogger Logger { get; }
         public double LatencyAvgMs { get; private set; }
         public double LatencyJitterMs { get; private set; }
         public float PacketLossRate { get; private set; }
-        public IEncryptor Encryptor { get; private set; }
+        public IEncryptor Encryptor => _encryptor;
 
         public IPEndPoint LocalEndPoint => Session.LocalEndPoint;
         public IPEndPoint RemoteEndPoint => Session.RemoteEndPoint;
         public bool IsConnected => _stateCode == PeerStateConst.Authorized || _stateCode == PeerStateConst.Online;
         public byte[] DhPublicKey => _diffieHellman.PublicKey;
         
-        protected BasePeer(EPeerType peerType, IClientSession session)
+        protected BasePeer(PeerKind peerType, IClientSession session)
         {
-            PeerId = PeerIdGenerator.Generate();
-            PeerType = peerType;
+            Id = PeerIdGenerator.Generate();
+            Kind = peerType;
             Logger = session.Logger;
-            SetInitialSendTimeoutMs(session.Config.Network.SendTimeoutMs);
+            Config = session.Config;
+            SetSendTimeoutMs(session.Config.Network.SendTimeoutMs);
             SetMaxResendCnt(session.Config.Session.MaxResendCount);
             Session = session;
-            _packOptions = session.Config.PackOptions;
         }
 
         protected BasePeer(BasePeer other)
         {
-            PeerId = other.PeerId;
-            PeerType = other.PeerType;
+            Id = other.Id;
+            Kind = other.Kind;
             Logger = other.Logger;
             Session = other.Session;
-            SetInitialSendTimeoutMs(other.InitialSendTimeoutMs);
+            SetSendTimeoutMs(other.SendTimeoutMs);
             SetMaxResendCnt(other.MaxReSendCnt);
             _diffieHellman = other._diffieHellman;
         }
@@ -128,7 +128,7 @@ namespace SP.Engine.Server
 
         protected override void OnExceededResendCnt(IMessage message)
         {
-            Close(ECloseReason.LimitExceededReSend);
+            Close(CloseReason.LimitExceededReSend);
         }
 
         public void Dispose()
@@ -144,10 +144,10 @@ namespace SP.Engine.Server
             
             if (disposing)
             {
-                PeerIdGenerator.Free(PeerId);
-                PeerId = EPeerId.None;
-                Encryptor?.Dispose();
-                Encryptor = null;
+                PeerIdGenerator.Free(Id);
+                Id = PeerId.None;
+                _encryptor?.Dispose();
+                _encryptor = null;
                 ResetMessageProcessor();
             }
 
@@ -159,19 +159,17 @@ namespace SP.Engine.Server
             if (!IsConnected)
                 return;
 
-            foreach (var message in GetResendCandidates())
+            foreach (var msg in GetResendCandidates())
             {
-                if (message == null)
+                if (msg == null)
                 {
-                    Close(ECloseReason.LimitExceededReSend);
+                    Close(CloseReason.LimitExceededReSend);
                     return;
                 }
 
-                if (!Session.Send(message))
-                    Logger.Warn("Message send failed: {0}({1})", message.ProtocolId, message.SequenceNumber);
+                if (!Session.Send(ChannelKind.Reliable, msg))
+                    Logger.Warn("Message send failed: {0}({1})", msg.Id, msg.SequenceNumber);
             }
-            
-            Assembler.Cleanup(TimeSpan.FromSeconds(10));
         }
         
         internal void OnPing(double rawRttMs, double avgRttMs, double jitterMs, float packetLossRate)
@@ -187,57 +185,52 @@ namespace SP.Engine.Server
             OnAckReceived(sequenceNumber);
         }
         
-        public void Reject(ERejectReason reason, string detailReason = null)
-        {
-            Session.Reject(reason, detailReason);
-        }
-
-        public void Close(ECloseReason reason)
+        public void Close(CloseReason reason)
         {
             Session.Close(reason);
         }
         
-        public bool Send(IProtocolData data)
+        public IPolicy GetPolicy<TProtocol>() where TProtocol : IProtocol
+            => _policyView.Resolve<TProtocol>();
+        
+        public bool Send<TProtocol>(TProtocol data) where TProtocol : IProtocol
         {
-            switch (data.ProtocolType)
+            var channel = data.Channel;
+            var policy = GetPolicy<TProtocol>();
+            var encryptor = policy.UseEncrypt ? Encryptor : null;
+            switch (channel)
             {
-                case EProtocolType.Tcp:
+                case ChannelKind.Reliable:
                 {
-                    var message = new TcpMessage();
-                    message.SetSequenceNumber(GetNextSequenceNumber());
-                    message.Pack(data, Encryptor, _packOptions);
-                    return Send(message);
+                    var msg = new TcpMessage();
+                    msg.SetSequenceNumber(GetNextSequenceNumber());
+                    msg.Serialize(data, policy, encryptor);
+                    
+                    if (!IsConnected)
+                    {
+                        EnqueuePendingSend(msg);
+                        return true;
+                    }
+                    
+                    StartSendingMessage(msg);
+                    return Session.Send(channel, msg);
                 }
-                case EProtocolType.Udp:
+                case ChannelKind.Unreliable:
                 {
-                    var message = new UdpMessage();
-                    message.SetPeerId(PeerId);
-                    message.Pack(data, Encryptor, _packOptions);
-                    return Session.Send(message);
+                    var msg = new UdpMessage();
+                    msg.SetPeerId(Id);
+                    msg.Serialize(data, policy, encryptor);
+                    return IsConnected && Session.Send(channel, msg);
                 }
                 default:
-                    throw new Exception($"Unknown protocol type: {data.ProtocolType}");
+                    throw new Exception($"Unknown channel: {channel}");
             }
         }
         
-        private bool Send(IMessage message)
-        {
-            if (!IsConnected)
-                EnqueuePendingSend(message);
-            else
-            {
-                StartSendingMessage(message);
-                if (!Session.Send(message))
-                    return false;
-            }
-            
-            return true;
-        }
-
         internal void ExecuteMessage(IMessage message)
         {
-            foreach (var received in ProcessReceivedMessage(message))
-                Session.Engine.ExecuteHandler(this, received);
+            foreach (var inOrder in ProcessReceivedMessage(message))
+                Session.Engine.ExecuteHandler(this, inOrder);
         }
 
         internal void JoinServer()
@@ -252,45 +245,54 @@ namespace SP.Engine.Server
             OnJoinServer();
         }
 
+        internal void OnSessionAuthed()
+        {
+            // 정책 생성
+            var s = Config.Security;
+            var g = new PolicyGlobals(s.UseEncrypt, s.UseCompress, s.CompressionThreshold);
+            var newView = new SnapshotPolicyView(g);
+            Interlocked.Exchange(ref _policyView, newView);
+        }
+        
         internal void Online(IClientSession session)
         {
             Interlocked.Exchange(ref _stateCode, PeerStateConst.Online);
             Session = session;
             
-            foreach (var message in DequeuePendingSend())
-                Session.Send(message);
+            foreach (var msg in DequeuePendingSend())
+                session.Send(ChannelKind.Reliable, msg);
             
             OnOnline();
         }
 
-        internal void Offline(ECloseReason reason)
+        internal void Offline(CloseReason reason)
         {
-            ResetSendingMessageState();
             Interlocked.Exchange(ref _stateCode, PeerStateConst.Offline);
+            _policyView = new SnapshotPolicyView(PolicyDefaults.Globals);
+            ResetSendingMessageState();
             OnOffline(reason);
         }
 
-        internal void LeaveServer(ECloseReason reason)
+        internal void LeaveServer(CloseReason reason)
         {
             Interlocked.Exchange(ref _stateCode, PeerStateConst.Closed);
-            PeerIdGenerator.Free(PeerId);
-            PeerId = EPeerId.None;
+            PeerIdGenerator.Free(Id);
+            Id = PeerId.None;
             ResetMessageProcessor();
             OnLeaveServer(reason);
         }
 
-        internal void SetupEncryptor(EDhKeySize keySize, byte[] publicKey)
+        internal void SetupSecurity(DhKeySize keySize, byte[] publicKey)
         {
             _diffieHellman = new DiffieHellman(keySize);
-            var sharedKey = _diffieHellman.DeriveSharedKey(publicKey);
-            Encryptor = new Encryptor(sharedKey);
+            _encryptor = new Encryptor(_diffieHellman.DeriveSharedKey(publicKey));
         }
 
         protected virtual void OnJoinServer()
         {
         }
 
-        protected virtual void OnLeaveServer(ECloseReason reason) 
+        protected virtual void OnLeaveServer(CloseReason reason) 
         {
         }
 
@@ -298,13 +300,13 @@ namespace SP.Engine.Server
         {
         }
 
-        protected virtual void OnOffline(ECloseReason reason)
+        protected virtual void OnOffline(CloseReason reason)
         {
         }
 
         public override string ToString()
         {
-            return $"sessionId={Session.SessionId}, peerId={PeerId}, peerType={PeerType}, remoteEndPoint={RemoteEndPoint}";   
+            return $"sessionId={Session.SessionId}, peerId={Id}, peerType={Kind}, remoteEndPoint={RemoteEndPoint}";   
         }
     }
 }

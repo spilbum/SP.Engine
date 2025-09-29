@@ -6,11 +6,11 @@ namespace SP.Engine.Runtime.Handler
     [AttributeUsage(AttributeTargets.Class)]
     public class ProtocolHandlerAttribute : Attribute
     {
-        public EProtocolId ProtocolId { get; }
+        public ushort Id { get; }
         
-        public ProtocolHandlerAttribute(EProtocolId protocolId)
+        public ProtocolHandlerAttribute(ushort id)
         {
-            ProtocolId = protocolId;
+            Id = id;
         }
     }
 }

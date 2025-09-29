@@ -1,17 +1,16 @@
 using System;
-using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Runtime.Handler
 {
     [AttributeUsage(AttributeTargets.Method)]
     public class ProtocolMethodAttribute : Attribute
     {
-        public ProtocolMethodAttribute(EProtocolId protocolId)
+        public ProtocolMethodAttribute(ushort id)
         {
-            ProtocolId = protocolId;
+            Id = id;
         }
 
-        public EProtocolId ProtocolId { get; }
+        public ushort Id { get; }
     }
 }
 

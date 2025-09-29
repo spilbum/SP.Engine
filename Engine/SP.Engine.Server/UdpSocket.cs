@@ -5,11 +5,13 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using SP.Engine.Runtime;
+using SP.Engine.Runtime.Channel;
 using SP.Engine.Runtime.Networking;
+using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Server
 {
-    public class UdpSocket : BaseNetworkSession
+    public class UdpSocket : BaseNetworkSession, IUdpSender
     {
         private uint _nextFragmentId;
         private ushort _mtu;
@@ -71,7 +73,7 @@ namespace SP.Engine.Server
             var client = Client;
             if (client == null)
             {
-                OnSendError(queue, ECloseReason.SocketError);
+                OnSendError(queue, CloseReason.SocketError);
                 return;
             }
             
@@ -95,7 +97,7 @@ namespace SP.Engine.Server
             {
                 LogError(new SocketException((int)e.SocketError));
                 ClearSocketAsyncEventArgs(e);
-                OnSendError(queue, ECloseReason.SocketError);
+                OnSendError(queue, CloseReason.SocketError);
                 return;
             }
 

@@ -63,6 +63,7 @@ namespace SP.Common.Buffer
         private bool _disposed;
         private const int MaxBufferSize = 1024 * 1024 * 1024;
         
+        public int Capacity => _memory.Length;
         public int ReadableBytes => _writeIndex - _readIndex;
         
         public BinaryBuffer(int size = 4096)
@@ -134,11 +135,8 @@ namespace SP.Common.Buffer
         public string ReadString()
         {
             var length = Read<int>();
-            if (length < 0) 
-                return null;
-            if (length == 0)
-                return string.Empty;
-            
+            if (length < 0) return null;
+            if (length == 0) return string.Empty;
             var span = Read(length);
             return Encoding.UTF8.GetString(span);
         }
@@ -192,19 +190,23 @@ namespace SP.Common.Buffer
             throw new NotSupportedException($"Unsupported type: {type.FullName}");
         }
         
-        public void Trim()
+        public void MaybeTrim(int minNeeded)
         {
-            if (_readIndex == 0) return;
-            if (_readIndex == _writeIndex)
+            var readable = ReadableBytes; 
+            if (readable == 0)
             {
-                _readIndex = _writeIndex = 0;
+                _readIndex = 0;
+                _writeIndex = 0;
                 return;
             }
 
+            var tail = Capacity - _writeIndex;
+            if (_readIndex < Capacity >> 1 || tail >= minNeeded) return;
+            
             var span = _memory.Span;
-            span.Slice(_readIndex, ReadableBytes).CopyTo(span);
-            _writeIndex -= _readIndex;
+            span.Slice(_readIndex, readable).CopyTo(span);
             _readIndex = 0;
+            _writeIndex = readable;
         }
         
         private void EnsureCapacity(int additionalSize)

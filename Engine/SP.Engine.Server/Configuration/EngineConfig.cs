@@ -12,13 +12,6 @@ namespace SP.Engine.Server.Configuration
         public RuntimeConfig Runtime { get; init; } = new();
         public IReadOnlyList<ListenerConfig> Listeners { get; init; } = Array.Empty<ListenerConfig>();
         public IReadOnlyList<ConnectorConfig> Connectors { get; init; } = Array.Empty<ConnectorConfig>();
-        
-        public PackOptions PackOptions => new()
-        {
-            UseEncryption = Security.UseEncryption,
-            UseCompression = Security.UseCompression,
-            CompressionThresholdPercent = Security.CompressionThresholdPercent
-        };
     }
 
     public class EngineConfigBuilder

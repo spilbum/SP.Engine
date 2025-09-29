@@ -1,6 +1,6 @@
 namespace SP.Engine.Runtime.Serialization
 {
-    public enum EDataType
+    public enum DataType
     {
         None = 0,
         Value,

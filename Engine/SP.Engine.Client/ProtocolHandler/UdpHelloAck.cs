@@ -1,15 +1,14 @@
 using SP.Engine.Protocol;
-using SP.Engine.Runtime;
 using SP.Engine.Runtime.Handler;
 
 namespace SP.Engine.Client.ProtocolHandler
 {
-    [ProtocolHandler(EngineProtocol.S2C.UdpHelloAck)]
-    public class UdpHelloAck : BaseProtocolHandler<EngineProtocolData.S2C.UdpHelloAck>
+    [ProtocolHandler(S2CEngineProtocolId.UdpHelloAck)]
+    public class UdpHelloAck : BaseProtocolHandler<S2CEngineProtocolData.UdpHelloAck>
     {
-        protected override void ExecuteProtocol(NetPeer session, EngineProtocolData.S2C.UdpHelloAck protocol)
+        protected override void ExecuteProtocol(NetPeer peer, S2CEngineProtocolData.UdpHelloAck data)
         {
-            session.OnUdpHelloAck(protocol.ErrorCode);
+            peer.OnUdpHelloAck(data.ErrorCode);
         }
     }
 }

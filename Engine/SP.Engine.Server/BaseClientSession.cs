@@ -5,7 +5,9 @@ using System.Net.Sockets;
 using SP.Common.Buffer;
 using SP.Common.Logging;
 using SP.Engine.Runtime;
+using SP.Engine.Runtime.Channel;
 using SP.Engine.Runtime.Networking;
+using SP.Engine.Runtime.Security;
 using SP.Engine.Server.Configuration;
 using SP.Engine.Server.ProtocolHandler;
 
@@ -18,38 +20,38 @@ namespace SP.Engine.Server
         IPEndPoint RemoteEndPoint { get; }
         EngineConfig Config { get; }
         IEngine Engine { get; }
-        TcpNetworkSession TcpSession { get; }
+        TcpNetworkSession Session { get; }
+        IEncryptor Encryptor { get; }
 
-        bool Send(IMessage message);
-        void EnsureUdpSocket(Socket socket, IPEndPoint remoteEndPoint);
-        void ProcessMessage(IMessage message);
+        bool Send(ChannelKind channel, IMessage message);
         void ProcessBuffer(byte[] buffer, int offset, int length);
-        void Reject(ERejectReason reason, string detailReason = null);
-        void Close(ECloseReason reason);
+        void ProcessBuffer(byte[] buffer, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint);
+        void Close(CloseReason reason);
     }
 
     public abstract class BaseClientSession<TSession> : IClientSession
         where TSession : BaseClientSession<TSession>, IClientSession, new()
     {
         private BinaryBuffer _receiveBuffer;
-        private BaseEngine<TSession> Engine { get; set; }
+        private BaseEngine<TSession> _engine;
+        private readonly ChannelRouter _channelRouter = new();
+        private readonly UdpFragmentAssembler _fragmentAssembler = new();
 
-        IEngine IClientSession.Engine => Engine;
-        public EngineConfig Config => Engine.Config;
-        public ILogger Logger => Engine.Logger;
-        public IPEndPoint LocalEndPoint => TcpSession.LocalEndPoint;
-        public IPEndPoint RemoteEndPoint => TcpSession.RemoteEndPoint;
+        IEngine IClientSession.Engine => _engine;
+        public EngineConfig Config => _engine.Config;
+        public ILogger Logger => _engine.Logger;
+        public IPEndPoint LocalEndPoint => Session.LocalEndPoint;
+        public IPEndPoint RemoteEndPoint => Session.RemoteEndPoint;
         public bool IsConnected { get; internal set; }
         public DateTime StartTime { get; }
         public DateTime LastActiveTime { get; private set; }
         public string SessionId { get; private set; }
         public DateTime StartClosingTime { get; protected set; }
-        public bool IsAuthorized { get; private set; }
-        public ERejectReason RejectReason { get; private set; }
-        public string RejectDetailReason { get; private set; }
-
-        public TcpNetworkSession TcpSession { get; private set; }
+        public bool IsAuthorized { get; protected set; }
+        public TcpNetworkSession Session { get; private set; }
         public UdpSocket UdpSocket { get; private set; }
+        public CloseReason CloseReason { get; private set; }
+        public IEncryptor Encryptor { get; protected set; }
 
         protected BaseClientSession()
         {
@@ -59,67 +61,32 @@ namespace SP.Engine.Server
 
         public virtual void Initialize(IEngine engine, TcpNetworkSession networkSession)
         {
-            Engine = (BaseEngine<TSession>)engine;
-            TcpSession = networkSession;
+            _engine = (BaseEngine<TSession>)engine;
+            Session = networkSession;
             SessionId = networkSession.SessionId;
             _receiveBuffer = new BinaryBuffer(engine.Config.Network.ReceiveBufferSize);
             networkSession.Attach(this);
+            _channelRouter.Bind(new ReliableChannel(networkSession));
+            _engine.Scheduler.Schedule(_fragmentAssembler.Cleanup, TimeSpan.FromMinutes(15), 5000, 5000);
             IsConnected = true;
-
-            OnInit();
         }
 
-        protected virtual void OnInit()
+        public bool Send(ChannelKind channel, IMessage message)
         {
-
+            switch (channel)
+            {
+                case ChannelKind.Reliable when message is not TcpMessage:
+                case ChannelKind.Unreliable when message is not UdpMessage:
+                    return false;
+                default:
+                    if (!IsConnected) return false;
+                    if (!_channelRouter.TrySend(channel, message)) return false;
+                    LastActiveTime = DateTime.UtcNow;
+                    return true;
+            }
         }
         
-        public void SetAuthorized()
-        {
-            IsAuthorized = true;
-        }
-
-        public bool Send(IMessage message)
-        {
-            switch (message)
-            {
-                case TcpMessage tcpMessage:
-                {
-                    if (!TcpSession.TrySend(tcpMessage))
-                        return false;
-                    
-                    break;
-                }
-                case UdpMessage udpMessage:
-                {
-                    if (!UdpSocket?.TrySend(udpMessage) ?? false)
-                        return false;
-
-                    break;
-                }
-            }
-            
-            LastActiveTime = DateTime.UtcNow;
-            return true;
-        }
-
-        void IClientSession.EnsureUdpSocket(Socket socket, IPEndPoint remoteEndPoint)
-        {
-            lock (this)
-            {
-                if (UdpSocket == null)
-                {
-                    UdpSocket = new UdpSocket(socket, remoteEndPoint);
-                    UdpSocket.Attach(this);
-                }
-                else
-                {
-                    UdpSocket.UpdateRemoteEndPoint(remoteEndPoint);
-                }
-            }
-        }
-
-        public void ProcessMessage(IMessage message)
+        private void ProcessMessage(IMessage message)
         {
             try
             {
@@ -134,6 +101,49 @@ namespace SP.Engine.Server
                 LastActiveTime = DateTime.UtcNow;
             }
         }
+        
+        private void EnsureUdpSocket(Socket socket, IPEndPoint remoteEndPoint)
+        {
+            lock (this)
+            {
+                if (UdpSocket == null)
+                {
+                    UdpSocket = new UdpSocket(socket, remoteEndPoint);
+                    UdpSocket.Attach(this);
+                    _channelRouter.Bind(new UnreliableChannel(UdpSocket));
+                }
+                else
+                {
+                    UdpSocket.UpdateRemoteEndPoint(remoteEndPoint);
+                }   
+            }
+        }
+
+        void IClientSession.ProcessBuffer(byte[] buffer, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint)
+        {
+            EnsureUdpSocket(socket, remoteEndPoint);
+
+            if (header.IsFragmentation)
+            {
+                if (!UdpFragment.TryParse(buffer, out var fragment))
+                {
+                    Logger.Warn("Failed to parse fragmentation data. datagram={0}", buffer.Length);
+                    return;
+                }
+
+                if (!_fragmentAssembler.TryAssemble(fragment, out var payload))
+                    return;
+
+                var msg = new UdpMessage(header, payload);
+                ProcessMessage(msg);
+            }
+            else
+            {
+                var payload = new ArraySegment<byte>(buffer);
+                var msg = new UdpMessage(header, payload);
+                ProcessMessage(msg);
+            }
+        }
 
         void IClientSession.ProcessBuffer(byte[] buffer, int offset, int length)
         {
@@ -142,8 +152,8 @@ namespace SP.Engine.Server
             
             try
             {
-                foreach (var message in Filter())
-                    ProcessMessage(message);
+                foreach (var msg in Filter())
+                    ProcessMessage(msg);
             }
             catch (Exception e)
             {
@@ -151,8 +161,7 @@ namespace SP.Engine.Server
             }
             finally
             {  
-                if (_receiveBuffer.ReadableBytes < 1024)
-                    _receiveBuffer.Trim();
+                _receiveBuffer.MaybeTrim(TcpHeader.HeaderSize);
             }
         }
         
@@ -167,7 +176,7 @@ namespace SP.Engine.Server
                 
                 var headerSpan = _receiveBuffer.Peek(TcpHeader.HeaderSize);
                 var result = TcpHeader.TryParse(headerSpan, out var header);
-                
+
                 switch (result)
                 {
                     case TcpHeader.ParseResult.Success:
@@ -175,9 +184,9 @@ namespace SP.Engine.Server
                         long frameLen = header.Length + header.PayloadLength;
                         if (frameLen <= 0 || frameLen > Config.Network.MaxFrameBytes)
                         {
-                            Logger.Warn("Frame too large/small. max={0}, got={1}, (protocolId={2})", 
-                                Config.Network.MaxFrameBytes, frameLen, header.ProtocolId);
-                            Close(ECloseReason.ProtocolError);
+                            Logger.Warn("Frame too large/small. max={0}, got={1}, (id={2})", 
+                                Config.Network.MaxFrameBytes, frameLen, header.Id);
+                            Close(CloseReason.ProtocolError);
                             yield break;
                         }
 
@@ -191,7 +200,7 @@ namespace SP.Engine.Server
                         break;
                     }
                     case TcpHeader.ParseResult.Invalid:
-                        Close(ECloseReason.ProtocolError);
+                        Close(CloseReason.ProtocolError);
                         yield break;
                     case TcpHeader.ParseResult.NeedMore:
                         yield break;
@@ -203,23 +212,18 @@ namespace SP.Engine.Server
 
         protected abstract void ExecuteMessage(IMessage message);
 
-        public void Reject(ERejectReason reason, string detailReason = null)
+        public virtual void Close(CloseReason reason)
         {
-            RejectReason = reason;
-            RejectDetailReason = detailReason;
-            Logger.Debug("Session is rejected. reason:{0}, detail:{1}", reason, detailReason);
-            Close(ECloseReason.Rejected);
-        }
-
-        public virtual void Close(ECloseReason reason)
-        {
-            TcpSession.Close(reason);
+            _channelRouter.Unbind(ChannelKind.Reliable);
+            _channelRouter.Unbind(ChannelKind.Unreliable);
+            Session.Close(reason);
             UdpSocket?.Close(reason);
+            CloseReason = reason;
         }
 
         public virtual void Close()
         {
-            Close(ECloseReason.ServerClosing);
+            Close(CloseReason.ServerClosing);
         }      
     }
 }

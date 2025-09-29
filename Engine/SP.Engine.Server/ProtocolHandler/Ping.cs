@@ -3,13 +3,13 @@ using SP.Engine.Runtime.Handler;
 
 namespace SP.Engine.Server.ProtocolHandler;
 
-[ProtocolHandler(EngineProtocol.C2S.Ping)]
-internal class Ping<TPeer> : BaseEngineHandler<ClientSession<TPeer>, EngineProtocolData.C2S.Ping>
+[ProtocolHandler(C2SEngineProtocolId.Ping)]
+internal class Ping<TPeer> : BaseEngineHandler<ClientSession<TPeer>, C2SEngineProtocolData.Ping>
     where TPeer : BasePeer, IPeer
 {
-    protected override void ExecuteProtocol(ClientSession<TPeer> session, EngineProtocolData.C2S.Ping protocol)
+    protected override void ExecuteProtocol(ClientSession<TPeer> session, C2SEngineProtocolData.Ping data)
     {
-        session.Peer.OnPing(protocol.RawRttMs, protocol.AvgRttMs, protocol.JitterMs, protocol.PacketLossRate);
-        session.SendPong(protocol.SendTimeMs);
+        session.Peer.OnPing(data.RawRttMs, data.AvgRttMs, data.JitterMs, data.PacketLossRate);
+        session.SendPong(data.SendTimeMs);
     }
 }

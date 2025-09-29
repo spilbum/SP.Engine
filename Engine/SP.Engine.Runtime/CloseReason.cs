@@ -1,6 +1,6 @@
 namespace SP.Engine.Runtime
 {
-    public enum ECloseReason : byte
+    public enum CloseReason : byte
     {
         Unknown = 0,
         ServerShutdown = 1,

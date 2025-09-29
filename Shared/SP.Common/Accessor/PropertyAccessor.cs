@@ -11,8 +11,6 @@ namespace SP.Common.Accessor
         
         public string Name { get; }
         public Type Type { get; }
-        public bool CanRead { get; }
-        public bool CanWrite { get; }
         
         public PropertyAccessor(PropertyInfo propertyInfo)
         {
@@ -20,25 +18,21 @@ namespace SP.Common.Accessor
             Name = attr == null ? propertyInfo.Name : attr.Name;
             Type = propertyInfo.PropertyType;
 
-            var ignoreAttr = propertyInfo.GetCustomAttribute<IgnoreMemberAttribute>();
-            CanRead = !(ignoreAttr?.IgnoreOnRead ?? false);
-            CanWrite = !(ignoreAttr?.IgnoreOnWrite ?? false);
-            
-            if (CanRead) _getter = CreateGetter(propertyInfo);
-            if (CanWrite) _setter = CreateSetter(propertyInfo);
+            _getter = CreateGetter(propertyInfo);
+            _setter = CreateSetter(propertyInfo);
         }
 
         public object GetValue(object instance)
         {
             if (_getter == null)
-                throw new InvalidOperationException($"Property '{Name}' is not readable");
+                throw new InvalidOperationException("Getter not set");
             return _getter(instance);
         }
 
         public void SetValue(object instance, object value)
         {
             if (_setter == null)
-                throw new InvalidOperationException($"Property '{Name}' is not writable.");
+                throw new InvalidOperationException("Setter not set");
             _setter(instance, value);
         }
         

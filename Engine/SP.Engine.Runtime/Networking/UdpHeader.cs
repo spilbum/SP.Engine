@@ -5,49 +5,46 @@ namespace SP.Engine.Runtime.Networking
 {
     public readonly struct UdpHeader : IHeader
     {
-        private const int SequenceNumberSize = sizeof(long);
         private const int PeerIdSize = sizeof(ushort);
         private const int ProtocolIdSize = sizeof(ushort);
         private const int FlagsSize = sizeof(byte);
         private const int PayloadLengthSize = sizeof(int);
 
-        private const int SequenceNumberOffset = 0;
-        private const int PeerIdOffset = SequenceNumberOffset + SequenceNumberSize;
+        private const int PeerIdOffset = 0;
         private const int ProtocolIdOffset = PeerIdOffset + PeerIdSize;
         private const int FlagsOffset = ProtocolIdOffset + ProtocolIdSize;
         private const int PayloadLengthOffset = FlagsOffset + FlagsSize;
         
-        public const int HeaderSize = SequenceNumberSize + PeerIdSize + ProtocolIdSize + FlagsSize + PayloadLengthSize;
-        
+        public const int HeaderSize = PeerIdSize + ProtocolIdSize + FlagsSize + PayloadLengthSize;
+
         public long SequenceNumber { get; }
-        public EPeerId PeerId { get; }
-        public EProtocolId ProtocolId  { get; }
-        public EHeaderFlags Flags { get; }
+        public PeerId PeerId { get; }
+        public ushort Id  { get; }
+        public HeaderFlags Flags { get; }
         public int PayloadLength { get; }
         public int Length => HeaderSize;
-        public bool IsFragmentation => Flags.HasFlag(EHeaderFlags.Fragmentation);
+        public bool IsFragmentation => Flags.HasFlag(HeaderFlags.Fragment);
 
-        public UdpHeader(long sequenceNumber, EPeerId peerId, EProtocolId protocolId, EHeaderFlags flags, int payloadLength)
+        public UdpHeader(PeerId peerId, ushort id, HeaderFlags flags, int payloadLength)
         {
-            SequenceNumber = sequenceNumber;
+            SequenceNumber = 0; // 사용안함
             PeerId = peerId;
-            ProtocolId = protocolId;
+            Id = id;
             Flags = flags;
             PayloadLength = payloadLength;
         }
 
         public void WriteTo(Span<byte> span)
         {
-            span.WriteInt64(SequenceNumberOffset, SequenceNumber);
             span.WriteUInt16(PeerIdOffset, (ushort)PeerId);
-            span.WriteUInt16(ProtocolIdOffset, (ushort)ProtocolId);
+            span.WriteUInt16(ProtocolIdOffset, Id);
             span[FlagsOffset] = (byte)Flags;
             span.WriteInt32(PayloadLengthOffset, PayloadLength);
         }
 
         public override string ToString()
         {
-            return $"sequenceNumber={SequenceNumber}, peerId={PeerId}, protocolId={ProtocolId}, flags={Flags}, payloadLength={PayloadLength}";
+            return $"peerId={PeerId}, id={Id}, flags={Flags}, payloadLength={PayloadLength}";
         }
 
         public static bool TryParse(ReadOnlySpan<byte> span, out UdpHeader header)
@@ -58,10 +55,9 @@ namespace SP.Engine.Runtime.Networking
                 return false;
             
             header = new UdpHeader(
-                span.ReadInt64(SequenceNumberOffset),
-                (EPeerId)span.ReadUInt16(PeerIdOffset),
-                (EProtocolId)span.ReadUInt16(ProtocolIdOffset), 
-                (EHeaderFlags)span[FlagsOffset],
+                (PeerId)span.ReadUInt16(PeerIdOffset),
+                span.ReadUInt16(ProtocolIdOffset), 
+                (HeaderFlags)span[FlagsOffset],
                 span.ReadInt32(PayloadLengthOffset));
             return true;
         }
@@ -69,41 +65,33 @@ namespace SP.Engine.Runtime.Networking
 
     public class UdpHeaderBuilder
     {
-        private long _sequenceNumber;
-        private EPeerId _peerId;
-        private EProtocolId _protocolId;
-        private EHeaderFlags _flags;
+        private PeerId _peerId;
+        private ushort _id;
+        private HeaderFlags _flags;
         private int _payloadLength;
 
         public UdpHeaderBuilder From(UdpHeader header)
         {
-            _sequenceNumber = header.SequenceNumber;
             _peerId = header.PeerId;
-            _protocolId = header.ProtocolId;
+            _id = header.Id;
             _flags = header.Flags;
             _payloadLength = header.PayloadLength;
             return this;
         }
 
-        public UdpHeaderBuilder WithSequenceNumber(long sequenceNumber)
-        {
-            _sequenceNumber = sequenceNumber;
-            return this;
-        }
-
-        public UdpHeaderBuilder WithPeerId(EPeerId peerId)
+        public UdpHeaderBuilder WithPeerId(PeerId peerId)
         {
             _peerId = peerId;
             return this;
         }
 
-        public UdpHeaderBuilder WithProtocolId(EProtocolId protocolId)
+        public UdpHeaderBuilder WithId(ushort id)
         {
-            _protocolId = protocolId;
+            _id = id;
             return this;
         }
 
-        public UdpHeaderBuilder AddFlag(EHeaderFlags flags)
+        public UdpHeaderBuilder AddFlag(HeaderFlags flags)
         {
             _flags |= flags;
             return this;
@@ -116,6 +104,6 @@ namespace SP.Engine.Runtime.Networking
         }
 
         public UdpHeader Build()
-            => new UdpHeader(_sequenceNumber, _peerId, _protocolId, _flags, _payloadLength);
+            => new UdpHeader(_peerId, _id, _flags, _payloadLength);
     }
 }

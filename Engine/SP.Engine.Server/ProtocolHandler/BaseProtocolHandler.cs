@@ -6,13 +6,13 @@ namespace SP.Engine.Server.ProtocolHandler;
 
 public abstract class BaseProtocolHandler<TPeer, TProtocol> : BaseHandler<TPeer, IMessage>
     where TPeer : BasePeer, IPeer
-    where TProtocol : IProtocolData
+    where TProtocol : IProtocol
 {
     public override void ExecuteMessage(TPeer peer, IMessage message)
     {
         try
         {
-            var protocol = (TProtocol)message.Unpack(typeof(TProtocol), peer.Encryptor);
+            var protocol = (TProtocol)message.Deserialize(typeof(TProtocol), peer.Encryptor);
             ExecuteProtocol(peer, protocol);
         }
         catch (Exception e)

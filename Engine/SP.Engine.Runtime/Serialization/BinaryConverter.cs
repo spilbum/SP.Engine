@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using SP.Common.Buffer;
 using SP.Common.Accessor;
@@ -8,24 +9,14 @@ namespace SP.Engine.Runtime.Serialization
 {
     public static class BinaryConverter
     {
-        private static readonly Dictionary<Type, Type> ElementTypeCache = new Dictionary<Type, Type>();
-        private static readonly Dictionary<Type, Type[]> GenericArgCache = new Dictionary<Type, Type[]>();
+        private static readonly ConcurrentDictionary<Type, Type> ElementTypeCache = new ConcurrentDictionary<Type, Type>();
+        private static readonly ConcurrentDictionary<Type, Type[]> GenericArgCache = new ConcurrentDictionary<Type, Type[]>();
 
-        private static Type GetCachedElementType(Type type)
-        {
-            if (ElementTypeCache.TryGetValue(type, out var elementType)) return elementType;
-            elementType = type.GetElementType()!;
-            ElementTypeCache[type] = elementType;
-            return elementType;
-        }
+        private static Type GetCachedElementType(Type type) 
+            => ElementTypeCache.GetOrAdd(type, t => t.GetElementType());
 
         private static Type[] GetCachedGenericArgs(Type type)
-        {
-            if (GenericArgCache.TryGetValue(type, out var args)) return args;
-            args = type.GetGenericArguments();
-            GenericArgCache[type] = args;
-            return args;
-        }
+            => GenericArgCache.GetOrAdd(type, t => t.GetGenericArguments());
         
         private static object ReadNullable(BinaryBuffer buffer, Type type)
         {
@@ -61,41 +52,47 @@ namespace SP.Engine.Runtime.Serialization
             var dataType = type.GetDataType();
             switch (dataType)
             {
-                case EDataType.Value:
+                case DataType.Value:
                 {
                     return ReadNullable(buffer, type);
                 }
 
-                case EDataType.Enum:
+                case DataType.Enum:
                 {
-                    if (type.IsNullable() && buffer.Read<bool>()) return null;
-                    var underlyingType = Enum.GetUnderlyingType(type);
-                    var value = buffer.ReadObject(underlyingType);
-                    return Enum.ToObject(type, value);
+                    if (type.IsNullableEnum())
+                    {
+                        var isNull = buffer.Read<bool>();
+                        if (isNull) return null;
+                    }
+                    
+                    var enumType = Nullable.GetUnderlyingType(type) ?? type;
+                    var underlying = Enum.GetUnderlyingType(enumType);
+                    var raw = buffer.ReadObject(underlying);
+                    return Enum.ToObject(enumType, raw);
                 }
 
-                case EDataType.String:
+                case DataType.String:
                 {
                     return buffer.ReadString();
                 }
 
-                case EDataType.Class:
+                case DataType.Class:
                 {
                     if (buffer.Read<bool>()) return null;
+                    
                     var instance = Activator.CreateInstance(type);
                     var accessor = RuntimeTypeAccessor.GetOrCreate(type);
                     foreach (var member in accessor.Members)
                     {
-                        if (!member.CanRead) continue;
                         var val = Read(buffer, member.Type);
-                        if (val != null)
+                        if (val != null || member.Type.IsNullable())
                             accessor[instance, member.Name] = val;
                     }
 
                     return instance;
                 }
 
-                case EDataType.Array:
+                case DataType.Array:
                 {
                     var count = buffer.Read<int>();
                     var elementType = GetCachedElementType(type);
@@ -105,17 +102,17 @@ namespace SP.Engine.Runtime.Serialization
                     return array;
                 }
 
-                case EDataType.List:
+                case DataType.List:
                 {
                     var count = buffer.Read<int>();
                     var itemType = GetCachedGenericArgs(type)[0];
-                    var list = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(itemType));
+                    var list = (IList)Activator.CreateInstance(type);
                     for (var i = 0; i < count; i++)
                         list.Add(Read(buffer, itemType));
                     return list;
                 }
 
-                case EDataType.Dictionary:
+                case DataType.Dictionary:
                 {
                     var dictCount = buffer.Read<int>();
                     var args = GetCachedGenericArgs(type);
@@ -131,7 +128,7 @@ namespace SP.Engine.Runtime.Serialization
                     return dict;
                 }
 
-                case EDataType.ByteArray:
+                case DataType.ByteArray:
                 {
                     if (buffer.Read<bool>()) 
                         return null;
@@ -140,7 +137,7 @@ namespace SP.Engine.Runtime.Serialization
                     return buffer.ReadBytes(length);
                 }
 
-                case EDataType.DateTime:
+                case DataType.DateTime:
                 {
                     if (buffer.Read<bool>()) 
                         return null;
@@ -160,34 +157,36 @@ namespace SP.Engine.Runtime.Serialization
             var dataType = type.GetDataType();
             switch (dataType)
             {
-                case EDataType.Value:
+                case DataType.Value:
                 {
                     WriteNullable(buffer, obj, type);
                     break;
                 }
 
-                case EDataType.Enum:
+                case DataType.Enum:
                 {
-                    if (type.IsNullable())
+                    if (type.IsNullableEnum())
                     {
                         var isNull = obj == null;
                         buffer.Write(isNull);
                         if (isNull) return;
+                        type = Nullable.GetUnderlyingType(type)!;
                     }
 
                     // 실제 타입으로 변환
-                    var underlyingValue = Convert.ChangeType(obj, Enum.GetUnderlyingType(type));
-                    buffer.WriteObject(underlyingValue);
+                    var underlying = Enum.GetUnderlyingType(type);
+                    var raw = Convert.ChangeType(obj, underlying);
+                    buffer.WriteObject(raw);
                     break;
                 }
 
-                case EDataType.String:
+                case DataType.String:
                 {
                     buffer.WriteString((string)obj);
                     break;
                 }
 
-                case EDataType.Class:
+                case DataType.Class:
                 {
                     var isNull = obj == null;
                     buffer.Write(isNull);
@@ -196,7 +195,6 @@ namespace SP.Engine.Runtime.Serialization
                         var accessor = RuntimeTypeAccessor.GetOrCreate(type);
                         foreach (var member in accessor.Members)
                         {
-                            if (!member.CanWrite) continue;
                             var val = accessor[obj, member.Name];
                             Write(buffer, val, member.Type);
                         }
@@ -204,7 +202,7 @@ namespace SP.Engine.Runtime.Serialization
                     break;
                 }
 
-                case EDataType.Array:
+                case DataType.Array:
                 {
                     if (obj is Array array && array.Length > 0)
                     {
@@ -219,7 +217,7 @@ namespace SP.Engine.Runtime.Serialization
                     break;
                 }
 
-                case EDataType.List:
+                case DataType.List:
                 {
                     if (obj is IList list && list.Count > 0)
                     {
@@ -234,7 +232,7 @@ namespace SP.Engine.Runtime.Serialization
                     break;
                 }
 
-                case EDataType.Dictionary:
+                case DataType.Dictionary:
                 {
                     if (obj is IDictionary dictionary)
                     {
@@ -254,7 +252,7 @@ namespace SP.Engine.Runtime.Serialization
                     break;
                 }
 
-                case EDataType.ByteArray:
+                case DataType.ByteArray:
                 {
                     var isNull = obj == null;
                     buffer.Write(isNull);
@@ -268,7 +266,7 @@ namespace SP.Engine.Runtime.Serialization
                     break;
                 }
 
-                case EDataType.DateTime:
+                case DataType.DateTime:
                 {
                     var isNull = obj == null;
                     buffer.Write(isNull);

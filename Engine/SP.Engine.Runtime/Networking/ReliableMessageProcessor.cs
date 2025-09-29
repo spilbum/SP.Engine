@@ -93,7 +93,7 @@ namespace SP.Engine.Runtime.Networking
         private readonly HashSet<long> _receivedSeqSet = new HashSet<long>();
         private readonly Queue<long> _receivedSeqQueue = new Queue<long>();
         
-        public int InitialSendTimeoutMs { get; private set; } = 500;
+        public int SendTimeoutMs { get; private set; } = 500;
         public int MaxReSendCnt { get; private set; } = 5;
 
         private bool VerifySequence(long seq)
@@ -124,7 +124,7 @@ namespace SP.Engine.Runtime.Networking
             }
         }
         
-        public void SetInitialSendTimeoutMs(int ms) => InitialSendTimeoutMs = ms;
+        public void SetSendTimeoutMs(int ms) => SendTimeoutMs = ms;
         public void SetMaxResendCnt(int cnt) => MaxReSendCnt = cnt;
         protected long GetNextSequenceNumber() => Interlocked.Increment(ref _nextSequenceNumber);
         protected void EnqueuePendingSend(IMessage message) => _pendingMessageSendQueue.Enqueue(message);
@@ -136,7 +136,8 @@ namespace SP.Engine.Runtime.Networking
 
         protected bool StartSendingMessage(IMessage message)
         {
-            var state = new SendingMessageState(message, InitialSendTimeoutMs, MaxReSendCnt);
+            if (message.SequenceNumber <= 0) return false;   
+            var state = new SendingMessageState(message, SendTimeoutMs, MaxReSendCnt);
             return _sendingMessageStateDict.TryAdd(message.SequenceNumber, state);
         }
 

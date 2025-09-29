@@ -7,7 +7,9 @@ using System.Net.Sockets;
 using System.Threading;
 using SP.Common.Logging;
 using SP.Engine.Protocol;
+using SP.Engine.Runtime.Channel;
 using SP.Engine.Runtime.Networking;
+using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Client
 {
@@ -16,7 +18,7 @@ namespace SP.Engine.Client
         public int Position { get; set; }
     }
     
-    public class UdpSocket
+    public class UdpSocket : IUdpSender
     {
         private Socket _socket;
         private IPEndPoint _remoteEndPoint;
@@ -123,7 +125,7 @@ namespace SP.Engine.Client
             OnClose();
         }
         
-        public bool Send(UdpMessage message)
+        public bool TrySend(UdpMessage message)
         {
             if (!IsRunning)
                 return false;

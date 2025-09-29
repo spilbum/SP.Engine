@@ -8,17 +8,17 @@ using SP.Engine.Runtime.Networking;
 
 namespace SP.Engine.Server
 {
-    public interface ITcpNetworkSession : ILogContext
+    public interface ITcpNetworkSession : ILogContext, ITcpSender
     {
         SocketReceiveContext ReceiveContext { get; }
         void ProcessReceive(SocketAsyncEventArgs e);
     }
 
-    public class TcpNetworkSession(Socket client, SocketReceiveContext socketReceiveContext) : BaseNetworkSession(ESocketMode.Tcp, client), ITcpNetworkSession
+    public class TcpNetworkSession(Socket client, SocketReceiveContext socketReceiveContext) : BaseNetworkSession(ESocketMode.Tcp, client), ITcpNetworkSession, ITcpSender
     {
         private SocketAsyncEventArgs _sendEventArgs;        
 
-        ILogger ILogContext.Logger => ClientSession.Logger;
+        ILogger ILogContext.Logger => Session.Logger;
         public SocketReceiveContext ReceiveContext { get; } = socketReceiveContext;
 
         public override void Attach(IClientSession session)
@@ -34,7 +34,7 @@ namespace SP.Engine.Server
             StartReceive(ReceiveContext.SocketEventArgs);
         }
 
-        protected override void OnClosed(ECloseReason reason)
+        protected override void OnClosed(CloseReason reason)
         {
             var e = _sendEventArgs;
             if (null == e)            
@@ -77,7 +77,7 @@ namespace SP.Engine.Server
             catch (Exception ex)
             {
                 LogError(ex);
-                OnReceiveTerminated(ECloseReason.SocketError);
+                OnReceiveTerminated(CloseReason.SocketError);
                 return;
             }
 
@@ -90,20 +90,20 @@ namespace SP.Engine.Server
             if (!ProcessCompleted(e))
             {
                 // e.SocketError == Socket.Success and e.BytesTransferred == 0 : close packet
-                OnReceiveTerminated(e.SocketError == SocketError.Success ? ECloseReason.ClientClosing : ECloseReason.SocketError);
+                OnReceiveTerminated(e.SocketError == SocketError.Success ? CloseReason.ClientClosing : CloseReason.SocketError);
                 return;
             }
 
             OnReceiveEnded();
-
+            
             try
             {
-                ClientSession.ProcessBuffer(e.Buffer, e.Offset, e.BytesTransferred);
+                Session.ProcessBuffer(e.Buffer, e.Offset, e.BytesTransferred);
             }
             catch (Exception ex)
             {
                 LogError(ex);
-                Close(ECloseReason.ProtocolError);
+                Close(CloseReason.ProtocolError);
                 return;
             }
 
@@ -146,7 +146,7 @@ namespace SP.Engine.Server
                 var socket = Client;
                 if (null == socket)
                 {
-                    OnSendError(queue, ECloseReason.SocketError);
+                    OnSendError(queue, CloseReason.SocketError);
                     return;
                 }
                 
@@ -158,7 +158,7 @@ namespace SP.Engine.Server
                 LogError(ex);
 
                 ClearPrevSendState(_sendEventArgs);
-                OnSendError(queue, ECloseReason.SocketError);
+                OnSendError(queue, CloseReason.SocketError);
             }
         }
         
@@ -180,14 +180,14 @@ namespace SP.Engine.Server
         {
             if (e.UserToken is not SegmentQueue queue)
             {
-                ClientSession.Logger.Error("SendingQueue is null");
+                Session.Logger.Error("SendingQueue is null");
                 return;
             }
 
             if (!ProcessCompleted(e))
             {
                 ClearPrevSendState(e);
-                OnSendError(queue, ECloseReason.SocketError);
+                OnSendError(queue, CloseReason.SocketError);
                 return;
             }
 
@@ -195,7 +195,7 @@ namespace SP.Engine.Server
             if (count != e.BytesTransferred)
             {
                 queue.TrimSentBytes(e.BytesTransferred);
-                ClientSession.Logger.Warn("{0} of {1} were transferred, send the rest {2} bytes right now.", e.BytesTransferred, count, queue.Sum(x => x.Count));
+                Session.Logger.Warn("{0} of {1} were transferred, send the rest {2} bytes right now.", e.BytesTransferred, count, queue.Sum(x => x.Count));
                 ClearPrevSendState(e);
                 Send(queue);
                 return;

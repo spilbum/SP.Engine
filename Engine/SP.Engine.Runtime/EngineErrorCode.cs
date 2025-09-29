@@ -1,6 +1,6 @@
 namespace SP.Engine.Runtime
 {
-    public enum EEngineErrorCode
+    public enum EngineErrorCode
     {
         Success = 0,
         Invalid = -1,

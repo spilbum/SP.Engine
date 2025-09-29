@@ -5,9 +5,11 @@ using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using SP.Common.Fiber;
 using SP.Common.Logging;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Networking;
+using SP.Engine.Runtime.Protocol;
 using SP.Engine.Server.Configuration;
 using SP.Engine.Server.Logging;
 
@@ -16,13 +18,14 @@ namespace SP.Engine.Server
     public interface IEngine : ILogContext
     {
         EngineConfig Config { get; }
+        IFiberScheduler Scheduler { get; }
         bool Initialize(string name, EngineConfig config);
         bool Start();
         void Stop();
         IClientSession CreateSession(TcpNetworkSession networkSession);   
         bool RegisterSession(IClientSession clientSession);
         IClientSession GetSession(string sessionId);
-        IPeer GetPeer(EPeerId peerId);
+        IPeer GetPeer(PeerId peerId);
         void ExecuteHandler(IPeer peer, IMessage message);
     }
 
@@ -62,9 +65,10 @@ namespace SP.Engine.Server
         public string Name { get; private set; }
         public ILogger Logger { get; private set; }
         public EngineConfig Config { get; private set; }
-        
+        public abstract IFiberScheduler Scheduler { get; }
+
         public abstract void ExecuteHandler(IPeer peer, IMessage message);
-        public abstract IPeer GetPeer(EPeerId peerId);
+        public abstract IPeer GetPeer(PeerId peerId);
         
         public virtual bool Initialize(string name, EngineConfig config)
         {
@@ -151,7 +155,7 @@ namespace SP.Engine.Server
             {
                 var tasks = sessions.Select(s => Task.Run(() =>
                 {
-                    s.Value.Close(ECloseReason.ServerShutdown);
+                    s.Value.Close(CloseReason.ServerShutdown);
                 })).ToArray();
 
                 Task.WaitAll(tasks);
@@ -267,7 +271,7 @@ namespace SP.Engine.Server
                 return false;
             }
 
-            ((IClientSession)session).TcpSession.Closed += OnNetworkSessionClosed;
+            clientSession.Session.Closed += OnNetworkSessionClosed;
 
             // 인증 해드쉐이크 대기 등록
             EnqueueAuthHandshakePending(session);
@@ -275,16 +279,16 @@ namespace SP.Engine.Server
             return true;
         }
 
-        private void OnNetworkSessionClosed(INetworkSession networkSession, ECloseReason reason)
+        private void OnNetworkSessionClosed(INetworkSession networkSession, CloseReason reason)
         {
-            if (networkSession.ClientSession is not TSession session) 
+            if (networkSession.Session is not TSession session) 
                 return;
          
             session.IsConnected = false;
             OnSessionClosed(session, reason);
         }
 
-        protected virtual void OnSessionClosed(TSession session, ECloseReason reason)
+        protected virtual void OnSessionClosed(TSession session, CloseReason reason)
         {
             if (!_sessionDict.TryRemove(session.SessionId, out var removed))
             {
@@ -340,7 +344,7 @@ namespace SP.Engine.Server
                         session.StartTime,
                         session.LastActiveTime);
 
-                    session.Close(ECloseReason.TimeOut);
+                    session.Close(CloseReason.TimeOut);
                 });
             }
             catch (Exception ex)
@@ -421,7 +425,7 @@ namespace SP.Engine.Server
         private Timer _handshakePendingTimer;
         private readonly ConcurrentQueue<TSession> _authHandshakePendingQueue = new();
         private readonly ConcurrentQueue<TSession> _closeHandshakePendingQueue = new();
-        
+
         private void StartHandshakePendingTimer()
         {
             var ts = TimeSpan.FromSeconds(Config.Session.HandshakePendingTimerIntervalSec);
@@ -458,7 +462,7 @@ namespace SP.Engine.Server
                 
                     // 인증 타임 아웃
                     _authHandshakePendingQueue.TryDequeue(out _);
-                    session.Close(ECloseReason.TimeOut);
+                    session.Close(CloseReason.TimeOut);
                 }
             
                 while (_closeHandshakePendingQueue.TryPeek(out var session))
@@ -478,7 +482,7 @@ namespace SP.Engine.Server
                     
                     // 종료 타임아웃
                     _closeHandshakePendingQueue.TryDequeue(out _);
-                    session.Close(ECloseReason.ServerClosing);
+                    session.Close(CloseReason.ServerClosing);
                 }
             }
             catch (Exception e)

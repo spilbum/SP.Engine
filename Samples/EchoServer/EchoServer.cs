@@ -1,13 +1,13 @@
 using SP.Engine.Server;
 using SP.Engine.Server.Connector;
 
-namespace GameServer;
+namespace EchoServer;
 
-public class GameServer : Engine<GamePeer>
+public class EchoServer : Engine<EchoPeer>
 {
-    protected override GamePeer CreatePeer(IClientSession<GamePeer> session)
+    protected override EchoPeer CreatePeer(IClientSession<EchoPeer> peer)
     {
-        return new GamePeer(session);
+        return new EchoPeer(peer);
     }
 
     protected override IServerConnector CreateConnector(string name)

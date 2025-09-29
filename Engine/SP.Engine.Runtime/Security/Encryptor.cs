@@ -8,6 +8,7 @@ namespace SP.Engine.Runtime.Security
         byte[] Encrypt(ReadOnlySpan<byte> plain);
         byte[] Decrypt(ReadOnlySpan<byte> cipher);
     }
+    
     public sealed class Encryptor : IEncryptor
     {
         private readonly byte[] _key;

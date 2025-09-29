@@ -1,46 +1,14 @@
-using SP.Engine.Runtime;
 using SP.Engine.Runtime.Handler;
 using SP.Engine.Protocol;
 
 namespace SP.Engine.Client.ProtocolHandler
 {
-    [ProtocolHandler(EngineProtocol.S2C.SessionAuthAck)]
-    public class SessionAuth : BaseProtocolHandler<EngineProtocolData.S2C.SessionAuthAck>
+    [ProtocolHandler(S2CEngineProtocolId.SessionAuthAck)]
+    public class SessionAuth : BaseProtocolHandler<S2CEngineProtocolData.SessionAuthAck>
     {
-        protected override void ExecuteProtocol(NetPeer session,EngineProtocolData.S2C.SessionAuthAck protocol)
+        protected override void ExecuteProtocol(NetPeer peer, S2CEngineProtocolData.SessionAuthAck data)
         {
-            if (protocol.ErrorCode != EEngineErrorCode.Success)
-            {
-                // 인증 실패로 종료 함
-                session.OnError(protocol.ErrorCode);
-                session.CloseWithoutHandshake();
-                return;
-            }
-            
-            // 허용되는 최대 데이터 크기 설정
-            if (0 < protocol.MaxFrameBytes)
-                session.SetMaxAllowedLength(protocol.MaxFrameBytes);
-                    
-            // 전송 타임아웃 시간 설정
-            if (0 < protocol.SendTimeoutMs)
-                session.SetInitialSendTimeoutMs(protocol.SendTimeoutMs);
-            
-            // 최대 재 전송 횟수 설정
-            if (0 < protocol.MaxResendCount)
-                session.SetMaxResendCnt(protocol.MaxResendCount);
-
-            if (protocol.UseEncryption)
-            {
-                session.SetupEncryptor(protocol.ServerPublicKey);
-            }
-
-            if (protocol.UseCompression)
-            {
-                session.PackOptions.UseCompression = true;
-                session.PackOptions.CompressionThresholdPercent = protocol.CompressionThresholdPercent;
-            }
-            
-            session.OnAuthHandshaked(protocol.PeerId, protocol.SessionId, protocol.UdpOpenPort);
+            peer.OnAuthHandshaked(data);
         }
     }
 }

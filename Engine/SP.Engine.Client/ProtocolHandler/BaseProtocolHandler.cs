@@ -4,14 +4,14 @@ using SP.Engine.Runtime.Protocol;
 namespace SP.Engine.Client.ProtocolHandler
 {
     public abstract class BaseProtocolHandler<TProtocol> : IHandler<NetPeer, IMessage>
-        where TProtocol : class, IProtocolData, new()
+        where TProtocol : class, IProtocol, new()
     {
-        public void ExecuteMessage(NetPeer session, IMessage message)
+        public void ExecuteMessage(NetPeer peer, IMessage message)
         {
-            var protocol = (TProtocol)message.Unpack(typeof(TProtocol), session.Encryptor);
-            ExecuteProtocol(session, protocol);
+            var protocol = (TProtocol)message.Deserialize(typeof(TProtocol), peer.Encryptor);
+            ExecuteProtocol(peer, protocol);
         }
 
-        protected abstract void ExecuteProtocol(NetPeer session, TProtocol protocol);
+        protected abstract void ExecuteProtocol(NetPeer peer, TProtocol data);
     }
 }

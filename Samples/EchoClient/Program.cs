@@ -1,21 +1,21 @@
-﻿using System.Text;
-using System.Timers;
-using Common;
-using SP.Common;
+﻿using Common;
 using SP.Common.Logging;
-using SP.Engine.Client;
 using SP.Engine.Client.Configuration;
-using SP.Engine.Runtime.Handler;
-using SP.Engine.Runtime.Protocol;
-using Timer = System.Threading.Timer;
 
-namespace GameClient
+namespace EchoClient
 {
     internal static class Program
     {
-        private static GameClient? _client;
+        private static EchoClient? _client;
         public static void Main(string[] args)
         {
+            Console.CancelKeyPress += (_, e) =>
+            {
+                e.Cancel = true;
+                _client?.Close();
+                Environment.Exit(0);
+            };
+                
             var host = string.Empty;
             var port = 0;
 
@@ -38,11 +38,10 @@ namespace GameClient
                 .WithLatencySampleWindowSize(20)
                 .Build();
 
-            var logger = new ConsoleLogger("GameClient");
-            _client = new GameClient(logger, config);
+            var logger = new ConsoleLogger("EchoClient");
+            _client = new EchoClient(logger, config);
             _client.Open(host, port);
 
-            var nextStatsPrint = DateTime.UtcNow;
             while (true)
             {
                 _client.Tick();
@@ -53,15 +52,11 @@ namespace GameClient
                     if (string.IsNullOrWhiteSpace(line)) continue;
                     HandleCommand(line.Trim());
                 }
-
-                if (DateTime.UtcNow >= nextStatsPrint)
-                {
-                    nextStatsPrint = DateTime.UtcNow.AddSeconds(5);
-                    PrintStats();
-                }
-
+                
                 Thread.Sleep(50);
             }
+            
+
         }
 
         private static void HandleCommand(string line)
@@ -109,8 +104,19 @@ commands:
                     SendEcho(sp[1], true);
                     break;
                 
+                case "spam":
+                    if (sp.Length < 5) { Console.WriteLine("usage: spam <tcp|udp> <bytes> <intervalMs> <seconds>"); break; }
+                    SpamEcho(sp[1].Equals("udp", StringComparison.OrdinalIgnoreCase), int.Parse(sp[2]), int.Parse(sp[3]), int.Parse(sp[4]));
+                    break;
+                
                 case "stats":
                     PrintStats();
+                    break;
+                
+                case "quit":
+                case "exit":
+                    _client?.Close();
+                    Environment.Exit(0);
                     break;
             }
         }
@@ -150,6 +156,44 @@ commands:
                 };
                 _client?.Send(req);
             }
+            
+            _client?.Logger.Info($"[Echo-{(isUdp ? "UDP" : "TCP")}] send: {size} bytes");
+        }
+
+        private static void SpamEcho(bool isUdp, int size, int intervalMs, int seconds)
+        {
+            var end = DateTime.UtcNow.AddSeconds(seconds);
+            var rand = new Random();
+            
+            new Thread(() =>
+            {
+                while (DateTime.UtcNow < end)
+                {
+                    var payload = new byte[size];
+                    rand.NextBytes(payload);
+                    var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+                    if (isUdp)
+                    {
+                        var req = new C2SProtocolData.UdpEchoReq { SendTime = now, Data = payload };
+                        _client?.Send(req);
+                    }
+                    else
+                    {
+                        var req = new C2SProtocolData.TcpEchoReq { SendTime = now, Data = payload };
+                        _client?.Send(req);
+                    }
+                    
+                    Thread.Sleep(intervalMs);
+                }
+                
+                _client?.Logger.Info("[Spam] done.");
+            })
+            {
+                IsBackground = true
+            }.Start();
+            
+            _client?.Logger.Info($"[Spam] {(isUdp ? "UDP" : "TCP")} size={size}, interval={intervalMs}ms, duration={seconds}s");
         }
 
         private static void PrintStats()

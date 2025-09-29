@@ -19,15 +19,15 @@ namespace SP.Engine.Runtime.Networking
         public const int HeaderSize = SequenceNumberSize + ProtocolIdSize + FlagsSize + PayloadLengthSize;
         
         public long SequenceNumber { get; }
-        public EProtocolId ProtocolId { get; }
-        public EHeaderFlags Flags { get; }
+        public ushort Id { get; }
+        public HeaderFlags Flags { get; }
         public int PayloadLength { get; }
         public int Length => HeaderSize;
 
-        public TcpHeader(long sequenceNumber, EProtocolId protocolId, EHeaderFlags flags, int payloadLength)
+        public TcpHeader(long sequenceNumber, ushort id, HeaderFlags flags, int payloadLength)
         {
             SequenceNumber = sequenceNumber;
-            ProtocolId = protocolId;
+            Id = id;
             Flags = flags;
             PayloadLength = payloadLength;
         }
@@ -35,7 +35,7 @@ namespace SP.Engine.Runtime.Networking
         public void WriteTo(Span<byte> span)
         {
             span.WriteInt64(SequenceNumberOffset, SequenceNumber);
-            span.WriteUInt16(ProtocolIdOffset, (ushort)ProtocolId);
+            span.WriteUInt16(ProtocolIdOffset, Id);
             span[FlagsOffset] = (byte)Flags;
             span.WriteInt32(PayloadLengthOffset, PayloadLength);
         }
@@ -55,14 +55,14 @@ namespace SP.Engine.Runtime.Networking
                 return ParseResult.NeedMore;
 
             var sequenceNumber = span.ReadInt64(SequenceNumberOffset);
-            var protocolId = (EProtocolId)span.ReadUInt16(ProtocolIdOffset);
-            var flags = (EHeaderFlags)span[FlagsOffset];
+            var id = span.ReadUInt16(ProtocolIdOffset);
+            var flags = (HeaderFlags)span[FlagsOffset];
             var payloadLength = span.ReadInt32(PayloadLengthOffset);
             
-            if (protocolId <= 0 || payloadLength < 0)
+            if (id <= 0 || payloadLength < 0)
                 return ParseResult.Invalid;
             
-            header = new TcpHeader(sequenceNumber, protocolId, flags, payloadLength);
+            header = new TcpHeader(sequenceNumber, id, flags, payloadLength);
             return ParseResult.Success;
         }
     }
@@ -70,14 +70,14 @@ namespace SP.Engine.Runtime.Networking
     public class TcpHeaderBuilder
     {
         private long _sequenceNumber;
-        private EProtocolId _protocolId;
-        private EHeaderFlags _flags;
+        private ushort _id;
+        private HeaderFlags _flags;
         private int _payloadLength;
 
         public TcpHeaderBuilder From(TcpHeader header)
         {
             _sequenceNumber = header.SequenceNumber;
-            _protocolId = header.ProtocolId;
+            _id = header.Id;
             _flags = header.Flags;
             _payloadLength = header.PayloadLength;
             return this;
@@ -89,13 +89,13 @@ namespace SP.Engine.Runtime.Networking
             return this;
         }
 
-        public TcpHeaderBuilder WithProtocolId(EProtocolId protocolId)
+        public TcpHeaderBuilder WithId(ushort id)
         {
-            _protocolId = protocolId;
+            _id = id;
             return this;
         }
 
-        public TcpHeaderBuilder AddFlag(EHeaderFlags flags)
+        public TcpHeaderBuilder AddFlag(HeaderFlags flags)
         {
             _flags |= flags;
             return this;
@@ -108,6 +108,6 @@ namespace SP.Engine.Runtime.Networking
         }
         
         public TcpHeader Build()
-            => new TcpHeader(_sequenceNumber, _protocolId, _flags, _payloadLength);
+            => new TcpHeader(_sequenceNumber, _id, _flags, _payloadLength);
     }
 }

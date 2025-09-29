@@ -33,11 +33,11 @@ namespace SP.Engine.Server
         Socket Client { get; }
         IPEndPoint LocalEndPoint { get; }
         IPEndPoint RemoteEndPoint { get; }
-        IClientSession ClientSession { get; }
+        IClientSession Session { get; }
         EngineConfig Config { get; }
-        event Action<INetworkSession, ECloseReason> Closed;
+        event Action<INetworkSession, CloseReason> Closed;
         void Attach(IClientSession clientSession);
-        void Close(ECloseReason reason);
+        void Close(CloseReason reason);
         bool TrySend(ArraySegment<byte> data);
     }
 
@@ -48,22 +48,22 @@ namespace SP.Engine.Server
         // 3rd byte : CloseReason
         // last byte : Normal State
         private volatile int _state;
-        private readonly object _lock = new object();
+        private readonly object _lock = new();
         private Socket _client;
         private IObjectPool<SegmentQueue> _sendingQueuePool;
         private SegmentQueue _sendingQueue;
-        private IClientSession _clientSession;
+        private IClientSession _session;
 
         public Socket Client => _client;
-        public ESocketMode Mode { get; private set; } = mode;
-        public IClientSession ClientSession => _clientSession ?? throw new InvalidOperationException("Session is not initialized.");
+        public ESocketMode Mode { get; } = mode;
+        public IClientSession Session => _session ?? throw new InvalidOperationException("Session is not initialized.");
         public EngineConfig Config { get; private set; }
         public string SessionId { get; }
-        public IPEndPoint LocalEndPoint { get; protected set; }
+        public IPEndPoint LocalEndPoint { get; protected init; }
         public IPEndPoint RemoteEndPoint { get; protected set; }
 
-        private Action<INetworkSession, ECloseReason> _closed;
-        public event Action<INetworkSession, ECloseReason> Closed
+        private Action<INetworkSession, CloseReason> _closed;
+        public event Action<INetworkSession, CloseReason> Closed
         {
             add => _closed += value;
             remove => _closed -= value;
@@ -85,7 +85,7 @@ namespace SP.Engine.Server
 
         public virtual void Attach(IClientSession session)
         {
-            _clientSession = session ?? throw new ArgumentNullException(nameof(session));
+            _session = session ?? throw new ArgumentNullException(nameof(session));
             Config = session.Config;
 
             if (((ISocketServerAccessor)session.Engine).SocketServer is SocketServer socketServer)
@@ -102,7 +102,7 @@ namespace SP.Engine.Server
 
         public abstract void Start();
 
-        protected virtual void OnClosed(ECloseReason reason)
+        protected virtual void OnClosed(CloseReason reason)
         {
             // 종료 플래그 설정
             if (!TryAddState(ESocketState.Closed))
@@ -164,9 +164,9 @@ namespace SP.Engine.Server
 
             if (!_sendingQueuePool.TryRent(out var newQueue) && newQueue == null)
             {
-                ClientSession.Logger.Error("Unable to acquire a new sending queue from the pool.");
+                Session.Logger.Error("Unable to acquire a new sending queue from the pool.");
                 OnSendEnd(false);
-                Close(ECloseReason.InternalError);
+                Close(CloseReason.InternalError);
                 return;
             }
 
@@ -181,8 +181,8 @@ namespace SP.Engine.Server
                 else
                 {
                     OnSendEnd(false);
-                    ClientSession.Logger.Error("Failed to switch the sending queue.");
-                    Close(ECloseReason.InternalError);
+                    Session.Logger.Error("Failed to switch the sending queue.");
+                    Close(CloseReason.InternalError);
                 }
 
                 return;
@@ -193,10 +193,10 @@ namespace SP.Engine.Server
 
             if (0 == queue.Count)
             {
-                ClientSession.Logger.Error("There is no data to be sent in the queue.");
+                Session.Logger.Error("There is no data to be sent in the queue.");
                 _sendingQueuePool.Return(queue);
                 OnSendEnd(false);
-                Close(ECloseReason.InternalError);
+                Close(CloseReason.InternalError);
                 return;
             }
 
@@ -254,7 +254,7 @@ namespace SP.Engine.Server
                 StartSend(newQueue, newQueue.TrackId, false);
         }
 
-        public void Close(ECloseReason reason)
+        public void Close(CloseReason reason)
         {
             if (!TryAddState(ESocketState.InClosing))
                 return;
@@ -274,7 +274,7 @@ namespace SP.Engine.Server
                 OnClosed(reason);
         }
 
-        private void InternalClose(Socket client, ECloseReason reason, bool isSetCloseReason)
+        private void InternalClose(Socket client, CloseReason reason, bool isSetCloseReason)
         {
             if (Interlocked.CompareExchange(ref _client, null, client) != client)
                 return;
@@ -290,7 +290,7 @@ namespace SP.Engine.Server
             }
         }
         
-        private static ESocketState GetSocketState(ECloseReason reason)
+        private static ESocketState GetSocketState(CloseReason reason)
         {
             return (ESocketState)(((int)reason & 0xFF) << 16);
         }  
@@ -380,12 +380,12 @@ namespace SP.Engine.Server
             return (_state & ((int)ESocketState.InSending | (int)ESocketState.InReceiving)) == 0;
         }
 
-        private ECloseReason GetCloseReasonFromSocketState()
+        private CloseReason GetCloseReasonFromSocketState()
         {
-            return (ECloseReason)((_state >> 16) & 0xFF);
+            return (CloseReason)((_state >> 16) & 0xFF);
         }
 
-        private void ValidateClosed(ECloseReason closeReason)
+        private void ValidateClosed(CloseReason closeReason)
         {
             if (IsClosed)
                 return;
@@ -405,7 +405,7 @@ namespace SP.Engine.Server
             }
         }
 
-        protected void OnSendError(SegmentQueue queue, ECloseReason closeReason)
+        protected void OnSendError(SegmentQueue queue, CloseReason closeReason)
         {
             queue.Clear();
             _sendingQueuePool.Return(queue);
@@ -418,7 +418,7 @@ namespace SP.Engine.Server
             OnReceiveTerminated(GetCloseReasonFromSocketState());
         }
 
-        protected void OnReceiveTerminated(ECloseReason reason)
+        protected void OnReceiveTerminated(CloseReason reason)
         {
             OnReceiveEnded();
             ValidateClosed(reason);
@@ -444,7 +444,7 @@ namespace SP.Engine.Server
                 return;
 
             var message = 0 < socketErrorCode ? string.Format(SocketErrorFormat, socketErrorCode) : string.Format(ErrorMessageFormat, e.Message, e.StackTrace);
-            ClientSession.Logger.Error(message + Environment.NewLine + string.Format(CallerFormat, caller, filePath, lineNumber));
+            Session.Logger.Error(message + Environment.NewLine + string.Format(CallerFormat, caller, filePath, lineNumber));
         }
 
         protected void LogError(int socketErrorCode, [CallerMemberName] string caller = "", [CallerFilePath] string filePath = "", [CallerLineNumber] int lineNumber = -1)
@@ -452,7 +452,7 @@ namespace SP.Engine.Server
             if (!Config.Network.LogAllSocketError && IsIgnoreSocketError(socketErrorCode))
                 return;
 
-            ClientSession.Logger.Error(string.Format(SocketErrorFormat, socketErrorCode) + Environment.NewLine + string.Format(CallerFormat, caller, filePath, lineNumber));
+            Session.Logger.Error(string.Format(SocketErrorFormat, socketErrorCode) + Environment.NewLine + string.Format(CallerFormat, caller, filePath, lineNumber));
         }
     }
 }

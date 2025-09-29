@@ -1,127 +1,118 @@
-using System;
 using SP.Engine.Runtime;
+using SP.Engine.Runtime.Channel;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Runtime.Security;
 
 namespace SP.Engine.Protocol
 {
-    public static class EngineProtocol
+    public static class C2SEngineProtocolId
     {
-        public static class C2S
+        public const ushort SessionAuthReq = 100;
+        public const ushort MessageAck = 101;
+        public const ushort Ping = 102;
+        public const ushort Close = 103;
+        public const ushort UdpHelloReq = 104;
+        public const ushort UdpKeepAlive = 105;
+    }
+
+    public static class S2CEngineProtocolId
+    {
+        public const ushort SessionAuthAck = 200;
+        public const ushort MessageAck = 201;
+        public const ushort Pong = 202;
+        public const ushort Close = 203;
+        public const ushort UdpHelloAck = 204;
+    }
+
+    public static class C2SEngineProtocolData
+    {
+        [Protocol(C2SEngineProtocolId.SessionAuthReq, encrypt: Toggle.Off, compress: Toggle.Off)]
+        public class SessionAuthReq : BaseProtocol
         {
-            public const EProtocolId SessionAuthReq = (EProtocolId)100;
-            public const EProtocolId MessageAck = (EProtocolId)101;
-            public const EProtocolId Ping = (EProtocolId)102;
-            public const EProtocolId Close = (EProtocolId)103;
-            public const EProtocolId UdpHelloReq = (EProtocolId)104;
-            public const EProtocolId UdpKeepAlive = (EProtocolId)105;
+            public string? SessionId;
+            public PeerId PeerId;
+            public DhKeySize KeySize;
+            public byte[]? ClientPublicKey;
+        }
+            
+        [Protocol(C2SEngineProtocolId.MessageAck)]
+        public class MessageAck : BaseProtocol
+        {
+            public long SequenceNumber;
+        }
+            
+        [Protocol(C2SEngineProtocolId.Ping)]
+        public class Ping : BaseProtocol
+        {
+            public double RawRttMs;
+            public double AvgRttMs;
+            public double JitterMs;
+            public float PacketLossRate;
+            public long SendTimeMs;
+        }
+            
+        [Protocol(C2SEngineProtocolId.Close)]
+        public class Close : BaseProtocol
+        {
         }
 
-        public static class S2C
+        [Protocol(C2SEngineProtocolId.UdpHelloReq, ChannelKind.Unreliable)]
+        public class UdpHelloReq : BaseProtocol
         {
-            public const EProtocolId SessionAuthAck = (EProtocolId)200;
-            public const EProtocolId MessageAck = (EProtocolId)201;
-            public const EProtocolId Pong = (EProtocolId)202;
-            public const EProtocolId Close = (EProtocolId)203;
-            public const EProtocolId UdpHelloAck = (EProtocolId)204;
+            public string? SessionId;
+            public PeerId PeerId;
+            public ushort Mtu;
+        }
+
+        [Protocol(C2SEngineProtocolId.UdpKeepAlive, ChannelKind.Unreliable)]
+        public class UdpKeepAlive : BaseProtocol
+        {
         }
     }
 
-    public static class EngineProtocolData
+    public static class S2CEngineProtocolData
     {
-        public static class C2S
+        [Protocol(S2CEngineProtocolId.SessionAuthAck, encrypt: Toggle.Off, compress: Toggle.Off)]
+        public class SessionAuthAck : BaseProtocol
         {
-                [ProtocolData(EngineProtocol.C2S.SessionAuthReq)]
-                public class SessionAuthReq : BaseProtocolData
-                {
-                    public string? SessionId;
-                    public EPeerId PeerId;
-                    public EDhKeySize KeySize;
-                    public byte[]? ClientPublicKey;
-                }
-            
-                [ProtocolData(EngineProtocol.C2S.MessageAck)]
-                public class MessageAck : BaseProtocolData
-                {
-                    public long SequenceNumber;
-                }
-            
-                [ProtocolData(EngineProtocol.C2S.Ping)]
-                public class Ping : BaseProtocolData
-                {
-                    public double RawRttMs;
-                    public double AvgRttMs;
-                    public double JitterMs;
-                    public float PacketLossRate;
-                    public long SendTimeMs;
-                }
-            
-                [ProtocolData(EngineProtocol.C2S.Close)]
-                public class Close : BaseProtocolData
-                {
-                }
+            public EngineErrorCode ErrorCode;
+            public string? SessionId;
+            public PeerId PeerId;
 
-                [ProtocolData(EngineProtocol.C2S.UdpHelloReq, EProtocolType.Udp)]
-                public class UdpHelloReq : BaseProtocolData
-                {
-                    public string? SessionId;
-                    public EPeerId PeerId;
-                    public ushort Mtu;
-                }
+            public bool UseEncrypt;
+            public byte[]? ServerPublicKey;
+            public bool UseCompress;
+            public int CompressionThreshold;
 
-                [ProtocolData(EngineProtocol.C2S.UdpKeepAlive, EProtocolType.Udp)]
-                public class UdpKeepAlive : BaseProtocolData
-                {
-                }
+            public int MaxFrameBytes;
+            public int SendTimeoutMs;
+            public int MaxResendCount;
+
+            public int UdpOpenPort;
         }
 
-        public static class S2C
+        [Protocol(S2CEngineProtocolId.Pong)]
+        public class Pong : BaseProtocol
         {
-            [ProtocolData(EngineProtocol.S2C.SessionAuthAck)]
-            public class SessionAuthAck : BaseProtocolData
-            {
-                public EEngineErrorCode ErrorCode;
-                public string? SessionId;
-                public EPeerId PeerId;
+            public long SendTimeMs;
+            public long ServerTimeMs;
+        }
 
-                public bool UseEncryption;
-                public byte[]? ServerPublicKey;
+        [Protocol(S2CEngineProtocolId.MessageAck)]
+        public class MessageAck : BaseProtocol
+        {
+            public long SequenceNumber;
+        }
 
-                public bool UseCompression;
-                public int CompressionThresholdPercent;
+        [Protocol(S2CEngineProtocolId.Close)]
+        public class Close : BaseProtocol
+        {
+        }
 
-                public int MaxFrameBytes;
-                public int SendTimeoutMs;
-                public int MaxResendCount;
-
-                public int UdpOpenPort;
-            }
-
-            [ProtocolData(EngineProtocol.S2C.Pong)]
-            public class Pong : BaseProtocolData
-            {
-                public long SendTimeMs;
-                public long ServerTimeMs;
-            }
-
-            [ProtocolData(EngineProtocol.S2C.MessageAck)]
-            public class MessageAck : BaseProtocolData
-            {
-                public long SequenceNumber;
-            }
-
-            [ProtocolData(EngineProtocol.S2C.Close)]
-            public class Close : BaseProtocolData
-            {
-            }
-
-            [ProtocolData(EngineProtocol.S2C.UdpHelloAck, EProtocolType.Udp)]
-            public class UdpHelloAck : BaseProtocolData
-            {
-                public EEngineErrorCode ErrorCode;
-            }
+        [Protocol(S2CEngineProtocolId.UdpHelloAck, ChannelKind.Unreliable)]
+        public class UdpHelloAck : BaseProtocol
+        {
+            public EngineErrorCode ErrorCode;
         }
     }
-    
-    
 }

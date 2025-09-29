@@ -11,25 +11,29 @@ namespace SP.Common.Accessor
 
         public string Name { get; }
         public Type Type { get; }
-        public bool CanRead { get; }
-        public bool CanWrite { get; }
 
         public FieldAccessor(FieldInfo fieldInfo)
         {
             var attr = fieldInfo.GetCustomAttribute<MemberAttribute>();
             Name = attr == null ? fieldInfo.Name : attr.Name;
             Type = fieldInfo.FieldType;
-
-            var ignoreAttr = fieldInfo.GetCustomAttribute<IgnoreMemberAttribute>();
-            CanRead = !(ignoreAttr?.IgnoreOnRead ?? false);
-            CanWrite = !(ignoreAttr?.IgnoreOnWrite ?? false);
-
-            if (CanRead) _getter = CreateGetter(fieldInfo);
-            if (CanWrite) _setter = CreateSetter(fieldInfo);
+            _getter = CreateGetter(fieldInfo);
+            _setter = CreateSetter(fieldInfo);
         }
 
-        public object GetValue(object instance) => _getter(instance);
-        public void SetValue(object instance, object value) => _setter(instance, value);
+        public object GetValue(object instance)
+        {
+            if (_getter == null)
+                throw new InvalidOperationException("Getter not set");
+            return _getter(instance);
+        }
+
+        public void SetValue(object instance, object value)
+        {
+            if (_setter == null)
+                throw new InvalidOperationException("Setter not set");
+            _setter(instance, value);
+        }
 
         private static Func<object, object> CreateGetter(FieldInfo field)
         {

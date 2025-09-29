@@ -2,7 +2,6 @@ using System;
 using System.Reflection;
 using SP.Engine.Runtime.Handler;
 using SP.Engine.Runtime.Networking;
-using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Server.ProtocolHandler;
 
@@ -16,10 +15,10 @@ public abstract class BaseHandler<TContext, TMessage> : IHandler<TContext, TMess
         if (attr == null)
             throw new InvalidOperationException($"{GetType().Name} must be decorated with ProtocolHandlerAttribute.");
         
-        Id = attr.ProtocolId;
+        Id = attr.Id;
     }
     
-    public EProtocolId Id { get; }
+    public ushort Id { get; }
 
     public abstract void ExecuteMessage(TContext context, TMessage message);
 }

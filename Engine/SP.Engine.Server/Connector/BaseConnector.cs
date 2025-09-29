@@ -23,7 +23,7 @@ namespace SP.Engine.Server.Connector
         void Connect();
         void Close();
         void Update();
-        void Send(IProtocolData protocol);
+        void Send(IProtocol protocol);
     }
     
     public abstract class BaseConnector(string name) : IHandleContext, IServerConnector, IDisposable
@@ -31,7 +31,7 @@ namespace SP.Engine.Server.Connector
         private bool _isDisposed;
         private bool _isOffline;        
         private NetPeer _netPeer;
-        private readonly Dictionary<EProtocolId, ProtocolMethodInvoker> _invokerDict = new();
+        private readonly Dictionary<ushort, ProtocolMethodInvoker> _invokerDict = new();
         
         public event Action Connected;
         public event Action Disconnected;
@@ -39,7 +39,7 @@ namespace SP.Engine.Server.Connector
         
         public string Name { get; } = name;
 
-        public EPeerId PeerId => _netPeer?.PeerId ?? EPeerId.None;
+        public PeerId PeerId => _netPeer?.PeerId ?? PeerId.None;
         public string Host { get; private set; }
         public int Port { get; private set; }
         public ILogger Logger { get; private set; }
@@ -76,14 +76,14 @@ namespace SP.Engine.Server.Connector
 
         private bool RegisterInvoker(ProtocolMethodInvoker invoker)
         {
-            if (_invokerDict.TryAdd(invoker.ProtocolId, invoker)) return true;
-            Logger.Error("Invoker '{0}' already exists.", invoker.ProtocolId);
+            if (_invokerDict.TryAdd(invoker.Id, invoker)) return true;
+            Logger.Error("Invoker '{0}' already exists.", invoker.Id);
             return false;
         }
 
-        private ProtocolMethodInvoker GetInvoker(EProtocolId protocolId)
+        private ProtocolMethodInvoker GetInvoker(ushort id)
         {
-            _invokerDict.TryGetValue(protocolId, out var invoker);
+            _invokerDict.TryGetValue(id, out var invoker);
             return invoker;
         }
 
@@ -163,7 +163,7 @@ namespace SP.Engine.Server.Connector
             _isDisposed = true;
         }
 
-        public void Send(IProtocolData protocol)
+        public void Send(IProtocol protocol)
         {
             _netPeer?.Send(protocol);
         }
@@ -182,14 +182,14 @@ namespace SP.Engine.Server.Connector
             }
         }
 
-        private void OnMessageReceived(object sender, MessageEventArgs e)
+        private void OnMessageReceived(object sender, MessageReceivedEventArgs e)
         {
             try
             {
                 var message = e.Message;
-                var invoker = GetInvoker(message.ProtocolId);
+                var invoker = GetInvoker(message.Id);
                 if (invoker == null)
-                    throw new Exception("Unknown protocol: " + message.ProtocolId);
+                    throw new Exception("Unknown protocol: " + message.Id);
                 
                 invoker.Invoke(this, message, _netPeer.Encryptor);
             }

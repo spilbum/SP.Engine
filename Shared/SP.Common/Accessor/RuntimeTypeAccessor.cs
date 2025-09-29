@@ -19,20 +19,18 @@ namespace SP.Common.Accessor
         private RuntimeTypeAccessor(Type type)
         {
             // 프로퍼티 검색
-            var list = (from property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                where property.CanRead || property.CanWrite
-                select new PropertyAccessor(property)).Cast<IMemberAccessor>().ToList();
+            var members = (from p in type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                where p.GetCustomAttribute<MemberIgnoreAttribute>() == null
+                select new PropertyAccessor(p)).Cast<IMemberAccessor>().ToList();
             
             // 필드 검색
-            list.AddRange(type.GetFields(BindingFlags.Public | BindingFlags.Instance)
-                .Select(field => new FieldAccessor(field)));
-
-            if (list.Count == 0)
-                throw new InvalidOperationException($"Invalid type: {type.FullName}");
-
-            Name = type.Name.Replace("C", "");
-            Members = list;
-            _memberMap = list.ToDictionary(m => m.Name);
+            members.AddRange(type.GetFields(BindingFlags.Public | BindingFlags.Instance)
+                .Where(f => f.GetCustomAttribute<MemberIgnoreAttribute>() == null)
+                .Select(f => new FieldAccessor(f)));
+            
+            Name = type.Name;
+            Members = members;
+            _memberMap = members.ToDictionary(m => m.Name);
         }
 
         public static RuntimeTypeAccessor GetOrCreate(Type type)

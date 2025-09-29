@@ -1,5 +1,4 @@
 ﻿using System;
-using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Runtime.Networking
 {
@@ -23,11 +22,11 @@ namespace SP.Engine.Runtime.Networking
                 .Build();
         }
         
-        protected override TcpHeader CreateHeader(EProtocolId protocolId, EHeaderFlags flags, int payloadLength)
+        protected override TcpHeader CreateHeader(ushort id, HeaderFlags flags, int payloadLength)
         {
             return new TcpHeaderBuilder()
                 .From(Header)
-                .WithProtocolId(protocolId)
+                .WithId(id)
                 .WithPayloadLength(payloadLength)
                 .AddFlag(flags)
                 .Build();

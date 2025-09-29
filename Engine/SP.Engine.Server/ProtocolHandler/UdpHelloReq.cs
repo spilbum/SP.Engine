@@ -1,30 +1,28 @@
-
-using System.Net;
 using SP.Engine.Protocol;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Handler;
 
 namespace SP.Engine.Server.ProtocolHandler;
 
-[ProtocolHandler(EngineProtocol.C2S.UdpHelloReq)]
-internal class UdpHelloReq<TPeer> : BaseEngineHandler<ClientSession<TPeer>, EngineProtocolData.C2S.UdpHelloReq>
+[ProtocolHandler(C2SEngineProtocolId.UdpHelloReq)]
+internal class UdpHelloReq<TPeer> : BaseEngineHandler<ClientSession<TPeer>, C2SEngineProtocolData.UdpHelloReq>
     where TPeer : BasePeer, IPeer
 {
-    protected override void ExecuteProtocol(ClientSession<TPeer> session, EngineProtocolData.C2S.UdpHelloReq protocol)
+    protected override void ExecuteProtocol(ClientSession<TPeer> session, C2SEngineProtocolData.UdpHelloReq data)
     {
-        var resposne = new EngineProtocolData.S2C.UdpHelloAck { ErrorCode = EEngineErrorCode.Unknown };
-        if (session.SessionId != protocol.SessionId ||
-            session.Peer.PeerId != protocol.PeerId)
+        var resposne = new S2CEngineProtocolData.UdpHelloAck { ErrorCode = EngineErrorCode.Unknown };
+        if (session.SessionId != data.SessionId ||
+            session.Peer.Id != data.PeerId)
         {
-            resposne.ErrorCode = EEngineErrorCode.Invalid;
-            session.Send(resposne);
+            resposne.ErrorCode = EngineErrorCode.Invalid;
+            session.SendEngine(resposne);
             return;
         }
 
-        session.Logger.Debug("UDP hello - {0} ({1}) - {2}", session.Peer.PeerId, session.SessionId, session.UdpSocket.RemoteEndPoint);
+        session.Logger.Debug("UDP hello - {0} ({1}) - {2}", session.Peer.Id, session.SessionId, session.UdpSocket.RemoteEndPoint);
         
-        resposne.ErrorCode = EEngineErrorCode.Success;
-        session.UdpSocket.SetMtu(protocol.Mtu);
-        session.Send(resposne);
+        resposne.ErrorCode = EngineErrorCode.Success;
+        session.UdpSocket.SetMtu(data.Mtu);
+        session.SendEngine(resposne);
     }
 }

@@ -3,7 +3,7 @@ using SP.Engine.Runtime;
 
 namespace SP.Engine.Server;
 
-public class ErrorCodeException(EEngineErrorCode errorCode, string message) : Exception(message)
+public class ErrorCodeException(EngineErrorCode errorCode, string message) : Exception(message)
 {
-    public EEngineErrorCode ErrorCode { get; } = errorCode;
+    public EngineErrorCode ErrorCode { get; } = errorCode;
 }

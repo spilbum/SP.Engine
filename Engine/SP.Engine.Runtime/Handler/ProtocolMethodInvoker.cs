@@ -13,18 +13,18 @@ namespace SP.Engine.Runtime.Handler
         private readonly Type _type;
         private readonly MethodInfo _method;
 
-        private ProtocolMethodInvoker(EProtocolId protocolId, Type type, MethodInfo method)
+        private ProtocolMethodInvoker(ushort id, Type type, MethodInfo method)
         {
-            ProtocolId = protocolId;
+            Id = id;
             _type = type;
             _method = method;
         }
 
-        public EProtocolId ProtocolId { get; }
+        public ushort Id { get; }
 
         public void Invoke(object instance, IMessage message, IEncryptor encryptor)
         {
-            var protocol = message.Unpack(_type, encryptor);
+            var protocol = message.Deserialize(_type, encryptor);
             _method.Invoke(instance, new object[] { protocol });
         }
         
@@ -36,7 +36,7 @@ namespace SP.Engine.Runtime.Handler
                 where attr != null
                 let parameters = method.GetParameters()
                 where parameters.Length == 1
-                select new ProtocolMethodInvoker(attr.ProtocolId, parameters[0].ParameterType, method)).ToList();
+                select new ProtocolMethodInvoker(attr.Id, parameters[0].ParameterType, method)).ToList();
         }
     }
 }

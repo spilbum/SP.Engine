@@ -1,6 +1,6 @@
 using SP.Engine.Server.Connector;
 
-namespace GameServer;
+namespace EchoServer;
 
 public class DummyConnector(string name) : BaseConnector(name)
 {

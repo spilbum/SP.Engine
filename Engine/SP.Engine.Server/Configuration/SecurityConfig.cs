@@ -1,8 +1,10 @@
+using SP.Engine.Runtime.Channel;
+
 namespace SP.Engine.Server.Configuration;
 
 public sealed record SecurityConfig
 {
-    public bool UseEncryption { get; init; } = true;
-    public bool UseCompression { get; init; } = true;
-    public byte CompressionThresholdPercent { get; init; } = 20;
+    public bool UseEncrypt { get; init; } = true;
+    public bool UseCompress { get; init; } = false;
+    public ushort CompressionThreshold { get; init; } = 2048;
 }

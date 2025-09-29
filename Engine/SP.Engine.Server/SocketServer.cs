@@ -187,40 +187,21 @@ namespace SP.Engine.Server
             if (state is not (byte[] buffer, IPEndPoint remoteEndPoint))
                 return;
 
-            var headerSpan = buffer.AsSpan();
-            if (!UdpHeader.TryParse(headerSpan, out var header))
+            if (!UdpHeader.TryParse(buffer, out var header))
             {
-                Engine.Logger.Warn($"Failed to parse UdpHeader: {buffer.Length} bytes");
+                Engine.Logger.Warn("Failed to parse header. received={0}, headerSize={1}", buffer.Length, UdpHeader.HeaderSize);
                 return;
             }
             
             var peer = Engine.GetPeer(header.PeerId);
             var session = peer?.Session;
             if (session == null)
+            {
+                Engine.Logger.Debug("Not found peer: {0}", header.PeerId);
                 return;
+            }
             
-            session.EnsureUdpSocket(socket, remoteEndPoint);
-
-            if (header.IsFragmentation)
-            {
-                if (!UdpFragment.TryParse(buffer, out var fragment))
-                {
-                    Engine.Logger.Warn($"Failed to parse fragmentation: {buffer.Length} bytes");
-                    return;
-                }
-
-                if (!peer.Assembler.TryAssemble(fragment, out var payload))
-                    return;
-                
-                var message = new UdpMessage(header, payload);
-                session.ProcessMessage(message);
-            }
-            else
-            {
-                var payload = new ArraySegment<byte>(buffer);
-                var message = new UdpMessage(header, payload);
-                session.ProcessMessage(message);
-            }
+            session.ProcessBuffer(buffer, header, socket, remoteEndPoint);
         }
 
         private void ProcessTcpClient(Socket client)
@@ -240,11 +221,11 @@ namespace SP.Engine.Server
                 Engine.AsyncRun(networkSession.Start);
             else
             {
-                networkSession.Close(ECloseReason.ApplicationError);
+                networkSession.Close(CloseReason.ApplicationError);
             }
         }
 
-        private void OnSessionClosed(INetworkSession session, ECloseReason reason)
+        private void OnSessionClosed(INetworkSession session, CloseReason reason)
         {
             if (session is not ITcpNetworkSession networkSession) return;
             var context = networkSession.ReceiveContext;
@@ -288,7 +269,7 @@ namespace SP.Engine.Server
             if (Engine.RegisterSession(clientSession))
                 return true;
 
-            clientSession.TcpSession.Close(ECloseReason.InternalError);
+            clientSession.Session.Close(CloseReason.InternalError);
             return false;
         }
 

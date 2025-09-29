@@ -13,10 +13,8 @@ namespace SP.Engine.Runtime.Networking
         public ArraySegment<byte> Payload { get; private set; }
         
         public long SequenceNumber => Header.SequenceNumber;
-        public EProtocolId ProtocolId => Header.ProtocolId;
+        public ushort Id => Header.Id;
         public int Length => Payload.Count;
-        private bool IsEncrypted => Header.Flags.HasFlag(EHeaderFlags.Encrypted);
-        private bool IsCompressed => Header.Flags.HasFlag(EHeaderFlags.Compressed);
 
         protected BaseMessage()
         {
@@ -27,67 +25,69 @@ namespace SP.Engine.Runtime.Networking
         {
             Header = header;
             Payload = payload;
+            if (payload.Count < header.Length)
+                throw new InvalidOperationException($"Invalid frame: payload({payload.Count}) < header({header.Length})");
         }
 
-        protected abstract THeader CreateHeader(EProtocolId protocolId, EHeaderFlags flags, int payloadLength);
+        private bool HasFlag(HeaderFlags flag)
+            => Header != null && Header.Flags.HasFlag(flag);
 
+        protected abstract THeader CreateHeader(ushort id, HeaderFlags flags, int payloadLength);
+
+        protected ReadOnlySpan<byte> GetBodySpan()
+            => new ReadOnlySpan<byte>(Payload.Array, Payload.Offset + Header.Length, Payload.Count - Header.Length);
         
-        protected byte[] GetBody()
-            => Payload.AsSpan(Header.Length, Length - Header.Length).ToArray();
-        
-        public void Pack(IProtocolData data, IEncryptor encryptor, PackOptions options)
+        public void Serialize(IProtocol data, IPolicy policy, IEncryptor encryptor)
         {
-            var body = BinaryConverter.SerializeObject(data, data.GetType());
+            if (data is null) throw new ArgumentNullException(nameof(data));
+            
+            var body = BinaryConverter.SerializeObject(data,  data.GetType());
             if (body == null || body.Length == 0)
                 throw new InvalidOperationException($"Failed to serialize protocol of type {data.GetType().FullName}");
 
-            var flags = EHeaderFlags.None;
+            var flags = HeaderFlags.None;
             
-            if (options?.UseCompression ?? false)
+            if (policy.UseCompress && body.Length >= policy.CompressionThreshold)
             {
-                var compressed = Compressor.Compress(body);
-                var compressedSize = compressed.Length;
-                var originalSize = body.Length;
-                var ratio = (double)compressedSize / originalSize;
-                if (compressedSize < originalSize && ratio < options.CompressionThreshold)
-                {
-                    body = compressed;
-                    flags |= EHeaderFlags.Compressed;
-                }
+                body = Compressor.Compress(body);
+                flags |= HeaderFlags.Compress;
             }
 
-            if (options?.UseEncryption ?? false)
+            if (policy.UseEncrypt)
             {
                 if (encryptor == null)
                     throw new InvalidOperationException("Encryptor cannot be null when encryption is enabled.");
 
                 body = encryptor.Encrypt(body);
-                flags |= EHeaderFlags.Encrypted;
+                flags |= HeaderFlags.Encrypt;
             }
 
-            var header = CreateHeader(data.ProtocolId, flags, body.Length);
-            var payload = new byte[header.Length + body.Length];
-            header.WriteTo(payload.AsSpan(0, header.Length));
-            body.CopyTo(payload.AsSpan(header.Length, body.Length));
+            var header = CreateHeader(data.Id, flags, body.Length);
+            var frame = new byte[header.Length + body.Length];
+            header.WriteTo(frame.AsSpan(0, header.Length));
+            body.CopyTo(frame.AsSpan(header.Length, body.Length));
             
             Header = header;
-            Payload = new ArraySegment<byte>(payload);
+            Payload = new ArraySegment<byte>(frame, 0, frame.Length);
         }
 
-        public IProtocolData Unpack(Type type, IEncryptor encryptor)
+        public IProtocol Deserialize(Type type, IEncryptor encryptor)
         {
-            var body = GetBody();
-            if (IsEncrypted)
+            var body = GetBodySpan();
+            if (HasFlag(HeaderFlags.Encrypt))
             {
                 if (encryptor == null)
                     throw new InvalidOperationException("Encryptor cannot be null.");
                 body = encryptor.Decrypt(body);
             }
 
-            if (IsCompressed)
-                body = Compressor.Decompress(body);
+            if (HasFlag(HeaderFlags.Compress))
+                body = Compressor.Decompress(body.ToArray());
             
-            return BinaryConverter.DeserializeObject(body, type) as IProtocolData;
+            var obj = BinaryConverter.DeserializeObject(body.ToArray(), type);
+            if (obj is IProtocol p) return p;
+
+            throw new InvalidCastException($"Deserialized object is not IProtocol: {type.FullName}");
         }
     }
 }

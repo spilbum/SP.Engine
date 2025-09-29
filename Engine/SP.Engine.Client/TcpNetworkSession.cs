@@ -7,11 +7,13 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using SP.Common.Logging;
+using SP.Engine.Runtime.Channel;
 using SP.Engine.Runtime.Networking;
+using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Client
 {
-    public class TcpNetworkSession
+    public class TcpNetworkSession : ITcpSender
     {
         private Socket _socket;
         private SocketAsyncEventArgs _receiveEventArgs; 
@@ -257,7 +259,7 @@ namespace SP.Engine.Client
             }
         }
 
-        public bool Send(TcpMessage message)
+        public bool TrySend(TcpMessage message)
         {
             if (!IsConnected)
                 return false;

@@ -5,7 +5,7 @@ namespace SP.Engine.Server.ProtocolHandler;
 
 public interface IHandler
 {
-    EProtocolId Id { get; }
+    ushort Id { get; }
 }
 
 public interface IHandler<in TContext, in TMessage> : IHandler

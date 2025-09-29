@@ -12,9 +12,9 @@ namespace SP.Engine.Runtime.Security
         private readonly DhParameters _parameters;
         private bool _disposed;
         
-        public EDhKeySize KeySize { get; }
+        public DhKeySize KeySize { get; }
 
-        public DiffieHellman(EDhKeySize keySize)
+        public DiffieHellman(DhKeySize keySize)
         {
             KeySize = keySize;
             _parameters = DhParameters.From(keySize);

@@ -6,9 +6,6 @@ namespace SP.Common.Accessor
     {
         string Name { get; }
         Type Type { get; }
-        bool CanRead { get; }
-        bool CanWrite { get; }
-        
         object GetValue(object instance);
         void SetValue(object instance, object value);
     }

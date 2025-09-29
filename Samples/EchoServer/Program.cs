@@ -1,7 +1,7 @@
 ﻿using SP.Engine.Server;
 using SP.Engine.Server.Configuration;
 
-namespace GameServer;
+namespace EchoServer;
 
 internal static class Program
 {
@@ -49,9 +49,9 @@ internal static class Program
                 .AddListener(new ListenerConfig { Ip = host, Port = port + 1, Mode = ESocketMode.Udp, BackLog = 128 })
                 .Build();
             
-            using var server = new GameServer();
+            using var server = new EchoServer();
             
-            if (!server.Initialize("Game", config))
+            if (!server.Initialize("Echo", config))
                 throw new Exception("Failed to initialize server");
         
             if (!server.Start())

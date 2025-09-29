@@ -7,7 +7,6 @@ using System.Threading;
 using SP.Common.Fiber;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Handler;
-using SP.Engine.Runtime.Protocol;
 using SP.Engine.Runtime.Security;
 using SP.Engine.Server.Configuration;
 using SP.Engine.Server.Connector;
@@ -26,15 +25,15 @@ namespace SP.Engine.Server
             public DateTime ExpireTime { get; } = DateTime.UtcNow.AddSeconds(timeOutSec);
         }
 
-        private readonly ConcurrentDictionary<EPeerId, WaitingReconnectPeer> _waitingReconnectPeerDict = new();
-        private readonly ConcurrentDictionary<EPeerId, TPeer> _peerDict = new();
+        private readonly ConcurrentDictionary<PeerId, WaitingReconnectPeer> _waitingReconnectPeerDict = new();
+        private readonly ConcurrentDictionary<PeerId, TPeer> _peerDict = new();
         private readonly List<IServerConnector> _connectors = [];
         private readonly List<ThreadFiber> _updatePeerFibers = [];
-        private readonly Dictionary<EProtocolId, IHandler<ClientSession<TPeer>, IMessage>> _engineHandlerDict = new();
-        private readonly Dictionary<EProtocolId, IHandler<TPeer, IMessage>> _handlerDict = new();
+        private readonly Dictionary<ushort, IHandler<ClientSession<TPeer>, IMessage>> _engineHandlerDict = new();
+        private readonly Dictionary<ushort, IHandler<TPeer, IMessage>> _handlerDict = new();
         private ThreadFiber _fiber;
-        
-        public IFiberScheduler Scheduler => _fiber;
+
+        public override IFiberScheduler Scheduler => _fiber;
         
         public override bool Initialize(string name, EngineConfig config)
         {
@@ -58,7 +57,7 @@ namespace SP.Engine.Server
 
             if (!SetupConnector(config.Connectors))
                 return false;
-            
+
             Logger.Info("The server {0} is initialized.", name);
             return true;
         }
@@ -104,12 +103,12 @@ namespace SP.Engine.Server
         {
             try
             {
-                _engineHandlerDict[EngineProtocol.C2S.SessionAuthReq] = new SessionAuth<TPeer>();
-                _engineHandlerDict[EngineProtocol.C2S.Close] = new Close<TPeer>();
-                _engineHandlerDict[EngineProtocol.C2S.Ping] = new Ping<TPeer>();
-                _engineHandlerDict[EngineProtocol.C2S.MessageAck] = new MessageAck<TPeer>();
-                _engineHandlerDict[EngineProtocol.C2S.UdpHelloReq] = new UdpHelloReq<TPeer>();
-                _engineHandlerDict[EngineProtocol.C2S.UdpKeepAlive] = new UdpKeepAlive<TPeer>();
+                _engineHandlerDict[C2SEngineProtocolId.SessionAuthReq] = new SessionAuth<TPeer>();
+                _engineHandlerDict[C2SEngineProtocolId.Close] = new Close<TPeer>();
+                _engineHandlerDict[C2SEngineProtocolId.Ping] = new Ping<TPeer>();
+                _engineHandlerDict[C2SEngineProtocolId.MessageAck] = new MessageAck<TPeer>();
+                _engineHandlerDict[C2SEngineProtocolId.UdpHelloReq] = new UdpHelloReq<TPeer>();
+                _engineHandlerDict[C2SEngineProtocolId.UdpKeepAlive] = new UdpKeepAlive<TPeer>();
                 return DiscoverHandlers().All(RegisterHandler);
             }
             catch (Exception e)
@@ -134,8 +133,10 @@ namespace SP.Engine.Server
                 if (!typeof(IHandler).IsAssignableFrom(type))
                     continue;
                 
-                if (Activator.CreateInstance(type) is IHandler<TPeer, IMessage> handler)
-                    yield return handler;
+                if (Activator.CreateInstance(type) is not IHandler<TPeer, IMessage> handler)
+                    continue;
+                
+                yield return handler;
             }
         }
 
@@ -151,15 +152,15 @@ namespace SP.Engine.Server
             return true;
         }
 
-        private IHandler<TPeer, IMessage> GetHandler(EProtocolId protocolId)
+        private IHandler<TPeer, IMessage> GetHandler(ushort id)
         {
-            _handlerDict.TryGetValue(protocolId, out var handler);
+            _handlerDict.TryGetValue(id, out var handler);
             return handler;
         }
         
         internal void ExecuteMessage(ClientSession<TPeer> session, IMessage message)
         {
-            var handler = GetHandler(message.ProtocolId);
+            var handler = GetHandler(message.Id);
             if (handler != null)
             {
                 var peer = session.Peer;
@@ -177,30 +178,30 @@ namespace SP.Engine.Server
             }
             else
             {
-                if (_engineHandlerDict.TryGetValue(message.ProtocolId, out var engineHandler))
+                if (_engineHandlerDict.TryGetValue(message.Id, out var engineHandler))
                 {
                     engineHandler.ExecuteMessage(session, message);
                 }
                 else
                 {
-                    Logger.Error("Unknown message: {0} Session: {1}/{2}", message.ProtocolId, session.SessionId, session.RemoteEndPoint);
+                    Logger.Error("Unknown message: {0} Session: {1}/{2}", message.Id, session.SessionId, session.RemoteEndPoint);
                 }
             }
         }
 
         public override void ExecuteHandler(IPeer peer, IMessage message)
         {
-            var handler = GetHandler(message.ProtocolId);
+            var handler = GetHandler(message.Id);
             if (handler == null)
             {
-                Logger.Error("Not found handler: {0}", message.ProtocolId);
+                Logger.Error("Not found handler: {0}", message.Id);
                 return;
             }
             
             handler.ExecuteMessage((TPeer)peer, message);
         }
 
-        public override IPeer GetPeer(EPeerId peerId)
+        public override IPeer GetPeer(PeerId peerId)
         {
             return FindPeer(peerId);
         }
@@ -298,11 +299,11 @@ namespace SP.Engine.Server
                     if (DateTime.UtcNow < expireTime)
                         continue;
                     
-                    Logger.Debug("Client terminated due to timeout. peerId={0}", peer.PeerId);
+                    Logger.Debug("Client terminated due to timeout. peerId={0}", peer.Id);
                  
                     // 재 연결 타임아웃으로 종료함
-                    _waitingReconnectPeerDict.TryRemove(peer.PeerId, out _);
-                    peer.LeaveServer(ECloseReason.TimeOut);
+                    _waitingReconnectPeerDict.TryRemove(peer.Id, out _);
+                    peer.LeaveServer(CloseReason.TimeOut);
                 }
             }
             catch (Exception e)
@@ -320,23 +321,23 @@ namespace SP.Engine.Server
         {
             var sessions = SessionsSource;
             var peers = sessions
-                .Where(x => x.Value.Peer != null && (int)x.Value.Peer.PeerId % _updatePeerFibers.Count == index)
+                .Where(x => x.Value.Peer != null && (int)x.Value.Peer.Id % _updatePeerFibers.Count == index)
                 .Select(x => x.Value.Peer);
             foreach (var peer in peers)
                 peer.Tick();
         }
         
-        internal TPeer CreateNewPeer(IClientSession<TPeer> session, EDhKeySize keySize, byte[] clientPublicKey)
+        internal TPeer CreateNewPeer(IClientSession<TPeer> session, DhKeySize keySize, byte[] clientPublicKey)
         {
             var peer = CreatePeer(session);
-            peer.SetupEncryptor(keySize, clientPublicKey);
+            peer.SetupSecurity(keySize, clientPublicKey);
             return peer;
         }
 
-        protected abstract TPeer CreatePeer(IClientSession<TPeer> session);
+        protected abstract TPeer CreatePeer(IClientSession<TPeer> peer);
         protected abstract IServerConnector CreateConnector(string name);
 
-        public TPeer FindPeer(EPeerId peerId)
+        public TPeer FindPeer(PeerId peerId)
         {
             if (!_peerDict.TryGetValue(peerId, out var peer))
                 peer = GetWaitingReconnectPeer(peerId);
@@ -345,21 +346,21 @@ namespace SP.Engine.Server
 
         protected virtual bool AddOrUpdatePeer(TPeer peer)
         {
-            switch (peer.PeerType)
+            switch (peer.Kind)
             {
-                case EPeerType.User:
-                    return _peerDict.TryAdd(peer.PeerId, peer);
-                case EPeerType.Server:
-                    _peerDict.AddOrUpdate(peer.PeerId, peer, (_, _) => peer);
+                case PeerKind.User:
+                    return _peerDict.TryAdd(peer.Id, peer);
+                case PeerKind.Server:
+                    _peerDict.AddOrUpdate(peer.Id, peer, (_, _) => peer);
                     return true;
-                case EPeerType.None:
+                case PeerKind.None:
                 default:
-                    Logger.Error("Invalid peer: {0}", peer.PeerType);
+                    Logger.Error("Invalid peer: {0}", peer.Kind);
                     return false;
             }
         }
 
-        protected virtual bool TryRemovePeer(EPeerId peerId, out TPeer peer)
+        protected virtual bool TryRemovePeer(PeerId peerId, out TPeer peer)
         {
             if (_peerDict.TryRemove(peerId, out var removed))
             {
@@ -371,7 +372,7 @@ namespace SP.Engine.Server
             return false;
         }
 
-        protected override void OnSessionClosed(ClientSession<TPeer> clientSession, ECloseReason reason)
+        protected override void OnSessionClosed(ClientSession<TPeer> clientSession, CloseReason reason)
         {
             base.OnSessionClosed(clientSession, reason);
 
@@ -385,13 +386,13 @@ namespace SP.Engine.Server
                 return;
             }
             
-            if (peer.State == EPeerState.Authorized || peer.State == EPeerState.Online)
+            if (peer.State == PeerState.Authorized || peer.State == PeerState.Online)
                 OfflinePeer(peer, reason);
             else
                 LeavePeer(peer, reason);
         }
 
-        private void OfflinePeer(TPeer peer, ECloseReason reason)
+        private void OfflinePeer(TPeer peer, CloseReason reason)
         {
             RegisterWaitingReconnectPeer(peer);
             peer.Offline(reason);
@@ -406,44 +407,49 @@ namespace SP.Engine.Server
 
         internal void JoinPeer(TPeer peer)
         {
-            if (!_peerDict.TryAdd(peer.PeerId, peer))
+            if (!_peerDict.TryAdd(peer.Id, peer))
                 return;
 
             peer.JoinServer();
         }
 
-        private void LeavePeer(TPeer peer, ECloseReason reason)
+        private void LeavePeer(TPeer peer, CloseReason reason)
         {
-            if (!TryRemovePeer(peer.PeerId, out var removed))
+            if (!TryRemovePeer(peer.Id, out var removed))
             {
                 Logger.Error("Failed to remove peer: {0}", peer);
                 return;
             }
 
-            Logger.Debug("Peer removed. peerId={0}", removed.PeerId);
+            Logger.Debug("Peer removed. peerId={0}", removed.Id);
             removed.LeaveServer(reason);
+        }
+
+        internal void UpdatePolicy()
+        {
+            
         }
 
         private void RegisterWaitingReconnectPeer(TPeer peer)
         {
-            if (!TryRemovePeer(peer.PeerId, out _))
+            if (!TryRemovePeer(peer.Id, out _))
                 return;
 
-            if (!_waitingReconnectPeerDict.TryAdd(peer.PeerId, new WaitingReconnectPeer(peer, Config.Session.WaitingReconnectTimeoutSec)))
+            if (!_waitingReconnectPeerDict.TryAdd(peer.Id, new WaitingReconnectPeer(peer, Config.Session.WaitingReconnectTimeoutSec)))
                 return;
             
-            Logger.Debug("Peer waiting reconnect registered. peerId={0}", peer.PeerId);
+            Logger.Debug("Peer waiting reconnect registered. peerId={0}", peer.Id);
         }
 
         private void RemoveWaitingReconnectPeer(TPeer peer)
         {
-            if (!_waitingReconnectPeerDict.TryRemove(peer.PeerId, out _))
+            if (!_waitingReconnectPeerDict.TryRemove(peer.Id, out _))
                 return;
             
-            Logger.Debug("Peer waiting reconnect removed. peerId={0}", peer.PeerId);
+            Logger.Debug("Peer waiting reconnect removed. peerId={0}", peer.Id);
         }
 
-        public TPeer GetWaitingReconnectPeer(EPeerId peerId)
+        public TPeer GetWaitingReconnectPeer(PeerId peerId)
         {
             _waitingReconnectPeerDict.TryGetValue(peerId, out var waitingReconnectPeer);
             return waitingReconnectPeer?.Peer;

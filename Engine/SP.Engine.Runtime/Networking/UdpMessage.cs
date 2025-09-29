@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Runtime.Networking
 {
@@ -15,16 +14,8 @@ namespace SP.Engine.Runtime.Networking
             : base(header, payload)
         {
         }
-
-        public void SetSequenceNumber(long sequenceNumber)
-        {
-            Header = new UdpHeaderBuilder()
-                .From(Header)
-                .WithSequenceNumber(sequenceNumber)
-                .Build();
-        }
         
-        public void SetPeerId(EPeerId peerId)
+        public void SetPeerId(PeerId peerId)
         {
             Header = new UdpHeaderBuilder()
                 .From(Header)
@@ -39,12 +30,12 @@ namespace SP.Engine.Runtime.Networking
                 throw new ArgumentOutOfRangeException(nameof(maxPayloadSize), $"mtu({maxPayloadSize}) <= overhead({overhead})");
 
             var maxSize = maxPayloadSize - overhead;
-            var body = GetBody();
+            var body = GetBodySpan();
             
             var totalCount = (byte)Math.Ceiling(body.Length / (float)maxSize);
             var header = new UdpHeaderBuilder()
                 .From(Header)
-                .AddFlag(EHeaderFlags.Fragmentation)
+                .AddFlag(HeaderFlags.Fragment)
                 .Build();
       
             var fragments = new List<UdpFragment>();
@@ -55,16 +46,17 @@ namespace SP.Engine.Runtime.Networking
                 fragments.Add(new UdpFragment(
                     header,
                     new UdpFragmentHeader(fragmentId, i, totalCount, size),
-                    new ArraySegment<byte>(body, offset, size)));
+                    new ArraySegment<byte>(body.ToArray(), offset, size))
+                );
             }
             return fragments;
         }
         
-        protected override UdpHeader CreateHeader(EProtocolId protocolId, EHeaderFlags flags, int payloadLength)
+        protected override UdpHeader CreateHeader(ushort id, HeaderFlags flags, int payloadLength)
         {
             return new UdpHeaderBuilder()
                 .From(Header)
-                .WithProtocolId(protocolId)
+                .WithId(id)
                 .WithPayloadLength(payloadLength)
                 .AddFlag(flags)
                 .Build();
