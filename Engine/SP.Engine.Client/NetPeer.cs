@@ -76,7 +76,7 @@ namespace SP.Engine.Client
         private TcpNetworkSession _session;
         private UdpSocket _udpSocket;
         private TickTimer _tickTimer;
-        private Encryptor _encryptor;
+        private AesCbcEncryptor _encryptor;
         private readonly BinaryBuffer _receiveBuffer = new BinaryBuffer();
         private readonly ConcurrentQueue<IMessage> _sendingMessageQueue = new ConcurrentQueue<IMessage>();
         private readonly ConcurrentQueue<IMessage> _receivedMessageQueue = new ConcurrentQueue<IMessage>();
@@ -215,49 +215,72 @@ namespace SP.Engine.Client
             foreach (var msg in DequeuePendingSend())
                 EnqueueSendingMessage(msg);   
         }
-
-        public bool Send<TProtocol>(TProtocol data) where TProtocol : IProtocol
+        
+        public bool Send(IProtocol data)
         {
-            var sequenceNumber = data.Channel == ChannelKind.Reliable ? GetNextSequenceNumber() : 0;
-            return InternalSend(sequenceNumber, data);
+            var sequenceNumber = data.Channel == ChannelKind.Reliable ? GetNextReliableSeq() : 0;
+            var policy = _policyView.Resolve(data.GetType());
+            var encryptor = policy.UseEncrypt ? Encryptor : null;
+            return TrySend(sequenceNumber, data, policy, encryptor);
         }
 
-        private bool SendEngine<TProtocol>(TProtocol data) where TProtocol : IProtocol
-            => InternalSend(0, data);
+        private bool InternalSend(IProtocol data)
+        { 
+            var policy = _policyView.Resolve(data.GetType());
+            var encryptor = policy.UseEncrypt ? Encryptor : null;
+            return TrySend(0, data, policy, encryptor);
+        }
         
-        private bool InternalSend<TProtocol>(long sequenceNumber, TProtocol data) where TProtocol : IProtocol
+        private bool TrySend(long sequenceNumber, IProtocol data, IPolicy policy, IEncryptor encryptor)
         {
             var channel = data.Channel;
-            var policy = _policyView.Resolve<TProtocol>();
 
+            try
+            {
+                switch (channel)
+                {
+                    case ChannelKind.Reliable:
+                    {
+                        var msg = new TcpMessage();
+                        msg.SetSequenceNumber(sequenceNumber);
+                        msg.Serialize(data, policy, encryptor);
+                    
+                        if (sequenceNumber > 0 && !IsConnected)
+                        {
+                            EnqueuePendingSend(msg);
+                            return true;
+                        }
+            
+                        if (sequenceNumber > 0) StartSendingMessage(msg);
+                        return TrySend(channel, msg);
+                    }
+                    case ChannelKind.Unreliable:
+                    {
+                        var msg = new UdpMessage();
+                        msg.SetPeerId(PeerId);
+                        msg.Serialize(data, policy, encryptor);
+                        return TrySend(channel, msg);
+                    }
+                    default:
+                        throw new Exception($"Unknown channel: {channel}");
+                }
+            }
+            catch (Exception e)
+            {
+                Logger.Error(e);
+                return false;
+            }
+        }
+        
+        private bool TrySend(ChannelKind channel, IMessage message)
+        {
             switch (channel)
             {
-                case ChannelKind.Reliable:
-                {
-                    var msg = new TcpMessage();
-                    msg.SetSequenceNumber(sequenceNumber);
-                    msg.Serialize(data, policy, _encryptor);
-
-                    if (sequenceNumber > 0 && !IsConnected)
-                    {
-                        // 오프라인 시 메시지 큐잉
-                        EnqueuePendingSend(msg);
-                        return true;
-                    }
-
-                    if (sequenceNumber > 0) StartSendingMessage(msg);
-                    return Send(channel, msg);
-                }
-                case ChannelKind.Unreliable:
-                {
-                    var msg = new UdpMessage();
-                    msg.SetPeerId(PeerId);
-                    msg.Serialize(data, policy, _encryptor);
-                    // 연결 상태에서만 전송
-                    return IsConnected && Send(channel, msg);
-                }
+                case ChannelKind.Reliable when !(message is TcpMessage):
+                case ChannelKind.Unreliable when !(message is UdpMessage):
+                    return false;
                 default:
-                    throw new Exception($"Unknown channel: {channel}");
+                    return _channelRouter.TrySend(channel, message);
             }
         }
 
@@ -275,7 +298,7 @@ namespace SP.Engine.Client
 
             try
             {
-                SendEngine(ping);
+                InternalSend(ping);
                 LatencyStats.OnSent();
             }
             finally
@@ -394,18 +417,6 @@ namespace SP.Engine.Client
                 OnError(e);
             }
         }
-        
-        private bool Send(ChannelKind kind, IMessage message)
-        {
-            switch (kind)
-            {
-                case ChannelKind.Reliable when !(message is TcpMessage):
-                case ChannelKind.Unreliable when !(message is UdpMessage):
-                    return false;
-                default:
-                    return _channelRouter.TrySend(kind, message);
-            }
-        }
 
         private void EnqueueSendingMessage(IMessage message)
         {
@@ -416,7 +427,7 @@ namespace SP.Engine.Client
         {
             try
             {
-                SendEngine(new C2SEngineProtocolData.SessionAuthReq
+                InternalSend(new C2SEngineProtocolData.SessionAuthReq
                 {
                     SessionId = _sessionId,
                     PeerId = PeerId,
@@ -432,12 +443,12 @@ namespace SP.Engine.Client
 
         private void SendCloseHandshake()
         {
-            SendEngine(new C2SEngineProtocolData.Close());
+            InternalSend(new C2SEngineProtocolData.Close());
         }
 
         private void SendMessageAck(long sequenceNumber)
         {
-            SendEngine(new C2SEngineProtocolData.MessageAck { SequenceNumber = sequenceNumber });
+            InternalSend(new C2SEngineProtocolData.MessageAck { SequenceNumber = sequenceNumber });
         }
 
         internal void CloseWithoutHandshake()
@@ -529,7 +540,7 @@ namespace SP.Engine.Client
             var count = 0;
             while (_sendingMessageQueue.TryDequeue(out var message))
             {
-                Send(ChannelKind.Reliable, message);
+                TrySend(ChannelKind.Reliable, message);
                 if (++count >= 20)
                     break;
             }
@@ -781,7 +792,7 @@ namespace SP.Engine.Client
 
         private void SendUdpHandshake()
         {
-            SendEngine(new C2SEngineProtocolData.UdpHelloReq
+            InternalSend(new C2SEngineProtocolData.UdpHelloReq
             {
                 SessionId = _sessionId,
                 PeerId = PeerId,
@@ -805,7 +816,7 @@ namespace SP.Engine.Client
             if (p.UseEncrypt)
             {
                 var sharedKey = _diffieHellman.DeriveSharedKey(p.ServerPublicKey);
-                _encryptor = new Encryptor(sharedKey);   
+                _encryptor = new AesCbcEncryptor(sharedKey);   
             }
 
             // 정책 적용
@@ -845,7 +856,7 @@ namespace SP.Engine.Client
         private void SendUdpKeepAlive(object state)
         {
             var keepAlive = new C2SEngineProtocolData.UdpKeepAlive();
-            SendEngine(keepAlive);
+            InternalSend(keepAlive);
         }
         
         private void OnOffline()

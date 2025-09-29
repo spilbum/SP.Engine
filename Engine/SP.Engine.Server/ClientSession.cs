@@ -121,7 +121,7 @@ namespace SP.Engine.Server
                     }
                 }
                 
-                if (!SendEngine(authAck))
+                if (!InternalSend(authAck))
                     Logger.Error("Failed to send session auth ack. sessionId={0}", SessionId);
             }
         }
@@ -131,10 +131,10 @@ namespace SP.Engine.Server
             Engine.ExecuteMessage(this, message);
         }
         
-        internal bool SendEngine<TProtocol>(TProtocol data) where TProtocol : IProtocol
+        internal bool InternalSend(IProtocol data)
         {
             var channel = data.Channel;
-            var policy = Peer.GetPolicy<TProtocol>();
+            var policy = Peer.GetPolicy(data.GetType());
             var encryptor = policy.UseEncrypt ? Encryptor : null;
             switch (channel)
             {
@@ -143,14 +143,14 @@ namespace SP.Engine.Server
                     var msg = new TcpMessage();
                     msg.SetSequenceNumber(0);
                     msg.Serialize(data, policy, encryptor);
-                    return Send(channel, msg);
+                    return TrySend(channel, msg);
                 }
                 case ChannelKind.Unreliable:
                 {
                     var msg = new UdpMessage();              
                     msg.SetPeerId(Peer.Id);
                     msg.Serialize(data, policy, encryptor);
-                    return Send(channel, msg);
+                    return TrySend(channel, msg);
                 }
                 default:
                     throw new Exception($"Unknown channel: {channel}");
@@ -159,7 +159,7 @@ namespace SP.Engine.Server
         
         internal void SendPong(long sendTimeMs)
         {
-            SendEngine(new S2CEngineProtocolData.Pong
+            InternalSend(new S2CEngineProtocolData.Pong
             {
                 SendTimeMs = sendTimeMs, 
                 ServerTimeMs = Engine.GetServerTimeMs()
@@ -176,13 +176,13 @@ namespace SP.Engine.Server
             }
 
             var close = new S2CEngineProtocolData.Close();
-            SendEngine(close);
+            InternalSend(close);
         }
         
         internal void SendMessageAck(long sequenceNumber)
         {
             var messageAck = new S2CEngineProtocolData.MessageAck { SequenceNumber = sequenceNumber };
-            SendEngine(messageAck);
+            InternalSend(messageAck);
         }
         
         public override void Close()

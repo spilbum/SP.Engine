@@ -53,11 +53,8 @@ namespace SP.Engine.Runtime.Networking
                 flags |= HeaderFlags.Compress;
             }
 
-            if (policy.UseEncrypt)
+            if (policy.UseEncrypt && encryptor != null)
             {
-                if (encryptor == null)
-                    throw new InvalidOperationException("Encryptor cannot be null when encryption is enabled.");
-
                 body = encryptor.Encrypt(body);
                 flags |= HeaderFlags.Encrypt;
             }

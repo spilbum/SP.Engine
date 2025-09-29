@@ -23,7 +23,7 @@ namespace SP.Engine.Server
         TcpNetworkSession Session { get; }
         IEncryptor Encryptor { get; }
 
-        bool Send(ChannelKind channel, IMessage message);
+        bool TrySend(ChannelKind channel, IMessage message);
         void ProcessBuffer(byte[] buffer, int offset, int length);
         void ProcessBuffer(byte[] buffer, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint);
         void Close(CloseReason reason);
@@ -71,7 +71,7 @@ namespace SP.Engine.Server
             IsConnected = true;
         }
 
-        public bool Send(ChannelKind channel, IMessage message)
+        public bool TrySend(ChannelKind channel, IMessage message)
         {
             switch (channel)
             {
@@ -79,7 +79,6 @@ namespace SP.Engine.Server
                 case ChannelKind.Unreliable when message is not UdpMessage:
                     return false;
                 default:
-                    if (!IsConnected) return false;
                     if (!_channelRouter.TrySend(channel, message)) return false;
                     LastActiveTime = DateTime.UtcNow;
                     return true;

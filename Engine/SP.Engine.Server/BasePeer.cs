@@ -44,7 +44,7 @@ namespace SP.Engine.Server
         PeerKind Kind { get; }
         PeerState State { get; }
         IClientSession Session { get; }
-        bool Send<TProtocol>(TProtocol data) where TProtocol : IProtocol;
+        bool Send(IProtocol data);
         void Close(CloseReason reason);
     }
     
@@ -75,7 +75,7 @@ namespace SP.Engine.Server
         private int _stateCode = PeerStateConst.NotAuthorized;
         private bool _disposed;
         private DiffieHellman _diffieHellman;
-        private Encryptor _encryptor;
+        private AesCbcEncryptor _encryptor;
         private IPolicyView _policyView = new SnapshotPolicyView(in PolicyDefaults.Globals);
 
         public PeerState State => (PeerState)_stateCode;
@@ -167,7 +167,7 @@ namespace SP.Engine.Server
                     return;
                 }
 
-                if (!Session.Send(ChannelKind.Reliable, msg))
+                if (!Session.TrySend(ChannelKind.Reliable, msg))
                     Logger.Warn("Message send failed: {0}({1})", msg.Id, msg.SequenceNumber);
             }
         }
@@ -190,22 +190,22 @@ namespace SP.Engine.Server
             Session.Close(reason);
         }
         
-        public IPolicy GetPolicy<TProtocol>() where TProtocol : IProtocol
-            => _policyView.Resolve<TProtocol>();
+        public IPolicy GetPolicy(Type protocolType)
+            => _policyView.Resolve(protocolType);
         
-        public bool Send<TProtocol>(TProtocol data) where TProtocol : IProtocol
+        public bool Send(IProtocol data)
         {
             var channel = data.Channel;
-            var policy = GetPolicy<TProtocol>();
+            var policy = GetPolicy(data.GetType());
             var encryptor = policy.UseEncrypt ? Encryptor : null;
             switch (channel)
             {
                 case ChannelKind.Reliable:
                 {
                     var msg = new TcpMessage();
-                    msg.SetSequenceNumber(GetNextSequenceNumber());
+                    msg.SetSequenceNumber(GetNextReliableSeq());
                     msg.Serialize(data, policy, encryptor);
-                    
+
                     if (!IsConnected)
                     {
                         EnqueuePendingSend(msg);
@@ -213,20 +213,20 @@ namespace SP.Engine.Server
                     }
                     
                     StartSendingMessage(msg);
-                    return Session.Send(channel, msg);
+                    return Session.TrySend(channel, msg);
                 }
                 case ChannelKind.Unreliable:
                 {
                     var msg = new UdpMessage();
                     msg.SetPeerId(Id);
                     msg.Serialize(data, policy, encryptor);
-                    return IsConnected && Session.Send(channel, msg);
+                    return Session.TrySend(channel, msg);
                 }
                 default:
                     throw new Exception($"Unknown channel: {channel}");
             }
         }
-        
+
         internal void ExecuteMessage(IMessage message)
         {
             foreach (var inOrder in ProcessReceivedMessage(message))
@@ -260,7 +260,7 @@ namespace SP.Engine.Server
             Session = session;
             
             foreach (var msg in DequeuePendingSend())
-                session.Send(ChannelKind.Reliable, msg);
+                session.TrySend(ChannelKind.Reliable, msg);
             
             OnOnline();
         }
@@ -285,7 +285,7 @@ namespace SP.Engine.Server
         internal void SetupSecurity(DhKeySize keySize, byte[] publicKey)
         {
             _diffieHellman = new DiffieHellman(keySize);
-            _encryptor = new Encryptor(_diffieHellman.DeriveSharedKey(publicKey));
+            _encryptor = new AesCbcEncryptor(_diffieHellman.DeriveSharedKey(publicKey));
         }
 
         protected virtual void OnJoinServer()

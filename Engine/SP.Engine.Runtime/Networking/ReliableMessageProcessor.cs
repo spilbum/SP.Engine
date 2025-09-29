@@ -126,7 +126,7 @@ namespace SP.Engine.Runtime.Networking
         
         public void SetSendTimeoutMs(int ms) => SendTimeoutMs = ms;
         public void SetMaxResendCnt(int cnt) => MaxReSendCnt = cnt;
-        protected long GetNextSequenceNumber() => Interlocked.Increment(ref _nextSequenceNumber);
+        protected long GetNextReliableSeq() => Interlocked.Increment(ref _nextSequenceNumber);
         protected void EnqueuePendingSend(IMessage message) => _pendingMessageSendQueue.Enqueue(message);
         protected IEnumerable<IMessage> DequeuePendingSend()
         {

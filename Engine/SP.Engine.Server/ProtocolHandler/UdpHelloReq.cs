@@ -15,7 +15,7 @@ internal class UdpHelloReq<TPeer> : BaseEngineHandler<ClientSession<TPeer>, C2SE
             session.Peer.Id != data.PeerId)
         {
             resposne.ErrorCode = EngineErrorCode.Invalid;
-            session.SendEngine(resposne);
+            session.InternalSend(resposne);
             return;
         }
 
@@ -23,6 +23,6 @@ internal class UdpHelloReq<TPeer> : BaseEngineHandler<ClientSession<TPeer>, C2SE
         
         resposne.ErrorCode = EngineErrorCode.Success;
         session.UdpSocket.SetMtu(data.Mtu);
-        session.SendEngine(resposne);
+        session.InternalSend(resposne);
     }
 }

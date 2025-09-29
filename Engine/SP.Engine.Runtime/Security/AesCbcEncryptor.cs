@@ -9,14 +9,14 @@ namespace SP.Engine.Runtime.Security
         byte[] Decrypt(ReadOnlySpan<byte> cipher);
     }
     
-    public sealed class Encryptor : IEncryptor
+    public sealed class AesCbcEncryptor : IEncryptor
     {
         private readonly byte[] _key;
         private const int IvSize = 16;
         private const int AesKeySize = 32;
         private const int BlockSize = 16;
 
-        public Encryptor(byte[] key)
+        public AesCbcEncryptor(byte[] key)
         {
             if (key is null) throw new ArgumentNullException(nameof(key));
             if (key.Length != AesKeySize) throw new ArgumentException("Session key must be 32 bytes", nameof(key));
