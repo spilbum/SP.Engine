@@ -182,7 +182,7 @@ namespace SP.Engine.Server
                 if (message.SequenceNumber > 0)
                     session.SendMessageAck(message.SequenceNumber);
 
-                foreach (var msg in peer.ProcessReceivedMessage(message))
+                foreach (var msg in peer.ProcessMessageInOrder(message))
                     GetHandler(message.Id)?.ExecuteMessage(peer, msg); 
             }
             else

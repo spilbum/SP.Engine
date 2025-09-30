@@ -106,7 +106,7 @@ namespace SP.Engine.Server
             Kind = peerType;
             Logger = session.Logger;
             SetSendTimeoutMs(session.Config.Network.SendTimeoutMs);
-            SetMaxSendCount(session.Config.Network.MaxSendCount);
+            SetMaxRetryCount(session.Config.Network.MaxRetryCount);
             Session = session;
         }
 
@@ -117,7 +117,7 @@ namespace SP.Engine.Server
             Logger = other.Logger;
             Session = other.Session;
             SetSendTimeoutMs(other.SendTimeoutMs);
-            SetMaxSendCount(other.MaxReSendCnt);
+            SetMaxRetryCount(other.MaxRetryCount);
             _diffieHellman = other._diffieHellman;
         }
 
@@ -131,9 +131,9 @@ namespace SP.Engine.Server
             Logger?.Debug(format, args);
         }
 
-        protected override void OnExceededResendCnt(IMessage message)
+        protected override void OnRetryLimitExceeded(IMessage message)
         {
-            Close(CloseReason.LimitExceededReSend);
+            Close(CloseReason.LimitExceededResend);
         }
 
         public void Dispose()
@@ -153,7 +153,7 @@ namespace SP.Engine.Server
                 Id = PeerId.None;
                 _encryptor?.Dispose();
                 _encryptor = null;
-                ResetMessageProcessor();
+                ResetProcessorState();
             }
 
             _disposed = true;
@@ -164,14 +164,8 @@ namespace SP.Engine.Server
             if (!IsConnected)
                 return;
 
-            foreach (var msg in GetResendCandidates())
+            foreach (var msg in FindExpiredForRetry())
             {
-                if (msg == null)
-                {
-                    Close(CloseReason.LimitExceededReSend);
-                    return;
-                }
-
                 if (!Session.TrySend(ChannelKind.Reliable, msg))
                     Logger.Warn("Message send failed: {0}({1})", msg.Id, msg.SequenceNumber);
             }
@@ -179,7 +173,7 @@ namespace SP.Engine.Server
         
         internal void OnPing(double rawRttMs, double avgRttMs, double jitterMs, float packetLossRate)
         {
-            RecordRttSample(rawRttMs);
+            AddRttSample(rawRttMs);
             LatencyAvgMs = avgRttMs;
             LatencyJitterMs = jitterMs;
             PacketLossRate = packetLossRate;
@@ -187,7 +181,7 @@ namespace SP.Engine.Server
         
         internal void OnMessageAck(long sequenceNumber)
         {
-            OnAckReceived(sequenceNumber);
+            RemoveMessageState(sequenceNumber);
         }
         
         public void Close(CloseReason reason)
@@ -213,11 +207,11 @@ namespace SP.Engine.Server
 
                     if (!IsConnected)
                     {
-                        EnqueuePendingSend(msg);
+                        EnqueuePendingMessage(msg);
                         return true;
                     }
                     
-                    StartSendingMessage(msg);
+                    RegisterMessageState(msg);
                     return Session.TrySend(channel, msg);
                 }
                 case ChannelKind.Unreliable:
@@ -258,7 +252,7 @@ namespace SP.Engine.Server
             Interlocked.Exchange(ref _stateCode, PeerStateConst.Online);
             Session = session;
             
-            foreach (var msg in DequeuePendingSend())
+            foreach (var msg in DequeuePendingMessages())
                 session.TrySend(ChannelKind.Reliable, msg);
             
             OnOnline();
@@ -268,7 +262,7 @@ namespace SP.Engine.Server
         {
             Interlocked.Exchange(ref _stateCode, PeerStateConst.Offline);
             _networkPolicy = new NetworkPolicyView(PolicyDefaults.Globals);
-            ResetSendingMessageState();
+            ResetAllMessageStates();
             OnOffline(reason);
         }
 
@@ -277,7 +271,7 @@ namespace SP.Engine.Server
             Interlocked.Exchange(ref _stateCode, PeerStateConst.Closed);
             PeerIdGenerator.Free(Id);
             Id = PeerId.None;
-            ResetMessageProcessor();
+            ResetProcessorState();
             OnLeaveServer(reason);
         }
 

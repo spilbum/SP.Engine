@@ -11,7 +11,7 @@ namespace SP.Engine.Runtime
         TimeOut = 6,
         ProtocolError = 7,
         InternalError = 8,
-        LimitExceededReSend = 9,
+        LimitExceededResend = 9,
         Rejected = 10,
     }   
 }

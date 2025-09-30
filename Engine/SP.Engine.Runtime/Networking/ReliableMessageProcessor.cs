@@ -8,41 +8,42 @@ namespace SP.Engine.Runtime.Networking
 {
     public abstract class ReliableMessageProcessor
     {
-        private sealed class SendingMessageState
+        private sealed class OutboundMessageState
         {
+            private int _InitialRtoMs;
             public IMessage Message { get; }
-            public int MaxReSendCnt { get; }
-            public int ReSendCnt { get; private set; }
-            public DateTime ExpireTime { get; private set; }
-            public int TimeoutMs { get; private set; }
-            public int InitTimeoutMs { get; }
+            public int MaxRetryCount { get; }
+            public int RetryCount { get; private set; }
+            public DateTime ExpiredAtUtc { get; private set; }
+            public int RtoMs { get; private set; }
 
-            public SendingMessageState(IMessage message, int initialTimeoutMs, int maxReSendCnt)
+            public OutboundMessageState(IMessage message, int initialRtoMs, int maxRetryCount)
             {
                 Message = message;
-                MaxReSendCnt = maxReSendCnt;
-                TimeoutMs = initialTimeoutMs;
-                ReSendCnt = 0;
-                InitTimeoutMs = initialTimeoutMs;
+                MaxRetryCount = maxRetryCount;
+                RtoMs = initialRtoMs;
+                RetryCount = 0;
+                _InitialRtoMs = initialRtoMs;
                 RefreshExpire();
             }
             
-            public void IncrementReSend(int timeoutMs)
+            public void IncrementRetry(int rtoMs)
             {
-                ReSendCnt++;
-                TimeoutMs = timeoutMs;
+                RetryCount++;
+                RtoMs = rtoMs;
                 RefreshExpire();
             }
 
             public void Reset()
             {
-                ReSendCnt = 0;
-                TimeoutMs = InitTimeoutMs;
+                RetryCount = 0;
+                RtoMs = _InitialRtoMs;
                 RefreshExpire();
             }
             
-            public bool HasExpired => DateTime.UtcNow >= ExpireTime;
-            private void RefreshExpire() => ExpireTime = DateTime.UtcNow.AddMilliseconds(TimeoutMs);
+            public bool HasExpired => DateTime.UtcNow >= ExpiredAtUtc;
+            public bool HasReachedRetryLimit => RetryCount >= MaxRetryCount;
+            private void RefreshExpire() => ExpiredAtUtc = DateTime.UtcNow.AddMilliseconds(RtoMs);
         }
 
         private sealed class RtoCalculator
@@ -50,7 +51,7 @@ namespace SP.Engine.Runtime.Networking
             private readonly EwmaFilter _srtt = new EwmaFilter(0.125);
             private readonly EwmaFilter _rttVar = new EwmaFilter(0.25);
             
-            private const int G = 10;
+            private const int RtoClockGranularityMs = 10;
             private const int MinRtoMs = 200;
             private const int MaxRtoMs = 5000;
         
@@ -68,9 +69,9 @@ namespace SP.Engine.Runtime.Networking
                 _srtt.Update(rttMs);
             }
 
-            public int GetTimeoutMs()
+            public int GetRtoMs()
             {
-                var rto = _srtt.Value + Math.Max(G, 4 * _rttVar.Value);
+                var rto = _srtt.Value + Math.Max(RtoClockGranularityMs, 4 * _rttVar.Value);
                 return (int)Math.Clamp(rto, MinRtoMs, MaxRtoMs);
             }
 
@@ -81,98 +82,66 @@ namespace SP.Engine.Runtime.Networking
             }
         }
         
-        private readonly ConcurrentQueue<IMessage> _pendingMessageSendQueue = new ConcurrentQueue<IMessage>();
-        private readonly ConcurrentDictionary<long, SendingMessageState> _sendingMessageStateDict = new ConcurrentDictionary<long, SendingMessageState>();
-        private readonly ConcurrentDictionary<long, IMessage> _receivedMessageDict = new ConcurrentDictionary<long, IMessage>();
-        private readonly RtoCalculator _rtoCalc = new RtoCalculator();
+        private readonly ConcurrentQueue<IMessage> _pendingMessageQueue = new ConcurrentQueue<IMessage>();
+        private readonly ConcurrentDictionary<long, OutboundMessageState> _messageStates = new ConcurrentDictionary<long, OutboundMessageState>();
+        private readonly ConcurrentDictionary<long, IMessage> _outOfOrderMessages = new ConcurrentDictionary<long, IMessage>();
+        private readonly RtoCalculator _rtoCalculator = new RtoCalculator();
         private readonly object _receiveLock = new object();
-
-        private long _nextSequenceNumber;
-        private long _expectedReceiveSequenceNumber = 1;
+        private const int RecentSeqWindow = 128;
+        private long _nextReliableSeq;
+        private long _nextExpectedSeq = 1;
+        private readonly HashSet<long> _recentSeqs = new HashSet<long>();
+        private readonly Queue<long> _recentSeqsQueue = new Queue<long>();
         
-        private readonly HashSet<long> _receivedSeqSet = new HashSet<long>();
-        private readonly Queue<long> _receivedSeqQueue = new Queue<long>();
+        protected int SendTimeoutMs { get; private set; } = 500;
+        protected int MaxRetryCount { get; private set; } = 5;
+        protected void SetSendTimeoutMs(int ms) => SendTimeoutMs = ms;
+        protected void SetMaxRetryCount(int cnt) => MaxRetryCount = cnt;
+        protected long GetNextReliableSeq() => Interlocked.Increment(ref _nextReliableSeq);
+        protected void EnqueuePendingMessage(IMessage message) => _pendingMessageQueue.Enqueue(message);
         
-        public int SendTimeoutMs { get; private set; } = 500;
-        public int MaxReSendCnt { get; private set; } = 5;
-
-        private bool VerifySequence(long seq)
+        protected IEnumerable<IMessage> DequeuePendingMessages()
         {
-            if (seq < _expectedReceiveSequenceNumber)
-                return false;
-            
-            if (_receivedSeqSet.Contains(seq))
-                return false;
-
-            if (_receivedSeqQueue.Count >= 128) 
-                _receivedSeqSet.Remove(_receivedSeqQueue.Dequeue());
-            
-            _receivedSeqQueue.Enqueue(seq);
-            _receivedSeqSet.Add(seq);
-            return true;
-        }
-
-        private IEnumerable<IMessage> YieldInOrder(IMessage startingMessage)
-        {
-            yield return startingMessage;
-            _expectedReceiveSequenceNumber++;
-
-            while (_receivedMessageDict.TryRemove(_expectedReceiveSequenceNumber, out var nextMessage))
-            {
-                yield return nextMessage;
-                _expectedReceiveSequenceNumber++;
-            }
-        }
-        
-        public void SetSendTimeoutMs(int ms) => SendTimeoutMs = ms;
-        public void SetMaxSendCount(int cnt) => MaxReSendCnt = cnt;
-        protected long GetNextReliableSeq() => Interlocked.Increment(ref _nextSequenceNumber);
-        protected void EnqueuePendingSend(IMessage message) => _pendingMessageSendQueue.Enqueue(message);
-        protected IEnumerable<IMessage> DequeuePendingSend()
-        {
-            while (_pendingMessageSendQueue.TryDequeue(out var message))
+            while (_pendingMessageQueue.TryDequeue(out var message))
                 yield return message;
         }
 
-        protected bool StartSendingMessage(IMessage message)
+        protected bool RegisterMessageState(IMessage message)
         {
             if (message.SequenceNumber <= 0) return false;   
-            var state = new SendingMessageState(message, SendTimeoutMs, MaxReSendCnt);
-            return _sendingMessageStateDict.TryAdd(message.SequenceNumber, state);
+            var state = new OutboundMessageState(message, SendTimeoutMs, MaxRetryCount);
+            return _messageStates.TryAdd(message.SequenceNumber, state);
         }
 
-        protected void OnAckReceived(long sequenceNumber)
+        protected bool RemoveMessageState(long sequenceNumber)
+            => _messageStates.TryRemove(sequenceNumber, out _);
+
+        protected void AddRttSample(double rttMs)
         {
-            _sendingMessageStateDict.TryRemove(sequenceNumber, out _);
+            _rtoCalculator.AddSample(rttMs);
         }
 
-        protected void RecordRttSample(double rawRtt)
+        protected IEnumerable<IMessage> FindExpiredForRetry()
         {
-            _rtoCalc.AddSample(rawRtt);
-        }
-
-        protected IEnumerable<IMessage> GetResendCandidates()
-        {
-            foreach (var (key, state) in _sendingMessageStateDict)
+            foreach (var (seq, state) in _messageStates)
             {
                 if (!state.HasExpired)
                     continue;
 
-                if (state.ReSendCnt >= state.MaxReSendCnt)
+                if (state.HasReachedRetryLimit)
                 {
-                    _sendingMessageStateDict.TryRemove(key, out _);
-                    OnExceededResendCnt(state.Message);
+                    _messageStates.TryRemove(seq, out _);
+                    OnRetryLimitExceeded(state.Message);
                     continue;
                 }
                 
-                state.IncrementReSend(_rtoCalc.GetTimeoutMs());
-                
-                OnDebug($"Resending message: seq={key}, count={state.ReSendCnt}, expireTime={state.ExpireTime:HH:mm:ss.fff}, timeoutMs={state.TimeoutMs}");
+                state.IncrementRetry(_rtoCalculator.GetRtoMs());
+                OnDebug($"Retrying message: seq={seq}, retry={state.RetryCount}/{state.MaxRetryCount}, expiresAt={state.ExpiredAtUtc:HH:mm:ss.fff}, rtoMs={state.RtoMs}");
                 yield return state.Message;
             }
         }
 
-        public IEnumerable<IMessage> ProcessReceivedMessage(IMessage message)
+        public IEnumerable<IMessage> ProcessMessageInOrder(IMessage message)
         {
             if (message.SequenceNumber == 0)
             {
@@ -182,45 +151,78 @@ namespace SP.Engine.Runtime.Networking
             
             lock (_receiveLock)
             {
-                if (!VerifySequence(message.SequenceNumber))
-                {
+                if (!TryAcceptSequence(message.SequenceNumber))
                     yield break;
-                }
 
-                if (message.SequenceNumber == _expectedReceiveSequenceNumber)
+                if (message.SequenceNumber == _nextExpectedSeq)
                 {
-                    foreach (var next in YieldInOrder(message))
-                        yield return next;
+                    foreach (var msg in EmitInOrder(message))
+                        yield return msg;
                 }
                 else
                 {
-                    _receivedMessageDict.TryAdd(message.SequenceNumber, message);
+                    _outOfOrderMessages.TryAdd(message.SequenceNumber, message);
                 }
             }
         }
-
-        protected void ResetSendingMessageState()
+        
+        private bool TryAcceptSequence(long seq)
         {
-            foreach (var kvp in _sendingMessageStateDict)
+            // 과거 시퀀스 거부
+            if (seq < _nextExpectedSeq)
+                return false;
+            
+            // 종복 시퀀스 거부
+            if (_recentSeqs.Contains(seq))
+                return false;
+
+            // LRU 창 유지
+            if (_recentSeqsQueue.Count >= RecentSeqWindow)
+            {
+                var old = _recentSeqsQueue.Dequeue();
+                _recentSeqs.Remove(old);
+            }
+            
+            // 신규 시퀀스
+            _recentSeqsQueue.Enqueue(seq);
+            _recentSeqs.Add(seq);
+            return true;
+        }
+
+        private IEnumerable<IMessage> EmitInOrder(IMessage firstMessage)
+        {
+            yield return firstMessage;
+            _nextExpectedSeq++;
+
+            while (_outOfOrderMessages.TryRemove(_nextExpectedSeq, out var nextMessage))
+            {
+                yield return nextMessage;
+                _nextExpectedSeq++;
+            }
+        }
+
+        protected void ResetAllMessageStates()
+        {
+            foreach (var kvp in _messageStates)
                 kvp.Value.Reset();
         }
 
-        protected void ResetMessageProcessor()
+        protected void ResetProcessorState()
         {
-            _rtoCalc.Reset();
-            _sendingMessageStateDict.Clear();
-            _pendingMessageSendQueue.Clear();
+            _rtoCalculator.Reset();
+            _messageStates.Clear();
+            _pendingMessageQueue.Clear();
 
             lock (_receiveLock)
             {
-                _receivedMessageDict.Clear();
-                _expectedReceiveSequenceNumber = 0;
-                _receivedSeqQueue.Clear();
-                _receivedSeqSet.Clear();
+                _outOfOrderMessages.Clear();
+                _nextExpectedSeq = 1;
+                _recentSeqsQueue.Clear();
+                _recentSeqs.Clear();
             }
         }
 
         protected abstract void OnDebug(string format, params object[] args);
-        protected abstract void OnExceededResendCnt(IMessage message);
+        protected abstract void OnRetryLimitExceeded(IMessage message);
     }
 }

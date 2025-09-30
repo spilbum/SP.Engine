@@ -112,7 +112,7 @@ namespace SP.Engine.Server
                     authAck.SessionId = SessionId;
                     authAck.MaxFrameBytes = network.MaxFrameBytes;
                     authAck.SendTimeoutMs = network.SendTimeoutMs;
-                    authAck.MaxSendCount = network.MaxSendCount;
+                    authAck.MaxRetryCount = network.MaxRetryCount;
                     authAck.UdpOpenPort = engine.GetOpenPort(ESocketMode.Udp);
 
                     if (peer != null)

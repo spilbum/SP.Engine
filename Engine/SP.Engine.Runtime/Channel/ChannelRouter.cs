@@ -49,10 +49,10 @@ namespace SP.Engine.Runtime.Channel
 
         public bool TrySend(ChannelKind kind, IMessage message)
         {
-            var ch = kind == ChannelKind.Reliable
+            var channel = kind == ChannelKind.Reliable
                 ? Volatile.Read(ref _reliable)
                 : Volatile.Read(ref _unreliable);
-            return ch != null && ch.TrySend(message);
+            return channel != null && channel.TrySend(message);
         }
     }
 }

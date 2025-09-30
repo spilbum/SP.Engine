@@ -15,5 +15,5 @@ public sealed record NetworkConfig
     public bool UseEncrypt { get; init; } = true;
     public bool UseCompress { get; init; } = false;
     public ushort CompressionThreshold { get; init; } = 2048;
-    public int MaxSendCount { get; init; } = 5;
+    public int MaxRetryCount { get; init; } = 5;
 }

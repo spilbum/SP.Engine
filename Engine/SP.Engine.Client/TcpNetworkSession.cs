@@ -26,7 +26,6 @@ namespace SP.Engine.Client
         private bool _isConnecting;
         private long _totalSentBytes;
         private long _totalReceivedBytes;
-        private readonly ILogger _logger;
         private readonly int _sendBufferSize;
         private readonly int _receiveBufferSize;
         private readonly int _sendQueueSize;
@@ -40,12 +39,10 @@ namespace SP.Engine.Client
         public EndPoint RemoteEndPoint { get; private set; }
         
         public TcpNetworkSession(
-            ILogger logger, 
             int sendQueueSize = 512, 
             int sendBufferSize = 4 * 1024, 
             int receiveBufferSize = 64 * 1024)
         {
-            _logger = logger;
             _sendBufferSize = sendBufferSize;
             _receiveBufferSize = receiveBufferSize;
             _sendQueueSize = sendQueueSize;

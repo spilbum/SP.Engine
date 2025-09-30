@@ -86,7 +86,7 @@ namespace SP.Engine.Protocol
 
             public int MaxFrameBytes;
             public int SendTimeoutMs;
-            public int MaxSendCount;
+            public int MaxRetryCount;
 
             public int UdpOpenPort;
         }
