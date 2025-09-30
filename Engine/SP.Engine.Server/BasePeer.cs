@@ -43,12 +43,18 @@ namespace SP.Engine.Server
         PeerId Id { get; }
         PeerKind Kind { get; }
         PeerState State { get; }
-        IClientSession Session { get; }
+        ISession Session { get; }
         bool Send(IProtocol data);
         void Close(CloseReason reason);
     }
+
+    public interface IBasePeer
+    {
+        DiffieHellman DiffieHellman { get; }
+        IBaseSession BaseSession { get; }
+    }
     
-    public abstract class BasePeer : ReliableMessageProcessor, IPeer, IHandleContext, IDisposable
+    public abstract class BasePeer : ReliableMessageProcessor, IPeer, IBasePeer, IHandleContext, IDisposable
     {
         private static class PeerIdGenerator
         {
@@ -67,7 +73,7 @@ namespace SP.Engine.Server
 
             public static void Free(PeerId peerId)
             {
-                if (Runtime.PeerId.None != peerId)
+                if (PeerId.None != peerId)
                     FreePeerIdPool.Enqueue(peerId);
             }
         }
@@ -76,11 +82,9 @@ namespace SP.Engine.Server
         private bool _disposed;
         private DiffieHellman _diffieHellman;
         private AesCbcEncryptor _encryptor;
-        private IPolicyView _policyView = new SnapshotPolicyView(in PolicyDefaults.Globals);
+        private IPolicyView _networkPolicy = new NetworkPolicyView(in PolicyDefaults.Globals);
 
         public PeerState State => (PeerState)_stateCode;
-        public IClientSession Session { get; private set; }
-        public EngineConfig Config { get; }
         public PeerId Id { get; private set; }
         public PeerKind Kind { get; } 
         public ILogger Logger { get; }
@@ -88,20 +92,21 @@ namespace SP.Engine.Server
         public double LatencyJitterMs { get; private set; }
         public float PacketLossRate { get; private set; }
         public IEncryptor Encryptor => _encryptor;
-
+        public ISession Session { get; private set; }
         public IPEndPoint LocalEndPoint => Session.LocalEndPoint;
         public IPEndPoint RemoteEndPoint => Session.RemoteEndPoint;
-        public bool IsConnected => _stateCode == PeerStateConst.Authorized || _stateCode == PeerStateConst.Online;
-        public byte[] DhPublicKey => _diffieHellman.PublicKey;
+        public bool IsConnected => _stateCode is PeerStateConst.Authorized or PeerStateConst.Online;
         
-        protected BasePeer(PeerKind peerType, IClientSession session)
+        IBaseSession IBasePeer.BaseSession => (IBaseSession)Session;
+        DiffieHellman IBasePeer.DiffieHellman => _diffieHellman;
+        
+        protected BasePeer(PeerKind peerType, ISession session)
         {
             Id = PeerIdGenerator.Generate();
             Kind = peerType;
             Logger = session.Logger;
-            Config = session.Config;
             SetSendTimeoutMs(session.Config.Network.SendTimeoutMs);
-            SetMaxResendCnt(session.Config.Session.MaxResendCount);
+            SetMaxSendCount(session.Config.Network.MaxSendCount);
             Session = session;
         }
 
@@ -112,7 +117,7 @@ namespace SP.Engine.Server
             Logger = other.Logger;
             Session = other.Session;
             SetSendTimeoutMs(other.SendTimeoutMs);
-            SetMaxResendCnt(other.MaxReSendCnt);
+            SetMaxSendCount(other.MaxReSendCnt);
             _diffieHellman = other._diffieHellman;
         }
 
@@ -190,13 +195,13 @@ namespace SP.Engine.Server
             Session.Close(reason);
         }
         
-        public IPolicy GetPolicy(Type protocolType)
-            => _policyView.Resolve(protocolType);
+        public IPolicy GetNetworkPolicy(Type protocolType)
+            => _networkPolicy.Resolve(protocolType);
         
         public bool Send(IProtocol data)
         {
             var channel = data.Channel;
-            var policy = GetPolicy(data.GetType());
+            var policy = GetNetworkPolicy(data.GetType());
             var encryptor = policy.UseEncrypt ? Encryptor : null;
             switch (channel)
             {
@@ -226,13 +231,7 @@ namespace SP.Engine.Server
                     throw new Exception($"Unknown channel: {channel}");
             }
         }
-
-        internal void ExecuteMessage(IMessage message)
-        {
-            foreach (var inOrder in ProcessReceivedMessage(message))
-                Session.Engine.ExecuteHandler(this, inOrder);
-        }
-
+        
         internal void JoinServer()
         {
             if (Interlocked.CompareExchange(ref _stateCode, PeerStateConst.Authorized, PeerStateConst.NotAuthorized)
@@ -248,13 +247,13 @@ namespace SP.Engine.Server
         internal void OnSessionAuthed()
         {
             // 정책 생성
-            var s = Config.Security;
-            var g = new PolicyGlobals(s.UseEncrypt, s.UseCompress, s.CompressionThreshold);
-            var newView = new SnapshotPolicyView(g);
-            Interlocked.Exchange(ref _policyView, newView);
+            var n = Session.Config.Network;
+            var g = new PolicyGlobals(n.UseEncrypt, n.UseCompress, n.CompressionThreshold);
+            var newView = new NetworkPolicyView(g);
+            Interlocked.Exchange(ref _networkPolicy, newView);
         }
         
-        internal void Online(IClientSession session)
+        internal void Online(ISession session)
         {
             Interlocked.Exchange(ref _stateCode, PeerStateConst.Online);
             Session = session;
@@ -268,7 +267,7 @@ namespace SP.Engine.Server
         internal void Offline(CloseReason reason)
         {
             Interlocked.Exchange(ref _stateCode, PeerStateConst.Offline);
-            _policyView = new SnapshotPolicyView(PolicyDefaults.Globals);
+            _networkPolicy = new NetworkPolicyView(PolicyDefaults.Globals);
             ResetSendingMessageState();
             OnOffline(reason);
         }
@@ -282,10 +281,11 @@ namespace SP.Engine.Server
             OnLeaveServer(reason);
         }
 
-        internal void SetupSecurity(DhKeySize keySize, byte[] publicKey)
+        internal void CreateEncryptor(DhKeySize keySize, byte[] otherPublicKey)
         {
-            _diffieHellman = new DiffieHellman(keySize);
-            _encryptor = new AesCbcEncryptor(_diffieHellman.DeriveSharedKey(publicKey));
+            var dh = new DiffieHellman(keySize);
+            _encryptor = new AesCbcEncryptor(dh.DeriveSharedKey(otherPublicKey));
+            _diffieHellman = dh;
         }
 
         protected virtual void OnJoinServer()

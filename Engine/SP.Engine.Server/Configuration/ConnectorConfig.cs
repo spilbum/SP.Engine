@@ -1,4 +1,3 @@
-using System.ComponentModel.DataAnnotations;
 
 namespace SP.Engine.Server.Configuration;
 

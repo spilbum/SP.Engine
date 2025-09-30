@@ -13,56 +13,50 @@ using SP.Engine.Server.ProtocolHandler;
 
 namespace SP.Engine.Server
 {
-    public interface IClientSession : ILogContext, IHandleContext
+    public interface IBaseSession : ILogContext, IHandleContext
     {
-        string SessionId { get; }
-        IPEndPoint LocalEndPoint { get; }
-        IPEndPoint RemoteEndPoint { get; }
-        EngineConfig Config { get; }
-        IEngine Engine { get; }
-        TcpNetworkSession Session { get; }
+        IBaseEngine Engine { get; }
+        INetworkSession NetworkSession { get; }
+        IEngineConfig Config { get; }
         IEncryptor Encryptor { get; }
-
-        bool TrySend(ChannelKind channel, IMessage message);
         void ProcessBuffer(byte[] buffer, int offset, int length);
         void ProcessBuffer(byte[] buffer, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint);
-        void Close(CloseReason reason);
     }
-
-    public abstract class BaseClientSession<TSession> : IClientSession
-        where TSession : BaseClientSession<TSession>, IClientSession, new()
+    
+    public abstract class BaseSession<TSession> : IBaseSession
+        where TSession : BaseSession<TSession>, IBaseSession, new()
     {
         private BinaryBuffer _receiveBuffer;
         private BaseEngine<TSession> _engine;
         private readonly ChannelRouter _channelRouter = new();
         private readonly UdpFragmentAssembler _fragmentAssembler = new();
 
-        IEngine IClientSession.Engine => _engine;
-        public EngineConfig Config => _engine.Config;
+        IBaseEngine IBaseSession.Engine => _engine;
+        public IEngineConfig Config => _engine.Config;
         public ILogger Logger => _engine.Logger;
-        public IPEndPoint LocalEndPoint => Session.LocalEndPoint;
-        public IPEndPoint RemoteEndPoint => Session.RemoteEndPoint;
+        public IPEndPoint LocalEndPoint => NetworkSession.LocalEndPoint;
+        public IPEndPoint RemoteEndPoint => NetworkSession.RemoteEndPoint;
         public bool IsConnected { get; internal set; }
         public DateTime StartTime { get; }
         public DateTime LastActiveTime { get; private set; }
         public string SessionId { get; private set; }
         public DateTime StartClosingTime { get; protected set; }
         public bool IsAuthorized { get; protected set; }
-        public TcpNetworkSession Session { get; private set; }
+        public INetworkSession NetworkSession { get; private set; }
         public UdpSocket UdpSocket { get; private set; }
         public CloseReason CloseReason { get; private set; }
         public IEncryptor Encryptor { get; protected set; }
 
-        protected BaseClientSession()
+        protected BaseSession()
         {
             StartTime = DateTime.UtcNow;
             LastActiveTime = StartTime;
         }
 
-        public virtual void Initialize(IEngine engine, TcpNetworkSession networkSession)
+        public virtual void Initialize(IBaseEngine engine, TcpNetworkSession networkSession)
         {
             _engine = (BaseEngine<TSession>)engine;
-            Session = networkSession;
+            NetworkSession = networkSession;
             SessionId = networkSession.SessionId;
             _receiveBuffer = new BinaryBuffer(engine.Config.Network.ReceiveBufferSize);
             networkSession.Attach(this);
@@ -118,7 +112,7 @@ namespace SP.Engine.Server
             }
         }
 
-        void IClientSession.ProcessBuffer(byte[] buffer, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint)
+        void IBaseSession.ProcessBuffer(byte[] buffer, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint)
         {
             EnsureUdpSocket(socket, remoteEndPoint);
 
@@ -144,7 +138,7 @@ namespace SP.Engine.Server
             }
         }
 
-        void IClientSession.ProcessBuffer(byte[] buffer, int offset, int length)
+        void IBaseSession.ProcessBuffer(byte[] buffer, int offset, int length)
         {
             var span = buffer.AsSpan(offset, length);
             _receiveBuffer.Write(span);
@@ -215,7 +209,7 @@ namespace SP.Engine.Server
         {
             _channelRouter.Unbind(ChannelKind.Reliable);
             _channelRouter.Unbind(ChannelKind.Unreliable);
-            Session.Close(reason);
+            NetworkSession.Close(reason);
             UdpSocket?.Close(reason);
             CloseReason = reason;
         }

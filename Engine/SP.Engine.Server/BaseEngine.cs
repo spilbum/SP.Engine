@@ -3,30 +3,24 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using SP.Common.Fiber;
 using SP.Common.Logging;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Networking;
-using SP.Engine.Runtime.Protocol;
 using SP.Engine.Server.Configuration;
 using SP.Engine.Server.Logging;
 
 namespace SP.Engine.Server
 {
-    public interface IEngine : ILogContext
+    public interface IBaseEngine : ILogContext
     {
-        EngineConfig Config { get; }
-        IFiberScheduler Scheduler { get; }
-        bool Initialize(string name, EngineConfig config);
-        bool Start();
-        void Stop();
-        IClientSession CreateSession(TcpNetworkSession networkSession);   
-        bool RegisterSession(IClientSession clientSession);
-        IClientSession GetSession(string sessionId);
-        IPeer GetPeer(PeerId peerId);
-        void ExecuteHandler(IPeer peer, IMessage message);
+        IEngineConfig Config { get; }
+        IBaseSession CreateSession(TcpNetworkSession networkSession);   
+        bool RegisterSession(IBaseSession session);
+        void ProcessUdpClient(byte[] buffer, Socket socket, IPEndPoint remoteEndPoint);
     }
 
     public interface ISocketServerAccessor
@@ -54,8 +48,8 @@ namespace SP.Engine.Server
         public const int Stopping = 5;
     }
 
-    public abstract class BaseEngine<TSession> : IEngine, ISocketServerAccessor, IDisposable
-        where TSession : BaseClientSession<TSession>, IClientSession, new()
+    public abstract class BaseEngine<TSession> : IBaseEngine, ISocketServerAccessor, IDisposable
+        where TSession : BaseSession<TSession>, IBaseSession, new()
     {
         private SocketServer _socketServer;
         private ListenerInfo[] _listenerInfos;
@@ -64,11 +58,10 @@ namespace SP.Engine.Server
         ISocketServer ISocketServerAccessor.SocketServer => _socketServer;
         public string Name { get; private set; }
         public ILogger Logger { get; private set; }
-        public EngineConfig Config { get; private set; }
+        public IEngineConfig Config { get; private set; }
         public abstract IFiberScheduler Scheduler { get; }
-
-        public abstract void ExecuteHandler(IPeer peer, IMessage message);
-        public abstract IPeer GetPeer(PeerId peerId);
+        
+        protected abstract IBasePeer GetBasePeer(PeerId peerId);
         
         public virtual bool Initialize(string name, EngineConfig config)
         {
@@ -177,7 +170,7 @@ namespace SP.Engine.Server
             return -1;
         }
 
-        public IClientSession GetSession(string sessionId)
+        public IBaseSession GetSession(string sessionId)
         {
             _sessionDict.TryGetValue(sessionId, out var session);
             return session;
@@ -253,30 +246,49 @@ namespace SP.Engine.Server
             return "IPv6Any".Equals(ip, StringComparison.OrdinalIgnoreCase) ? IPAddress.IPv6Any : IPAddress.Parse(ip);
         }
 
-        IClientSession IEngine.CreateSession(TcpNetworkSession networkSession)
+        IBaseSession IBaseEngine.CreateSession(TcpNetworkSession networkSession)
         {
             var session = new TSession();
             session.Initialize(this, networkSession);
             return session;
         }
 
-        bool IEngine.RegisterSession(IClientSession clientSession)
+        bool IBaseEngine.RegisterSession(IBaseSession session)
         {
-            if (clientSession is not TSession session)
+            if (session is not TSession s)
                 return false;
 
-            if (!_sessionDict.TryAdd(session.SessionId, session))
+            if (!_sessionDict.TryAdd(s.SessionId, s))
             {
-                Logger.Error("The session is refused because the it's ID already exists. sessionId={0}", session.SessionId);
+                Logger.Error("The session is refused because the it's ID already exists. sessionId={0}", s.SessionId);
                 return false;
             }
 
-            clientSession.Session.Closed += OnNetworkSessionClosed;
+            session.NetworkSession.Closed += OnNetworkSessionClosed;
 
             // 인증 해드쉐이크 대기 등록
-            EnqueueAuthHandshakePending(session);
-            Logger.Debug("A new session connected. sessionId={0}, remoteEndPoint={1}", session.SessionId, session.RemoteEndPoint);
+            EnqueueAuthHandshakePending(s);
+            Logger.Debug("A new session connected. sessionId={0}, remoteEndPoint={1}", s.SessionId, s.RemoteEndPoint);
             return true;
+        }
+
+        void IBaseEngine.ProcessUdpClient(byte[] buffer, Socket socket, IPEndPoint remoteEndPoint)
+        {
+            if (!UdpHeader.TryParse(buffer, out var header))
+            {
+                Logger.Warn("Invalid UDP header found.");
+                return;
+            }
+
+            var peer = GetBasePeer(header.PeerId);
+            var session = peer?.BaseSession;
+            if (session == null)
+            {
+                Logger.Warn("Not found session. peerId={0}", header.PeerId);
+                return;
+            }
+            
+            session.ProcessBuffer(buffer, header, socket, remoteEndPoint);
         }
 
         private void OnNetworkSessionClosed(INetworkSession networkSession, CloseReason reason)

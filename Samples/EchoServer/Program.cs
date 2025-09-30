@@ -39,9 +39,6 @@ internal static class Program
                 .WithSession(s => s with
                 {
                 })
-                .WithSecurity(s => s with
-                {
-                })
                 .WithRuntime(r => r with
                 {
                 })

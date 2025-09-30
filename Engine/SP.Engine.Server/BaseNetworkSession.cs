@@ -33,10 +33,9 @@ namespace SP.Engine.Server
         Socket Client { get; }
         IPEndPoint LocalEndPoint { get; }
         IPEndPoint RemoteEndPoint { get; }
-        IClientSession Session { get; }
-        EngineConfig Config { get; }
+        IBaseSession Session { get; }
         event Action<INetworkSession, CloseReason> Closed;
-        void Attach(IClientSession clientSession);
+        void Attach(IBaseSession session);
         void Close(CloseReason reason);
         bool TrySend(ArraySegment<byte> data);
     }
@@ -52,12 +51,12 @@ namespace SP.Engine.Server
         private Socket _client;
         private IObjectPool<SegmentQueue> _sendingQueuePool;
         private SegmentQueue _sendingQueue;
-        private IClientSession _session;
+        private IBaseSession _session;
 
         public Socket Client => _client;
         public ESocketMode Mode { get; } = mode;
-        public IClientSession Session => _session ?? throw new InvalidOperationException("Session is not initialized.");
-        public EngineConfig Config { get; private set; }
+        public IBaseSession Session => _session ?? throw new InvalidOperationException("Session is not initialized.");
+        public IEngineConfig Config { get; private set; }
         public string SessionId { get; }
         public IPEndPoint LocalEndPoint { get; protected init; }
         public IPEndPoint RemoteEndPoint { get; protected set; }
@@ -83,7 +82,7 @@ namespace SP.Engine.Server
             SessionId = Guid.NewGuid().ToString();
         }        
 
-        public virtual void Attach(IClientSession session)
+        public virtual void Attach(IBaseSession session)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));
             Config = session.Config;
@@ -215,7 +214,7 @@ namespace SP.Engine.Server
             if (!TryValidateClosedBySocket(out var client))
             {
                 var queue = _sendingQueue;
-                if (queue != null && queue.Count > 0) return;
+                if (queue is { Count: > 0 }) return;
                 if (null != client)
                     InternalClose(client, GetCloseReasonFromSocketState(), false);
                 else

@@ -18,6 +18,4 @@ public sealed record SessionConfig
     
     public int PeerUpdateIntervalMs { get; init; } = 50;
     public int ConnectorUpdateIntervalMs { get; init; } = 30;
-    
-    public int MaxResendCount { get; init; } = 5;
 }

@@ -5,13 +5,15 @@ namespace EchoServer;
 
 public class EchoServer : Engine<EchoPeer>
 {
-    protected override EchoPeer CreatePeer(IClientSession<EchoPeer> peer)
+    protected override bool TryCreatePeer(ISession session, out EchoPeer peer)
     {
-        return new EchoPeer(peer);
+        peer = new EchoPeer(session);
+        return true;
     }
 
-    protected override IServerConnector CreateConnector(string name)
+    protected override bool TryCreateConnector(string name, out IServerConnector connector)
     {
-        return new DummyConnector(name);
+        connector = new DummyConnector(name);
+        return true;
     }
 }

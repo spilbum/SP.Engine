@@ -20,14 +20,15 @@ namespace SP.Engine.Server
         void Stop();
     }
 
-    internal sealed class SocketServer(IEngine engine, ListenerInfo[] listenerInfos) : ISocketServer, IDisposable
+    internal sealed class SocketServer(IBaseEngine engine, ListenerInfo[] listenerInfos) : ISocketServer, IDisposable
     {
-        private IEngine Engine { get; } = engine;
-        public bool IsRunning { get; private set; }
-        private List<ISocketListener> Listeners { get; } = new List<ISocketListener>(listenerInfos.Length);
+        private IBaseEngine Engine { get; } = engine;
+        private List<ISocketListener> Listeners { get; } = new(listenerInfos.Length);
         private ListenerInfo[] ListenerInfos { get; } = listenerInfos;
         private bool IsStopped { get; set; }
 
+        public bool IsRunning { get; private set; }
+        
         internal IObjectPool<SegmentQueue> SendingQueuePool { get; private set; }
 
         private byte[] _keepAliveOptionValues;        
@@ -36,7 +37,7 @@ namespace SP.Engine.Server
         public bool Start()
         {
             IsStopped = false;
-           
+
             var config = Engine.Config;
             var logger = Engine.Logger;
 
@@ -81,7 +82,7 @@ namespace SP.Engine.Server
             return true;
         }
 
-        private bool SetupKeepAlive(EngineConfig config)
+        private bool SetupKeepAlive(IEngineConfig config)
         {
             try
             {
@@ -102,7 +103,7 @@ namespace SP.Engine.Server
             }
         }
 
-        private bool SetupSocketEventArgsPool(EngineConfig config)
+        private bool SetupSocketEventArgsPool(IEngineConfig config)
         {
             var bufferSize = config.Network.ReceiveBufferSize;
             var limitCount = config.Network.LimitConnectionCount;
@@ -186,22 +187,8 @@ namespace SP.Engine.Server
         {
             if (state is not (byte[] buffer, IPEndPoint remoteEndPoint))
                 return;
-
-            if (!UdpHeader.TryParse(buffer, out var header))
-            {
-                Engine.Logger.Warn("Failed to parse header. received={0}, headerSize={1}", buffer.Length, UdpHeader.HeaderSize);
-                return;
-            }
             
-            var peer = Engine.GetPeer(header.PeerId);
-            var session = peer?.Session;
-            if (session == null)
-            {
-                Engine.Logger.Debug("Not found peer: {0}", header.PeerId);
-                return;
-            }
-            
-            session.ProcessBuffer(buffer, header, socket, remoteEndPoint);
+            Engine.ProcessUdpClient(buffer, socket, remoteEndPoint);
         }
 
         private void ProcessTcpClient(Socket client)
@@ -244,7 +231,7 @@ namespace SP.Engine.Server
             Engine.Logger.Error($"Listener ({listener.EndPoint}) error: {e.Message}\r\nstackTrace={e.StackTrace}");
         }
 
-        private IClientSession CreateSession(Socket client, TcpNetworkSession networkSession)
+        private IBaseSession CreateSession(Socket client, TcpNetworkSession networkSession)
         {
             var config = Engine.Config;
             if (0 < config.Network.SendTimeoutMs)
@@ -264,12 +251,12 @@ namespace SP.Engine.Server
             return Engine.CreateSession(networkSession);
         }
         
-        private bool RegisterSession(IClientSession clientSession)
+        private bool RegisterSession(IBaseSession session)
         {
-            if (Engine.RegisterSession(clientSession))
+            if (Engine.RegisterSession(session))
                 return true;
 
-            clientSession.Session.Close(CloseReason.InternalError);
+            session.NetworkSession.Close(CloseReason.InternalError);
             return false;
         }
 

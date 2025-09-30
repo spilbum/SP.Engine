@@ -86,7 +86,7 @@ namespace SP.Engine.Client
         private TickTimer _udpKeepAliveTimer;
         private readonly DiffieHellman _diffieHellman = new DiffieHellman(DhKeySize.Bit2048);
         private readonly ChannelRouter _channelRouter = new ChannelRouter();
-        private IPolicyView _policyView = new SnapshotPolicyView(in PolicyDefaults.Globals);
+        private IPolicyView _policyView = new NetworkPolicyView(in PolicyDefaults.Globals);
         
         public int ConnectAttempts { get; private set; }
         public int ReconnectAttempts { get; private set; }
@@ -811,7 +811,7 @@ namespace SP.Engine.Client
             
             if (p.MaxFrameBytes > 0) MaxFrameBytes = p.MaxFrameBytes;
             if (p.SendTimeoutMs > 0) SetSendTimeoutMs(p.SendTimeoutMs);
-            if (p.MaxResendCount > 0) SetMaxResendCnt(p.MaxResendCount);
+            if (p.MaxSendCount > 0) SetMaxSendCount(p.MaxSendCount);
 
             if (p.UseEncrypt)
             {
@@ -821,7 +821,7 @@ namespace SP.Engine.Client
 
             // 정책 적용
             var g = new PolicyGlobals(p.UseEncrypt, p.UseCompress, p.CompressionThreshold);
-            var newView = new SnapshotPolicyView(g);
+            var newView = new NetworkPolicyView(g);
             Interlocked.Exchange(ref _policyView, newView);
             
             SetState(ENetPeerState.Open);
@@ -861,7 +861,7 @@ namespace SP.Engine.Client
         
         private void OnOffline()
         {
-            _policyView = new SnapshotPolicyView(PolicyDefaults.Globals);
+            _policyView = new NetworkPolicyView(PolicyDefaults.Globals);
             ResetSendingMessageState();
             Offline?.Invoke(this, EventArgs.Empty);
             StartReconnection();

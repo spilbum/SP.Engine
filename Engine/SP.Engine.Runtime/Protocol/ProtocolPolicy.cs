@@ -58,10 +58,10 @@ namespace SP.Engine.Runtime.Protocol
         ProtocolPolicy Resolve(Type protocolType);
     }
 
-    public sealed class SnapshotPolicyView : IPolicyView
+    public sealed class NetworkPolicyView : IPolicyView
     {
         private readonly PolicyGlobals _globals;
-        public SnapshotPolicyView(in PolicyGlobals globals)
+        public NetworkPolicyView(in PolicyGlobals globals)
         {
             _globals = globals;
         }

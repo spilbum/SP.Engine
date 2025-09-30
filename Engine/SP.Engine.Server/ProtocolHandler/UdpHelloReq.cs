@@ -5,10 +5,10 @@ using SP.Engine.Runtime.Handler;
 namespace SP.Engine.Server.ProtocolHandler;
 
 [ProtocolHandler(C2SEngineProtocolId.UdpHelloReq)]
-internal class UdpHelloReq<TPeer> : BaseEngineHandler<ClientSession<TPeer>, C2SEngineProtocolData.UdpHelloReq>
+internal class UdpHelloReq<TPeer> : BaseEngineHandler<Session<TPeer>, C2SEngineProtocolData.UdpHelloReq>
     where TPeer : BasePeer, IPeer
 {
-    protected override void ExecuteProtocol(ClientSession<TPeer> session, C2SEngineProtocolData.UdpHelloReq data)
+    protected override void ExecuteProtocol(Session<TPeer> session, C2SEngineProtocolData.UdpHelloReq data)
     {
         var resposne = new S2CEngineProtocolData.UdpHelloAck { ErrorCode = EngineErrorCode.Unknown };
         if (session.SessionId != data.SessionId ||

@@ -4,10 +4,10 @@ using SP.Engine.Runtime.Handler;
 namespace SP.Engine.Server.ProtocolHandler;
 
 [ProtocolHandler(C2SEngineProtocolId.UdpKeepAlive)]
-internal class UdpKeepAlive<TPeer> : BaseEngineHandler<ClientSession<TPeer>, C2SEngineProtocolData.UdpKeepAlive>
+internal class UdpKeepAlive<TPeer> : BaseEngineHandler<Session<TPeer>, C2SEngineProtocolData.UdpKeepAlive>
     where TPeer : BasePeer, IPeer
 {
-    protected override void ExecuteProtocol(ClientSession<TPeer> session, C2SEngineProtocolData.UdpKeepAlive data)
+    protected override void ExecuteProtocol(Session<TPeer> session, C2SEngineProtocolData.UdpKeepAlive data)
     {
     }
 }

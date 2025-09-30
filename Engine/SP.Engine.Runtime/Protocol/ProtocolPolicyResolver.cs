@@ -28,8 +28,8 @@ namespace SP.Engine.Runtime.Protocol
 
         private static ProtocolPolicy Merge(in ProtocolOverrides ov, in PolicyGlobals g)
         {
-            var useEncrypt = ov.Encrypt == Toggle.Inherit ? g.UseEncrypt : ov.Encrypt.ToBool();
-            var useCompress = ov.Compress == Toggle.Inherit ? g.UseCompress : ov.Compress.ToBool();
+            var useEncrypt = g.UseEncrypt && (ov.Encrypt == Toggle.Inherit || ov.Encrypt.ToBool());
+            var useCompress = g.UseCompress && (ov.Compress == Toggle.Inherit || ov.Compress.ToBool());
 
             if (!useCompress)
                 return new ProtocolPolicy(useEncrypt, false, 0);

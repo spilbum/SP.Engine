@@ -1,24 +1,28 @@
 ﻿using System;
 using System.Collections.Generic;
-using SP.Engine.Runtime.Networking;
 
 namespace SP.Engine.Server.Configuration
 {
-    public sealed record EngineConfig
+    public interface IEngineConfig
+    {
+        NetworkConfig Network { get; }
+        SessionConfig Session { get; }
+        RuntimeConfig Runtime { get; }
+    }
+    
+    public sealed record EngineConfig : IEngineConfig
     {
         public NetworkConfig Network { get; init; } = new();
         public SessionConfig Session { get; init; } = new();
-        public SecurityConfig Security { get; init; } = new();
         public RuntimeConfig Runtime { get; init; } = new();
-        public IReadOnlyList<ListenerConfig> Listeners { get; init; } = Array.Empty<ListenerConfig>();
-        public IReadOnlyList<ConnectorConfig> Connectors { get; init; } = Array.Empty<ConnectorConfig>();
+        public List<ListenerConfig> Listeners { get; init; } = [];
+        public List<ConnectorConfig> Connectors { get; init; } = [];
     }
 
     public class EngineConfigBuilder
     {
         private NetworkConfig _network = new();
         private SessionConfig _session = new();
-        private SecurityConfig _security = new();
         private RuntimeConfig _runtime = new();
         private readonly List<ListenerConfig> _listeners = [];
         private readonly List<ConnectorConfig> _connectors = [];
@@ -36,13 +40,7 @@ namespace SP.Engine.Server.Configuration
             _session = configure(_session);
             return this;
         }
-
-        public EngineConfigBuilder WithSecurity(Func<SecurityConfig, SecurityConfig> configure)
-        {
-            _security = configure(_security);
-            return this;
-        }
-
+        
         public EngineConfigBuilder WithRuntime(Func<RuntimeConfig, RuntimeConfig> configure)
         {
             _runtime = configure(_runtime);
@@ -67,10 +65,9 @@ namespace SP.Engine.Server.Configuration
             {
                 Network = _network,
                 Session = _session,
-                Security = _security,
                 Runtime = _runtime,
-                Listeners = _listeners.ToArray(),
-                Connectors = _connectors.ToArray(),
+                Listeners = _listeners,
+                Connectors = _connectors
             };
         }
     }

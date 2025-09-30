@@ -21,7 +21,7 @@ namespace SP.Engine.Server
         ILogger ILogContext.Logger => Session.Logger;
         public SocketReceiveContext ReceiveContext { get; } = socketReceiveContext;
 
-        public override void Attach(IClientSession session)
+        public override void Attach(IBaseSession session)
         {
             base.Attach(session);
             ReceiveContext.Initialize(this);

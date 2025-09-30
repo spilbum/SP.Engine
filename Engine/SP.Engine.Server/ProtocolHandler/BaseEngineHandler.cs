@@ -5,7 +5,7 @@ using SP.Engine.Runtime.Protocol;
 namespace SP.Engine.Server.ProtocolHandler;
 
 internal abstract class BaseEngineHandler<TSession, TProtocol> : BaseHandler<TSession, IMessage>
-    where TSession : IClientSession
+    where TSession : IBaseSession
     where TProtocol : IProtocol
 {
     public override void ExecuteMessage(TSession session, IMessage message)

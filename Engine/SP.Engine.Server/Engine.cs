@@ -5,9 +5,9 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using SP.Common.Fiber;
+using SP.Common.Logging;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Handler;
-using SP.Engine.Runtime.Security;
 using SP.Engine.Server.Configuration;
 using SP.Engine.Server.Connector;
 using SP.Engine.Protocol;
@@ -16,7 +16,17 @@ using SP.Engine.Server.ProtocolHandler;
 
 namespace SP.Engine.Server
 {
-    public abstract class Engine<TPeer> : BaseEngine<ClientSession<TPeer>>
+    public interface IEngine : ILogContext
+    {
+        IEngineConfig Config { get; }
+        IFiberScheduler Scheduler { get; }
+        bool Initialize(string name, EngineConfig config);
+        bool Start();
+        void Stop();
+        IPeer GetPeer(PeerId peerId);
+    }
+    
+    public abstract class Engine<TPeer> : BaseEngine<Session<TPeer>>, IEngine
         where TPeer : BasePeer, IPeer
     {
         private sealed class WaitingReconnectPeer(TPeer peer, int timeOutSec)
@@ -26,28 +36,33 @@ namespace SP.Engine.Server
         }
 
         private readonly ConcurrentDictionary<PeerId, WaitingReconnectPeer> _waitingReconnectPeerDict = new();
-        private readonly ConcurrentDictionary<PeerId, TPeer> _peerDict = new();
+        private readonly ConcurrentDictionary<PeerId, TPeer> _peers = new();
         private readonly List<IServerConnector> _connectors = [];
         private readonly List<ThreadFiber> _updatePeerFibers = [];
-        private readonly Dictionary<ushort, IHandler<ClientSession<TPeer>, IMessage>> _engineHandlerDict = new();
-        private readonly Dictionary<ushort, IHandler<TPeer, IMessage>> _handlerDict = new();
-        private ThreadFiber _fiber;
+        private readonly Dictionary<ushort, IHandler<Session<TPeer>, IMessage>> _engineHandlers = new();
+        private readonly Dictionary<ushort, IHandler<TPeer, IMessage>> _handlers = new();
+        private ThreadFiber _scheduler;
 
-        public override IFiberScheduler Scheduler => _fiber;
+        public override IFiberScheduler Scheduler => _scheduler;
+        
+        protected override IBasePeer GetBasePeer(PeerId peerId)
+            => FindPeer(peerId);
+        
+        public IPeer GetPeer(PeerId peerId)
+            => FindPeer(peerId);
         
         public override bool Initialize(string name, EngineConfig config)
         {
             if (!base.Initialize(name, config))
                 return false;
 
-            // 스케줄러 생성
-            _fiber = CreateFiber();
-            _fiber.Schedule(ScheduleUpdateConnectors, config.Session.ConnectorUpdateIntervalMs, config.Session.ConnectorUpdateIntervalMs);
+            _scheduler = new ThreadFiber(Logger);
+            _scheduler.Schedule(ScheduleUpdateConnectors, config.Session.ConnectorUpdateIntervalMs, config.Session.ConnectorUpdateIntervalMs);
             
             var fiberCnt = Math.Max(config.Network.LimitConnectionCount / 300, 10);
             for (var index = 0; index < fiberCnt; index++)
             {
-                var fiber = CreateFiber();
+                var fiber = new ThreadFiber(Logger);
                 fiber.Schedule(ScheduleUpdatePeers, index, config.Session.PeerUpdateIntervalMs, config.Session.PeerUpdateIntervalMs);
                 _updatePeerFibers.Add(fiber);
             }
@@ -65,27 +80,20 @@ namespace SP.Engine.Server
         public long GetServerTimeMs()
             => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         
-        private ThreadFiber CreateFiber()
+        private bool SetupConnector(List<ConnectorConfig> connectors)
         {
-            var fiber = new ThreadFiber(logger: Logger);
-            return fiber;
-        }
-
-        private bool SetupConnector(IReadOnlyList<ConnectorConfig> connectors)
-        {
-            foreach (var connectorConfig in connectors)
+            foreach (var config in connectors)
             {
-                var connector = CreateConnector(connectorConfig.Name);
-                if (null == connector)
+                if (!TryCreateConnector(config.Name, out var connector))
                 {
-                    Logger.Info("Failed to create connector {0}.", connectorConfig.Name);
+                    Logger.Info("Failed to create connector. name={0}.", config.Name);
                     return false;
                 }
 
                 try
                 {
-                    if (!connector.Initialize(this, connectorConfig))
-                        throw new InvalidOperationException($"Failed to initialize connector {connector.Name}.");
+                    if (!connector.Initialize(this, config))
+                        throw new InvalidOperationException($"Failed to initialize connector. name={connector.Name}.");
 
                     _connectors.Add(connector);
                 }
@@ -103,12 +111,12 @@ namespace SP.Engine.Server
         {
             try
             {
-                _engineHandlerDict[C2SEngineProtocolId.SessionAuthReq] = new SessionAuth<TPeer>();
-                _engineHandlerDict[C2SEngineProtocolId.Close] = new Close<TPeer>();
-                _engineHandlerDict[C2SEngineProtocolId.Ping] = new Ping<TPeer>();
-                _engineHandlerDict[C2SEngineProtocolId.MessageAck] = new MessageAck<TPeer>();
-                _engineHandlerDict[C2SEngineProtocolId.UdpHelloReq] = new UdpHelloReq<TPeer>();
-                _engineHandlerDict[C2SEngineProtocolId.UdpKeepAlive] = new UdpKeepAlive<TPeer>();
+                _engineHandlers[C2SEngineProtocolId.SessionAuthReq] = new SessionAuth<TPeer>();
+                _engineHandlers[C2SEngineProtocolId.Close] = new Close<TPeer>();
+                _engineHandlers[C2SEngineProtocolId.Ping] = new Ping<TPeer>();
+                _engineHandlers[C2SEngineProtocolId.MessageAck] = new MessageAck<TPeer>();
+                _engineHandlers[C2SEngineProtocolId.UdpHelloReq] = new UdpHelloReq<TPeer>();
+                _engineHandlers[C2SEngineProtocolId.UdpKeepAlive] = new UdpKeepAlive<TPeer>();
                 return DiscoverHandlers().All(RegisterHandler);
             }
             catch (Exception e)
@@ -142,7 +150,7 @@ namespace SP.Engine.Server
 
         private bool RegisterHandler(IHandler<TPeer, IMessage> handler)
         {
-            if (!_handlerDict.TryAdd(handler.Id, handler))
+            if (!_handlers.TryAdd(handler.Id, handler))
             {
                 Logger.Error("Handler '{0}' already exists.", handler.Id);
                 return false;
@@ -154,11 +162,11 @@ namespace SP.Engine.Server
 
         private IHandler<TPeer, IMessage> GetHandler(ushort id)
         {
-            _handlerDict.TryGetValue(id, out var handler);
+            _handlers.TryGetValue(id, out var handler);
             return handler;
         }
         
-        internal void ExecuteMessage(ClientSession<TPeer> session, IMessage message)
+        internal void ExecuteMessage(Session<TPeer> session, IMessage message)
         {
             var handler = GetHandler(message.Id);
             if (handler != null)
@@ -173,37 +181,17 @@ namespace SP.Engine.Server
                 
                 if (message.SequenceNumber > 0)
                     session.SendMessageAck(message.SequenceNumber);
-                
-                peer.ExecuteMessage(message);
+
+                foreach (var msg in peer.ProcessReceivedMessage(message))
+                    GetHandler(message.Id)?.ExecuteMessage(peer, msg); 
             }
             else
             {
-                if (_engineHandlerDict.TryGetValue(message.Id, out var engineHandler))
-                {
-                    engineHandler.ExecuteMessage(session, message);
-                }
+                if (_engineHandlers.TryGetValue(message.Id, out var value))
+                    value.ExecuteMessage(session, message);
                 else
-                {
                     Logger.Error("Unknown message: {0} Session: {1}/{2}", message.Id, session.SessionId, session.RemoteEndPoint);
-                }
             }
-        }
-
-        public override void ExecuteHandler(IPeer peer, IMessage message)
-        {
-            var handler = GetHandler(message.Id);
-            if (handler == null)
-            {
-                Logger.Error("Not found handler: {0}", message.Id);
-                return;
-            }
-            
-            handler.ExecuteMessage((TPeer)peer, message);
-        }
-
-        public override IPeer GetPeer(PeerId peerId)
-        {
-            return FindPeer(peerId);
         }
 
         public override bool Start()
@@ -211,7 +199,7 @@ namespace SP.Engine.Server
             if (!base.Start())
                 return false;
 
-            _fiber?.Start();
+            _scheduler?.Start();
             
             foreach (var fiber in _updatePeerFibers)
                 fiber.Start();
@@ -226,7 +214,7 @@ namespace SP.Engine.Server
 
         public override void Stop()
         {
-            _fiber?.Dispose();
+            _scheduler?.Dispose();
             
             foreach (var fiber in _updatePeerFibers)
                 fiber.Dispose();
@@ -326,20 +314,16 @@ namespace SP.Engine.Server
             foreach (var peer in peers)
                 peer.Tick();
         }
-        
-        internal TPeer CreateNewPeer(IClientSession<TPeer> session, DhKeySize keySize, byte[] clientPublicKey)
-        {
-            var peer = CreatePeer(session);
-            peer.SetupSecurity(keySize, clientPublicKey);
-            return peer;
-        }
 
-        protected abstract TPeer CreatePeer(IClientSession<TPeer> peer);
-        protected abstract IServerConnector CreateConnector(string name);
+        internal TPeer CreatePeer(ISession session)
+            => TryCreatePeer(session, out var peer) ? peer : null;
+        
+        protected abstract bool TryCreatePeer(ISession session, out TPeer peer);
+        protected abstract bool TryCreateConnector(string name, out IServerConnector connector);
 
         public TPeer FindPeer(PeerId peerId)
         {
-            if (!_peerDict.TryGetValue(peerId, out var peer))
+            if (!_peers.TryGetValue(peerId, out var peer))
                 peer = GetWaitingReconnectPeer(peerId);
             return peer;
         }
@@ -349,20 +333,20 @@ namespace SP.Engine.Server
             switch (peer.Kind)
             {
                 case PeerKind.User:
-                    return _peerDict.TryAdd(peer.Id, peer);
+                    return _peers.TryAdd(peer.Id, peer);
                 case PeerKind.Server:
-                    _peerDict.AddOrUpdate(peer.Id, peer, (_, _) => peer);
+                    _peers.AddOrUpdate(peer.Id, peer, (_, _) => peer);
                     return true;
                 case PeerKind.None:
                 default:
-                    Logger.Error("Invalid peer: {0}", peer.Kind);
+                    Logger.Error("Unknown peer kind: {0}", peer.Kind);
                     return false;
             }
         }
 
         protected virtual bool TryRemovePeer(PeerId peerId, out TPeer peer)
         {
-            if (_peerDict.TryRemove(peerId, out var removed))
+            if (_peers.TryRemove(peerId, out var removed))
             {
                 peer = removed;
                 return true;
@@ -372,7 +356,7 @@ namespace SP.Engine.Server
             return false;
         }
 
-        protected override void OnSessionClosed(ClientSession<TPeer> clientSession, CloseReason reason)
+        protected override void OnSessionClosed(Session<TPeer> clientSession, CloseReason reason)
         {
             base.OnSessionClosed(clientSession, reason);
 
@@ -398,16 +382,18 @@ namespace SP.Engine.Server
             peer.Offline(reason);
         }
 
-        internal void OnlinePeer(TPeer peer, IClientSession<TPeer> clientSession)
+        internal void OnlinePeer(TPeer peer, ISession session)
         {
             RemoveWaitingReconnectPeer(peer);
-            AddOrUpdatePeer(peer);
-            peer.Online(clientSession);
+            if (AddOrUpdatePeer(peer)) 
+                peer.Online(session);
+            else
+                Logger.Warn("Failed to add or update peer. peerId={0}", peer.Id);
         }
 
         internal void JoinPeer(TPeer peer)
         {
-            if (!_peerDict.TryAdd(peer.Id, peer))
+            if (!_peers.TryAdd(peer.Id, peer))
                 return;
 
             peer.JoinServer();

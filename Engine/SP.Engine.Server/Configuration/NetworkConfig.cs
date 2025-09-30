@@ -12,4 +12,8 @@ public sealed record NetworkConfig
     public int KeepAliveTimeSec { get; init; } = 30;
     public int KeepAliveIntervalSec { get; init; } = 2;
     public bool LogAllSocketError  { get; init; }
+    public bool UseEncrypt { get; init; } = true;
+    public bool UseCompress { get; init; } = false;
+    public ushort CompressionThreshold { get; init; } = 2048;
+    public int MaxSendCount { get; init; } = 5;
 }

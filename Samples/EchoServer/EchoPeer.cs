@@ -3,7 +3,7 @@ using SP.Engine.Server;
 
 namespace EchoServer;
 
-public class EchoPeer(IClientSession session) : BasePeer(SP.Engine.Server.PeerKind.User, session)
+public class EchoPeer(ISession session) : BasePeer(PeerKind.User, session)
 {
     protected override void OnJoinServer()
     {

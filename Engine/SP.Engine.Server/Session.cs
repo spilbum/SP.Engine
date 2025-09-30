@@ -1,35 +1,46 @@
 ﻿using System;
+using System.Net;
+using SP.Common.Logging;
 using SP.Engine.Runtime;
 using SP.Engine.Protocol;
 using SP.Engine.Runtime.Channel;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
+using SP.Engine.Server.Configuration;
+using SP.Engine.Server.ProtocolHandler;
 
 namespace SP.Engine.Server
 {
-    public interface IClientSession<out TPeer> : IClientSession
-        where TPeer : BasePeer, IPeer
+    public interface ISession : ILogContext, IHandleContext
     {
-        TPeer Peer { get; }
+        string SessionId { get; }
+        IPEndPoint LocalEndPoint { get; }
+        IPEndPoint RemoteEndPoint { get; }
+        IEngineConfig Config { get; }
+        IEngine Engine { get; }
+        bool TrySend(ChannelKind channel, IMessage message);
+        void Close(CloseReason reason);
     }
     
-    public sealed class ClientSession<TPeer> : BaseClientSession<ClientSession<TPeer>>, IClientSession<TPeer>
+    public sealed class Session<TPeer> : BaseSession<Session<TPeer>>, ISession
         where TPeer : BasePeer, IPeer
     {
+        private Engine<TPeer> _engine;
+        IEngine ISession.Engine => _engine;
+        
         public TPeer Peer { get; private set; }
         public bool IsClosing { get; private set; }
-        private Engine<TPeer> Engine { get; set; }
         
-        public override void Initialize(IEngine engine, TcpNetworkSession networkSession)
+        public override void Initialize(IBaseEngine engine, TcpNetworkSession networkSession)
         {
             base.Initialize(engine, networkSession);
-            Engine = (Engine<TPeer>)engine;
+            _engine = (Engine<TPeer>)engine;
         }
 
         internal void OnSessionAuth(C2SEngineProtocolData.SessionAuthReq data)
         {
             var errorCode = EngineErrorCode.Unknown;
-            var engine = Engine;
+            var engine = _engine;
             var peer = Peer;
 
             try
@@ -40,16 +51,17 @@ namespace SP.Engine.Server
                     if (null != peer)
                         return;
 
-                    peer = engine.CreateNewPeer(this, data.KeySize, data.ClientPublicKey);
+                    peer = engine.CreatePeer(this);
                     if (null == peer)
                         return;
 
+                    peer.CreateEncryptor(data.KeySize, data.ClientPublicKey);
                     engine.JoinPeer(peer);
                 }
                 else
                 {
                     // 재연결
-                    var prevSession = (ClientSession<TPeer>)engine.GetSession(data.SessionId);
+                    var prevSession = (Session<TPeer>)engine.GetSession(data.SessionId);
                     if (null != prevSession)
                     {
                         // 이전 세션이 살아 있는 경우
@@ -96,27 +108,27 @@ namespace SP.Engine.Server
                 var authAck = new S2CEngineProtocolData.SessionAuthAck { ErrorCode = errorCode };
                 if (errorCode == EngineErrorCode.Success)
                 {
+                    var network = Config.Network;
                     authAck.SessionId = SessionId;
-                    authAck.MaxFrameBytes = Config.Network.MaxFrameBytes;
-                    authAck.SendTimeoutMs = Config.Network.SendTimeoutMs;
-                    authAck.MaxResendCount = Config.Session.MaxResendCount;
+                    authAck.MaxFrameBytes = network.MaxFrameBytes;
+                    authAck.SendTimeoutMs = network.SendTimeoutMs;
+                    authAck.MaxSendCount = network.MaxSendCount;
                     authAck.UdpOpenPort = engine.GetOpenPort(ESocketMode.Udp);
 
                     if (peer != null)
                     {
                         authAck.PeerId = peer.Id;
                         
-                        var security = Config.Security;
-                        if (security.UseEncrypt)
+                        if (network.UseEncrypt)
                         {
                             authAck.UseEncrypt = true;
-                            authAck.ServerPublicKey = peer.DhPublicKey;
+                            authAck.ServerPublicKey = ((IBasePeer)peer).DiffieHellman.PublicKey;
                         }
 
-                        if (security.UseCompress)
+                        if (network.UseCompress)
                         {
                             authAck.UseCompress = true;
-                            authAck.CompressionThreshold = security.CompressionThreshold;
+                            authAck.CompressionThreshold = network.CompressionThreshold;
                         }
                     }
                 }
@@ -125,16 +137,11 @@ namespace SP.Engine.Server
                     Logger.Error("Failed to send session auth ack. sessionId={0}", SessionId);
             }
         }
-
-        protected override void ExecuteMessage(IMessage message)
-        {
-            Engine.ExecuteMessage(this, message);
-        }
         
         internal bool InternalSend(IProtocol data)
         {
             var channel = data.Channel;
-            var policy = Peer.GetPolicy(data.GetType());
+            var policy = Peer.GetNetworkPolicy(data.GetType());
             var encryptor = policy.UseEncrypt ? Encryptor : null;
             switch (channel)
             {
@@ -162,7 +169,7 @@ namespace SP.Engine.Server
             InternalSend(new S2CEngineProtocolData.Pong
             {
                 SendTimeMs = sendTimeMs, 
-                ServerTimeMs = Engine.GetServerTimeMs()
+                ServerTimeMs = _engine.GetServerTimeMs()
             });
         }
         
@@ -172,7 +179,7 @@ namespace SP.Engine.Server
             {
                 IsClosing = true;
                 StartClosingTime = DateTime.UtcNow;    
-                Engine?.EnqueueCloseHandshakePending(this);
+                _engine.EnqueueCloseHandshakePending(this);
             }
 
             var close = new S2CEngineProtocolData.Close();
@@ -183,6 +190,11 @@ namespace SP.Engine.Server
         {
             var messageAck = new S2CEngineProtocolData.MessageAck { SequenceNumber = sequenceNumber };
             InternalSend(messageAck);
+        }
+        
+        protected override void ExecuteMessage(IMessage message)
+        {
+            _engine.ExecuteMessage(this, message);
         }
         
         public override void Close()
