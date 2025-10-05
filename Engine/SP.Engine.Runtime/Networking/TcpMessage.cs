@@ -4,6 +4,8 @@ namespace SP.Engine.Runtime.Networking
 {
     public class TcpMessage : BaseMessage<TcpHeader>
     {
+        public long SequenceNumber => Header.SequenceNumber;
+        
         public TcpMessage()
         {
             
@@ -22,13 +24,13 @@ namespace SP.Engine.Runtime.Networking
                 .Build();
         }
         
-        protected override TcpHeader CreateHeader(ushort id, HeaderFlags flags, int payloadLength)
+        protected override TcpHeader CreateHeader(HeaderFlags flags, ushort id, int payloadLength)
         {
             return new TcpHeaderBuilder()
                 .From(Header)
+                .AddFlag(flags)
                 .WithId(id)
                 .WithPayloadLength(payloadLength)
-                .AddFlag(flags)
                 .Build();
         }
     }

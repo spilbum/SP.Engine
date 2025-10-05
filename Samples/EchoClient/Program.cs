@@ -201,11 +201,11 @@ commands:
             if (_client == null)
                 return;
             
-            var (ts, tr) = _client.GetTcpTrafficInfo();
-            var (us, ur) = _client.GetUdpTrafficInfo();
+            var tcpInfo = _client.GetTcpTrafficInfo();
+            var udpInfo = _client.GetUdpTrafficInfo();
             var ls = _client.GetLatencyStats();
 
-            _client.Logger.Info($"[Stats] TCP sent/recv={ts}/{tr} bytes | UDP sent/recv={us}/{ur} bytes | " +
+            _client.Logger.Info($"[Stats] TCP sent/recv={tcpInfo.SentBytes}/{tcpInfo.ReceivedBytes} bytes | UDP sent/recv={udpInfo.SentBytes}/{udpInfo.ReceivedBytes} bytes | " +
                          $"RTT last={ls.LastRttMs:F1}ms avg={ls.AvgRttMs:F1}ms jitter={ls.JitterMs:F1}ms loss={ls.PacketLossRate:F2}%");
         }
     }

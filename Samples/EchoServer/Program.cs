@@ -42,8 +42,8 @@ internal static class Program
                 .WithRuntime(r => r with
                 {
                 })
-                .AddListener(new ListenerConfig { Ip = host, Port = port, Mode = ESocketMode.Tcp, BackLog = 128 })
-                .AddListener(new ListenerConfig { Ip = host, Port = port + 1, Mode = ESocketMode.Udp, BackLog = 128 })
+                .AddListener(new ListenerConfig { Ip = host, Port = port, Mode = SocketMode.Tcp, BackLog = 128 })
+                .AddListener(new ListenerConfig { Ip = host, Port = port + 1, Mode = SocketMode.Udp, BackLog = 128 })
                 .Build();
             
             using var server = new EchoServer();

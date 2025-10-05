@@ -6,6 +6,7 @@ using SP.Common.Buffer;
 using SP.Common.Logging;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Channel;
+using SP.Engine.Runtime.Compression;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Security;
 using SP.Engine.Server.Configuration;
@@ -19,8 +20,9 @@ namespace SP.Engine.Server
         INetworkSession NetworkSession { get; }
         IEngineConfig Config { get; }
         IEncryptor Encryptor { get; }
+        ICompressor Compressor { get; }
         void ProcessBuffer(byte[] buffer, int offset, int length);
-        void ProcessBuffer(byte[] buffer, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint);
+        void ProcessDatagram(ArraySegment<byte> buffer, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint);
     }
     
     public abstract class BaseSession<TSession> : IBaseSession
@@ -36,32 +38,35 @@ namespace SP.Engine.Server
         public ILogger Logger => _engine.Logger;
         public IPEndPoint LocalEndPoint => NetworkSession.LocalEndPoint;
         public IPEndPoint RemoteEndPoint => NetworkSession.RemoteEndPoint;
-        public bool IsConnected { get; internal set; }
         public DateTime StartTime { get; }
         public DateTime LastActiveTime { get; private set; }
-        public string SessionId { get; private set; }
+        public string Id { get; private set; }
         public DateTime StartClosingTime { get; protected set; }
         public bool IsAuthorized { get; protected set; }
         public INetworkSession NetworkSession { get; private set; }
         public UdpSocket UdpSocket { get; private set; }
         public CloseReason CloseReason { get; private set; }
         public IEncryptor Encryptor { get; protected set; }
+        public ICompressor Compressor { get; protected set; }
+        public bool IsConnected { get; internal set; }
+        public bool IsClosed { get; internal set; }
 
         protected BaseSession()
         {
             StartTime = DateTime.UtcNow;
             LastActiveTime = StartTime;
+            Compressor = new Lz4Compressor();
         }
 
         public virtual void Initialize(IBaseEngine engine, TcpNetworkSession networkSession)
         {
             _engine = (BaseEngine<TSession>)engine;
             NetworkSession = networkSession;
-            SessionId = networkSession.SessionId;
+            Id = networkSession.SessionId;
             _receiveBuffer = new BinaryBuffer(engine.Config.Network.ReceiveBufferSize);
             networkSession.Attach(this);
             _channelRouter.Bind(new ReliableChannel(networkSession));
-            _engine.Scheduler.Schedule(_fragmentAssembler.Cleanup, TimeSpan.FromMinutes(15), 5000, 5000);
+            //_engine.Scheduler.Schedule(_fragmentAssembler.Cleanup, TimeSpan.FromMinutes(15), 5000, 5000);
             IsConnected = true;
         }
 
@@ -112,27 +117,32 @@ namespace SP.Engine.Server
             }
         }
 
-        void IBaseSession.ProcessBuffer(byte[] buffer, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint)
+        void IBaseSession.ProcessDatagram(ArraySegment<byte> datagram, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint)
         {
             EnsureUdpSocket(socket, remoteEndPoint);
 
-            if (header.IsFragmentation)
+            var bodyOffset = datagram.Offset + header.Size;
+            var bodyLength = header.PayloadLength;
+            var bodySpan = new ReadOnlySpan<byte>(datagram.Array, bodyOffset, bodyLength);
+            
+            if (header.Flags.HasFlag(HeaderFlags.Fragment))
             {
-                if (!UdpFragment.TryParse(buffer, out var fragment))
-                {
-                    Logger.Warn("Failed to parse fragmentation data. datagram={0}", buffer.Length);
+                if (bodyLength < UdpFragmentHeader.ByteSize) return;
+                
+                if (!UdpFragmentHeader.TryRead(bodySpan[..UdpFragmentHeader.ByteSize], out var fragHeader))
                     return;
-                }
-
-                if (!_fragmentAssembler.TryAssemble(fragment, out var payload))
+                
+                if (bodyLength < UdpFragmentHeader.ByteSize + fragHeader.PayloadLength)
                     return;
 
-                var msg = new UdpMessage(header, payload);
-                ProcessMessage(msg);
+                var fragPayload = new ArraySegment<byte>(
+                    datagram.Array!, bodyOffset + UdpFragmentHeader.ByteSize, fragHeader.PayloadLength);
+                
+                
             }
             else
             {
-                var payload = new ArraySegment<byte>(buffer);
+                var payload = new ArraySegment<byte>(datagram.Array!, bodyOffset, bodyLength);
                 var msg = new UdpMessage(header, payload);
                 ProcessMessage(msg);
             }
@@ -154,7 +164,7 @@ namespace SP.Engine.Server
             }
             finally
             {  
-                _receiveBuffer.MaybeTrim(TcpHeader.HeaderSize);
+                _receiveBuffer.MaybeTrim(TcpHeader.ByteSize);
             }
         }
         
@@ -164,42 +174,29 @@ namespace SP.Engine.Server
             var produced = 0;
             while (produced < maxFramePerTick)
             {
-                if (_receiveBuffer.ReadableBytes < TcpHeader.HeaderSize)
+                if (_receiveBuffer.ReadableBytes < TcpHeader.ByteSize)
                     yield break;
                 
-                var headerSpan = _receiveBuffer.Peek(TcpHeader.HeaderSize);
-                var result = TcpHeader.TryParse(headerSpan, out var header);
-
-                switch (result)
-                {
-                    case TcpHeader.ParseResult.Success:
-                    {
-                        long frameLen = header.Length + header.PayloadLength;
-                        if (frameLen <= 0 || frameLen > Config.Network.MaxFrameBytes)
-                        {
-                            Logger.Warn("Frame too large/small. max={0}, got={1}, (id={2})", 
-                                Config.Network.MaxFrameBytes, frameLen, header.Id);
-                            Close(CloseReason.ProtocolError);
-                            yield break;
-                        }
-
-                        var len = (int)frameLen;
-                        if (_receiveBuffer.ReadableBytes < len)
-                            yield break;
+                var headerSpan = _receiveBuffer.Read(TcpHeader.ByteSize);
+                if (!TcpHeader.TryParse(headerSpan, out var header, out var consumed))
+                    yield break;
                 
-                        var frameBytes = _receiveBuffer.ReadBytes(len);
-                        yield return new TcpMessage(header, new ArraySegment<byte>(frameBytes));
-                        produced++;
-                        break;
-                    }
-                    case TcpHeader.ParseResult.Invalid:
-                        Close(CloseReason.ProtocolError);
-                        yield break;
-                    case TcpHeader.ParseResult.NeedMore:
-                        yield break;
-                    default:
-                        throw new ArgumentOutOfRangeException();
+                long frameLen = consumed + header.PayloadLength;
+                if (frameLen <= 0 || frameLen > Config.Network.MaxFrameBytes)
+                {
+                    Logger.Warn("Frame too large/small. max={0}, got={1}, (id={2})", 
+                        Config.Network.MaxFrameBytes, frameLen, header.Id);
+                    Close(CloseReason.ProtocolError);
+                    yield break;
                 }
+
+                var len = (int)frameLen;
+                if (_receiveBuffer.ReadableBytes < len)
+                    yield break;
+                
+                var frameBytes = _receiveBuffer.ReadBytes(len);
+                yield return new TcpMessage(header, new ArraySegment<byte>(frameBytes));
+                produced++;
             }
         }
 

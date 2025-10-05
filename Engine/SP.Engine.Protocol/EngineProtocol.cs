@@ -30,7 +30,7 @@ namespace SP.Engine.Protocol
         public class SessionAuthReq : BaseProtocol
         {
             public string? SessionId;
-            public PeerId PeerId;
+            public uint PeerId;
             public DhKeySize KeySize;
             public byte[]? ClientPublicKey;
         }
@@ -60,7 +60,7 @@ namespace SP.Engine.Protocol
         public class UdpHelloReq : BaseProtocol
         {
             public string? SessionId;
-            public PeerId PeerId;
+            public uint PeerId;
             public ushort Mtu;
         }
 
@@ -75,20 +75,18 @@ namespace SP.Engine.Protocol
         [Protocol(S2CEngineProtocolId.SessionAuthAck, encrypt: Toggle.Off, compress: Toggle.Off)]
         public class SessionAuthAck : BaseProtocol
         {
-            public EngineErrorCode ErrorCode;
+            public SessionHandshakeResult Result;
             public string? SessionId;
-            public PeerId PeerId;
-
+            public int MaxFrameBytes;
+            public int SendTimeoutMs;
+            public int MaxRetryCount;
+            public int UdpOpenPort;
+            public uint PeerId;
             public bool UseEncrypt;
             public byte[]? ServerPublicKey;
             public bool UseCompress;
             public int CompressionThreshold;
-
-            public int MaxFrameBytes;
-            public int SendTimeoutMs;
-            public int MaxRetryCount;
-
-            public int UdpOpenPort;
+            public string? Reason;
         }
 
         [Protocol(S2CEngineProtocolId.Pong)]
@@ -112,7 +110,8 @@ namespace SP.Engine.Protocol
         [Protocol(S2CEngineProtocolId.UdpHelloAck, ChannelKind.Unreliable)]
         public class UdpHelloAck : BaseProtocol
         {
-            public EngineErrorCode ErrorCode;
+            public UdpHandshakeResult Result;
+            public ushort Mtu;
         }
     }
 }

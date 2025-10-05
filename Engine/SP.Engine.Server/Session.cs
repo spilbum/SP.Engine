@@ -6,6 +6,7 @@ using SP.Engine.Protocol;
 using SP.Engine.Runtime.Channel;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
+using SP.Engine.Runtime.Security;
 using SP.Engine.Server.Configuration;
 using SP.Engine.Server.ProtocolHandler;
 
@@ -13,7 +14,7 @@ namespace SP.Engine.Server
 {
     public interface ISession : ILogContext, IHandleContext
     {
-        string SessionId { get; }
+        string Id { get; }
         IPEndPoint LocalEndPoint { get; }
         IPEndPoint RemoteEndPoint { get; }
         IEngineConfig Config { get; }
@@ -37,9 +38,9 @@ namespace SP.Engine.Server
             _engine = (Engine<TPeer>)engine;
         }
 
-        internal void OnSessionAuth(C2SEngineProtocolData.SessionAuthReq data)
+        internal void OnSessionHandshake(C2SEngineProtocolData.SessionAuthReq data)
         {
-            var errorCode = EngineErrorCode.Unknown;
+            var ack = new S2CEngineProtocolData.SessionAuthAck { Result = SessionHandshakeResult.None };
             var engine = _engine;
             var peer = Peer;
 
@@ -47,15 +48,17 @@ namespace SP.Engine.Server
             {
                 if (string.IsNullOrEmpty(data.SessionId))
                 {
-                    // 최조 연결
+                    // 최초 연결
                     if (null != peer)
-                        return;
+                        throw new SessionAuthException(SessionHandshakeResult.InvalidRequest, 
+                            $"Already created peer. sessionId={peer.Session.Id}, peerId={peer.Id}");
 
-                    peer = engine.CreatePeer(this);
-                    if (null == peer)
-                        return;
-
-                    peer.CreateEncryptor(data.KeySize, data.ClientPublicKey);
+                    peer = engine.CreatePeer(this) ??
+                           throw new SessionAuthException(SessionHandshakeResult.InternalError, "Failed to create peer.");
+                    
+                    if (!peer.TryKeyExchange(data.KeySize, data.ClientPublicKey))
+                        throw new SessionAuthException(SessionHandshakeResult.KeyExchangeFailed, "Key exchange failed.");
+                    
                     engine.JoinPeer(peer);
                 }
                 else
@@ -66,8 +69,8 @@ namespace SP.Engine.Server
                     {
                         // 이전 세션이 살아 있는 경우
                         if (CloseReason.Rejected == prevSession.CloseReason)
-                            throw new ErrorCodeException(EngineErrorCode.ReconnectionFailed,
-                                $"Reconnection is not allowed because the session was rejected. sessionId={prevSession.SessionId}");
+                            throw new SessionAuthException(SessionHandshakeResult.ReconnectionNotAllowed,
+                                $"Reconnection is not allowed because the session was rejected. sessionId={prevSession.Id}");
 
                         peer = prevSession.Peer;
                         prevSession.Close();
@@ -77,7 +80,7 @@ namespace SP.Engine.Server
                         // 재 연결 대기인 경우
                         peer = engine.GetWaitingReconnectPeer(data.PeerId);
                         if (peer == null)
-                            throw new ErrorCodeException(EngineErrorCode.ReconnectionFailed,
+                            throw new SessionAuthException(SessionHandshakeResult.SessionNotFound,
                                 $"No waiting reconnection peer found for sessionId={data.SessionId}");
                     }
 
@@ -88,75 +91,130 @@ namespace SP.Engine.Server
                 Peer.OnSessionAuthed();
                 Encryptor = Peer.Encryptor;
                 IsAuthorized = true;
-                errorCode = EngineErrorCode.Success;
-                Logger.Debug("Session authentication succeeded. sessionId={0}, peerId={1}", SessionId, peer.Id);
+                ack.Result = SessionHandshakeResult.Ok;
+                Logger.Debug("Session authentication succeeded. sessionId={0}, peerId={1}", Id, peer.Id);
             }
-            catch (ErrorCodeException e)
+            catch (SessionAuthException e)
             {
-                errorCode = e.ErrorCode;
+                ack.Result = e.Result;
+                #if DEBUG
+                ack.Reason = e.Message;
+                #endif
                 Logger.Error("Session authentication failed ({0}). {1}\r\nstackTrace={2}",
-                    e.ErrorCode, e.Message, e.StackTrace);
+                    e.Result, e.Message, e.StackTrace);
             }
             catch (Exception e)
             {
-                errorCode = EngineErrorCode.Invalid;
+                ack.Result = SessionHandshakeResult.InternalError;
                 Logger.Error("Session authentication failed. {0}\r\nstackTrace={1}",
                     e.Message, e.StackTrace);
             }
             finally
             {
-                var authAck = new S2CEngineProtocolData.SessionAuthAck { ErrorCode = errorCode };
-                if (errorCode == EngineErrorCode.Success)
+                if (ack.Result  == SessionHandshakeResult.Ok)
                 {
                     var network = Config.Network;
-                    authAck.SessionId = SessionId;
-                    authAck.MaxFrameBytes = network.MaxFrameBytes;
-                    authAck.SendTimeoutMs = network.SendTimeoutMs;
-                    authAck.MaxRetryCount = network.MaxRetryCount;
-                    authAck.UdpOpenPort = engine.GetOpenPort(ESocketMode.Udp);
+                    ack.SessionId = Id;
+                    ack.MaxFrameBytes = network.MaxFrameBytes;
+                    ack.SendTimeoutMs = network.SendTimeoutMs;
+                    ack.MaxRetryCount = network.MaxRetryCount;
+                    ack.UdpOpenPort = engine.GetOpenPort(SocketMode.Udp);
 
                     if (peer != null)
                     {
-                        authAck.PeerId = peer.Id;
+                        ack.PeerId = peer.Id;
                         
                         if (network.UseEncrypt)
                         {
-                            authAck.UseEncrypt = true;
-                            authAck.ServerPublicKey = ((IBasePeer)peer).DiffieHellman.PublicKey;
+                            ack.UseEncrypt = true;
+                            ack.ServerPublicKey = ((IBasePeer)peer).LocalPublicKey;
                         }
 
                         if (network.UseCompress)
                         {
-                            authAck.UseCompress = true;
-                            authAck.CompressionThreshold = network.CompressionThreshold;
+                            ack.UseCompress = true;
+                            ack.CompressionThreshold = network.CompressionThreshold;
                         }
                     }
                 }
                 
-                if (!InternalSend(authAck))
-                    Logger.Error("Failed to send session auth ack. sessionId={0}", SessionId);
+                if (!InternalSend(ack))
+                    Logger.Error("Failed to send session auth ack. sessionId={0}", Id);
+            }
+        }
+
+        internal void OnUdpHandshake(C2SEngineProtocolData.UdpHelloReq data)
+        {
+            var ack = new S2CEngineProtocolData.UdpHelloAck { Result = UdpHandshakeResult.None };
+            
+            try
+            {
+                if (Id != data.SessionId || Peer == null || Peer.Id != data.PeerId)
+                {
+                    ack.Result = UdpHandshakeResult.InvalidRequest;
+                    Logger.Debug("UDP hello invalid ids. sid={0}/{1}, pid={2}/{3}",
+                        data.SessionId, Id, data.PeerId, Peer?.Id);
+                    return;
+                }
+
+                if (IsClosing || IsClosed)
+                {
+                    ack.Result = UdpHandshakeResult.InvalidRequest;
+                    Logger.Debug("UDP hello while closing. sid={0}", Id);
+                    return;
+                }
+
+                if (data.Mtu <= 0)
+                {
+                    ack.Result = UdpHandshakeResult.InvalidRequest;
+                    Logger.Debug("UDP hello invalid mtu. mtu={0}", data.Mtu);
+                    return;
+                }
+                
+                const ushort minIpv4Mtu = 576;
+                
+                var net = Config.Network;
+                var minMtu = Math.Max(minIpv4Mtu, net.MinMtu);
+                var maxMtu = Math.Max(minMtu, net.MaxMtu);
+                var negotiated = (ushort)Math.Min(Math.Max(data.Mtu, minMtu), maxMtu);
+                UdpSocket.SetMaxDatagramSize(negotiated);
+                ack.Mtu = negotiated;
+                
+                Logger.Debug("UDP hello OK - pid={0}, sid={1}, mtu={2}", Peer.Id, Id, negotiated);
+                ack.Result = UdpHandshakeResult.Ok;
+            }
+            catch (Exception e)
+            {
+                ack.Result = UdpHandshakeResult.InternalError;
+                Logger.Error("Udp handshake failed. {0}", e.Message);
+            }
+            finally
+            {
+                if (!InternalSend(ack))
+                    Logger.Error("Failed to send UDP hello ack. sessionId={0}", Id);
             }
         }
         
-        internal bool InternalSend(IProtocol data)
+        private bool InternalSend(IProtocol data)
         {
             var channel = data.Channel;
             var policy = Peer.GetNetworkPolicy(data.GetType());
             var encryptor = policy.UseEncrypt ? Encryptor : null;
+            var compressor = policy.UseCompress ? Compressor : null;
             switch (channel)
             {
                 case ChannelKind.Reliable:
                 {
                     var msg = new TcpMessage();
                     msg.SetSequenceNumber(0);
-                    msg.Serialize(data, policy, encryptor);
+                    msg.Serialize(data, policy, encryptor, compressor);
                     return TrySend(channel, msg);
                 }
                 case ChannelKind.Unreliable:
                 {
                     var msg = new UdpMessage();              
                     msg.SetPeerId(Peer.Id);
-                    msg.Serialize(data, policy, encryptor);
+                    msg.Serialize(data, policy, encryptor, compressor);
                     return TrySend(channel, msg);
                 }
                 default:

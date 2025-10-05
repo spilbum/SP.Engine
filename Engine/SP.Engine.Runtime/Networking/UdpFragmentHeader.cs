@@ -4,45 +4,43 @@ namespace SP.Engine.Runtime.Networking
 {
     public readonly struct UdpFragmentHeader
     {
-        private const int IdOffset = 0;
-        private const int IndexOffset = IdOffset + sizeof(uint);
-        private const int TotalCountOffset = IndexOffset + sizeof(byte);
-        private const int PayloadLengthOffset = TotalCountOffset + sizeof(byte);
-        public const int HeaderSize = PayloadLengthOffset + sizeof(ushort);
-        
+        // id(4) + index(1} + totalCount(1) + payloadLen(4) = 10 bytes
+        public const int ByteSize = 10;
         public uint Id { get; }
         public byte Index { get; }
         public byte TotalCount { get; }
-        public ushort PayloadLength { get; }
-        
-        public UdpFragmentHeader(uint id, byte index, byte totalCount, ushort payloadLength)
+        public int PayloadLength { get; }
+
+        public UdpFragmentHeader(uint id, byte index, byte totalCount, int payloadLength)
         {
             Id = id;
             Index = index;
             TotalCount = totalCount;
             PayloadLength = payloadLength;
         }
-
-        public void WriteTo(Span<byte> span)
+        
+        public static bool TryRead(ReadOnlySpan<byte> source, out UdpFragmentHeader header)
         {
-            span.WriteUInt32(IdOffset, Id);
-            span[IndexOffset] = Index;
-            span[TotalCountOffset] = TotalCount;
-            span.WriteUInt16(PayloadLengthOffset, PayloadLength);
+            header = default;
+            if (source.Length < ByteSize) return false;
+
+            var id = source.ReadUInt32(0);
+            var index = source[4];
+            var totalCount = source[5];
+            var payloadLength = source.ReadInt32(6);
+            if (payloadLength < 0) return false;
+            
+            header = new UdpFragmentHeader(id, index, totalCount, payloadLength);
+            return true;
         }
 
-        public static bool TryParse(ReadOnlySpan<byte> span, out UdpFragmentHeader udpFragmentHeader)
+        public void WriteTo(Span<byte> destination)
         {
-            udpFragmentHeader = default;
-            if (span.Length < HeaderSize)
-                return false;
-            
-            udpFragmentHeader = new UdpFragmentHeader(
-                span.ReadUInt32(IdOffset),
-                span[IndexOffset],
-                span[TotalCountOffset],
-                span.ReadUInt16(PayloadLengthOffset));
-            return true;
+            if (destination.Length < ByteSize) throw new ArgumentException("destination too small");
+            destination.WriteUInt32(0, Id);
+            destination[4] = Index;
+            destination[5] = TotalCount;
+            destination.WriteInt32(6, PayloadLength);
         }
     }
 }

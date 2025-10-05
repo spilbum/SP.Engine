@@ -8,7 +8,7 @@ namespace SP.Engine.Client.ProtocolHandler
     {
         public void ExecuteMessage(NetPeer peer, IMessage message)
         {
-            var protocol = (TProtocol)message.Deserialize(typeof(TProtocol), peer.Encryptor);
+            var protocol = (TProtocol)message.Deserialize(typeof(TProtocol), peer.Encryptor, peer.Compressor);
             ExecuteProtocol(peer, protocol);
         }
 

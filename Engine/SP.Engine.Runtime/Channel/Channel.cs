@@ -1,3 +1,5 @@
+using System.Collections;
+using System.Collections.Generic;
 using SP.Engine.Runtime.Networking;
 
 namespace SP.Engine.Runtime.Channel
@@ -8,19 +10,19 @@ namespace SP.Engine.Runtime.Channel
         Unreliable = 1, // 비보장
     }
     
-    public interface IChannel
+    public interface IMessageChannel
     {
         ChannelKind Kind { get; }
         bool TrySend(IMessage message);
     }
 
-    public sealed class ReliableChannel : IChannel
+    public sealed class ReliableChannel : IMessageChannel
     {
-        private readonly ITcpSender _sender;
+        private readonly IReliableSender _sender;
         
         public ChannelKind Kind => ChannelKind.Reliable;
         
-        public ReliableChannel(ITcpSender sender)
+        public ReliableChannel(IReliableSender sender)
         {
             _sender = sender;    
         }
@@ -33,13 +35,13 @@ namespace SP.Engine.Runtime.Channel
         }
     }
 
-    public sealed class UnreliableChannel : IChannel
+    public sealed class UnreliableChannel : IMessageChannel
     {
-        private readonly IUdpSender _sender;
+        private readonly IUnreliableSender _sender;
 
         public ChannelKind Kind => ChannelKind.Unreliable;
 
-        public UnreliableChannel(IUdpSender sender)
+        public UnreliableChannel(IUnreliableSender sender)
         {
             _sender = sender;
         }

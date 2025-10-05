@@ -7,16 +7,16 @@ namespace SP.Engine.Runtime.Channel
     public interface IChannelRouter
     {
         bool TrySend(ChannelKind kind, IMessage message);
-        void Bind(IChannel channel);
+        void Bind(IMessageChannel channel);
         void Unbind(ChannelKind kind);
     }
 
     public sealed class ChannelRouter : IChannelRouter
     {
-        private IChannel _reliable;
-        private IChannel _unreliable;
+        private IMessageChannel _reliable;
+        private IMessageChannel _unreliable;
 
-        public void Bind(IChannel channel)
+        public void Bind(IMessageChannel channel)
         {
             if (channel == null) throw new ArgumentNullException(nameof(channel));
             switch (channel.Kind)

@@ -6,10 +6,12 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using SP.Common.Buffer;
 using SP.Common.Fiber;
 using SP.Common.Logging;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Networking;
+using SP.Engine.Runtime.Serialization;
 using SP.Engine.Server.Configuration;
 using SP.Engine.Server.Logging;
 
@@ -20,7 +22,7 @@ namespace SP.Engine.Server
         IEngineConfig Config { get; }
         IBaseSession CreateSession(TcpNetworkSession networkSession);   
         bool RegisterSession(IBaseSession session);
-        void ProcessUdpClient(byte[] buffer, Socket socket, IPEndPoint remoteEndPoint);
+        void ProcessUdpClient(byte[] buffer, int offset, int length, Socket socket, IPEndPoint remoteEndPoint);
     }
 
     public interface ISocketServerAccessor
@@ -61,7 +63,7 @@ namespace SP.Engine.Server
         public IEngineConfig Config { get; private set; }
         public abstract IFiberScheduler Scheduler { get; }
         
-        protected abstract IBasePeer GetBasePeer(PeerId peerId);
+        protected abstract IBasePeer GetBasePeer(uint peerId);
         
         public virtual bool Initialize(string name, EngineConfig config)
         {
@@ -143,7 +145,7 @@ namespace SP.Engine.Server
             StopHandshakePendingTimer();
             LogManager.Dispose();
             
-            var sessions = _sessionDict.ToArray();
+            var sessions = _sessions.ToArray();
             if (0 < sessions.Length)
             {
                 var tasks = sessions.Select(s => Task.Run(() =>
@@ -159,7 +161,7 @@ namespace SP.Engine.Server
             Logger.Debug("The server instance {0} has been stopped!", Name);
         }
 
-        public int GetOpenPort(ESocketMode mode)
+        public int GetOpenPort(SocketMode mode)
         {
             foreach (var info in _listenerInfos)
             {
@@ -172,7 +174,7 @@ namespace SP.Engine.Server
 
         public IBaseSession GetSession(string sessionId)
         {
-            _sessionDict.TryGetValue(sessionId, out var session);
+            _sessions.TryGetValue(sessionId, out var session);
             return session;
         }
 
@@ -258,9 +260,9 @@ namespace SP.Engine.Server
             if (session is not TSession s)
                 return false;
 
-            if (!_sessionDict.TryAdd(s.SessionId, s))
+            if (!_sessions.TryAdd(s.Id, s))
             {
-                Logger.Error("The session is refused because the it's ID already exists. sessionId={0}", s.SessionId);
+                Logger.Error("The session is refused because the it's ID already exists. sessionId={0}", s.Id);
                 return false;
             }
 
@@ -268,17 +270,21 @@ namespace SP.Engine.Server
 
             // 인증 해드쉐이크 대기 등록
             EnqueueAuthHandshakePending(s);
-            Logger.Debug("A new session connected. sessionId={0}, remoteEndPoint={1}", s.SessionId, s.RemoteEndPoint);
+            Logger.Debug("A new session connected. sessionId={0}, remoteEndPoint={1}", s.Id, s.RemoteEndPoint);
             return true;
         }
 
-        void IBaseEngine.ProcessUdpClient(byte[] buffer, Socket socket, IPEndPoint remoteEndPoint)
+        void IBaseEngine.ProcessUdpClient(byte[] buffer, int offset, int length, Socket socket, IPEndPoint remoteEndPoint)
         {
-            if (!UdpHeader.TryParse(buffer, out var header))
-            {
-                Logger.Warn("Invalid UDP header found.");
+            if (buffer is null || buffer.Length < UdpHeader.ByteSize)
                 return;
-            }
+
+            var span = new ReadOnlySpan<byte>(buffer, offset, length);
+            if (!UdpHeader.TryParse(span, out var header, out var consumed))
+                return;
+
+            if (buffer.Length < consumed + header.PayloadLength)
+                return;
 
             var peer = GetBasePeer(header.PeerId);
             var session = peer?.BaseSession;
@@ -287,8 +293,9 @@ namespace SP.Engine.Server
                 Logger.Warn("Not found session. peerId={0}", header.PeerId);
                 return;
             }
-            
-            session.ProcessBuffer(buffer, header, socket, remoteEndPoint);
+
+            var datagram = new ArraySegment<byte>(buffer, offset + consumed, header.PayloadLength);
+            session.ProcessDatagram(datagram, header, socket, remoteEndPoint);
         }
 
         private void OnNetworkSessionClosed(INetworkSession networkSession, CloseReason reason)
@@ -297,18 +304,19 @@ namespace SP.Engine.Server
                 return;
          
             session.IsConnected = false;
+            session.IsClosed = true;
             OnSessionClosed(session, reason);
         }
 
         protected virtual void OnSessionClosed(TSession session, CloseReason reason)
         {
-            if (!_sessionDict.TryRemove(session.SessionId, out var removed))
+            if (!_sessions.TryRemove(session.Id, out var removed))
             {
                 Logger.Error("Failed to remove this session, because it hasn't been in session container.");
                 return;
             }
             
-            Logger.Debug("The session {0} has been closed. reason={1}", removed.SessionId, reason);
+            Logger.Debug("The session {0} has been closed. reason={1}", removed.Id, reason);
         }
 
         private Timer _clearIdleSessionTimer;
@@ -351,7 +359,7 @@ namespace SP.Engine.Server
                 {
                     Logger.Debug(
                         "The session {0} will be closed for {1} timeout, the session start time: {2}, last active time: {3}",
-                        session.SessionId,
+                        session.Id,
                         now.Subtract(session.LastActiveTime).TotalSeconds,
                         session.StartTime,
                         session.LastActiveTime);
@@ -383,7 +391,7 @@ namespace SP.Engine.Server
         private Timer _sessionSnapshotTimer;
         private KeyValuePair<string, TSession>[] _sessionSnapshot;
         private readonly object _snapshotLock = new();        
-        private readonly ConcurrentDictionary<string, TSession> _sessionDict = new(Environment.ProcessorCount, 3000, StringComparer.OrdinalIgnoreCase);        
+        private readonly ConcurrentDictionary<string, TSession> _sessions = new(Environment.ProcessorCount, 3000, StringComparer.OrdinalIgnoreCase);        
 
         private void StartSessionSnapshotTimer()
         {
@@ -404,7 +412,7 @@ namespace SP.Engine.Server
 
             try
             { 
-                Interlocked.Exchange(ref _sessionSnapshot, _sessionDict.ToArray());
+                Interlocked.Exchange(ref _sessionSnapshot, _sessions.ToArray());
             }
             finally
             {
@@ -490,7 +498,7 @@ namespace SP.Engine.Server
                     if (DateTime.UtcNow < session.StartClosingTime.AddSeconds(Config.Session.CloseHandshakeTimeoutSec))
                         continue;
 
-                    Logger.Debug("Client terminated due to timeout. sessionId={0}", session.SessionId);
+                    Logger.Debug("Client terminated due to timeout. sessionId={0}", session.Id);
                     
                     // 종료 타임아웃
                     _closeHandshakePendingQueue.TryDequeue(out _);

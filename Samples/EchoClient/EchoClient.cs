@@ -58,10 +58,10 @@ public class EchoClient
         _peer?.SendPing();
     }
 
-    public (int ts, int tr) GetTcpTrafficInfo() =>
+    public TrafficInfo GetTcpTrafficInfo() =>
         _peer?.GetTcpTrafficInfo() ?? throw new NullReferenceException(nameof(_peer));
 
-    public (int ts, int tr) GetUdpTrafficInfo() =>
+    public TrafficInfo GetUdpTrafficInfo() =>
         _peer?.GetUdpTrafficInfo() ?? throw new NullReferenceException(nameof(_peer));
 
     public LatencyStats GetLatencyStats() => _peer?.LatencyStats ?? throw new NullReferenceException(nameof(_peer));
@@ -80,7 +80,7 @@ public class EchoClient
     {
         var message = e.Message;
         if (_invokerDict.TryGetValue(message.Id, out var invoker))
-            invoker.Invoke(this, message, _peer?.Encryptor);
+            invoker.Invoke(this, message, _peer?.Encryptor, _peer?.Compressor);
     }
 
     private void OnError(object? sender, ErrorEventArgs e)

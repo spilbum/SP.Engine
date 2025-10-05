@@ -23,7 +23,7 @@ namespace SP.Engine.Server
         bool Initialize(string name, EngineConfig config);
         bool Start();
         void Stop();
-        IPeer GetPeer(PeerId peerId);
+        IPeer GetPeer(uint peerId);
     }
     
     public abstract class Engine<TPeer> : BaseEngine<Session<TPeer>>, IEngine
@@ -35,8 +35,8 @@ namespace SP.Engine.Server
             public DateTime ExpireTime { get; } = DateTime.UtcNow.AddSeconds(timeOutSec);
         }
 
-        private readonly ConcurrentDictionary<PeerId, WaitingReconnectPeer> _waitingReconnectPeerDict = new();
-        private readonly ConcurrentDictionary<PeerId, TPeer> _peers = new();
+        private readonly ConcurrentDictionary<uint, WaitingReconnectPeer> _waitingReconnectPeerDict = new();
+        private readonly ConcurrentDictionary<uint, TPeer> _peers = new();
         private readonly List<IServerConnector> _connectors = [];
         private readonly List<ThreadFiber> _updatePeerFibers = [];
         private readonly Dictionary<ushort, IHandler<Session<TPeer>, IMessage>> _engineHandlers = new();
@@ -45,10 +45,10 @@ namespace SP.Engine.Server
 
         public override IFiberScheduler Scheduler => _scheduler;
         
-        protected override IBasePeer GetBasePeer(PeerId peerId)
+        protected override IBasePeer GetBasePeer(uint peerId)
             => FindPeer(peerId);
         
-        public IPeer GetPeer(PeerId peerId)
+        public IPeer GetPeer(uint peerId)
             => FindPeer(peerId);
         
         public override bool Initialize(string name, EngineConfig config)
@@ -174,13 +174,13 @@ namespace SP.Engine.Server
                 var peer = session.Peer;
                 if (peer == null)
                 {
-                    Logger.Warn("Invalid peer. sessionId={0}", session.SessionId);
+                    Logger.Warn("Not found peer. sessionId={0}", session.Id);
                     session.Close();
                     return;
                 }
                 
-                if (message.SequenceNumber > 0)
-                    session.SendMessageAck(message.SequenceNumber);
+                if (message is TcpMessage tcp)
+                    session.SendMessageAck(tcp.SequenceNumber);
 
                 foreach (var msg in peer.ProcessMessageInOrder(message))
                     GetHandler(message.Id)?.ExecuteMessage(peer, msg); 
@@ -190,7 +190,7 @@ namespace SP.Engine.Server
                 if (_engineHandlers.TryGetValue(message.Id, out var value))
                     value.ExecuteMessage(session, message);
                 else
-                    Logger.Error("Unknown message: {0} Session: {1}/{2}", message.Id, session.SessionId, session.RemoteEndPoint);
+                    Logger.Error("Unknown message: {0} Session: {1}/{2}", message.Id, session.Id, session.RemoteEndPoint);
             }
         }
 
@@ -321,7 +321,7 @@ namespace SP.Engine.Server
         protected abstract bool TryCreatePeer(ISession session, out TPeer peer);
         protected abstract bool TryCreateConnector(string name, out IServerConnector connector);
 
-        public TPeer FindPeer(PeerId peerId)
+        public TPeer FindPeer(uint peerId)
         {
             if (!_peers.TryGetValue(peerId, out var peer))
                 peer = GetWaitingReconnectPeer(peerId);
@@ -344,7 +344,7 @@ namespace SP.Engine.Server
             }
         }
 
-        protected virtual bool TryRemovePeer(PeerId peerId, out TPeer peer)
+        protected virtual bool TryRemovePeer(uint peerId, out TPeer peer)
         {
             if (_peers.TryRemove(peerId, out var removed))
             {
@@ -435,7 +435,7 @@ namespace SP.Engine.Server
             Logger.Debug("Peer waiting reconnect removed. peerId={0}", peer.Id);
         }
 
-        public TPeer GetWaitingReconnectPeer(PeerId peerId)
+        public TPeer GetWaitingReconnectPeer(uint peerId)
         {
             _waitingReconnectPeerDict.TryGetValue(peerId, out var waitingReconnectPeer);
             return waitingReconnectPeer?.Peer;

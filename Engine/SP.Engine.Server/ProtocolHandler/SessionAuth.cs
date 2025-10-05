@@ -9,6 +9,6 @@ internal class SessionAuth<TPeer> : BaseEngineHandler<Session<TPeer>, C2SEngineP
 {
     protected override void ExecuteProtocol(Session<TPeer> session, C2SEngineProtocolData.SessionAuthReq data)
     {   
-        session.OnSessionAuth(data);
+        session.OnSessionHandshake(data);
     }
 }

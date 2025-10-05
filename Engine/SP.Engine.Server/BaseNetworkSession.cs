@@ -12,7 +12,7 @@ using SP.Engine.Server.Configuration;
 namespace SP.Engine.Server
 {
     [Flags]
-    public enum ESocketState
+    public enum SocketState
     {
         InSending = 1 << 0,
         InReceiving = 1 << 1,
@@ -20,7 +20,7 @@ namespace SP.Engine.Server
         Closed = 1 << 24
     }
 
-    public enum ESocketMode
+    public enum SocketMode
     {
         Tcp = 0,
         Udp = 1
@@ -28,7 +28,7 @@ namespace SP.Engine.Server
 
     public interface INetworkSession
     { 
-        ESocketMode Mode { get; }
+        SocketMode Mode { get; }
         string SessionId { get; }
         Socket Client { get; }
         IPEndPoint LocalEndPoint { get; }
@@ -40,7 +40,7 @@ namespace SP.Engine.Server
         bool TrySend(ArraySegment<byte> data);
     }
 
-    public abstract class BaseNetworkSession(ESocketMode mode) : INetworkSession
+    public abstract class BaseNetworkSession(SocketMode mode) : INetworkSession
     {
         // 1st byte : Closed (y/n)
         // 2nd byte : N/A
@@ -54,7 +54,7 @@ namespace SP.Engine.Server
         private IBaseSession _session;
 
         public Socket Client => _client;
-        public ESocketMode Mode { get; } = mode;
+        public SocketMode Mode { get; } = mode;
         public IBaseSession Session => _session ?? throw new InvalidOperationException("Session is not initialized.");
         public IEngineConfig Config { get; private set; }
         public string SessionId { get; }
@@ -68,10 +68,10 @@ namespace SP.Engine.Server
             remove => _closed -= value;
         }
 
-        protected bool IsInClosingOrClosed => _state >= (int)ESocketState.InClosing;
-        private bool IsClosed => _state >= (int)ESocketState.Closed;
+        protected bool IsInClosingOrClosed => _state >= (int)SocketState.InClosing;
+        private bool IsClosed => _state >= (int)SocketState.Closed;
 
-        protected BaseNetworkSession(ESocketMode mode, Socket client)
+        protected BaseNetworkSession(SocketMode mode, Socket client)
             : this (mode)
         {
             _client = client 
@@ -104,7 +104,7 @@ namespace SP.Engine.Server
         protected virtual void OnClosed(CloseReason reason)
         {
             // 종료 플래그 설정
-            if (!TryAddState(ESocketState.Closed))
+            if (!TryAddState(SocketState.Closed))
                 return;
 
             // 전송 큐 반환
@@ -144,7 +144,7 @@ namespace SP.Engine.Server
             
             if (isInit)
             {
-                if (!TryAddState(ESocketState.InSending))
+                if (!TryAddState(SocketState.InSending))
                     return;
 
                 var currentQueue = _sendingQueue;
@@ -206,7 +206,7 @@ namespace SP.Engine.Server
 
         private void OnSendEnd(bool isInClosingOrClosed)
         {
-            RemoveState(ESocketState.InSending);
+            RemoveState(SocketState.InSending);
 
             if (!isInClosingOrClosed)
                 return;
@@ -255,13 +255,13 @@ namespace SP.Engine.Server
 
         public void Close(CloseReason reason)
         {
-            if (!TryAddState(ESocketState.InClosing))
+            if (!TryAddState(SocketState.InClosing))
                 return;
 
             if (TryValidateClosedBySocket(out var client))
                 return;
 
-            if (CheckState(ESocketState.InSending))
+            if (CheckState(SocketState.InSending))
             {
                 TryAddState(GetSocketState(reason), false);
                 return;
@@ -289,9 +289,9 @@ namespace SP.Engine.Server
             }
         }
         
-        private static ESocketState GetSocketState(CloseReason reason)
+        private static SocketState GetSocketState(CloseReason reason)
         {
-            return (ESocketState)(((int)reason & 0xFF) << 16);
+            return (SocketState)(((int)reason & 0xFF) << 16);
         }  
 
         protected virtual bool TryValidateClosedBySocket(out Socket client)
@@ -322,12 +322,12 @@ namespace SP.Engine.Server
             }
         }
 
-        private bool TryAddState(ESocketState state, bool ensureNotClosing)
+        private bool TryAddState(SocketState state, bool ensureNotClosing)
         {
             while (true)
             {
                 var oldState = _state;
-                if (ensureNotClosing && oldState >= (int)ESocketState.InClosing)
+                if (ensureNotClosing && oldState >= (int)SocketState.InClosing)
                     return false;
 
                 var newState = oldState | (int)state;
@@ -338,7 +338,7 @@ namespace SP.Engine.Server
             }
         }
 
-        private bool TryAddState(ESocketState state)
+        private bool TryAddState(SocketState state)
         {
             while (true)
             {
@@ -357,7 +357,7 @@ namespace SP.Engine.Server
             }
         }
 
-        private void RemoveState(ESocketState state)
+        private void RemoveState(SocketState state)
         {
             while (true)
             {
@@ -369,14 +369,14 @@ namespace SP.Engine.Server
             }
         }
 
-        private bool CheckState(ESocketState state)
+        private bool CheckState(SocketState state)
         {
             return (_state & (int)state) != 0;
         }
 
         private bool IsIdle()
         {
-            return (_state & ((int)ESocketState.InSending | (int)ESocketState.InReceiving)) == 0;
+            return (_state & ((int)SocketState.InSending | (int)SocketState.InReceiving)) == 0;
         }
 
         private CloseReason GetCloseReasonFromSocketState()
@@ -390,7 +390,7 @@ namespace SP.Engine.Server
                 return;
     
             // 종료 중인지 체크
-            if (CheckState(ESocketState.InClosing))
+            if (CheckState(SocketState.InClosing))
             {
                 if (IsIdle())
                 {
@@ -425,12 +425,12 @@ namespace SP.Engine.Server
 
         protected bool OnReceiveStarted()
         {
-            return TryAddState(ESocketState.InReceiving, true);
+            return TryAddState(SocketState.InReceiving, true);
         }
 
         protected void OnReceiveEnded()
         {
-            RemoveState(ESocketState.InReceiving);
+            RemoveState(SocketState.InReceiving);
         }
 
         private const string ErrorMessageFormat = "An error occurred: {0}\r\n{1}";

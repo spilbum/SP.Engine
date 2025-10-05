@@ -8,7 +8,7 @@ namespace SP.Engine.Client.ProtocolHandler
     {
         protected override void ExecuteProtocol(NetPeer peer, S2CEngineProtocolData.Close data)
         {
-            if (peer.State == ENetPeerState.Closing)
+            if (peer.State == NetPeerState.Closing)
             {
                 // 클라이언트 요청으로 받은 경우, 즉시 종료함
                 peer.CloseWithoutHandshake();

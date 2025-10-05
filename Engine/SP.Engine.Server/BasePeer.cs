@@ -1,10 +1,13 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Net;
+using System.Security.AccessControl;
+using System.Security.Cryptography;
 using System.Threading;
 using SP.Common.Logging;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Channel;
+using SP.Engine.Runtime.Compression;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Runtime.Security;
@@ -40,7 +43,7 @@ namespace SP.Engine.Server
     
     public interface IPeer
     {
-        PeerId Id { get; }
+        uint Id { get; }
         PeerKind Kind { get; }
         PeerState State { get; }
         ISession Session { get; }
@@ -50,7 +53,7 @@ namespace SP.Engine.Server
 
     public interface IBasePeer
     {
-        DiffieHellman DiffieHellman { get; }
+        byte[] LocalPublicKey { get; }
         IBaseSession BaseSession { get; }
     }
     
@@ -58,47 +61,47 @@ namespace SP.Engine.Server
     {
         private static class PeerIdGenerator
         {
-            private static readonly ConcurrentQueue<PeerId> FreePeerIdPool = new();
-            private static int _latestPeerId;
+            private static readonly ConcurrentQueue<uint> FreePeerIdPool = new();
+            private static uint _latestPeerId;
 
-            public static PeerId Generate()
+            public static uint Generate()
             {
-                if (_latestPeerId >= int.MaxValue)
-                    throw new InvalidOperationException("ID overflow detected");
-
-                if (FreePeerIdPool.TryDequeue(out var peerId))
-                    return peerId;
-                return (PeerId)Interlocked.Increment(ref _latestPeerId);
+                if (_latestPeerId >= uint.MaxValue) throw new InvalidOperationException("ID overflow detected");
+                return FreePeerIdPool.TryDequeue(out var peerId) 
+                    ? peerId 
+                    : Interlocked.Increment(ref _latestPeerId);
             }
 
-            public static void Free(PeerId peerId)
+            public static void Free(uint peerId)
             {
-                if (PeerId.None != peerId)
+                if (peerId > 0)
                     FreePeerIdPool.Enqueue(peerId);
             }
         }
 
         private int _stateCode = PeerStateConst.NotAuthorized;
         private bool _disposed;
-        private DiffieHellman _diffieHellman;
+        private byte[] _localPublicKey;
         private AesCbcEncryptor _encryptor;
+        private Lz4Compressor _compressor = new Lz4Compressor();
         private IPolicyView _networkPolicy = new NetworkPolicyView(in PolicyDefaults.Globals);
 
         public PeerState State => (PeerState)_stateCode;
-        public PeerId Id { get; private set; }
+        public uint Id { get; private set; }
         public PeerKind Kind { get; } 
         public ILogger Logger { get; }
         public double LatencyAvgMs { get; private set; }
         public double LatencyJitterMs { get; private set; }
         public float PacketLossRate { get; private set; }
         public IEncryptor Encryptor => _encryptor;
+        public ICompressor Compressor => _compressor;
         public ISession Session { get; private set; }
         public IPEndPoint LocalEndPoint => Session.LocalEndPoint;
         public IPEndPoint RemoteEndPoint => Session.RemoteEndPoint;
         public bool IsConnected => _stateCode is PeerStateConst.Authorized or PeerStateConst.Online;
         
         IBaseSession IBasePeer.BaseSession => (IBaseSession)Session;
-        DiffieHellman IBasePeer.DiffieHellman => _diffieHellman;
+        byte[] IBasePeer.LocalPublicKey => _localPublicKey;
         
         protected BasePeer(PeerKind peerType, ISession session)
         {
@@ -118,7 +121,7 @@ namespace SP.Engine.Server
             Session = other.Session;
             SetSendTimeoutMs(other.SendTimeoutMs);
             SetMaxRetryCount(other.MaxRetryCount);
-            _diffieHellman = other._diffieHellman;
+            _localPublicKey = other._localPublicKey;
         }
 
         ~BasePeer()
@@ -131,7 +134,7 @@ namespace SP.Engine.Server
             Logger?.Debug(format, args);
         }
 
-        protected override void OnRetryLimitExceeded(IMessage message)
+        protected override void OnRetryLimitExceeded(IMessage message, int count, int maxCount)
         {
             Close(CloseReason.LimitExceededResend);
         }
@@ -150,7 +153,7 @@ namespace SP.Engine.Server
             if (disposing)
             {
                 PeerIdGenerator.Free(Id);
-                Id = PeerId.None;
+                Id = 0;
                 _encryptor?.Dispose();
                 _encryptor = null;
                 ResetProcessorState();
@@ -165,15 +168,12 @@ namespace SP.Engine.Server
                 return;
 
             foreach (var msg in FindExpiredForRetry())
-            {
-                if (!Session.TrySend(ChannelKind.Reliable, msg))
-                    Logger.Warn("Message send failed: {0}({1})", msg.Id, msg.SequenceNumber);
-            }
+                Session.TrySend(ChannelKind.Reliable, msg);
         }
         
-        internal void OnPing(double rawRttMs, double avgRttMs, double jitterMs, float packetLossRate)
+        internal void OnPing(double rttMs, double avgRttMs, double jitterMs, float packetLossRate)
         {
-            AddRttSample(rawRttMs);
+            AddRtoSample(rttMs);
             LatencyAvgMs = avgRttMs;
             LatencyJitterMs = jitterMs;
             PacketLossRate = packetLossRate;
@@ -197,13 +197,14 @@ namespace SP.Engine.Server
             var channel = data.Channel;
             var policy = GetNetworkPolicy(data.GetType());
             var encryptor = policy.UseEncrypt ? Encryptor : null;
+            var compressor = policy.UseCompress ? Compressor : null;
             switch (channel)
             {
                 case ChannelKind.Reliable:
                 {
                     var msg = new TcpMessage();
                     msg.SetSequenceNumber(GetNextReliableSeq());
-                    msg.Serialize(data, policy, encryptor);
+                    msg.Serialize(data, policy, encryptor, compressor);
 
                     if (!IsConnected)
                     {
@@ -218,7 +219,7 @@ namespace SP.Engine.Server
                 {
                     var msg = new UdpMessage();
                     msg.SetPeerId(Id);
-                    msg.Serialize(data, policy, encryptor);
+                    msg.Serialize(data, policy, encryptor, compressor);
                     return Session.TrySend(channel, msg);
                 }
                 default:
@@ -270,16 +271,49 @@ namespace SP.Engine.Server
         {
             Interlocked.Exchange(ref _stateCode, PeerStateConst.Closed);
             PeerIdGenerator.Free(Id);
-            Id = PeerId.None;
+            Id = 0;
             ResetProcessorState();
             OnLeaveServer(reason);
         }
 
-        internal void CreateEncryptor(DhKeySize keySize, byte[] otherPublicKey)
+        internal bool TryKeyExchange(DhKeySize keySize, byte[] peerPublicKey)
         {
-            var dh = new DiffieHellman(keySize);
-            _encryptor = new AesCbcEncryptor(dh.DeriveSharedKey(otherPublicKey));
-            _diffieHellman = dh;
+            if (peerPublicKey == null || peerPublicKey.Length == 0)
+            {
+                Logger?.Warn("Key exchange validation failed: peer public key is empty.");
+                return false;
+            }
+            
+            byte[] shared = null;
+
+            try
+            {
+                using var dh = new DiffieHellman(keySize);
+                shared = dh.DeriveSharedKey(peerPublicKey);
+                _encryptor = new AesCbcEncryptor(shared);
+                _localPublicKey = dh.PublicKey;
+                return true;
+            }
+            catch (ArgumentException ex)
+            {
+                Logger?.Warn("Key exchange validation failed: {0}", ex.Message);
+                return false;
+            }
+            catch (CryptographicException ex)
+            {
+                Logger?.Error("Key exchange provider error: {0}", ex.Message);
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Logger?.Error(ex, "Key exchange unexpected error.");
+                return false;
+            }
+            finally
+            {
+                if (shared != null)
+                    CryptographicOperations.ZeroMemory(shared);
+            }
         }
 
         protected virtual void OnJoinServer()
@@ -300,7 +334,7 @@ namespace SP.Engine.Server
 
         public override string ToString()
         {
-            return $"sessionId={Session.SessionId}, peerId={Id}, peerType={Kind}, remoteEndPoint={RemoteEndPoint}";   
+            return $"sessionId={Session.Id}, peerId={Id}, peerType={Kind}, remoteEndPoint={RemoteEndPoint}";   
         }
     }
 }

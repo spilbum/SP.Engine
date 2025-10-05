@@ -5,19 +5,17 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using SP.Engine.Runtime;
-using SP.Engine.Runtime.Channel;
 using SP.Engine.Runtime.Networking;
-using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Server
 {
-    public class UdpSocket : BaseNetworkSession, IUdpSender
+    public class UdpSocket : BaseNetworkSession, IUnreliableSender
     {
         private uint _nextFragmentId;
-        private ushort _mtu;
+        private ushort _maxDatagramSize;
         
         public UdpSocket(Socket client, IPEndPoint remoteEndPoint)
-            : base (ESocketMode.Udp, client)
+            : base (SocketMode.Udp, client)
         {
             RemoteEndPoint = remoteEndPoint;
             LocalEndPoint = (IPEndPoint)client.LocalEndPoint;
@@ -25,27 +23,15 @@ namespace SP.Engine.Server
         
         public bool TrySend(UdpMessage message)
         {
-            var segments = ToSegments(message);
-            return segments.All(TrySend);
+            var datagrams = message.ToDatagrams(
+                _maxDatagramSize, 
+                () => Interlocked.Increment(ref _nextFragmentId));
+            return datagrams.All(TrySend);
         }
         
-        private List<ArraySegment<byte>> ToSegments(UdpMessage message)
+        public void SetMaxDatagramSize(ushort maxDatagramSize)
         {
-            var segments = new List<ArraySegment<byte>>();
-            if (message.Length <= _mtu)
-            {
-                segments.Add(message.Payload);
-                return segments;
-            }
-
-            var fragmentId = Interlocked.Increment(ref _nextFragmentId);
-            segments.AddRange(message.ToSplit(_mtu, fragmentId).Select(f => f.Serialize()));
-            return segments;
-        }
-
-        public void SetMtu(ushort mtu)
-        {
-            _mtu = mtu;
+            _maxDatagramSize = maxDatagramSize;
         }
         
         public void UpdateRemoteEndPoint(IPEndPoint remoteEndPoint)

@@ -159,8 +159,8 @@ namespace SP.Engine.Server
         {
             return listenerInfo.Mode switch
             {
-                ESocketMode.Tcp => new TcpNetworkListener(listenerInfo),
-                ESocketMode.Udp => new UdpNetworkListener(listenerInfo),
+                SocketMode.Tcp => new TcpNetworkListener(listenerInfo),
+                SocketMode.Udp => new UdpNetworkListener(listenerInfo),
                 _ => throw new ArgumentException($"Invalid socket mode: {listenerInfo.Mode}"),
             };
         }
@@ -172,10 +172,10 @@ namespace SP.Engine.Server
 
             switch (listener.Mode)
             {
-                case ESocketMode.Tcp:
+                case SocketMode.Tcp:
                     ProcessTcpClient(socket);
                     break;
-                case ESocketMode.Udp:
+                case SocketMode.Udp:
                     ProcessUdpClient(socket, state);
                     break;
                 default:
@@ -185,10 +185,10 @@ namespace SP.Engine.Server
         
         private void ProcessUdpClient(Socket socket, object state)
         {
-            if (state is not (byte[] buffer, IPEndPoint remoteEndPoint))
+            if (state is not (byte[] buffer, int offset, int length, IPEndPoint remoteEndPoint))
                 return;
             
-            Engine.ProcessUdpClient(buffer, socket, remoteEndPoint);
+            Engine.ProcessUdpClient(buffer, offset, length, socket, remoteEndPoint);
         }
 
         private void ProcessTcpClient(Socket client)

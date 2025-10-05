@@ -5,11 +5,17 @@ using K4os.Compression.LZ4;
 
 namespace SP.Engine.Runtime.Compression
 {
-    public static class Compressor
+    public interface ICompressor
+    {
+        byte[] Compress(byte[] data);
+        byte[] Decompress(byte[] data);
+    }
+    
+    public class Lz4Compressor : ICompressor
     {
         private const int HeaderSize = sizeof(int);
 
-        public static byte[] Compress(byte[] source)
+        public byte[] Compress(byte[] source)
         {
             if (source == null || source.Length == 0)
                 throw new ArgumentException("Source cannot be null or empty.", nameof(source));
@@ -42,7 +48,7 @@ namespace SP.Engine.Runtime.Compression
             }
         }
         
-        public static byte[] Decompress(byte[] source)
+        public byte[] Decompress(byte[] source)
         {
             if (source == null || source.Length < HeaderSize)
                 throw new ArgumentException("Invalid compressed data", nameof(source));

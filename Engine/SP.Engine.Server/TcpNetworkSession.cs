@@ -8,13 +8,13 @@ using SP.Engine.Runtime.Networking;
 
 namespace SP.Engine.Server
 {
-    public interface ITcpNetworkSession : ILogContext, ITcpSender
+    public interface ITcpNetworkSession : ILogContext, IReliableSender
     {
         SocketReceiveContext ReceiveContext { get; }
         void ProcessReceive(SocketAsyncEventArgs e);
     }
 
-    public class TcpNetworkSession(Socket client, SocketReceiveContext socketReceiveContext) : BaseNetworkSession(ESocketMode.Tcp, client), ITcpNetworkSession, ITcpSender
+    public class TcpNetworkSession(Socket client, SocketReceiveContext socketReceiveContext) : BaseNetworkSession(SocketMode.Tcp, client), ITcpNetworkSession, IReliableSender
     {
         private SocketAsyncEventArgs _sendEventArgs;        
 
@@ -52,7 +52,7 @@ namespace SP.Engine.Server
         }
 
         public bool TrySend(TcpMessage message)
-            => TrySend(message.Payload);
+            => TrySend(message.Body);
 
         private void StartReceive(SocketAsyncEventArgs e)
         {

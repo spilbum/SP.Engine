@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using SP.Engine.Runtime.Compression;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Runtime.Security;
@@ -22,9 +23,9 @@ namespace SP.Engine.Runtime.Handler
 
         public ushort Id { get; }
 
-        public void Invoke(object instance, IMessage message, IEncryptor encryptor)
+        public void Invoke(object instance, IMessage message, IEncryptor encryptor, ICompressor compressor)
         {
-            var protocol = message.Deserialize(_type, encryptor);
+            var protocol = message.Deserialize(_type, encryptor, compressor);
             _method.Invoke(instance, new object[] { protocol });
         }
         

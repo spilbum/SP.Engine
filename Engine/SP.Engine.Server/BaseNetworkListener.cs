@@ -14,12 +14,12 @@ namespace SP.Engine.Server
     {
         public IPEndPoint EndPoint { get; set; }
         public int BackLog { get; set; }
-        public ESocketMode Mode { get; set; }
+        public SocketMode Mode { get; set; }
     }
 
     internal interface ISocketListener
     {
-        ESocketMode Mode { get; set; }
+        SocketMode Mode { get; set; }
         IPEndPoint EndPoint { get; }
         int BackLog { get; }
         event EventHandler Stopped;
@@ -32,7 +32,7 @@ namespace SP.Engine.Server
 
     internal abstract class BaseNetworkListener(ListenerInfo info) : ISocketListener, IDisposable
     {
-        public ESocketMode Mode { get; set; } = info.Mode;
+        public SocketMode Mode { get; set; } = info.Mode;
         public IPEndPoint EndPoint { get; } = info.EndPoint;
         public int BackLog { get; } = info.BackLog;
 
@@ -53,10 +53,10 @@ namespace SP.Engine.Server
             
             switch (Mode)
             {
-                case ESocketMode.Tcp:
+                case SocketMode.Tcp:
                     handler.Invoke(this, socket, state);
                     break;
-                case ESocketMode.Udp:
+                case SocketMode.Udp:
                     Task.Run(() => handler.Invoke(this, socket, state));
                     break;
             }

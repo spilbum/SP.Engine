@@ -2,6 +2,7 @@
 using System.Net;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using SP.Common.Buffer;
@@ -11,6 +12,7 @@ using SP.Engine.Client.ProtocolHandler;
 using SP.Engine.Protocol;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Channel;
+using SP.Engine.Runtime.Compression;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Runtime.Security;
@@ -29,17 +31,17 @@ namespace SP.Engine.Client
 
     public class StateChangedEventArgs : EventArgs
     {
-        public ENetPeerState OldState { get; private set; }
-        public ENetPeerState NewState { get; private set; }
+        public NetPeerState OldState { get; private set; }
+        public NetPeerState NewState { get; private set; }
 
-        public StateChangedEventArgs(ENetPeerState oldState, ENetPeerState newState)
+        public StateChangedEventArgs(NetPeerState oldState, NetPeerState newState)
         {
             OldState = oldState;
             NewState = newState;
         }
     }
 
-    public enum ENetPeerState
+    public enum NetPeerState
     {
         None = 0,
         /// <summary>
@@ -74,32 +76,37 @@ namespace SP.Engine.Client
         private int _stateCode;
         private bool _disposed;
         private TcpNetworkSession _session;
-        private UdpSocket _udpSocket;
-        private TickTimer _tickTimer;
+        private UdpSocket _udp;
+        private TickTimer _timer;
         private AesCbcEncryptor _encryptor;
-        private readonly BinaryBuffer _receiveBuffer = new BinaryBuffer();
-        private readonly ConcurrentQueue<IMessage> _sendingMessageQueue = new ConcurrentQueue<IMessage>();
-        private readonly ConcurrentQueue<IMessage> _messageReceivedQueue = new ConcurrentQueue<IMessage>();
+        private readonly Lz4Compressor _compressor = new Lz4Compressor();
+        private readonly BinaryBuffer _recvBuffer = new BinaryBuffer(1024);
+        private readonly ConcurrentQueue<IMessage> _receivedMessageQueue = new ConcurrentQueue<IMessage>();
         private readonly Dictionary<ushort, IHandler<NetPeer, IMessage>> _engineHandlers =
             new Dictionary<ushort, IHandler<NetPeer, IMessage>>();
         private double _serverTimeOffsetMs;
-        private TickTimer _udpKeepAliveTimer;
+        private TickTimer _keepAliveTimer;
         private readonly DiffieHellman _diffieHellman = new DiffieHellman(DhKeySize.Bit2048);
         private readonly ChannelRouter _channelRouter = new ChannelRouter();
         private IPolicyView _networkPolicy = new NetworkPolicyView(in PolicyDefaults.Globals);
+        private int _recvBudgetMs = 1;
+        private int _tcpParseBudgetMs = 1;
+        private int _maxTcpBytesPerTick = 128 * 1024;
+        private int _maxTcpFramesPerTickCap = 512;
         
-        public int ConnectAttempts { get; private set; }
-        public int ReconnectAttempts { get; private set; }
+        public int ConnectTryCount { get; private set; }
+        public int ReconnectTryCount { get; private set; }
+        public int MaxFrameBytes { get; private set; }
         public long LastSendPingTime { get; private set; }
         public EndPoint RemoteEndPoint { get; private set; }
-        public PeerId PeerId { get; private set; }
+        public uint PeerId { get; private set; }
         public ILogger Logger { get; }
         public EngineConfig Config { get; }
-        public int MaxFrameBytes { get; private set; }
         public LatencyStats LatencyStats { get; }
-        public ENetPeerState State => (ENetPeerState)_stateCode;
-        public bool IsConnected => State == ENetPeerState.Open;
+        public NetPeerState State => (NetPeerState)_stateCode;
+        public bool IsConnected => State == NetPeerState.Open;
         public IEncryptor Encryptor => _encryptor;
+        public ICompressor Compressor => _compressor;
 
         public event EventHandler Connected;
         public event EventHandler Disconnected;
@@ -114,7 +121,7 @@ namespace SP.Engine.Client
         {
             Config = config;
             Logger = logger;
-            MaxFrameBytes = 32 * 1024;
+            MaxFrameBytes = 64 * 1024;
             LatencyStats = new LatencyStats(config.LatencySampleWindowSize);
             
             _engineHandlers[S2CEngineProtocolId.SessionAuthAck] = new SessionAuth();
@@ -128,33 +135,26 @@ namespace SP.Engine.Client
         {
             Dispose(false);
         }
+        
+        public void SetRecvBudgetMs(int ms) => _recvBudgetMs = ms;
+        public void SetTcpBudgetMs(int ms) => _tcpParseBudgetMs = ms;
+        public void SetMaxTcpBytesPerTick(int bytes) => _maxTcpBytesPerTick = bytes;
+        public void SetMaxTcpFramesPerTickCap(int cap) => _maxTcpFramesPerTickCap = cap;
 
-        public (int totalSentBytes, int totalReceivedBytes) GetTcpTrafficInfo()
-        {
-            var tcp = _session?.GetTraffic();
-            return (
-                tcp?.totalSentBytes ?? 0,
-                tcp?.totalReceivedBytes ?? 0
-            );
-        }
+        public TrafficInfo GetTcpTrafficInfo()
+            => _session?.GetTrafficInfo();
 
-        public (int totalSentBytes, int totalReceivedBytes) GetUdpTrafficInfo()
-        {
-            var udp = _udpSocket?.GetTraffic();
-            return (
-                udp?.totalSentBytes ?? 0,
-                udp?.totalReceivedBytes ?? 0
-            );
-        }
+        public TrafficInfo GetUdpTrafficInfo() 
+            => _udp?.GetTrafficInfo();
 
         protected override void OnDebug(string format, params object[] args)
         {
             Logger?.Debug(format, args);
         }
 
-        protected override void OnRetryLimitExceeded(IMessage message)
+        protected override void OnRetryLimitExceeded(IMessage message, int count, int maxCount)
         {
-            Logger?.Error("Message {0}({1}) exceeded max resend count.", message.SequenceNumber, message.Id);
+            Logger?.Error("Message {0} exceeded max resend count ({1}/{2}).", message.Id, count, maxCount);
             // 재전송 횟수 초가로 종료함
             Close();
         }
@@ -189,22 +189,18 @@ namespace SP.Engine.Client
 
         public void Tick()
         {
-            _tickTimer?.Tick();
-            
-            _udpKeepAliveTimer?.Tick();
-            _udpSocket?.Assembler.Cleanup(TimeSpan.FromSeconds(10));
+            _timer?.Tick();
+            _keepAliveTimer?.Tick();
+            _udp?.Tick();
             
             // 수신된 메시지 처리
-            DequeueMessageReceived();
-
-            // 전송 메시지 처리
-            DequeueSendingMessage();
+            DequeueReceivedMessage();
 
             // 대기 중인 메시지 전송
             DequeuePendingMessage();
 
             // 재 전송 메시지 체크
-            CheckReSendMessages();
+            CheckRetryMessage();
         }
 
         private void DequeuePendingMessage()
@@ -213,7 +209,7 @@ namespace SP.Engine.Client
                 return;
 
             foreach (var msg in DequeuePendingMessages())
-                EnqueueSendingMessage(msg);   
+                TrySend(ChannelKind.Reliable, msg);
         }
         
         public bool Send(IProtocol data)
@@ -221,17 +217,19 @@ namespace SP.Engine.Client
             var sequenceNumber = data.Channel == ChannelKind.Reliable ? GetNextReliableSeq() : 0;
             var policy = _networkPolicy.Resolve(data.GetType());
             var encryptor = policy.UseEncrypt ? Encryptor : null;
-            return TrySend(sequenceNumber, data, policy, encryptor);
+            var compressor = policy.UseCompress ? Compressor : null;
+            return TrySend(sequenceNumber, data, policy, encryptor, compressor);
         }
 
         private bool InternalSend(IProtocol data)
         { 
             var policy = _networkPolicy.Resolve(data.GetType());
             var encryptor = policy.UseEncrypt ? Encryptor : null;
-            return TrySend(0, data, policy, encryptor);
+            var compressor = policy.UseCompress ? Compressor : null;
+            return TrySend(0, data, policy, encryptor, compressor);
         }
         
-        private bool TrySend(long sequenceNumber, IProtocol data, IPolicy policy, IEncryptor encryptor)
+        private bool TrySend(long sequenceNumber, IProtocol data, IPolicy policy, IEncryptor encryptor, ICompressor compressor)
         {
             var channel = data.Channel;
 
@@ -243,7 +241,7 @@ namespace SP.Engine.Client
                     {
                         var msg = new TcpMessage();
                         msg.SetSequenceNumber(sequenceNumber);
-                        msg.Serialize(data, policy, encryptor);
+                        msg.Serialize(data, policy, encryptor, compressor);
                     
                         if (sequenceNumber > 0 && !IsConnected)
                         {
@@ -258,7 +256,7 @@ namespace SP.Engine.Client
                     {
                         var msg = new UdpMessage();
                         msg.SetPeerId(PeerId);
-                        msg.Serialize(data, policy, encryptor);
+                        msg.Serialize(data, policy, encryptor, compressor);
                         return TrySend(channel, msg);
                     }
                     default:
@@ -307,7 +305,7 @@ namespace SP.Engine.Client
             }
         }
 
-        private bool TrySetState(ENetPeerState compareState, ENetPeerState nextState)
+        private bool TrySetState(NetPeerState compareState, NetPeerState nextState)
         {
             if (Interlocked.CompareExchange(ref _stateCode, (int)nextState, (int)compareState) != (int)compareState)
                 return false;
@@ -316,27 +314,27 @@ namespace SP.Engine.Client
             return true;
         }
 
-        private void SetState(ENetPeerState newState)
+        private void SetState(NetPeerState newState)
         {
-            var oldState = (ENetPeerState)Interlocked.Exchange(ref _stateCode, (int)newState);
+            var oldState = (NetPeerState)Interlocked.Exchange(ref _stateCode, (int)newState);
             OnStateChanged(oldState, newState);
         }
 
-        private void OnStateChanged(ENetPeerState oldState, ENetPeerState newState)
+        private void OnStateChanged(NetPeerState oldState, NetPeerState newState)
         {
             StateChanged?.Invoke(this, new StateChangedEventArgs(oldState, newState));
         }
 
         private void SetTimer(Action<object> callback, object state, int dueTimeMs, int intervalMs)
         {
-            _tickTimer?.Dispose();
-            _tickTimer = new TickTimer(callback, state, dueTimeMs, intervalMs);
+            _timer?.Dispose();
+            _timer = new TickTimer(callback, state, dueTimeMs, intervalMs);
         }
 
         private void CancelTimer()
         {
-            _tickTimer?.Dispose();
-            _tickTimer = null;
+            _timer?.Dispose();
+            _timer = null;
         }
 
         private void StartPingTimer()
@@ -348,9 +346,9 @@ namespace SP.Engine.Client
 
         private void StartConnection()
         {
-            SetState(ENetPeerState.Connecting);
+            SetState(NetPeerState.Connecting);
 
-            ConnectAttempts = 0;
+            ConnectTryCount = 0;
             SetTimer(OnConnectTimerTick, null, 0, Config.ConnectAttemptIntervalSec * 1000);
         }
 
@@ -359,7 +357,7 @@ namespace SP.Engine.Client
             var session = _session;
             session?.Close();
             
-            session = new TcpNetworkSession(Config.SendQueueSize, Config.SendBufferSize, Config.ReceiveBufferSize);
+            session = new TcpNetworkSession(Config);
             session.Opened += OnSessionOpened;
             session.Closed += OnSessionClosed;
             session.Error += OnSessionError;
@@ -371,9 +369,9 @@ namespace SP.Engine.Client
 
         private void OnConnectTimerTick(object state)
         {
-            if (++ConnectAttempts > Config.MaxConnectAttempts)
+            if (++ConnectTryCount > Config.MaxConnectAttempts)
             {
-                Logger?.Warn("Max connect attempts exceeded: {0} > {1}", ConnectAttempts, Config.MaxConnectAttempts);
+                Logger?.Warn("Max connect attempts exceeded: {0} > {1}", ConnectTryCount, Config.MaxConnectAttempts);
                 Close();
                 return;
             }
@@ -391,24 +389,24 @@ namespace SP.Engine.Client
 
         private void StartReconnection()
         {
-            SetState(ENetPeerState.Reconnecting);
+            SetState(NetPeerState.Reconnecting);
 
-            ReconnectAttempts = 0;
+            ReconnectTryCount = 0;
             SetTimer(OnReconnectTimerTick, null, 0, Config.ReconnectAttemptIntervalSec * 1000);
         }
 
         private void OnReconnectTimerTick(object state)
         {
-            if (++ReconnectAttempts > Config.MaxReconnectAttempts)
+            if (++ReconnectTryCount > Config.MaxReconnectAttempts)
             {
-                Logger?.Warn("Max reconnect attempts exceeded: {0} > {1}", ReconnectAttempts, Config.MaxReconnectAttempts);
+                Logger?.Warn("Max reconnect attempts exceeded: {0} > {1}", ReconnectTryCount, Config.MaxReconnectAttempts);
                 Close();
                 return;
             }
             
             try
             {
-                Logger?.Debug("Reconnecting... {0}", ReconnectAttempts);
+                Logger?.Debug("Reconnecting... {0}", ReconnectTryCount);
                 _session = CreateNetworkSession();
                 _session.Connect(RemoteEndPoint);
             }
@@ -416,11 +414,6 @@ namespace SP.Engine.Client
             {
                 OnError(e);
             }
-        }
-
-        private void EnqueueSendingMessage(IMessage message)
-        {
-            _sendingMessageQueue.Enqueue(message);
         }
 
         private void SendAuthHandshake()
@@ -459,23 +452,23 @@ namespace SP.Engine.Client
         internal void CloseWithoutHandshake()
         {
             _session?.Close();
-            _udpSocket?.Close();
+            _udp?.Close();
         }
 
         public void Close()
         {
-            if (State == ENetPeerState.Closing || State == ENetPeerState.Closed)
+            if (State == NetPeerState.Closing || State == NetPeerState.Closed)
                 return;
             
-            if (TrySetState(ENetPeerState.None, ENetPeerState.Closing))
+            if (TrySetState(NetPeerState.None, NetPeerState.Closing))
             {
                 // 초기상태에서 종료된 경우
                 OnClosed();
                 return;
             }
 
-            if (TrySetState(ENetPeerState.Connecting, ENetPeerState.Closing) 
-                || TrySetState(ENetPeerState.Reconnecting, ENetPeerState.Closing))
+            if (TrySetState(NetPeerState.Connecting, NetPeerState.Closing) 
+                || TrySetState(NetPeerState.Reconnecting, NetPeerState.Closing))
             {
                 var session = _session;
                 if (session != null && session.IsConnected)
@@ -489,60 +482,42 @@ namespace SP.Engine.Client
                 return;
             }
             
-            SetState(ENetPeerState.Closing);
+            SetState(NetPeerState.Closing);
 
             // 종료 요청
             SendCloseHandshake();
             
             SetTimer(_ =>
             {
-                if (_stateCode == (int)ENetPeerState.Closed) 
-                    return;
-            
-                // 종료 요청에 대한 응답을 받지 못했으면 즉시 종료함
-                CloseWithoutHandshake();
+                try
+                {
+                    if (_stateCode == (int)NetPeerState.Closed) return;
+                    CloseWithoutHandshake();
+                }
+                catch (Exception e)
+                {
+                    OnError(e);
+                }
             }, null, 5000, Timeout.Infinite);
         }
 
-        private void DequeueMessageReceived()
+        private void DequeueReceivedMessage()
         {
-            // 연결된 상태에서만 메시지를 처리함
-            if (!IsConnected)
-                return;
+            if (!IsConnected) return;
 
-            var count = 0;
-            while (_messageReceivedQueue.TryDequeue(out var message))
+            var sw = Stopwatch.StartNew();
+            var budgetTicks = _recvBudgetMs <= 0
+                ? long.MaxValue
+                : TimeSpan.FromMilliseconds(_recvBudgetMs).Ticks;
+
+            while (sw.ElapsedTicks < budgetTicks && _receivedMessageQueue.TryDequeue(out var message))
             {
-                if (message.SequenceNumber > 0)
-                {
-                    foreach (var msg in ProcessMessageInOrder(message))
-                        OnMessageReceived(msg);
-                }
-                else
-                {
-                    OnMessageReceived(message);
-                }
-                
-                if (++count >= 20)
-                    break;
+                foreach (var msg in ProcessMessageInOrder(message))
+                    OnMessageReceived(msg);
             }
         }
-
-        private void DequeueSendingMessage()
-        {
-            if (!IsConnected)
-                return;
-
-            var count = 0;
-            while (_sendingMessageQueue.TryDequeue(out var message))
-            {
-                TrySend(ChannelKind.Reliable, message);
-                if (++count >= 20)
-                    break;
-            }
-        }
-
-        private void CheckReSendMessages()
+        
+        private void CheckRetryMessage()
         {
             // 연결 상태일때만 체크함
             if (!IsConnected)
@@ -550,13 +525,13 @@ namespace SP.Engine.Client
 
             // 메시지 재전송 
             foreach (var msg in FindExpiredForRetry())
-                EnqueueSendingMessage(msg); 
+                EnqueuePendingMessage(msg);
         }
 
         private void OnSessionDataReceived(object sender, DataEventArgs e)
         {
             var span = e.Data.AsSpan(e.Offset, e.Length);
-            _receiveBuffer.Write(span);
+            _recvBuffer.Write(span);
 
             try
             {
@@ -569,7 +544,7 @@ namespace SP.Engine.Client
             }
             finally
             {
-                _receiveBuffer.MaybeTrim(TcpHeader.HeaderSize);
+                _recvBuffer.MaybeTrim(TcpHeader.ByteSize);
             }
         }
 
@@ -581,8 +556,8 @@ namespace SP.Engine.Client
             }
             else
             {
-                if (message.SequenceNumber > 0)
-                    SendMessageAck(message.SequenceNumber);
+                if (message is TcpMessage tcp)
+                    SendMessageAck(tcp.SequenceNumber);
                             
                 EnqueueReceivedMessage(message);
             }
@@ -590,47 +565,48 @@ namespace SP.Engine.Client
         
         private IEnumerable<TcpMessage> Filter()
         {
-            const int maxFramesPerTick = 128;
-            var produced = 0;
+            var budgetTicks = _tcpParseBudgetMs <= 0
+                ? long.MaxValue
+                : TimeSpan.FromMilliseconds(_tcpParseBudgetMs).Ticks;
             
-            while (produced < maxFramesPerTick)
+            var bytesBudget = _maxTcpBytesPerTick <= 0 ? long.MaxValue : _maxTcpBytesPerTick;
+            var framesCap = _maxTcpFramesPerTickCap;
+            
+            var tickSw = Stopwatch.StartNew();
+            var frames = 0;
+            long bytesParsed = 0;
+            
+            while (frames < framesCap && tickSw.ElapsedTicks < budgetTicks)
             {
-                if (_receiveBuffer.ReadableBytes < TcpHeader.HeaderSize)
+                if (_recvBuffer.ReadableBytes < TcpHeader.ByteSize)
                     yield break;
                 
-                var headerSpan = _receiveBuffer.Peek(TcpHeader.HeaderSize);
-                var result = TcpHeader.TryParse(headerSpan, out var header);
+                var headerSpan = _recvBuffer.Peek(TcpHeader.ByteSize);
+                if (!TcpHeader.TryParse(headerSpan, out var header, out var consumed))
+                    yield break;
 
-                switch (result)
+                long frameLen = consumed + header.PayloadLength;
+                if (frameLen <= 0 || frameLen > MaxFrameBytes)
                 {
-                    case TcpHeader.ParseResult.NeedMore:
-                        yield break;
-                    case TcpHeader.ParseResult.Invalid:
-                        Close(); 
-                        yield break;
-                    case TcpHeader.ParseResult.Success:
-                    {
-                        long frameLen = header.Length + header.PayloadLength;
-                        if (frameLen <= 0 || frameLen > MaxFrameBytes)
-                        {
-                            Logger.Warn("Frame too large/small. max={0}, got={1}, (id={2})", 
-                                MaxFrameBytes, frameLen, header.Id);
-                            Close();
-                            yield break;
-                        }
-
-                        var len = (int)frameLen;
-                        if (_receiveBuffer.ReadableBytes < len)
-                            yield break;
-
-                        var frameBytes = _receiveBuffer.ReadBytes(len);
-                        yield return new TcpMessage(header, new ArraySegment<byte>(frameBytes));
-                        produced++;
-                        break;
-                    }
-                    default:
-                        throw new ArgumentOutOfRangeException();
+                    Logger.Warn("Frame too large/small. max={0}, got={1}, (id={2})", 
+                        MaxFrameBytes, frameLen, header.Id);
+                    Close();
+                    yield break;
                 }
+
+                var len = (int)frameLen;
+                if (_recvBuffer.ReadableBytes < len)
+                    yield break;
+
+                if (bytesParsed + len > bytesBudget)
+                    yield break;
+                        
+                _recvBuffer.Advance(consumed);
+                var frameBytes = _recvBuffer.ReadBytes(len);
+                bytesParsed += len;
+                frames++;
+                        
+                yield return new TcpMessage(header, new ArraySegment<byte>(frameBytes));
             }
         }
 
@@ -648,7 +624,7 @@ namespace SP.Engine.Client
         private void OnSessionOpened(object sender, EventArgs e)
         {
             _channelRouter.Bind(new ReliableChannel(_session));
-            SetState(ENetPeerState.Handshake);
+            SetState(NetPeerState.Handshake);
             SendAuthHandshake();
         }
         
@@ -658,7 +634,7 @@ namespace SP.Engine.Client
         /// <param name="message"></param>
         private void EnqueueReceivedMessage(IMessage message)
         {
-            _messageReceivedQueue.Enqueue(message);
+            _receivedMessageQueue.Enqueue(message);
         }
 
         private void OnError(ErrorEventArgs e)
@@ -671,37 +647,36 @@ namespace SP.Engine.Client
             Error?.Invoke(this, new ErrorEventArgs(ex));
         }
 
-        private void OnError(EngineErrorCode errorCode)
-        {
-            OnError(new Exception($"The system error occurred: {errorCode}"));
-        }
-
         private void OnClosed()
         {
             switch (State)
             {
-                case ENetPeerState.Connecting:
-                case ENetPeerState.Reconnecting:
-                    // 최초 연결 또는 재 연결 중일때는 타이머에서 종료 처리
-                    break;
-                case ENetPeerState.Open:
-                    // 오프라인 전환
+                case NetPeerState.Open:
                     OnOffline();
                     break;
-                case ENetPeerState.None:
-                case ENetPeerState.Handshake:
-                case ENetPeerState.Closing:
+                case NetPeerState.None:
+                case NetPeerState.Handshake:
+                case NetPeerState.Closing:
                 {
-                    SetState(ENetPeerState.Closed);
+                    SetState(NetPeerState.Closed);
                     CancelTimer();
                     ResetProcessorState();
+                    
+                    StopUdpKeepAliveTimer();
+                    _udp?.Close();
+                    _udp = null;
+                    
                     _session = null;
-                    _udpSocket = null;
+                    _channelRouter.Unbind(ChannelKind.Reliable);
+                    _channelRouter.Unbind(ChannelKind.Unreliable);
                     Disconnected?.Invoke(this, EventArgs.Empty);
                     break;
                 }
-                case ENetPeerState.Closed:
-                    // 이미 종료됨
+                case NetPeerState.Connecting:
+                case NetPeerState.Reconnecting:
+                    // 최초 연결 또는 재 연결 중일때는 타이머에서 종료 처리
+                    break;
+                case NetPeerState.Closed:
                     break;
                 default:
                     throw new ArgumentOutOfRangeException();
@@ -713,7 +688,7 @@ namespace SP.Engine.Client
             if (port <= 0)
                 return;
             
-            var socket = new UdpSocket(Config.UdpMtu);
+            var socket = new UdpSocket(Config);
             socket.Error += OnUdpSocketError;
             socket.DataReceived += OnUdpSocketDataReceived;
             socket.Closed += OnUdpSocketClosed;
@@ -725,13 +700,14 @@ namespace SP.Engine.Client
                 return;
             }
 
-            _udpSocket = socket;
+            _udp = socket;
             _channelRouter.Bind(new UnreliableChannel(socket));
             SendUdpHandshake();
         }
 
         private void OnUdpSocketClosed(object sender, EventArgs e)
         {
+            StopUdpKeepAliveTimer();
             _channelRouter.Unbind(ChannelKind.Unreliable);
             UdpClosed?.Invoke(this, EventArgs.Empty);
         }
@@ -744,47 +720,47 @@ namespace SP.Engine.Client
 
         private void OnUdpSocketDataReceived(object sender, DataEventArgs e)
         {
-            if (_udpSocket == null)
+            if (_udp == null)
                 return;
             
-            var headerSpan = e.Data.AsSpan(e.Offset, e.Length);
-            if (!UdpHeader.TryParse(headerSpan, out var header))
-                return;
-
-            if (PeerId != header.PeerId)
-                return;
-            
-            IMessage message = null;
-            if (header.IsFragmentation)
-            {
-                var span = e.Data.AsSpan(e.Offset, e.Length);
-                if (UdpFragment.TryParse(span, out var fragment) &&
-                    _udpSocket.Assembler.TryAssemble(fragment, out var payload))
-                {
-                    message = new UdpMessage(header, payload);
-                }
-            }
-            else
-            {
-                var payload = new ArraySegment<byte>(e.Data, e.Offset, e.Length);
-                message = new UdpMessage(header, payload);
-            }
-
-            if (message == null)
-                return;
-
-            try
-            {
-                // 엔진 프로토콜은 즉시 처리함
-                if (_engineHandlers.TryGetValue(message.Id, out var handler))
-                    handler.ExecuteMessage(this, message);
-                else
-                    EnqueueReceivedMessage(message);
-            }
-            catch (Exception ex)
-            {
-                OnError(ex);
-            }
+            // var headerSpan = e.Data.AsSpan(e.Offset, e.Length);
+            // if (!UdpHeader.TryParse(headerSpan, out var header))
+            //     return;
+            //
+            // if (PeerId != header.PeerId)
+            //     return;
+            //
+            // IMessage message = null;
+            // if (header.IsFragmentation)
+            // {
+            //     var span = e.Data.AsSpan(e.Offset, e.Length);
+            //     if (UdpFragment.TryParse(span, out var fragment) &&
+            //         _udp.TryAssemble(fragment, out var payload))
+            //     {
+            //         message = new UdpMessage(header, payload);
+            //     }
+            // }
+            // else
+            // {
+            //     var payload = new ArraySegment<byte>(e.Data, e.Offset, e.Length);
+            //     message = new UdpMessage(header, payload);
+            // }
+            //
+            // if (message == null)
+            //     return;
+            //
+            // try
+            // {
+            //     // 엔진 프로토콜은 즉시 처리함
+            //     if (_engineHandlers.TryGetValue(message.Id, out var handler))
+            //         handler.ExecuteMessage(this, message);
+            //     else
+            //         EnqueueReceivedMessage(message);
+            // }
+            // catch (Exception ex)
+            // {
+            //     OnError(ex);
+            // }
         }
 
         private void SendUdpHandshake()
@@ -802,9 +778,9 @@ namespace SP.Engine.Client
 
         internal void OnAuthHandshaked(S2CEngineProtocolData.SessionAuthAck p)
         {
-            if (p.ErrorCode != EngineErrorCode.Success)
+            if (p.Result != SessionHandshakeResult.Ok)
             {
-                OnError(p.ErrorCode);
+                OnError(new Exception($"Session auth failed: {p.Result}"));
                 CloseWithoutHandshake();
                 return;
             }
@@ -824,7 +800,7 @@ namespace SP.Engine.Client
             var newView = new NetworkPolicyView(g);
             Interlocked.Exchange(ref _networkPolicy, newView);
             
-            SetState(ENetPeerState.Open);
+            SetState(NetPeerState.Open);
 
             PeerId = p.PeerId;
             _sessionId = p.SessionId;
@@ -836,20 +812,37 @@ namespace SP.Engine.Client
             Connected?.Invoke(this, EventArgs.Empty);
         }
 
-        internal void OnUdpHelloAck(EngineErrorCode errorCode)
+        internal void OnUdpHandshaked(S2CEngineProtocolData.UdpHelloAck p)
         {
-            if (errorCode != EngineErrorCode.Success)
+            if (p.Result != UdpHandshakeResult.Ok)
             {
-                _udpSocket.Close();
-                _udpSocket = null;
+                _udp.Close();
+                _udp = null;
+                _channelRouter.Unbind(ChannelKind.Unreliable);
                 UdpClosed?.Invoke(this, EventArgs.Empty);
+                Logger?.Error("UDP handshake failed: {0}", p.Result);
                 return;
             }
             
+            _udp.SetMtu(p.Mtu);
             UdpOpened?.Invoke(this, EventArgs.Empty);
 
             if (Config.EnableUdpKeepAlive)
-                _udpKeepAliveTimer = new TickTimer(SendUdpKeepAlive, null, 0, Config.UdpKeepAliveIntervalSec * 1000);
+                StartUdpKeepAliveTimer();
+        }
+
+        private void StartUdpKeepAliveTimer()
+        {
+            StopUdpKeepAliveTimer();
+            var internalMs = Config.UdpKeepAliveIntervalSec * 1000;
+            _keepAliveTimer = new TickTimer(SendUdpKeepAlive, null, 0, internalMs);
+        }
+
+        private void StopUdpKeepAliveTimer()
+        {
+            if (_keepAliveTimer == null) return;
+            _keepAliveTimer.Dispose();
+            _keepAliveTimer = null;
         }
         
         private void SendUdpKeepAlive(object state)
@@ -863,6 +856,12 @@ namespace SP.Engine.Client
             _networkPolicy = new NetworkPolicyView(PolicyDefaults.Globals);
             ResetAllMessageStates();
             Offline?.Invoke(this, EventArgs.Empty);
+
+            StopUdpKeepAliveTimer();
+            _udp?.Close();
+            _udp = null;
+            
+            _channelRouter.Unbind(ChannelKind.Unreliable);
             StartReconnection();
         }
         
@@ -874,11 +873,11 @@ namespace SP.Engine.Client
         internal void OnPong(long sendTimeMs, long serverTimeMs)
         {
             var now = GetCurrentTimeMs();
-            var rawRttMs = now - sendTimeMs;
-            LatencyStats.OnReceived(rawRttMs);
-            AddRttSample(rawRttMs);
+            var rttMs = now - sendTimeMs;
+            LatencyStats.OnReceived(rttMs);
+            AddRtoSample(rttMs);
 
-            var estimatedServerTime = serverTimeMs + rawRttMs / 2.0;
+            var estimatedServerTime = serverTimeMs + rttMs / 2.0;
             _serverTimeOffsetMs = estimatedServerTime - now;
         }
         
@@ -914,12 +913,13 @@ namespace SP.Engine.Client
                     _session = null;
                 }
 
-                if (_udpSocket != null)
+                StopUdpKeepAliveTimer();
+                if (_udp != null)
                 {
-                    _udpSocket.DataReceived -= OnUdpSocketDataReceived;
-                    _udpSocket.Error -= OnUdpSocketError;
-                    _udpSocket.Close();
-                    _udpSocket = null;
+                    _udp.DataReceived -= OnUdpSocketDataReceived;
+                    _udp.Error -= OnUdpSocketError;
+                    _udp.Close();
+                    _udp = null;
                 }
                 
                 _channelRouter.Unbind(ChannelKind.Reliable);
@@ -928,7 +928,7 @@ namespace SP.Engine.Client
                 _encryptor?.Dispose();
                 
                 _sessionId = null;
-                PeerId = PeerId.None;
+                PeerId = 0;
                 LatencyStats.Clear();
                 CancelTimer();
                 ResetProcessorState();

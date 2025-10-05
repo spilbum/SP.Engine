@@ -12,7 +12,7 @@ internal abstract class BaseEngineHandler<TSession, TProtocol> : BaseHandler<TSe
     {
         try
         {
-            var protocol = (TProtocol)message.Deserialize(typeof(TProtocol), session.Encryptor);
+            var protocol = (TProtocol)message.Deserialize(typeof(TProtocol), session.Encryptor, session.Compressor);
             if (protocol == null)
                 throw new NullReferenceException($"Protocol could not be deserialized: {message.Id}");
             ExecuteProtocol(session, protocol);

@@ -20,7 +20,7 @@ namespace SP.Engine.Runtime.Security
         {
             if (key is null) throw new ArgumentNullException(nameof(key));
             if (key.Length != AesKeySize) throw new ArgumentException("Session key must be 32 bytes", nameof(key));
-            _key = key;
+            _key = (byte[])key.Clone();
         }
         
         public byte[] Encrypt(ReadOnlySpan<byte> plain)

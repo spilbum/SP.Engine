@@ -39,7 +39,7 @@ namespace SP.Engine.Server.Connector
         
         public string Name { get; } = name;
 
-        public PeerId PeerId => _netPeer?.PeerId ?? PeerId.None;
+        public uint PeerId => _netPeer?.PeerId ?? 0;
         public string Host { get; private set; }
         public int Port { get; private set; }
         public ILogger Logger { get; private set; }
@@ -176,7 +176,7 @@ namespace SP.Engine.Server.Connector
             netPeer.Tick();
             switch (netPeer.State)
             {
-                case ENetPeerState.Closed:
+                case NetPeerState.Closed:
                     netPeer.Connect(Host, Port);
                     break;
             }
@@ -191,7 +191,7 @@ namespace SP.Engine.Server.Connector
                 if (invoker == null)
                     throw new Exception("Unknown protocol: " + message.Id);
                 
-                invoker.Invoke(this, message, _netPeer.Encryptor);
+                invoker.Invoke(this, message, _netPeer.Encryptor, _netPeer.Compressor);
             }
             catch (Exception ex)
             {

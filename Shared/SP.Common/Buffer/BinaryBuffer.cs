@@ -66,7 +66,7 @@ namespace SP.Common.Buffer
         public int Capacity => _memory.Length;
         public int ReadableBytes => _writeIndex - _readIndex;
         
-        public BinaryBuffer(int size = 4096)
+        public BinaryBuffer(int size)
         {
             _memoryOwner = MemoryPool<byte>.Shared.Rent(size);
             _memory = _memoryOwner.Memory.Slice(0, size);

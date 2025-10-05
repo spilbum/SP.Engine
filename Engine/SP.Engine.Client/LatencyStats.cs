@@ -3,6 +3,12 @@ using SP.Common;
 
 namespace SP.Engine.Client
 {
+    public class TrafficInfo
+    {
+        public long SentBytes;
+        public long ReceivedBytes;
+    }
+    
     public class LatencyStats
     {
         private readonly DataSampler _sampler;

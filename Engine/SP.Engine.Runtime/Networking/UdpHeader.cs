@@ -1,85 +1,84 @@
 using System;
+using System.Buffers.Binary;
 using SP.Engine.Runtime.Protocol;
+using SP.Engine.Runtime.Serialization;
 
 namespace SP.Engine.Runtime.Networking
 {
     public readonly struct UdpHeader : IHeader
     {
-        private const int PeerIdSize = sizeof(ushort);
-        private const int ProtocolIdSize = sizeof(ushort);
-        private const int FlagsSize = sizeof(byte);
-        private const int PayloadLengthSize = sizeof(int);
-
-        private const int PeerIdOffset = 0;
-        private const int ProtocolIdOffset = PeerIdOffset + PeerIdSize;
-        private const int FlagsOffset = ProtocolIdOffset + ProtocolIdSize;
-        private const int PayloadLengthOffset = FlagsOffset + FlagsSize;
-        
-        public const int HeaderSize = PeerIdSize + ProtocolIdSize + FlagsSize + PayloadLengthSize;
-
-        public long SequenceNumber { get; }
-        public PeerId PeerId { get; }
-        public ushort Id  { get; }
         public HeaderFlags Flags { get; }
+        public uint PeerId { get; }
+        public ushort Id  { get; }
         public int PayloadLength { get; }
-        public int Length => HeaderSize;
+        public int Size { get; }
         public bool IsFragmentation => Flags.HasFlag(HeaderFlags.Fragment);
 
-        public UdpHeader(PeerId peerId, ushort id, HeaderFlags flags, int payloadLength)
-        {
-            SequenceNumber = 0; // 사용안함
+        public const int ByteSize = 1 + 4 + 2 + 4; // 11 bytes
+
+        public UdpHeader(HeaderFlags flags, uint peerId, ushort id, int payloadLength)
+        {            
+            Flags = flags;
             PeerId = peerId;
             Id = id;
-            Flags = flags;
             PayloadLength = payloadLength;
+            Size = ByteSize;
+        }
+        
+        public void WriteTo(INetWriter w)
+        {
+            w.WriteByte((byte)Flags);
+            w.WriteUInt32(PeerId);
+            w.WriteUInt16(Id);
+            w.WriteInt32(PayloadLength);
         }
 
-        public void WriteTo(Span<byte> span)
+        public void WriteTo(Span<byte> s)
         {
-            span.WriteUInt16(PeerIdOffset, (ushort)PeerId);
-            span.WriteUInt16(ProtocolIdOffset, Id);
-            span[FlagsOffset] = (byte)Flags;
-            span.WriteInt32(PayloadLengthOffset, PayloadLength);
+            s[0] = (byte)Flags;
+            s.WriteUInt32(1, PeerId);
+            s.WriteUInt16(5, Id);
+            s.WriteInt32(7, PayloadLength);
         }
 
-        public override string ToString()
+        public static bool TryParse(ReadOnlySpan<byte> source, out UdpHeader header, out int consumed)
         {
-            return $"peerId={PeerId}, id={Id}, flags={Flags}, payloadLength={PayloadLength}";
-        }
-
-        public static bool TryParse(ReadOnlySpan<byte> span, out UdpHeader header)
-        {
-            header = default;
-            
-            if (span.Length < HeaderSize)
+            if (source.Length < ByteSize)
+            {
+                header = default;
+                consumed = 0;
                 return false;
+            }
             
-            header = new UdpHeader(
-                (PeerId)span.ReadUInt16(PeerIdOffset),
-                span.ReadUInt16(ProtocolIdOffset), 
-                (HeaderFlags)span[FlagsOffset],
-                span.ReadInt32(PayloadLengthOffset));
+            var flags = (HeaderFlags)source[0];
+            var peerId = BinaryPrimitives.ReadUInt32LittleEndian(source.Slice(1, 4));
+            var id = BinaryPrimitives.ReadUInt16LittleEndian(source.Slice(5, 2));
+            var len = BinaryPrimitives.ReadInt32LittleEndian(source.Slice(7, 4));
+            if (len < 0) throw new InvalidOperationException("Negative payload length");
+            
+            header = new UdpHeader(flags, peerId, id, len);
+            consumed = ByteSize;
             return true;
         }
     }
 
     public class UdpHeaderBuilder
     {
-        private PeerId _peerId;
-        private ushort _id;
         private HeaderFlags _flags;
+        private uint _peerId;
+        private ushort _id;
         private int _payloadLength;
 
         public UdpHeaderBuilder From(UdpHeader header)
         {
+            _flags = header.Flags;
             _peerId = header.PeerId;
             _id = header.Id;
-            _flags = header.Flags;
             _payloadLength = header.PayloadLength;
             return this;
         }
 
-        public UdpHeaderBuilder WithPeerId(PeerId peerId)
+        public UdpHeaderBuilder WithPeerId(uint peerId)
         {
             _peerId = peerId;
             return this;
@@ -104,6 +103,6 @@ namespace SP.Engine.Runtime.Networking
         }
 
         public UdpHeader Build()
-            => new UdpHeader(_peerId, _id, _flags, _payloadLength);
+            => new UdpHeader(_flags, _peerId, _id, _payloadLength);
     }
 }

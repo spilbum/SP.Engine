@@ -1,6 +1,6 @@
 namespace SP.Engine.Runtime.Networking
 {
-    public interface ITcpSender
+    public interface IReliableSender
     {
         bool TrySend(TcpMessage msg);
     }

@@ -68,8 +68,7 @@ namespace SP.Engine.Server
                 if (null == e.RemoteEndPoint)
                     throw new Exception("RemoteEndPoint is null");
 
-                var buffer = e.Buffer.AsSpan(e.Offset, e.BytesTransferred).ToArray();
-                OnNewClientAccepted(_listenSocket, (buffer, (IPEndPoint)e.RemoteEndPoint));
+                OnNewClientAccepted(_listenSocket, (e.Buffer, e.Offset, e.BytesTransferred, (IPEndPoint)e.RemoteEndPoint));
             }
             catch (Exception ex)
             {

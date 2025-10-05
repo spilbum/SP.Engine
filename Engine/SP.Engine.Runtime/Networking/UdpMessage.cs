@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace SP.Engine.Runtime.Networking
 {
@@ -15,7 +16,7 @@ namespace SP.Engine.Runtime.Networking
         {
         }
         
-        public void SetPeerId(PeerId peerId)
+        public void SetPeerId(uint peerId)
         {
             Header = new UdpHeaderBuilder()
                 .From(Header)
@@ -23,36 +24,91 @@ namespace SP.Engine.Runtime.Networking
                 .Build();
         }
 
-        public List<UdpFragment> ToSplit(int maxPayloadSize, uint fragmentId)
+        public List<ArraySegment<byte>> ToDatagrams(int maxDatagramSize, Func<uint> getFragId)
         {
-            const int overhead = UdpHeader.HeaderSize + UdpFragmentHeader.HeaderSize;
-            if (maxPayloadSize <= overhead)
-                throw new ArgumentOutOfRangeException(nameof(maxPayloadSize), $"mtu({maxPayloadSize}) <= overhead({overhead})");
+            var list = new List<ArraySegment<byte>>();
+            var body = Body;
+            var bodyLen = body.Count;
 
-            var maxSize = maxPayloadSize - overhead;
-            var body = GetBodySpan();
-            
-            var totalCount = (byte)Math.Ceiling(body.Length / (float)maxSize);
-            var header = new UdpHeaderBuilder()
-                .From(Header)
-                .AddFlag(HeaderFlags.Fragment)
-                .Build();
-      
-            var fragments = new List<UdpFragment>();
-            for (byte i = 0; i < totalCount; i++)
+            if (maxDatagramSize <= 0 || UdpHeader.ByteSize + bodyLen <= maxDatagramSize)
             {
-                var offset = i * maxSize;
-                var size = (ushort)Math.Min(maxSize, body.Length - offset);
-                fragments.Add(new UdpFragment(
-                    header,
-                    new UdpFragmentHeader(fragmentId, i, totalCount, size),
-                    new ArraySegment<byte>(body.ToArray(), offset, size))
-                );
+                var header = new UdpHeaderBuilder()
+                    .From(Header)
+                    .WithPayloadLength(bodyLen)
+                    .Build();
+                
+                list.Add(ToArraySegment(header, body));
+                return list;
             }
-            return fragments;
+
+            var maxChunk = maxDatagramSize - UdpHeader.ByteSize - UdpFragmentHeader.ByteSize;
+            if (maxChunk <= 0)
+                throw new ArgumentOutOfRangeException(nameof(maxChunk), "Too small for headers.");
+
+            var totalCount = (byte)((bodyLen + maxChunk - 1) / maxChunk);
+            var fragId = getFragId();
+            
+            var offset = 0;
+            byte index = 0;
+
+            while (offset < bodyLen)
+            {
+                var size = Math.Min(maxChunk, bodyLen - offset);
+                var slice = new ArraySegment<byte>(body.Array!, body.Offset + offset, size);
+                
+                var fragHeader = new UdpFragmentHeader(fragId, index, totalCount, size);
+                var length = UdpFragmentHeader.ByteSize + size;
+                
+                var header = new UdpHeaderBuilder()
+                    .From(Header)
+                    .AddFlag(HeaderFlags.Fragment)
+                    .WithPayloadLength(length)
+                    .Build();
+              
+                list.Add( ToArraySegment(header, fragHeader, slice));
+                
+                offset += size;
+                index++;
+            }
+            
+            return list;
+        }
+
+        private static ArraySegment<byte> ToArraySegment(UdpHeader header, ArraySegment<byte> payload)
+        {
+            var total = UdpHeader.ByteSize + header.PayloadLength;
+            var buf = new byte[total];
+            var span = buf.AsSpan();
+            
+            header.WriteTo(span[..UdpHeader.ByteSize]);
+
+            if (payload.Count > 0 && payload.Array is { } arr)
+                Buffer.BlockCopy(arr, payload.Offset, buf, UdpHeader.ByteSize, payload.Count);
+            
+            return new ArraySegment<byte>(buf);
+        }
+
+        private static ArraySegment<byte> ToArraySegment(UdpHeader header, UdpFragmentHeader fragHeader,
+            ArraySegment<byte> fragPayload)
+        {
+            var total = UdpHeader.ByteSize + header.PayloadLength;
+            var buf = new byte[total];
+            var span = buf.AsSpan();
+            
+            var offset = 0;
+            header.WriteTo(span.Slice(offset, UdpHeader.ByteSize));
+            offset += UdpHeader.ByteSize;
+            
+            fragHeader.WriteTo(span.Slice(offset, UdpFragmentHeader.ByteSize));
+            offset += UdpFragmentHeader.ByteSize;
+            
+            if (fragPayload.Count > 0 && fragPayload.Array is { } arr)
+                Buffer.BlockCopy(arr, fragPayload.Offset, buf, offset, fragPayload.Count);
+            
+            return new ArraySegment<byte>(buf);
         }
         
-        protected override UdpHeader CreateHeader(ushort id, HeaderFlags flags, int payloadLength)
+        protected override UdpHeader CreateHeader(HeaderFlags flags, ushort id, int payloadLength)
         {
             return new UdpHeaderBuilder()
                 .From(Header)
