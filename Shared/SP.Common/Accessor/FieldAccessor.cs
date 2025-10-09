@@ -11,14 +11,27 @@ namespace SP.Common.Accessor
 
         public string Name { get; }
         public Type Type { get; }
+        public int Order { get; }
 
-        public FieldAccessor(FieldInfo fieldInfo)
+        public FieldAccessor(FieldInfo f)
         {
-            var attr = fieldInfo.GetCustomAttribute<MemberAttribute>();
-            Name = attr == null ? fieldInfo.Name : attr.Name;
-            Type = fieldInfo.FieldType;
-            _getter = CreateGetter(fieldInfo);
-            _setter = CreateSetter(fieldInfo);
+            Name = GetName(f);
+            Type = f.FieldType;
+            Order = GetOrder(f);
+            _getter = BuildGetter(f);
+            _setter = BuildSetter(f);
+        }
+
+        private static string GetName(FieldInfo f)
+        {
+            var attr = f.GetCustomAttribute<MemberNameAttribute>();
+            return attr?.Name ?? f.Name;
+        }
+        
+        private static int GetOrder(FieldInfo f)
+        {
+            var attr = f.GetCustomAttribute<MemberOrderAttribute>();
+            return attr?.Order ?? int.MaxValue;
         }
 
         public object GetValue(object instance)
@@ -35,30 +48,29 @@ namespace SP.Common.Accessor
             _setter(instance, value);
         }
 
-        private static Func<object, object> CreateGetter(FieldInfo field)
+        private static Func<object, object> BuildGetter(FieldInfo f)
         {
-            if (field.DeclaringType == null)
-                throw new ArgumentException("Field declaring type is null", nameof(field));
+            if (f.DeclaringType == null)
+                throw new ArgumentException("Field declaring type is null", nameof(f));
             
-            var instance = Expression.Parameter(typeof(object), "instance");
-            var instanceCast = Expression.Convert(instance, field.DeclaringType);
-            var fieldAccess = Expression.Field(instanceCast, field);
-            var castToObject = Expression.Convert(fieldAccess, typeof(object));
-            return Expression.Lambda<Func<object, object>>(castToObject, instance).Compile();
+            var obj = Expression.Parameter(typeof(object), "obj");
+            var cast = Expression.Convert(obj, f.DeclaringType);
+            var fld = Expression.Field(cast, f);
+            var box = Expression.Convert(fld, typeof(object));
+            return Expression.Lambda<Func<object, object>>(box, obj).Compile();
         }
 
-        private static Action<object, object> CreateSetter(FieldInfo field)
+        private static Action<object, object> BuildSetter(FieldInfo f)
         {
-            if (field.DeclaringType == null)
-                throw new ArgumentException("Field declaring type is null", nameof(field));
+            if (f.DeclaringType == null)
+                throw new ArgumentException("Field declaring type is null", nameof(f));
             
-            var instance = Expression.Parameter(typeof(object), "instance");
+            var obj = Expression.Parameter(typeof(object), "obj");
             var value = Expression.Parameter(typeof(object), "value");
-            var instanceCast = Expression.Convert(instance, field.DeclaringType);
-            var valueCast = Expression.Convert(value, field.FieldType);
-            var fieldAccess = Expression.Field(instanceCast, field);
-            var assign = Expression.Assign(fieldAccess, valueCast);
-            return Expression.Lambda<Action<object, object>>(assign, instance, value).Compile();
+            var castObj = Expression.Convert(obj, f.DeclaringType);
+            var castValue = Expression.Convert(value, f.FieldType);
+            var assign = Expression.Assign(Expression.Field(castObj, f), castValue);
+            return Expression.Lambda<Action<object, object>>(assign, obj, value).Compile();
         }
     }
 }

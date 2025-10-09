@@ -1,16 +1,16 @@
 using System;
 using System.Numerics;
 using System.Security.Cryptography;
-using SP.Common.Buffer;
+using System.Text;
 
 namespace SP.Engine.Runtime.Security
 {
     public class DiffieHellman : IDisposable
     {
         private DhPrivateKey _privateKey;
-        private readonly DhPublicKey _publicKey;
         private readonly DhParameters _parameters;
         private bool _disposed;
+        private readonly byte[] _publicKeyBytes;
         
         public DhKeySize KeySize { get; }
 
@@ -21,56 +21,73 @@ namespace SP.Engine.Runtime.Security
             
             var keyPair = DhKeyPair.Generate(_parameters);
             _privateKey = keyPair.PrivateKey;
-            _publicKey = keyPair.PublicKey;
+            var pub = keyPair.PublicKey;
+            _publicKeyBytes = DhUtil.PadToLength(
+                pub.KeyValue.ToByteArray(isUnsigned: true, isBigEndian: true),
+                _parameters.PublicKeyByteLength);
+
         }
 
-        public byte[] PublicKey 
-            => DhUtil.PadToLength(
-                _publicKey.KeyValue.ToByteArray(isUnsigned: true, isBigEndian: true),
-                _parameters.PublicKeyByteLength);
+        public byte[] PublicKey
+        {
+            get
+            {
+                var dst = new byte[_publicKeyBytes.Length];
+                Buffer.BlockCopy(_publicKeyBytes, 0, dst, 0, dst.Length);
+                return dst;
+            }
+        }
 
         public byte[] DeriveSharedKey(byte[] otherPublicKey)
         {
             if (_disposed) throw new ObjectDisposedException(nameof(DiffieHellman));
-            if (otherPublicKey is null || otherPublicKey.Length == 0)
-                throw new ArgumentNullException(nameof(otherPublicKey));
+            if (otherPublicKey is null) throw new ArgumentNullException(nameof(otherPublicKey));
+            if (otherPublicKey.Length != _parameters.PublicKeyByteLength) 
+                throw new ArgumentException("Invalid public key length", nameof(otherPublicKey));
             
             // 상대 공개키 파싱/검증
             var y = new BigInteger(otherPublicKey, isBigEndian: true, isUnsigned: true);
-            if (!DhUtil.IsValidPublicKey(y, _parameters.P))
-                throw new ArgumentException("Invalid other public key. Key is out of bounds for DH parameter P.");
+            
+            if (y <= BigInteger.One || y >= _parameters.P - BigInteger.One)
+                throw new ArgumentException("Invalid public key range", nameof(otherPublicKey));
 
-            // 공유 비밀 Z = Y^x mod p
-            var z = BigInteger.ModPow(y, _privateKey.KeyValue, _parameters.P)
-                                    .ToByteArray(isUnsigned: true, isBigEndian: true);
+            if (_parameters.Q > BigInteger.One)
+            {
+                if(BigInteger.ModPow(y, _parameters.Q, _parameters.P) != BigInteger.One)
+                    throw new ArgumentException("Invalid other public key (failed subgroup check).", nameof(otherPublicKey));
+            }
+            
+            // 공유 비밀 z 계산
+            var zBig = BigInteger.ModPow(y, _privateKey.KeyValue, _parameters.P);
+            var z = zBig.ToByteArray(isUnsigned: true, isBigEndian: true);
+
+            // z == 0/1 방지
+            if (z.Length == 0 || z.Length == 1 && z[0] == 1)
+            {
+                Array.Clear(z, 0, z.Length);
+                throw new CryptographicException("Week shared secret.");
+            }
 
             // 고정 길이 정규화
             var zFixed = DhUtil.PadToLength(z, _parameters.PublicKeyByteLength);
+            var otherFixed = DhUtil.PadToLength(otherPublicKey, _parameters.PublicKeyByteLength);
+            
+            var (a, b) = ByteArrayCompare(_publicKeyBytes, otherFixed) <= 0
+                ? (_publicKeyBytes, otherFixed)
+                : (otherFixed, _publicKeyBytes);
 
-            try
-            {
-                var selfPubFixed = PublicKey;
-                var otherPubFixed = DhUtil.PadToLength(otherPublicKey, _parameters.PublicKeyByteLength);
-                var (a, b) = ByteArrayCompare(selfPubFixed, otherPubFixed) <= 0
-                    ? (selfPubFixed, otherPubFixed)
-                    : (otherPubFixed, selfPubFixed);
-                
-                using var sha256 = SHA256.Create();
+            var salt = DhUtil.Sha256Concat(a, b);
+            var info = Encoding.UTF8.GetBytes($"SP.Engine.DH|v1|{(int)KeySize}");
 
-                var buf = new byte[a.Length + b.Length + zFixed.Length];
-                Buffer.BlockCopy(a, 0, buf, 0, a.Length);
-                Buffer.BlockCopy(b, 0, buf, a.Length, b.Length);
-                Buffer.BlockCopy(zFixed, 0, buf, a.Length + b.Length, zFixed.Length);
-                
-                var sharedKey = sha256.ComputeHash(buf);
-                Array.Clear(buf, 0, buf.Length);
-                return sharedKey;
-            }
-            finally
-            {
-                Array.Clear(z, 0, z.Length);
-                Array.Clear(zFixed, 0, zFixed.Length);
-            }
+            var prk = HkdfUtil.Extract(salt, zFixed);
+            var okm = HkdfUtil.Expand(prk, info, 32);
+
+            CryptographicOperations.ZeroMemory(prk);
+            CryptographicOperations.ZeroMemory(salt);
+            CryptographicOperations.ZeroMemory(z);
+            CryptographicOperations.ZeroMemory(zFixed);
+            
+            return okm;
 
             static int ByteArrayCompare(ReadOnlySpan<byte> x, ReadOnlySpan<byte> y)
             {
@@ -91,9 +108,11 @@ namespace SP.Engine.Runtime.Security
             if (_privateKey != null)
             {
                 var skBytes = _privateKey.KeyValue.ToByteArray(isUnsigned: true, isBigEndian: true);
-                Array.Clear(skBytes, 0, skBytes.Length);
+                CryptographicOperations.ZeroMemory(skBytes);
                 _privateKey = null;
             }
+            
+            CryptographicOperations.ZeroMemory(_publicKeyBytes);
             GC.SuppressFinalize(this);
         }
     }

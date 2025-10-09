@@ -5,16 +5,17 @@ namespace SP.Engine.Runtime.Security
 {
     public interface IEncryptor : IDisposable
     {
-        byte[] Encrypt(ReadOnlySpan<byte> plain);
-        byte[] Decrypt(ReadOnlySpan<byte> cipher);
+        byte[] Encrypt(byte[] plain);
+        byte[] Decrypt(byte[] cipher);
     }
     
-    public sealed class AesCbcEncryptor : IEncryptor
+    public class AesCbcEncryptor : IEncryptor
     {
         private readonly byte[] _key;
         private const int IvSize = 16;
         private const int AesKeySize = 32;
         private const int BlockSize = 16;
+        private bool _disposed;
 
         public AesCbcEncryptor(byte[] key)
         {
@@ -23,76 +24,84 @@ namespace SP.Engine.Runtime.Security
             _key = (byte[])key.Clone();
         }
         
-        public byte[] Encrypt(ReadOnlySpan<byte> plain)
+        public byte[] Encrypt(byte[] plain)
         {
+            if (_disposed) throw new ObjectDisposedException(nameof(AesCbcEncryptor));
+            if (plain is null) throw new ArgumentNullException(nameof(plain));
+            if (plain.Length == 0) plain = Array.Empty<byte>();
+            
             var iv = new byte[IvSize];
-            RandomNumberGenerator.Fill(iv);
-
+            byte[] cipher = null;
+            
             try
             {
-                using var aes = Aes.Create();
-                aes.KeySize = 256;
+                RandomNumberGenerator.Fill(iv);
+                
+                using var aes = Aes.Create();   
                 aes.Key = _key;
                 aes.IV = iv;
                 aes.Mode = CipherMode.CBC;
                 aes.Padding = PaddingMode.PKCS7;
 
                 using var encryptor = aes.CreateEncryptor();
-                var ciphertext = encryptor.TransformFinalBlock(plain.ToArray(), 0, plain.Length);
+                cipher = encryptor.TransformFinalBlock(plain, 0, plain.Length);
 
-                var result = new byte[IvSize + ciphertext.Length];
+                var result = new byte[IvSize + cipher.Length];
                 Buffer.BlockCopy(iv, 0, result, 0, IvSize);
-                Buffer.BlockCopy(ciphertext, 0, result, IvSize, ciphertext.Length);
-                
-                Array.Clear(ciphertext, 0, ciphertext.Length);
+                Buffer.BlockCopy(cipher, 0, result, IvSize, cipher.Length);
                 return result;
             }
             finally
             {
-                Array.Clear(iv, 0, iv.Length);
+                CryptographicOperations.ZeroMemory(iv);
+                CryptographicOperations.ZeroMemory(cipher);
             }
         }
 
-        public byte[] Decrypt(ReadOnlySpan<byte> input)
+        public byte[] Decrypt(byte[] cipher)
         {
-            if (input.Length < IvSize + 1) throw new ArgumentException("Encrypted data too short", nameof(input));
-            var chipherLen = input.Length - IvSize;
-            if (chipherLen % BlockSize != 0) throw new ArgumentException("Chiphertext length invalid", nameof(input));
+            if (_disposed) throw new ObjectDisposedException(nameof(AesCbcEncryptor));
+            if (cipher is null) throw new ArgumentNullException(nameof(cipher));
+            if (cipher.Length < IvSize + BlockSize)
+                throw new ArgumentException("Encrypted data too short", nameof(cipher));
+            
+            var iv = new byte[IvSize];
+            Buffer.BlockCopy(cipher, 0, iv, 0, iv.Length);
+            var ctLen = cipher.Length - IvSize;
+            if (ctLen % BlockSize != 0) 
+                throw new ArgumentException("Ciphertext length invalid", nameof(cipher));
 
-            var iv = input.Slice(0, IvSize).ToArray();
-            var ciphertext = input.Slice(IvSize).ToArray();
+            var ct = new byte[ctLen];
+            Buffer.BlockCopy(cipher, IvSize, ct, 0, ctLen);
 
             try
             {
                 using var aes = Aes.Create();
-                aes.KeySize = 256;
                 aes.Key = _key;
                 aes.IV = iv;
                 aes.Mode = CipherMode.CBC;
                 aes.Padding = PaddingMode.PKCS7;
 
                 using var decryptor = aes.CreateDecryptor();
-                try
-                {
-                    var plain = decryptor.TransformFinalBlock(ciphertext, 0, ciphertext.Length);
-                    return plain;
-                }
-                catch (CryptographicException)
-                {
-                    throw new CryptographicException("Decryption failed");
-                }
+                return decryptor.TransformFinalBlock(ct, 0, ctLen);
+            }
+            catch (CryptographicException ex)
+            {
+                throw new CryptographicException("Decryption failed.", ex);
             }
             finally
             {
-                Array.Clear(iv, 0, iv.Length);
-                Array.Clear(ciphertext, 0, ciphertext.Length);
+                CryptographicOperations.ZeroMemory(iv);
+                CryptographicOperations.ZeroMemory(ct);
             }
         }
 
         public void Dispose()
         {
-            if (_key != null)
-                Array.Clear(_key, 0, _key.Length);
+            if (_disposed) return;
+            _disposed = true;
+            CryptographicOperations.ZeroMemory(_key);
+            GC.SuppressFinalize(this);
         }
     }
 }

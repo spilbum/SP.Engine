@@ -76,7 +76,7 @@ namespace SP.Engine.Client
         private int _stateCode;
         private bool _disposed;
         private TcpNetworkSession _session;
-        private UdpSocket _udp;
+        private UdpSocket _udpSocket;
         private TickTimer _timer;
         private AesCbcEncryptor _encryptor;
         private readonly Lz4Compressor _compressor = new Lz4Compressor();
@@ -145,7 +145,7 @@ namespace SP.Engine.Client
             => _session?.GetTrafficInfo();
 
         public TrafficInfo GetUdpTrafficInfo() 
-            => _udp?.GetTrafficInfo();
+            => _udpSocket?.GetTrafficInfo();
 
         protected override void OnDebug(string format, params object[] args)
         {
@@ -191,7 +191,7 @@ namespace SP.Engine.Client
         {
             _timer?.Tick();
             _keepAliveTimer?.Tick();
-            _udp?.Tick();
+            _udpSocket?.Tick();
             
             // 수신된 메시지 처리
             DequeueReceivedMessage();
@@ -452,7 +452,7 @@ namespace SP.Engine.Client
         internal void CloseWithoutHandshake()
         {
             _session?.Close();
-            _udp?.Close();
+            _udpSocket?.Close();
         }
 
         public void Close()
@@ -531,7 +531,7 @@ namespace SP.Engine.Client
         private void OnSessionDataReceived(object sender, DataEventArgs e)
         {
             var span = e.Data.AsSpan(e.Offset, e.Length);
-            _recvBuffer.Write(span);
+            _recvBuffer.WriteSpan(span);
 
             try
             {
@@ -565,6 +565,7 @@ namespace SP.Engine.Client
         
         private IEnumerable<TcpMessage> Filter()
         {
+            const int headerSize = TcpHeader.ByteSize;
             var budgetTicks = _tcpParseBudgetMs <= 0
                 ? long.MaxValue
                 : TimeSpan.FromMilliseconds(_tcpParseBudgetMs).Ticks;
@@ -578,32 +579,31 @@ namespace SP.Engine.Client
             
             while (frames < framesCap && tickSw.ElapsedTicks < budgetTicks)
             {
-                if (_recvBuffer.ReadableBytes < TcpHeader.ByteSize)
+                if (_recvBuffer.ReadableBytes < headerSize)
                     yield break;
                 
-                var headerSpan = _recvBuffer.Peek(TcpHeader.ByteSize);
+                var headerSpan = _recvBuffer.PeekSpan(headerSize);
                 if (!TcpHeader.TryParse(headerSpan, out var header, out var consumed))
                     yield break;
 
-                long frameLen = consumed + header.PayloadLength;
-                if (frameLen <= 0 || frameLen > MaxFrameBytes)
+                var bodyLen = header.PayloadLength;
+                if (bodyLen <= 0 || bodyLen > MaxFrameBytes)
                 {
-                    Logger.Warn("Frame too large/small. max={0}, got={1}, (id={2})", 
-                        MaxFrameBytes, frameLen, header.Id);
+                    Logger.Warn("Body too large/small. max={0}, got={1}, (id={2})", 
+                        MaxFrameBytes, bodyLen, header.Id);
                     Close();
                     yield break;
                 }
 
-                var len = (int)frameLen;
-                if (_recvBuffer.ReadableBytes < len)
+                if (_recvBuffer.ReadableBytes < bodyLen)
                     yield break;
 
-                if (bytesParsed + len > bytesBudget)
+                if (bytesParsed + bodyLen > bytesBudget)
                     yield break;
                         
                 _recvBuffer.Advance(consumed);
-                var frameBytes = _recvBuffer.ReadBytes(len);
-                bytesParsed += len;
+                var frameBytes = _recvBuffer.ReadBytes(bodyLen);
+                bytesParsed += bodyLen;
                 frames++;
                         
                 yield return new TcpMessage(header, new ArraySegment<byte>(frameBytes));
@@ -663,8 +663,8 @@ namespace SP.Engine.Client
                     ResetProcessorState();
                     
                     StopUdpKeepAliveTimer();
-                    _udp?.Close();
-                    _udp = null;
+                    _udpSocket?.Close();
+                    _udpSocket = null;
                     
                     _session = null;
                     _channelRouter.Unbind(ChannelKind.Reliable);
@@ -700,7 +700,7 @@ namespace SP.Engine.Client
                 return;
             }
 
-            _udp = socket;
+            _udpSocket = socket;
             _channelRouter.Bind(new UnreliableChannel(socket));
             SendUdpHandshake();
         }
@@ -720,47 +720,69 @@ namespace SP.Engine.Client
 
         private void OnUdpSocketDataReceived(object sender, DataEventArgs e)
         {
-            if (_udp == null)
+            if (_udpSocket == null) return;
+
+            var datagram = new ArraySegment<byte>(e.Data, e.Offset, e.Length);
+            if (datagram.Array == null) return;
+
+            var headerSpan = datagram.AsSpan(0, UdpHeader.ByteSize);
+            if (!UdpHeader.TryParse(headerSpan, out var header, out var consumed))
                 return;
             
-            // var headerSpan = e.Data.AsSpan(e.Offset, e.Length);
-            // if (!UdpHeader.TryParse(headerSpan, out var header))
-            //     return;
-            //
-            // if (PeerId != header.PeerId)
-            //     return;
-            //
-            // IMessage message = null;
-            // if (header.IsFragmentation)
-            // {
-            //     var span = e.Data.AsSpan(e.Offset, e.Length);
-            //     if (UdpFragment.TryParse(span, out var fragment) &&
-            //         _udp.TryAssemble(fragment, out var payload))
-            //     {
-            //         message = new UdpMessage(header, payload);
-            //     }
-            // }
-            // else
-            // {
-            //     var payload = new ArraySegment<byte>(e.Data, e.Offset, e.Length);
-            //     message = new UdpMessage(header, payload);
-            // }
-            //
-            // if (message == null)
-            //     return;
-            //
-            // try
-            // {
-            //     // 엔진 프로토콜은 즉시 처리함
-            //     if (_engineHandlers.TryGetValue(message.Id, out var handler))
-            //         handler.ExecuteMessage(this, message);
-            //     else
-            //         EnqueueReceivedMessage(message);
-            // }
-            // catch (Exception ex)
-            // {
-            //     OnError(ex);
-            // }
+            if (PeerId != header.PeerId)
+                return;
+
+            var bodyOffset = datagram.Offset + consumed;
+            var bodyLen = header.PayloadLength;
+            var bodySpan = datagram.AsSpan(bodyOffset, bodyLen);
+            
+            if (header.Flags.HasFlag(HeaderFlags.Fragment))
+            {
+                if (!UdpFragmentHeader.TryParse(bodySpan.Slice(0, UdpFragmentHeader.ByteSize), out var fragHeader, out consumed))
+                    return;
+                
+                if (bodySpan.Length < consumed + fragHeader.PayloadLength)
+                    return;
+    
+                var fragPayload = new ArraySegment<byte>(datagram.Array, bodyOffset + consumed, fragHeader.PayloadLength);
+                
+                if (!_udpSocket.Assembler.TryAssemble(header, fragHeader, fragPayload, out var assembledPayload)) 
+                    return;
+
+                var normalizedHeader = new UdpHeaderBuilder()
+                    .From(header)
+                    .WithPayloadLength(assembledPayload.Count)
+                    .Build();
+                
+                var message = new UdpMessage(normalizedHeader, assembledPayload);
+                OnReceivedMessage(message);
+            }
+            else
+            {
+                var payload = new ArraySegment<byte>(datagram.Array, bodyOffset, bodyLen);
+                var normalizedHeader = new UdpHeaderBuilder()
+                    .From(header)
+                    .WithPayloadLength(payload.Count)
+                    .Build();
+                
+                var message = new UdpMessage(normalizedHeader, payload);
+                OnReceivedMessage(message);
+            }
+        }
+
+        private void OnReceivedMessage(IMessage message)
+        {
+            try
+            {
+                if (_engineHandlers.TryGetValue(message.Id, out var handler))
+                    handler.ExecuteMessage(this, message);
+                else
+                    EnqueueReceivedMessage(message);
+            }
+            catch (Exception ex)
+            {
+                OnError(ex);
+            }
         }
 
         private void SendUdpHandshake()
@@ -776,7 +798,7 @@ namespace SP.Engine.Client
             }
         }
 
-        internal void OnAuthHandshaked(S2CEngineProtocolData.SessionAuthAck p)
+        internal void OnAuthHandshake(S2CEngineProtocolData.SessionAuthAck p)
         {
             if (p.Result != SessionHandshakeResult.Ok)
             {
@@ -812,19 +834,19 @@ namespace SP.Engine.Client
             Connected?.Invoke(this, EventArgs.Empty);
         }
 
-        internal void OnUdpHandshaked(S2CEngineProtocolData.UdpHelloAck p)
+        internal void OnUdpHandshake(S2CEngineProtocolData.UdpHelloAck p)
         {
             if (p.Result != UdpHandshakeResult.Ok)
             {
-                _udp.Close();
-                _udp = null;
+                _udpSocket.Close();
+                _udpSocket = null;
                 _channelRouter.Unbind(ChannelKind.Unreliable);
                 UdpClosed?.Invoke(this, EventArgs.Empty);
                 Logger?.Error("UDP handshake failed: {0}", p.Result);
                 return;
             }
             
-            _udp.SetMtu(p.Mtu);
+            _udpSocket.SetMtu(p.Mtu);
             UdpOpened?.Invoke(this, EventArgs.Empty);
 
             if (Config.EnableUdpKeepAlive)
@@ -858,8 +880,8 @@ namespace SP.Engine.Client
             Offline?.Invoke(this, EventArgs.Empty);
 
             StopUdpKeepAliveTimer();
-            _udp?.Close();
-            _udp = null;
+            _udpSocket?.Close();
+            _udpSocket = null;
             
             _channelRouter.Unbind(ChannelKind.Unreliable);
             StartReconnection();
@@ -914,12 +936,12 @@ namespace SP.Engine.Client
                 }
 
                 StopUdpKeepAliveTimer();
-                if (_udp != null)
+                if (_udpSocket != null)
                 {
-                    _udp.DataReceived -= OnUdpSocketDataReceived;
-                    _udp.Error -= OnUdpSocketError;
-                    _udp.Close();
-                    _udp = null;
+                    _udpSocket.DataReceived -= OnUdpSocketDataReceived;
+                    _udpSocket.Error -= OnUdpSocketError;
+                    _udpSocket.Close();
+                    _udpSocket = null;
                 }
                 
                 _channelRouter.Unbind(ChannelKind.Reliable);

@@ -1,0 +1,14 @@
+[18:28:58 INF] [T:1] Logger setup was successful: Echo
+[18:28:58 DBG] [T:1] Handler '10000' registered.
+[18:28:58 DBG] [T:1] Handler '10001' registered.
+[18:28:58 INF] [T:1] The server Echo is initialized.
+[18:28:58 INF] [T:1] Listener (127.0.0.1:10000:"Tcp") was started.
+[18:28:58 INF] [T:1] Listener (127.0.0.1:10001:"Udp") was started.
+[18:28:58 INF] [T:1] The server instance Echo was been started!
+[18:30:42 INF] [T:1] Logger setup was successful: Echo
+[18:30:42 DBG] [T:1] Handler '10000' registered.
+[18:30:42 DBG] [T:1] Handler '10001' registered.
+[18:30:42 INF] [T:1] The server Echo is initialized.
+[18:30:42 INF] [T:1] Listener (127.0.0.1:10000:"Tcp") was started.
+[18:30:42 INF] [T:1] Listener (127.0.0.1:10001:"Udp") was started.
+[18:30:42 INF] [T:1] The server instance Echo was been started!

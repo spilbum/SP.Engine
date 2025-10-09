@@ -1,204 +1,184 @@
 using System;
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Text;
-using SP.Common.Buffer;
 
 namespace SP.Engine.Runtime.Serialization
 {
-    public interface INetWriter
+    public sealed class NetWriter : IDisposable
     {
-        void WriteByte(byte v);
-        void WriteBool(bool v);
-        void WriteInt16(short v);
-        void WriteUInt16(ushort v);
-        void WriteInt32(int v);
-        void WriteUInt32(uint v);
-        void WriteInt64(long v);
-        void WriteUInt64(ulong v);
-        void WriteSingle(float v);
-        void WriteDouble(double v);
-        void WriteBytes(ReadOnlySpan<byte> span);
-        void WriteByteArray(byte[] bytes);
-        void WriteString(string s);
-    }
+        private ArrayBufferWriter<byte> _buffer;
+        private bool _disposed;
 
-    public interface INetReader
-    {
-        byte ReadByte();
-        bool ReadBool();
-        short ReadInt16();
-        ushort ReadUInt16();
-        int ReadInt32();
-        uint ReadUInt32();
-        long ReadInt64();
-        ulong ReadUInt64();
-        float ReadSingle();
-        double ReadDouble();
-        byte[] ReadBytes(int length);
-        byte[] ReadByteArray();
-        string ReadString();
-    }
-
-    internal static class NetEncoding
-    {
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void WriteFloatLe(Span<byte> dst, float v)
+        public NetWriter(int initialCapacity = 128)
         {
-            BinaryPrimitives.WriteInt32LittleEndian(dst, BitConverter.SingleToInt32Bits(v));
+            _buffer = new ArrayBufferWriter<byte>(initialCapacity);
+        }
+
+        public byte[] ToArray() => _buffer.WrittenSpan.ToArray();
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private Span<byte> GetSpan(int sizeHint) => _buffer.GetSpan(sizeHint);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void Advance(int count) => _buffer.Advance(count);
+
+        public void Clear() => _buffer = new ArrayBufferWriter<byte>(_buffer.WrittenCount);
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static float ReadFloatLe(ReadOnlySpan<byte> src)
+        public void WriteByte(byte value)
         {
-            var i = BinaryPrimitives.ReadInt32LittleEndian(src);
-            return BitConverter.Int32BitsToSingle(i);
+            var span = GetSpan(1);
+            span[0] = value;
+            Advance(1);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void WriteDoubleLe(Span<byte> dst, double v)
+        public void WriteSByte(sbyte value) => WriteByte(unchecked((byte)value));
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteBool(bool value) => WriteByte(value ? (byte)1 : (byte)0);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteInt16(short value)
         {
-            BinaryPrimitives.WriteInt64LittleEndian(dst, BitConverter.DoubleToInt64Bits(v));
+            var span = GetSpan(2);
+            BinaryPrimitives.WriteInt16BigEndian(span, value);
+            Advance(2);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static double ReadDoubleLe(ReadOnlySpan<byte> src)
+        public void WriteUInt16(ushort value)
         {
-            var i = BinaryPrimitives.ReadInt64LittleEndian(src);
-            return BitConverter.Int64BitsToDouble(i);
-        }
-    }
-
-    public sealed class NetWriterBuffer : INetWriter
-    {
-        private readonly BinaryBuffer _buf;
-        public NetWriterBuffer(BinaryBuffer buf) => _buf = buf;
-
-        public void WriteByte(byte v)
-        {
-            _buf.Write(v);
+            var span = GetSpan(2);
+            BinaryPrimitives.WriteUInt16BigEndian(span, value);
+            Advance(2);
         }
 
-        public void WriteBool(bool v)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteInt32(int value)
         {
-            _buf.Write(v ? (byte)1 : (byte)0);
+            var span = GetSpan(4);
+            BinaryPrimitives.WriteInt32BigEndian(span, value);
+            Advance(4);
         }
 
-        public void WriteInt16(short v)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteUInt32(uint value)
         {
-            Span<byte> s = stackalloc byte[2];
-            BinaryPrimitives.WriteInt16LittleEndian(s, v);
-            _buf.Write(s);
+            var span = GetSpan(4);
+            BinaryPrimitives.WriteUInt32BigEndian(span, value);
+            Advance(4);
         }
 
-        public void WriteUInt16(ushort v)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteInt64(long value)
         {
-            Span<byte> s = stackalloc byte[2];
-            BinaryPrimitives.WriteUInt16LittleEndian(s, v);
-            _buf.Write(s);
+            var span = GetSpan(8);
+            BinaryPrimitives.WriteInt64BigEndian(span, value);
+            Advance(8);
         }
 
-        public void WriteInt32(int v)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteUInt64(ulong value)
         {
-            Span<byte> s = stackalloc byte[4];
-            BinaryPrimitives.WriteInt32LittleEndian(s, v);
-            _buf.Write(s);
+            var span = GetSpan(8);
+            BinaryPrimitives.WriteUInt64BigEndian(span, value);
+            Advance(8);
         }
 
-        public void WriteUInt32(uint v)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteSingle(float value)
         {
-            Span<byte> s = stackalloc byte[4];
-            BinaryPrimitives.WriteUInt32LittleEndian(s, v);
-            _buf.Write(s);
+            var span = GetSpan(4);
+            Unsafe.WriteUnaligned(ref span[0], value);
+            Advance(4);
         }
 
-        public void WriteInt64(long v)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteDouble(double value)
         {
-            Span<byte> s = stackalloc byte[8];
-            BinaryPrimitives.WriteInt64LittleEndian(s, v);
-            _buf.Write(s);
+            var span = GetSpan(8);
+            Unsafe.WriteUnaligned(ref span[0], value);
+            Advance(8);
         }
 
-        public void WriteUInt64(ulong v)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteVarUInt(uint value)
         {
-            Span<byte> s = stackalloc byte[8];
-            BinaryPrimitives.WriteUInt64LittleEndian(s, v);
-            _buf.Write(s);
+            Span<byte> tmp = stackalloc byte[5];
+            var i = 0;
+            while (value >= 0x80)
+            {
+                tmp[i++] = (byte)(value | 0x80);
+                value >>= 7;
+            }
+            tmp[i++] = (byte)value;
+
+            var span = GetSpan(i);
+            tmp[..i].CopyTo(span);
+            Advance(i);
         }
 
-        public void WriteSingle(float v)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteVarInt(int value)
         {
-            Span<byte> s = stackalloc byte[4];
-            NetEncoding.WriteFloatLe(s, v);
-            _buf.Write(s);
+            var zigzag = (uint)((value << 1) ^ (value >> 31));
+            WriteVarUInt(zigzag);
         }
 
-        public void WriteDouble(double v)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteVarULong(ulong value)
         {
-            Span<byte> s = stackalloc byte[8];
-            NetEncoding.WriteDoubleLe(s, v);
-            _buf.Write(s);
+            Span<byte> tmp = stackalloc byte[10];
+            var i = 0;
+            while (value >= 0x80)
+            {
+                tmp[i++] = (byte)((byte)value | 0x80);
+                value >>= 7;
+            }
+            tmp[i++] = (byte)value;
+            var span = GetSpan(i);
+            tmp[..i].CopyTo(span);
+            Advance(i);
         }
 
-        public void WriteBytes(ReadOnlySpan<byte> span)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteVarLong(long value)
         {
-            _buf.Write(span);
+            var zigzag = (ulong)((value << 1) ^ (value >> 63));
+            WriteVarULong(zigzag);
         }
 
-        public void WriteByteArray(byte[] bytes)
+        public void WriteString(string value)
         {
-            var isNull = bytes == null;
-            WriteBool(isNull);
-            if (isNull) return;
-            
-            WriteInt32(bytes.Length);
-            _buf.Write(bytes);
+            if (value == null)
+            {
+                WriteVarUInt(0);
+                return;
+            }
+
+            var byteLen = Encoding.UTF8.GetByteCount(value);
+            WriteVarUInt((uint)byteLen);
+
+            var span = GetSpan(byteLen);
+            var written = Encoding.UTF8.GetBytes(value, span);
+            Advance(written);
         }
 
-        public void WriteString(string s)
+        public void WriteBytes(ReadOnlySpan<byte> data)
         {
-            var isNull = s == null;
-            WriteBool(isNull);
-            if (isNull) return;
-            
-            var bytes = Encoding.UTF8.GetBytes(s);
-            WriteInt32(bytes.Length);
-            _buf.Write(bytes);
-        }
-    }
-
-    public sealed class NetReaderBuffer : INetReader
-    {
-        private readonly BinaryBuffer _buf;
-        public NetReaderBuffer(BinaryBuffer buf) => _buf = buf;
-        
-        public byte ReadByte() => _buf.Read<byte>();
-        public bool ReadBool() => ReadByte() != 0;
-        public short ReadInt16() => BinaryPrimitives.ReadInt16LittleEndian(_buf.Read(2));
-        public ushort ReadUInt16() => BinaryPrimitives.ReadUInt16LittleEndian(_buf.Read(2));
-        public int ReadInt32() => BinaryPrimitives.ReadInt32LittleEndian(_buf.Read(4));
-        public uint ReadUInt32() => BinaryPrimitives.ReadUInt32LittleEndian(_buf.Read(4));
-        public long ReadInt64() => BinaryPrimitives.ReadInt64LittleEndian(_buf.Read(8));
-        public ulong ReadUInt64() => BinaryPrimitives.ReadUInt64LittleEndian(_buf.Read(8));
-        public float ReadSingle() => NetEncoding.ReadFloatLe(_buf.Read(4));
-        public double ReadDouble() => NetEncoding.ReadDoubleLe(_buf.Read(8));
-        public byte[] ReadBytes(int length) => _buf.ReadBytes(length);
-
-        public byte[] ReadByteArray()
-        {
-            if (ReadBool()) return null;
-            var len = ReadInt32();
-            if (len < 0) throw new InvalidOperationException("Negative length");
-            return _buf.ReadBytes(len);
-        }
-
-        public string ReadString()
-        {
-            if (ReadBool()) return null;
-            var len = ReadInt32();
-            if (len == 0) return string.Empty;
-            var span = _buf.Read(len);
-            return Encoding.UTF8.GetString(span);
+            WriteVarUInt((uint)data.Length);
+            var span = GetSpan(data.Length);
+            data.CopyTo(span);
+            Advance(data.Length);
         }
     }
 }

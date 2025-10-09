@@ -1,51 +1,26 @@
+using System;
 using System.Numerics;
-using System.Security.Cryptography;
 
 namespace SP.Engine.Runtime.Security
 {
-    public static class BigIntegerExtensions
-    {
-        public static int GetBitLength(this BigInteger value)
-        {
-            var bytes = value.ToByteArray(isUnsigned: true, isBigEndian: true);
-            if (bytes.Length == 0)
-                return 0;
-
-            int leading = 8;
-            byte first = bytes[0];
-
-            while ((first & 0x80) == 0)
-            {
-                first <<= 1;
-                leading--;
-            }
-
-            return (bytes.Length - 1) * 8 + leading;
-        }
-    }
-    
     internal class DhPrivateKey
     {
-        public DhPrivateKey(BigInteger keyValue, DhParameters parameters)
+        public DhPrivateKey(BigInteger keyValue)
         {
             KeyValue = keyValue;
-            Parameters = parameters;
         }
 
-        public BigInteger KeyValue { get; set; }
-        public DhParameters Parameters { get; set; }
+        public BigInteger KeyValue { get; }
     }
 
     internal class DhPublicKey
     {
-        public DhPublicKey(BigInteger keyValue, DhParameters parameters)
+        public DhPublicKey(BigInteger keyValue)
         {
             KeyValue = keyValue;
-            Parameters = parameters;
         }
         
-        public BigInteger KeyValue { get; set; }
-        public DhParameters Parameters { get; set; }
+        public BigInteger KeyValue { get; }
     }
 
     internal class DhKeyPair
@@ -53,36 +28,26 @@ namespace SP.Engine.Runtime.Security
         public DhPrivateKey PrivateKey { get; }
         public DhPublicKey PublicKey { get; }
 
-        private DhKeyPair(DhPrivateKey priv, DhPublicKey pub)
+        private DhKeyPair(DhPrivateKey privateKey, DhPublicKey publicKey)
         {
-            PrivateKey = priv;
-            PublicKey = pub;
+            PrivateKey = privateKey;
+            PublicKey = publicKey;
         }
 
         public static DhKeyPair Generate(DhParameters parameters)
         {
-            var p = parameters.P;
-            var g = parameters.G;
+            if (parameters is null) throw new ArgumentNullException(nameof(parameters));
+            if (parameters.Q <= BigInteger.One) { throw new ArgumentException("Invalid Q in parameters", nameof(parameters)); }
 
-            var bitLength = p.GetBitLength();
-            var byteLength = (bitLength + 7) / 8;
-
-            var bytes = new byte[byteLength];
-            int extraBits = byteLength * 8 - bitLength;
-            byte mask = (byte)(0xFF >> extraBits);
-
-            BigInteger priv;
+            BigInteger x;
+            var qMinusTwo = parameters.Q - 2;
             do
             {
-                RandomNumberGenerator.Fill(bytes);
-                bytes[0] &= mask;
-                priv = new BigInteger(bytes, isUnsigned: true, isBigEndian: true);
-            } while (!DhUtil.IsValidPublicKey(priv, p));
-
-            var pub = BigInteger.ModPow(g, priv, p);
-            return new DhKeyPair(
-                new DhPrivateKey(priv, parameters),
-                new DhPublicKey(pub, parameters));
+                x = DhUtil.RandomBigIntegerLessThan(parameters.Q - 2) + 2;
+            } while (x < 2 || x > qMinusTwo);
+            
+            var y = BigInteger.ModPow(parameters.G, x, parameters.P);   
+            return new DhKeyPair(new DhPrivateKey(x), new DhPublicKey(y));
         }
     }
 }

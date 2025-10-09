@@ -24,14 +24,6 @@ namespace SP.Engine.Runtime.Networking
             PayloadLength = payloadLength;
             Size = ByteSize;
         }
-        
-        public void WriteTo(INetWriter w)
-        {
-            w.WriteByte((byte)Flags);
-            w.WriteUInt32(PeerId);
-            w.WriteUInt16(Id);
-            w.WriteInt32(PayloadLength);
-        }
 
         public void WriteTo(Span<byte> s)
         {
@@ -51,9 +43,9 @@ namespace SP.Engine.Runtime.Networking
             }
             
             var flags = (HeaderFlags)source[0];
-            var peerId = BinaryPrimitives.ReadUInt32LittleEndian(source.Slice(1, 4));
-            var id = BinaryPrimitives.ReadUInt16LittleEndian(source.Slice(5, 2));
-            var len = BinaryPrimitives.ReadInt32LittleEndian(source.Slice(7, 4));
+            var peerId = BinaryPrimitives.ReadUInt32BigEndian(source.Slice(1, 4));
+            var id = BinaryPrimitives.ReadUInt16BigEndian(source.Slice(5, 2));
+            var len = BinaryPrimitives.ReadInt32BigEndian(source.Slice(7, 4));
             if (len < 0) throw new InvalidOperationException("Negative payload length");
             
             header = new UdpHeader(flags, peerId, id, len);

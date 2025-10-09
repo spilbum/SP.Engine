@@ -1,378 +1,376 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Concurrent;
-using SP.Common.Buffer;
+using System.Collections.Generic;
 using SP.Common.Accessor;
 
 namespace SP.Engine.Runtime.Serialization
 {
     public static class BinaryConverter
     {
-        private static readonly ConcurrentDictionary<Type, Type> ElementTypeCache = new ConcurrentDictionary<Type, Type>();
-        private static readonly ConcurrentDictionary<Type, Type[]> GenericArgCache = new ConcurrentDictionary<Type, Type[]>();
 
-        private static Type GetCachedElementType(Type type) 
-            => ElementTypeCache.GetOrAdd(type, t => t.GetElementType());
+        private static readonly ConcurrentDictionary<Type, SerializerPair> Cache =
+            new ConcurrentDictionary<Type, SerializerPair>();
 
-        private static Type[] GetCachedGenericArgs(Type type)
-            => GenericArgCache.GetOrAdd(type, t => t.GetGenericArguments());
+        private class SerializerPair
+        {
+            public delegate object ReadFn(ref NetReader r);
 
-        public static void Serialize(object obj, Type type, INetWriter w)
-        {
-            if (obj == null) throw new ArgumentNullException(nameof(obj));
-            Write(w, obj, type);
-        }
+            public delegate void WriteFn(ref NetWriter w, object value);
 
-        public static object Deserialize(INetReader r, Type type)
-        {
-            return Read(r, type);
-        }
-        
-        public static byte[] SerializeObject(object obj, Type type)
-        {
-            if (obj == null) throw new ArgumentNullException(nameof(obj));
-            using var buf = new BinaryBuffer(4096);
-            var w = new NetWriterBuffer(buf);
-            Write(w, obj, type);
-            return buf.ToArray();
-        }
+            public ReadFn Reader { get; }
+            public WriteFn Writer { get; }
 
-        public static object DeserializeObject(byte[] data, Type type)
-        {
-            using var buf = new BinaryBuffer(data.Length);
-            buf.Write(data);
-            var r = new NetReaderBuffer(buf);
-            return Read(r, type);
-        }
-        
-        private static object Read(INetReader r, Type type)
-        {
-            var dataType = type.GetDataType();
-            switch (dataType)
+            public SerializerPair(ReadFn reader, WriteFn writer)
             {
-                case DataType.Value:
-                {
-                    return ReadNullableValue(r, type);
-                }
-
-                case DataType.Enum:
-                {
-                    var ut = Nullable.GetUnderlyingType(type);
-                    if (ut is { IsEnum: true })
-                    {
-                        if (r.ReadBool()) return null;
-                    }
-                    else
-                    {
-                        ut = type;
-                    }
-                    
-                    ut = Enum.GetUnderlyingType(ut);
-                    object raw;
-                    if (ut == typeof(byte)) raw = r.ReadByte();
-                    else if (ut == typeof(sbyte)) raw = unchecked((sbyte)r.ReadByte());
-                    else if (ut == typeof(short)) raw = r.ReadInt16();
-                    else if (ut == typeof(ushort)) raw = r.ReadUInt16();
-                    else if (ut == typeof(int)) raw = r.ReadInt32();
-                    else if (ut == typeof(uint)) raw = r.ReadUInt32();
-                    else if (ut == typeof(long)) raw = r.ReadInt64();
-                    else if (ut == typeof(ulong)) raw = r.ReadUInt64();
-                    else throw new NotSupportedException($"Unsupported enum type: {ut.FullName}");
-                    return Enum.ToObject(ut, raw);
-                }
-
-                case DataType.String:
-                {
-                    return r.ReadString();
-                }
-
-                case DataType.Class:
-                {
-                    if (r.ReadBool()) return null;
-                    var instance = Activator.CreateInstance(type);
-                    var accessor = RuntimeTypeAccessor.GetOrCreate(type);
-                    foreach (var member in accessor.Members)
-                    {
-                        var val = Read(r, member.Type);
-                        if (val != null || member.Type.IsNullable())
-                            accessor[instance, member.Name] = val;
-                    }
-
-                    return instance;
-                }
-
-                case DataType.Array:
-                {
-                    if (r.ReadBool()) return null;
-                    var count = r.ReadInt32();
-                    var elemType = GetCachedElementType(type);
-                    var array = Array.CreateInstance(elemType!, count);
-                    for (var i = 0; i < count; i++)
-                        array.SetValue(Read(r, elemType), i);
-                    return array;
-                }
-
-                case DataType.List:
-                {
-                    if (r.ReadBool()) return null;
-                    var count = r.ReadInt32();
-                    var itemType = GetCachedGenericArgs(type)[0];
-                    var list = (IList)Activator.CreateInstance(type);
-                    for (var i = 0; i < count; i++)
-                        list.Add(Read(r, itemType));
-                    return list;
-                }
-
-                case DataType.Dictionary:
-                {
-                    if (r.ReadBool()) return null;
-                    var dictCount = r.ReadInt32();
-                    var args = GetCachedGenericArgs(type);
-                    var dict = (IDictionary)Activator.CreateInstance(type);
-                    for (var i = 0; i < dictCount; i++)
-                    {
-                        var key = Read(r, args[0]);
-                        var val = Read(r, args[1]);
-                        dict.Add(key, val);
-                    }
-
-                    return dict;
-                }
-
-                case DataType.ByteArray:
-                {
-                    return r.ReadByteArray();
-                }
-
-                case DataType.DateTime:
-                {
-                    if (r.ReadBool()) return null;
-                    var kind = (DateTimeKind)r.ReadByte();
-                    var ticks = r.ReadInt64();
-                    return new DateTime(ticks, kind);
-                }
-
-                default:
-                    throw new NotSupportedException($"Unsupported data type: {dataType}");
+                Reader = reader;
+                Writer = writer;
             }
         }
 
-        private static void Write(INetWriter w, object obj, Type type)
+        public static T Deserialize<T>(ref NetReader r) => (T)Deserialize(ref r, typeof(T));
+        public static object Deserialize(ref NetReader r, Type type) => GetOrBuild(type).Reader(ref r);
+
+        public static void Serialize<T>(ref NetWriter w, T value) => Serialize(ref w, typeof(T), value);
+        public static void Serialize(ref NetWriter w, Type type, object value) => GetOrBuild(type).Writer(ref w, value);
+
+        private static SerializerPair GetOrBuild(Type type) => Cache.GetOrAdd(type, Build);
+
+        private static SerializerPair Build(Type t)
         {
-            var dataType = type.GetDataType();
-            switch (dataType)
-            {
-                case DataType.Value:
-                {
-                    WriteNullableValue(w, obj, type);
-                    break;
-                }
+            if (TryBuildPrimitive(t, out var p)) return p;
 
-                case DataType.Enum:
-                {
-                    var ut = Nullable.GetUnderlyingType(type);
-                    if (ut is { IsEnum: true })
-                    {
-                        var isNull = obj == null;
-                        w.WriteBool(isNull);
-                        if (isNull) return;
-                    }
-                    else
-                    {
-                        ut = type;
-                    }
-
-                    ut = Enum.GetUnderlyingType(ut);
-                    if (ut == typeof(byte)) w.WriteByte((byte)obj);
-                    else if (ut == typeof(sbyte)) w.WriteByte(unchecked((byte)(sbyte)obj));
-                    else if (ut == typeof(short)) w.WriteInt16((short)obj);
-                    else if (ut == typeof(ushort)) w.WriteUInt16((ushort)obj);
-                    else if (ut == typeof(int)) w.WriteInt32((int)obj);
-                    else if (ut == typeof(uint)) w.WriteUInt32((uint)obj);
-                    else if (ut == typeof(long)) w.WriteInt64((long)obj);
-                    else if (ut == typeof(ulong)) w.WriteUInt64((ulong)obj);
-                    else throw new NotSupportedException($"Unsupported enum type: {ut.FullName}");
-                    break;
-                }
-
-                case DataType.String:
-                {
-                    w.WriteString((string)obj);
-                    break;
-                }
-
-                case DataType.Class:
-                {
-                    var isNull = obj == null;
-                    w.WriteBool(isNull);
-                    if (!isNull)
-                    {
-                        var accessor = RuntimeTypeAccessor.GetOrCreate(type);
-                        foreach (var member in accessor.Members)
-                        {
-                            var val = accessor[obj, member.Name];
-                            Write(w, val, member.Type);
-                        }
-                    }
-                    break;
-                }
-
-                case DataType.Array:
-                {
-                    var arr = obj as Array;
-                    var isNull = arr == null;
-                    w.WriteBool(isNull);
-                    if (!isNull)
-                    {
-                        var len = arr.Length;
-                        w.WriteInt32(len);
-                        var elemType = GetCachedElementType(type);
-                        for (var i = 0; i < len; i++)
-                            Write(w, arr.GetValue(i), elemType);
-                    }
-                    break;
-                }
-
-                case DataType.List:
-                {
-                    var list = obj as IList;
-                    var isNull = list == null;
-                    w.WriteBool(isNull);
-                    if (!isNull)
-                    {
-                        w.WriteInt32(list.Count);
-                        var itemType = GetCachedGenericArgs(type)[0];
-                        foreach (var item in list)
-                            Write(w, item, itemType);
-                    }
-                    break;
-                }
-
-                case DataType.Dictionary:
-                {
-                    var dict = obj as IDictionary;
-                    var isNull = dict == null;
-                    w.WriteBool(isNull);
-                    if (!isNull)
-                    {
-                        w.WriteInt32(dict.Count);
-                        var args = GetCachedGenericArgs(type);
-                        foreach (DictionaryEntry e in dict)
-                        {
-                            Write(w, e.Key, args[0]);
-                            Write(w, e.Value, args[1]);
-                        }
-                    }
-                    break;
-                }
-
-                case DataType.ByteArray:
-                {
-                    w.WriteByteArray((byte[])obj);
-                    break;
-                }
-
-                case DataType.DateTime:
-                {
-                    var isNull = obj == null;
-                    w.WriteBool(isNull);
-                    if (!isNull)
-                    {
-                        var dt = (DateTime)obj;
-                        w.WriteByte((byte)dt.Kind);
-                        w.WriteInt64(dt.Ticks);
-                    }
-                    break;
-                }
-
-                default:
-                    throw new NotSupportedException($"Unsupported data type: {dataType}");
-            }
-        }
-
-        private static object ReadNullableValue(INetReader r, Type type)
-        {
-            if (!type.IsNullable())
-            {
-                if (type == typeof(bool)) return r.ReadBool();
-                if (type == typeof(byte)) return r.ReadByte();
-                if (type == typeof(sbyte)) return unchecked((sbyte)r.ReadByte());
-                if (type == typeof(short)) return r.ReadInt16();
-                if (type == typeof(ushort)) return r.ReadUInt16();
-                if (type == typeof(int)) return r.ReadInt32();
-                if (type == typeof(uint)) return r.ReadUInt32();
-                if (type == typeof(long)) return r.ReadInt64();
-                if (type == typeof(ulong)) return r.ReadUInt64();
-                if (type == typeof(float)) return r.ReadSingle();
-                if (type == typeof(double)) return r.ReadDouble();
-                if (type == typeof(decimal))
-                {
-                    var a = r.ReadInt32();
-                    var b = r.ReadInt32();
-                    var c = r.ReadInt32();
-                    var d = r.ReadInt32();
-                    return new decimal(new int[] {a, b, c, d});
-                }
-                throw new NotSupportedException($"Unsupported value type: {type.FullName}");
-            }
+            if (t == typeof(string)) return BuildString();
+            if (t == typeof(byte[])) return BuildByteArray();
             
-            if (r.ReadBool()) return null;
-            var ut = Nullable.GetUnderlyingType(type);
-            if (ut == typeof(bool)) return (bool?)r.ReadBool();
-            if (ut == typeof(byte)) return (byte?)r.ReadByte();
-            if (ut == typeof(sbyte)) return (sbyte?)unchecked((sbyte)r.ReadByte());
-            if (ut == typeof(short)) return (short?)r.ReadInt16();
-            if (ut == typeof(ushort)) return (ushort?)r.ReadUInt16();
-            if (ut == typeof(int)) return (int?)r.ReadInt32();
-            if (ut == typeof(uint)) return (uint?)r.ReadUInt32();
-            if (ut == typeof(long)) return (long?)r.ReadInt64();
-            if (ut == typeof(ulong)) return (ulong?)r.ReadUInt64();
-            if (ut == typeof(float)) return (float?)r.ReadSingle();
-            if (ut == typeof(double)) return (double?)r.ReadDouble();
-            if (ut == typeof(decimal))
-            {
-                var a = r.ReadInt32();
-                var b = r.ReadInt32();
-                var c = r.ReadInt32();
-                var d = r.ReadInt32();
-                return (decimal?)new decimal(new int[] {a, b, c, d});
-            }
-            throw new NotSupportedException($"Unsupported nullable value type: {ut?.FullName}");
-        }
+            if (t.IsEnum) return BuildEnum(t);
         
-        private static void WriteNullableValue(INetWriter w, object obj, Type type)
+            var ut = Nullable.GetUnderlyingType(t);
+            if (ut != null) return BuildNullable(ut);
+            
+            if (t.IsArray) return BuildArray(t);
+            if (TryBuildList(t, out p)) return p;
+            if (TryBuildDictionary(t, out p)) return p;
+            
+            return t == typeof(DateTime) ? BuildDateTime() : BuildPoco(t);
+        }
+
+        private static bool TryBuildPrimitive(Type t, out SerializerPair pair)
         {
-            if (!type.IsNullable())
+            pair = null;
+            if (t == typeof(bool))
             {
-                if (type == typeof(bool)) { w.WriteBool((bool)obj); return; }
-                if (type == typeof(byte)) { w.WriteByte((byte)obj); return; }
-                if (type == typeof(sbyte)) { w.WriteByte(unchecked((byte)(sbyte)obj)); return; }
-                if (type == typeof(short)) { w.WriteInt16((short)obj); return; }
-                if (type == typeof(ushort)) { w.WriteUInt16((ushort)obj); return; }
-                if (type == typeof(int)) { w.WriteInt32((int)obj); return; }
-                if (type == typeof(uint)) { w.WriteUInt32((uint)obj); return; }
-                if (type == typeof(long)) { w.WriteInt64((long)obj); return; }
-                if (type == typeof(ulong)) { w.WriteUInt64((ulong)obj); return; }
-                if (type == typeof(float)) { w.WriteSingle((float)obj); return; }
-                if (type == typeof(double)) { w.WriteDouble((double)obj); return; }
-                if (type == typeof(decimal))
+                pair = Generate((ref NetReader r) => r.ReadBool(),
+                    (ref NetWriter w, object v) => w.WriteBool((bool)v));
+                return true;
+            }
+
+            if (t == typeof(byte))
+            {
+                pair = Generate((ref NetReader r) => r.ReadByte(),
+                    (ref NetWriter w, object v) => w.WriteByte((byte)v));
+                return true;
+            }
+
+            if (t == typeof(sbyte))
+            {
+                pair = Generate((ref NetReader r) => (sbyte)r.ReadByte(),
+                    (ref NetWriter w, object v) => w.WriteByte(unchecked((byte)(sbyte)v)));
+                return true;
+            }
+
+            if (t == typeof(short))
+            {
+                pair = Generate((ref NetReader r) => r.ReadInt16(),
+                    (ref NetWriter w, object v) => w.WriteInt16((short)v));
+                return true;
+            }
+
+            if (t == typeof(ushort))
+            {
+                pair = Generate((ref NetReader r) => r.ReadUInt16(),
+                    (ref NetWriter w, object v) => w.WriteUInt16((ushort)v));
+                return true;
+            }
+
+            if (t == typeof(int))
+            {
+                pair = Generate((ref NetReader r) => r.ReadInt32(),
+                    (ref NetWriter w, object v) => w.WriteInt32((int)v));
+                return true;
+            }
+
+            if (t == typeof(uint))
+            {
+                pair = Generate((ref NetReader r) => r.ReadUInt32(),
+                    (ref NetWriter w, object v) => w.WriteUInt32((uint)v));
+                return true;
+            }
+
+            if (t == typeof(long))
+            {
+                pair = Generate((ref NetReader r) => r.ReadInt64(),
+                    (ref NetWriter w, object v) => w.WriteInt64((long)v));
+                return true;
+            }
+
+            if (t == typeof(ulong))
+            {
+                pair = Generate((ref NetReader r) => r.ReadUInt64(),
+                    (ref NetWriter w, object v) => w.WriteUInt64((ulong)v));
+                return true;
+            }
+
+            if (t == typeof(float))
+            {
+                pair = Generate((ref NetReader r) => r.ReadSingle(),
+                    (ref NetWriter w, object v) => w.WriteSingle((float)v));
+                return true;
+            }
+
+            if (t == typeof(double))
+            {
+                pair = Generate((ref NetReader r) => r.ReadDouble(),
+                    (ref NetWriter w, object v) => w.WriteDouble((double)v));
+                return true;
+            }
+
+            if (t == typeof(decimal))
+            {
+                pair = Generate(
+                    (ref NetReader r) =>
+                    {
+                        var a = r.ReadInt32();
+                        var b = r.ReadInt32();
+                        var c = r.ReadInt32();
+                        var d = r.ReadInt32();
+                        return new decimal(new[] { a, b, c, d });
+                    },
+                    (ref NetWriter w, object v) =>
+                    {
+                        var bits = decimal.GetBits((decimal)v);
+                        w.WriteInt32(bits[0]);
+                        w.WriteInt32(bits[1]);
+                        w.WriteInt32(bits[2]);
+                        w.WriteInt32(bits[3]);
+                    });
+                return true;
+            }
+
+            return false;
+
+            SerializerPair Generate(SerializerPair.ReadFn r, SerializerPair.WriteFn w)
+                => new SerializerPair(r, w);
+        }
+
+        private static SerializerPair BuildString()
+        {
+            return new SerializerPair(Read, Write);
+
+            object Read(ref NetReader r)
+            {
+                return r.ReadString();
+            }
+
+            void Write(ref NetWriter w, object v)
+            {
+                w.WriteString((string)v);
+            }
+        }
+
+        private static SerializerPair BuildByteArray()
+        {
+            return new SerializerPair(Read, Write);
+
+            void Write(ref NetWriter writer, object value)
+            {
+                var bytes = (byte[])value ?? Array.Empty<byte>();
+                writer.WriteBytes(bytes);
+            }
+
+            object Read(ref NetReader r)
+            {
+                var s = r.ReadBytes();
+                var arr = new byte[s.Length];
+                s.CopyTo(arr);
+                return arr;
+            }
+        }
+
+        private static SerializerPair BuildEnum(Type enumType)
+        {
+            var underlying = Enum.GetUnderlyingType(enumType);
+            var uSer = GetOrBuild(underlying);
+
+            return new SerializerPair(Read, Write);
+
+            void Write(ref NetWriter writer, object value)
+            {
+                var raw = Convert.ChangeType(value, underlying);
+                uSer.Writer(ref writer, raw);
+            }
+
+            object Read(ref NetReader r)
+            {
+                var raw = uSer.Reader(ref r);
+                return Enum.ToObject(enumType, raw);
+            }
+        }
+
+        private static SerializerPair BuildNullable(Type type)
+        {
+            var ser = GetOrBuild(type);
+
+            return new SerializerPair(Read, Write);
+
+            object Read(ref NetReader r)
+            {
+                var has = r.ReadBool();
+                return !has ? null : ser.Reader(ref r);
+            }
+
+            void Write(ref NetWriter writer, object value)
+            {
+                if (value == null)
                 {
-                    var bits = decimal.GetBits((decimal)obj);
-                    w.WriteInt32(bits[0]);
-                    w.WriteInt32(bits[1]);
-                    w.WriteInt32(bits[2]);
-                    w.WriteInt32(bits[3]);
+                    writer.WriteBool(false);
                     return;
                 }
-                throw new NotSupportedException($"Unsupported value type: {type.FullName}");
+
+                writer.WriteBool(true);
+                ser.Writer(ref writer, value);
+            }
+        }
+
+        private static SerializerPair BuildArray(Type arrayType)
+        {
+            var elemType = arrayType.GetElementType();
+            if (elemType == null) throw new InvalidOperationException("elemType is null");
+            var elemSer = GetOrBuild(elemType);
+
+            return new SerializerPair(Read, Write);
+
+            object Read(ref NetReader r)
+            {
+                var n = (int)r.ReadVarUInt();
+                var arr = Array.CreateInstance(elemType, n);
+                for (var i = 0; i < n; i++)
+                    arr.SetValue(elemSer.Reader(ref r), i);
+                return arr;
             }
 
-            var isNull = obj == null;
-            w.WriteBool(isNull);
-            if (isNull) return;
+            void Write(ref NetWriter writer, object value)
+            {
+                var arr = (Array)value ?? Array.CreateInstance(elemType, 0);
+                writer.WriteVarUInt((uint)arr.Length);
+                for (var i = 0; i < arr.Length; i++)
+                    elemSer.Writer(ref writer, arr.GetValue(i));
+            }
+        }
 
-            var ut = Nullable.GetUnderlyingType(type)!;
-            WriteNullableValue(w, Convert.ChangeType(obj, ut), ut);
+        private static bool TryBuildList(Type t, out SerializerPair pair)
+        {
+            pair = null;
+            if (!t.IsGenericType) return false;
+            var gen = t.GetGenericTypeDefinition();
+            if (gen != typeof(List<>)) return false;
+            
+            var elemType = t.GetGenericArguments()[0];
+            var elemSer = GetOrBuild(elemType);
+
+            pair = new SerializerPair(Read, Write);
+            return true;
+
+            void Write(ref NetWriter w, object v)
+            {
+                var list = (IList)v ?? (IList)Activator.CreateInstance(t);
+                w.WriteVarUInt((uint)list.Count);
+                foreach (var it in list) elemSer.Writer(ref w, it);
+            }
+
+            object Read(ref NetReader r)
+            {
+                var n = (int)r.ReadVarUInt();
+                var list = (IList)Activator.CreateInstance(t);
+                for (var i = 0; i < n; i++)
+                    list.Add(elemSer.Reader(ref r));
+                return list;
+            }
+        }
+
+        private static bool TryBuildDictionary(Type t, out SerializerPair pair)
+        {
+            pair = null;
+            if (!t.IsGenericType) return false;
+            var gen = t.GetGenericTypeDefinition();
+            if (gen != typeof(Dictionary<,>)) return false;
+            
+            var args = t.GetGenericArguments();
+            var kSer = GetOrBuild(args[0]);
+            var vSer = GetOrBuild(args[1]);
+
+            pair = new SerializerPair(Read, Write);
+            return true;
+            
+            object Read(ref NetReader r)
+            {
+                var n = (int)r.ReadVarUInt();
+                var dict = (IDictionary)Activator.CreateInstance(t);
+                for (var i = 0; i < n; i++)
+                {
+                    var k = kSer.Reader(ref r);
+                    var v = vSer.Reader(ref r);
+                    dict.Add(k, v);
+                }
+                return dict;
+            }
+
+            void Write(ref NetWriter w, object v)
+            {
+                var dict = (IDictionary)v ?? (IDictionary)Activator.CreateInstance(t);
+                w.WriteVarUInt((uint)dict.Count);
+                foreach (DictionaryEntry e in dict)
+                {
+                    kSer.Writer(ref w, e.Key);
+                    vSer.Writer(ref w, e.Value);
+                }
+            }
+        }
+
+        private static SerializerPair BuildDateTime()
+        {
+            return new SerializerPair(Read, Write);
+            void Write(ref NetWriter w, object v) => w.WriteInt64(((DateTime)v).ToUniversalTime().Ticks);
+            object Read(ref NetReader r) => new DateTime(r.ReadInt64(), DateTimeKind.Utc);
+        }
+
+        private static SerializerPair BuildPoco(Type t)
+        {
+            var accessor = RuntimeTypeAccessor.GetOrCreate(t);
+            var members = accessor.Members;
+            
+            return new SerializerPair(Read, Write);
+
+            object Read(ref NetReader r)
+            {
+                var obj = Activator.CreateInstance(t);
+                foreach (var m in members)
+                {
+                    var ser = GetOrBuild(m.Type);
+                    var val = ser.Reader(ref r);
+                    m.SetValue(obj, val);
+                }
+                return obj;
+            }
+
+            void Write(ref NetWriter w, object v)
+            {
+                foreach (var m in members)
+                {
+                    var ser = GetOrBuild(m.Type);
+                    ser.Writer(ref w, m.GetValue(v));
+                }
+            }
         }
     }
 }

@@ -81,9 +81,9 @@ namespace SP.Engine.Server
 
         private int _stateCode = PeerStateConst.NotAuthorized;
         private bool _disposed;
-        private byte[] _localPublicKey;
+        private DiffieHellman _diffieHellman;
         private AesCbcEncryptor _encryptor;
-        private Lz4Compressor _compressor = new Lz4Compressor();
+        private readonly Lz4Compressor _compressor = new();
         private IPolicyView _networkPolicy = new NetworkPolicyView(in PolicyDefaults.Globals);
 
         public PeerState State => (PeerState)_stateCode;
@@ -101,7 +101,7 @@ namespace SP.Engine.Server
         public bool IsConnected => _stateCode is PeerStateConst.Authorized or PeerStateConst.Online;
         
         IBaseSession IBasePeer.BaseSession => (IBaseSession)Session;
-        byte[] IBasePeer.LocalPublicKey => _localPublicKey;
+        byte[] IBasePeer.LocalPublicKey => _diffieHellman?.PublicKey;
         
         protected BasePeer(PeerKind peerType, ISession session)
         {
@@ -121,7 +121,7 @@ namespace SP.Engine.Server
             Session = other.Session;
             SetSendTimeoutMs(other.SendTimeoutMs);
             SetMaxRetryCount(other.MaxRetryCount);
-            _localPublicKey = other._localPublicKey;
+            _diffieHellman = other._diffieHellman;
         }
 
         ~BasePeer()
@@ -154,6 +154,8 @@ namespace SP.Engine.Server
             {
                 PeerIdGenerator.Free(Id);
                 Id = 0;
+                _diffieHellman?.Dispose();
+                _diffieHellman = null;
                 _encryptor?.Dispose();
                 _encryptor = null;
                 ResetProcessorState();
@@ -288,10 +290,9 @@ namespace SP.Engine.Server
 
             try
             {
-                using var dh = new DiffieHellman(keySize);
-                shared = dh.DeriveSharedKey(peerPublicKey);
+                _diffieHellman = new DiffieHellman(keySize);
+                shared = _diffieHellman.DeriveSharedKey(peerPublicKey);
                 _encryptor = new AesCbcEncryptor(shared);
-                _localPublicKey = dh.PublicKey;
                 return true;
             }
             catch (ArgumentException ex)

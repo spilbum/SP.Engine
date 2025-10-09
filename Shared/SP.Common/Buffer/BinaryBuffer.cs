@@ -66,13 +66,13 @@ namespace SP.Common.Buffer
         public int Capacity => _memory.Length;
         public int ReadableBytes => _writeIndex - _readIndex;
         
-        public BinaryBuffer(int size)
+        public BinaryBuffer(int initialCapacity)
         {
-            _memoryOwner = MemoryPool<byte>.Shared.Rent(size);
-            _memory = _memoryOwner.Memory.Slice(0, size);
+            _memoryOwner = MemoryPool<byte>.Shared.Rent(initialCapacity);
+            _memory = _memoryOwner.Memory.Slice(0, initialCapacity);
         }
 
-        public void Reset()
+        public void Clear()
         {
             _writeIndex = 0;
             _readIndex = 0;
@@ -80,21 +80,29 @@ namespace SP.Common.Buffer
 
         public void Advance(int count)
         {
+            if (ReadableBytes < count) throw new IndexOutOfRangeException(nameof(count));
             _readIndex += count;
         }
 
-        public ReadOnlySpan<byte> Peek(int length)
+        public ReadOnlySpan<byte> PeekSpan(int length)
         {
             if (ReadableBytes < length)
                 throw new InvalidOperationException("Insufficient data");
             return _memory.Span.Slice(_readIndex, length);
         }
         
-        public void Write(ReadOnlySpan<byte> span)
+        public void WriteSpan(ReadOnlySpan<byte> span)
         {
             EnsureCapacity(span.Length);
             span.CopyTo(_memory.Span.Slice(_writeIndex));
             _writeIndex += span.Length;
+        }
+
+        public void WriteBytes(byte[] bytes)
+        {
+            EnsureCapacity(bytes.Length);
+            bytes.CopyTo(_memory.Span.Slice(_writeIndex));
+            _writeIndex += bytes.Length;
         }
         
         public void Write<T>(T value) where T : struct
@@ -117,7 +125,7 @@ namespace SP.Common.Buffer
             return MemoryMarshal.Read<T>(span);
         }
         
-        public ReadOnlySpan<byte> Read(int length)
+        public Span<byte> GetSpan(int length)
         {
             if (ReadableBytes < length)
                 throw new InvalidOperationException("Insufficient data");
@@ -128,7 +136,7 @@ namespace SP.Common.Buffer
 
         public byte[] ReadBytes(int length)
         {
-            var span = Read(length);
+            var span = GetSpan(length);
             return span.ToArray();
         }
         
@@ -137,7 +145,7 @@ namespace SP.Common.Buffer
             var length = Read<int>();
             if (length < 0) return null;
             if (length == 0) return string.Empty;
-            var span = Read(length);
+            var span = GetSpan(length);
             return Encoding.UTF8.GetString(span);
         }
         
@@ -157,7 +165,7 @@ namespace SP.Common.Buffer
 
             var bytes = Encoding.UTF8.GetBytes(value);
             Write(bytes.Length);
-            Write(bytes);
+            WriteSpan(bytes);
         }
         
         public void WriteObject(object value)

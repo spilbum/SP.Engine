@@ -18,20 +18,36 @@ namespace SP.Common.Accessor
 
         private RuntimeTypeAccessor(Type type)
         {
-            // 프로퍼티 검색
-            var members = (from p in type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                where p.GetCustomAttribute<MemberIgnoreAttribute>() == null
-                select new PropertyAccessor(p)).Cast<IMemberAccessor>().ToList();
-            
-            // 필드 검색
-            members.AddRange(type.GetFields(BindingFlags.Public | BindingFlags.Instance)
-                .Where(f => f.GetCustomAttribute<MemberIgnoreAttribute>() == null)
-                .Select(f => new FieldAccessor(f)));
+            var members = new List<IMemberAccessor>();
+            foreach (var m in type.GetMembers(BindingFlags.Instance | BindingFlags.Public))
+            {
+                switch (m)
+                {
+                    case PropertyInfo p when !p.CanRead || !p.CanWrite:
+                        continue;
+                    case PropertyInfo p when p.GetCustomAttribute<MemberIgnoreAttribute>() != null:
+                        continue;
+                    case PropertyInfo p:
+                        members.Add(new PropertyAccessor(p));
+                        break;
+                    case FieldInfo f when f.IsInitOnly:
+                        continue;
+                    case FieldInfo f when f.GetCustomAttribute<MemberIgnoreAttribute>() != null:
+                        continue;
+                    case FieldInfo f:
+                        members.Add(new FieldAccessor(f));
+                        break;
+                }
+            }
+
+            members.Sort((a, b) => a.Order.CompareTo(b.Order));
             
             Name = type.Name;
             Members = members;
             _memberMap = members.ToDictionary(m => m.Name);
         }
+        
+
 
         public static RuntimeTypeAccessor GetOrCreate(Type type)
             => Cached.GetOrAdd(type, t => new RuntimeTypeAccessor(t));

@@ -31,7 +31,6 @@ namespace SP.Engine.Server
         private BinaryBuffer _receiveBuffer;
         private BaseEngine<TSession> _engine;
         private readonly ChannelRouter _channelRouter = new();
-        private readonly UdpFragmentAssembler _fragmentAssembler = new();
 
         IBaseEngine IBaseSession.Engine => _engine;
         public IEngineConfig Config => _engine.Config;
@@ -66,7 +65,6 @@ namespace SP.Engine.Server
             _receiveBuffer = new BinaryBuffer(engine.Config.Network.ReceiveBufferSize);
             networkSession.Attach(this);
             _channelRouter.Bind(new ReliableChannel(networkSession));
-            //_engine.Scheduler.Schedule(_fragmentAssembler.Cleanup, TimeSpan.FromMinutes(15), 5000, 5000);
             IsConnected = true;
         }
 
@@ -84,7 +82,7 @@ namespace SP.Engine.Server
             }
         }
         
-        private void ProcessMessage(IMessage message)
+        private void OnReceivedMessage(IMessage message)
         {
             try
             {
@@ -122,41 +120,50 @@ namespace SP.Engine.Server
             EnsureUdpSocket(socket, remoteEndPoint);
 
             var bodyOffset = datagram.Offset + header.Size;
-            var bodyLength = header.PayloadLength;
-            var bodySpan = new ReadOnlySpan<byte>(datagram.Array, bodyOffset, bodyLength);
+            var bodyLen = header.PayloadLength;
+            var bodySpan = new ReadOnlySpan<byte>(datagram.Array, bodyOffset, bodyLen);
             
             if (header.Flags.HasFlag(HeaderFlags.Fragment))
             {
-                if (bodyLength < UdpFragmentHeader.ByteSize) return;
+                if (bodyLen < UdpFragmentHeader.ByteSize) return;
                 
-                if (!UdpFragmentHeader.TryRead(bodySpan[..UdpFragmentHeader.ByteSize], out var fragHeader))
+                if (!UdpFragmentHeader.TryParse(bodySpan[..UdpFragmentHeader.ByteSize], out var fragHeader, out var consumed))
                     return;
                 
-                if (bodyLength < UdpFragmentHeader.ByteSize + fragHeader.PayloadLength)
+                if (bodyLen < consumed + fragHeader.PayloadLength)
                     return;
 
                 var fragPayload = new ArraySegment<byte>(
-                    datagram.Array!, bodyOffset + UdpFragmentHeader.ByteSize, fragHeader.PayloadLength);
-                
-                
+                    datagram.Array!, bodyOffset + consumed, fragHeader.PayloadLength);
+
+                if (!UdpSocket.Assembler.TryAssemble(header, fragHeader, fragPayload, out var assembled))
+                    return;
+
+                var normalizedHeader = new UdpHeaderBuilder()
+                    .From(header)
+                    .WithPayloadLength(assembled.Count)
+                    .Build();
+
+                var msg = new UdpMessage(normalizedHeader, assembled);
+                OnReceivedMessage(msg);
             }
             else
             {
-                var payload = new ArraySegment<byte>(datagram.Array!, bodyOffset, bodyLength);
+                var payload = new ArraySegment<byte>(datagram.Array!, bodyOffset, bodyLen);
                 var msg = new UdpMessage(header, payload);
-                ProcessMessage(msg);
+                OnReceivedMessage(msg);
             }
         }
 
         void IBaseSession.ProcessBuffer(byte[] buffer, int offset, int length)
         {
-            var span = buffer.AsSpan(offset, length);
-            _receiveBuffer.Write(span);
+            var span = new ReadOnlySpan<byte>(buffer, offset, length);
+            _receiveBuffer.WriteSpan(span);
             
             try
             {
-                foreach (var msg in Filter())
-                    ProcessMessage(msg);
+                foreach (var message in Filter())
+                    OnReceivedMessage(message);
             }
             catch (Exception e)
             {
@@ -171,31 +178,32 @@ namespace SP.Engine.Server
         private IEnumerable<TcpMessage> Filter()
         {
             const int maxFramePerTick = 128;
+            const int headerSize = TcpHeader.ByteSize;
             var produced = 0;
             while (produced < maxFramePerTick)
             {
-                if (_receiveBuffer.ReadableBytes < TcpHeader.ByteSize)
+                if (_receiveBuffer.ReadableBytes < headerSize)
                     yield break;
-                
-                var headerSpan = _receiveBuffer.Read(TcpHeader.ByteSize);
+
+                var headerSpan = _receiveBuffer.PeekSpan(headerSize);
                 if (!TcpHeader.TryParse(headerSpan, out var header, out var consumed))
                     yield break;
                 
-                long frameLen = consumed + header.PayloadLength;
-                if (frameLen <= 0 || frameLen > Config.Network.MaxFrameBytes)
+                var bodyLen = header.PayloadLength;
+                if (bodyLen <= 0 || bodyLen > Config.Network.MaxFrameBytes)
                 {
-                    Logger.Warn("Frame too large/small. max={0}, got={1}, (id={2})", 
-                        Config.Network.MaxFrameBytes, frameLen, header.Id);
+                    Logger.Warn("Body too large/small. max={0}, got={1}, (id={2})", 
+                        Config.Network.MaxFrameBytes, bodyLen, header.Id);
                     Close(CloseReason.ProtocolError);
                     yield break;
                 }
 
-                var len = (int)frameLen;
-                if (_receiveBuffer.ReadableBytes < len)
+                if (_receiveBuffer.ReadableBytes < bodyLen)
                     yield break;
                 
-                var frameBytes = _receiveBuffer.ReadBytes(len);
-                yield return new TcpMessage(header, new ArraySegment<byte>(frameBytes));
+                _receiveBuffer.Advance(headerSize);
+                var payload = _receiveBuffer.ReadBytes(bodyLen);
+                yield return new TcpMessage(header, new ArraySegment<byte>(payload));
                 produced++;
             }
         }

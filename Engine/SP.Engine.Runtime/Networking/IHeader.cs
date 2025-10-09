@@ -8,7 +8,7 @@ namespace SP.Engine.Runtime.Networking
         HeaderFlags Flags { get; }
         ushort Id { get; }
         int Size { get; }
-        void WriteTo(INetWriter w);
+        void WriteTo(Span<byte> s);
     }
 
     [Flags]

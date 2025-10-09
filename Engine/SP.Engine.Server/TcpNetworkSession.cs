@@ -52,7 +52,7 @@ namespace SP.Engine.Server
         }
 
         public bool TrySend(TcpMessage message)
-            => TrySend(message.Body);
+            => TrySend(message.ToArray());
 
         private void StartReceive(SocketAsyncEventArgs e)
         {

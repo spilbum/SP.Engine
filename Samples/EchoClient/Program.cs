@@ -1,6 +1,8 @@
-﻿using Common;
+﻿using System.Security.Cryptography;
+using Common;
 using SP.Common.Logging;
 using SP.Engine.Client.Configuration;
+using SP.Engine.Runtime.Security;
 
 namespace EchoClient
 {
@@ -41,7 +43,7 @@ namespace EchoClient
             var logger = new ConsoleLogger("EchoClient");
             _client = new EchoClient(logger, config);
             _client.Open(host, port);
-
+            
             while (true)
             {
                 _client.Tick();

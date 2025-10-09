@@ -21,12 +21,12 @@ namespace SP.Engine.Runtime.Networking
             Size = ByteSize;
         }
 
-        public void WriteTo(INetWriter w)
+        public void WriteTo(Span<byte> s)
         {
-            w.WriteByte((byte)Flags);
-            w.WriteInt64(SequenceNumber);
-            w.WriteUInt16(Id);
-            w.WriteInt32(PayloadLength);
+            s[0] = (byte)Flags;
+            s.WriteInt64(1, SequenceNumber);
+            s.WriteUInt16(9, Id);
+            s.WriteInt32(11, PayloadLength);
         }
 
         public static bool TryParse(ReadOnlySpan<byte> source, out TcpHeader header, out int consumed)

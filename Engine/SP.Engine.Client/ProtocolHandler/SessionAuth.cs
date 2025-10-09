@@ -8,7 +8,7 @@ namespace SP.Engine.Client.ProtocolHandler
     {
         protected override void ExecuteProtocol(NetPeer peer, S2CEngineProtocolData.SessionAuthAck data)
         {
-            peer.OnAuthHandshaked(data);
+            peer.OnAuthHandshake(data);
         }
     }
 }

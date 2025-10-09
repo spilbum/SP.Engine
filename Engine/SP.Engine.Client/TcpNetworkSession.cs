@@ -264,8 +264,9 @@ namespace SP.Engine.Client
         {
             if (!IsConnected)
                 return false;
-            
-            if (!_sendQueue.Enqueue(message.Body))
+
+            var seg = message.ToArray();
+            if (!_sendQueue.Enqueue(seg))
                 return false;
             
             if (Interlocked.CompareExchange(ref _isSending, 1, 0) == 0)

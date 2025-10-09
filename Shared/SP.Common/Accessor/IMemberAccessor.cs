@@ -6,6 +6,7 @@ namespace SP.Common.Accessor
     {
         string Name { get; }
         Type Type { get; }
+        int Order { get; }
         object GetValue(object instance);
         void SetValue(object instance, object value);
     }

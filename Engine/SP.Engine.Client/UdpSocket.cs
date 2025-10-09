@@ -29,12 +29,13 @@ namespace SP.Engine.Client
         private readonly byte[] _receiveBuffer;
         private readonly int _sendBufferSize;
         private int _isSending;
-        private uint _nextFragmentId;
-        private int _maxDatagramSize;
+        private int _nextFragmentId;
+        private ushort _maxDatagramSize = 512;
         private long _totalSentBytes;
         private long _totalReceivedBytes;
         private TickTimer _cleanupTimer;
         private readonly UdpFragmentAssembler _assembler = new UdpFragmentAssembler();
+        public IUdpFragmentAssembler Assembler => _assembler;
         
         public bool IsRunning { get; private set; }
         public event EventHandler<DataEventArgs> DataReceived;
@@ -50,17 +51,14 @@ namespace SP.Engine.Client
 
         public void SetMtu(ushort mtu)
         {
-            _maxDatagramSize = mtu - 20 /* IP header size */ - 8 /* UDP header size*/;
+            _maxDatagramSize = (ushort)(mtu - 20 /* IP header size */ - 8 /* UDP header size*/);
         }
 
         public void Tick()
         {
             _cleanupTimer?.Tick();
         }
-
-        public bool TryAssemble(UdpHeader header, UdpFragmentHeader fragHeader, ArraySegment<byte> fragPayload, out ArraySegment<byte> assembled)
-            => _assembler.TryAssemble(header, fragHeader, fragPayload, out assembled);
-
+        
         public TrafficInfo GetTrafficInfo()
         {
             return new TrafficInfo
@@ -94,8 +92,9 @@ namespace SP.Engine.Client
                 _receiveEventArgs.Completed += OnReceiveCompleted;
                 _socket.ReceiveFromAsync(_receiveEventArgs);
 
-                // _cleanupTimer = new TickTimer(_ => _assembler.Cleanup(TimeSpan.FromSeconds(AssemblerCleanupIntervalSec)),
-                //     null, 0, AssemblerCleanupIntervalSec / 2);
+                _cleanupTimer =
+                    new TickTimer(_ => _assembler.Cleanup(TimeSpan.FromSeconds(AssemblerCleanupIntervalSec)), null, 0,
+                        AssemblerCleanupIntervalSec / 2);
                 
                 IsRunning = true;
                 return true;
@@ -152,8 +151,7 @@ namespace SP.Engine.Client
                 return false;
 
             var items = message.ToDatagrams(
-                _maxDatagramSize, () => 1); 
-                // () => Interlocked.Increment(ref _nextFragmentId));
+                _maxDatagramSize, () => (uint)Interlocked.Increment(ref _nextFragmentId)); 
             
             if (!_sendQueue.Enqueue(items))
                 return false;

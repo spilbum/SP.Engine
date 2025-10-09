@@ -294,7 +294,7 @@ namespace SP.Engine.Server
                 return;
             }
 
-            var datagram = new ArraySegment<byte>(buffer, offset + consumed, header.PayloadLength);
+            var datagram = new ArraySegment<byte>(buffer, offset, length);
             session.ProcessDatagram(datagram, header, socket, remoteEndPoint);
         }
 

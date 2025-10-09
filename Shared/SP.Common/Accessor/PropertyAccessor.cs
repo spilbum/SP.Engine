@@ -11,15 +11,27 @@ namespace SP.Common.Accessor
         
         public string Name { get; }
         public Type Type { get; }
+        public int Order { get; }
         
-        public PropertyAccessor(PropertyInfo propertyInfo)
+        public PropertyAccessor(PropertyInfo p)
         {
-            var attr = propertyInfo.GetCustomAttribute<MemberAttribute>();
-            Name = attr == null ? propertyInfo.Name : attr.Name;
-            Type = propertyInfo.PropertyType;
+            Name = GetName(p);
+            Type = p.PropertyType;
+            Order = GetOrder(p);
+            _getter = BuildGetter(p);
+            _setter = BuildSetter(p);
+        }
 
-            _getter = CreateGetter(propertyInfo);
-            _setter = CreateSetter(propertyInfo);
+        private static string GetName(PropertyInfo p)
+        {
+            var attr = p.GetCustomAttribute<MemberNameAttribute>();
+            return attr?.Name ?? p.Name;
+        }
+
+        private static int GetOrder(PropertyInfo f)
+        {
+            var attr = f.GetCustomAttribute<MemberOrderAttribute>();
+            return attr?.Order ?? int.MaxValue;
         }
 
         public object GetValue(object instance)
@@ -36,30 +48,29 @@ namespace SP.Common.Accessor
             _setter(instance, value);
         }
         
-        private static Func<object, object> CreateGetter(PropertyInfo property)
+        private static Func<object, object> BuildGetter(PropertyInfo p)
         {
-            if (property.DeclaringType == null)
-                throw new ArgumentException("Property declaring type is null.", nameof(property));
+            if (p.DeclaringType == null)
+                throw new ArgumentException("Property declaring type is null.", nameof(p));
             
-            var instanceParam = Expression.Parameter(typeof(object), "instance");
-            var instanceCast = Expression.Convert(instanceParam, property.DeclaringType);
-            var propertyAccess = Expression.Property(instanceCast, property);
-            var returnCast = Expression.Convert(propertyAccess, typeof(object));
-            return Expression.Lambda<Func<object, object>>(returnCast, instanceParam).Compile();
+            var obj = Expression.Parameter(typeof(object), "obj");
+            var cast = Expression.Convert(obj, p.DeclaringType);
+            var prop = Expression.Property(cast, p);
+            var box = Expression.Convert(prop, typeof(object));
+            return Expression.Lambda<Func<object, object>>(box, obj).Compile();
         }
 
-        private static Action<object, object> CreateSetter(PropertyInfo property)
+        private static Action<object, object> BuildSetter(PropertyInfo p)
         {
-            if (property.DeclaringType == null)
-                throw new ArgumentException("Property declaring type is null.", nameof(property));
+            if (p.DeclaringType == null)
+                throw new ArgumentException("Property declaring type is null.", nameof(p));
             
-            var instanceParam = Expression.Parameter(typeof(object), "instance");
-            var valueParam = Expression.Parameter(typeof(object), "value");
-            var instanceCast = Expression.Convert(instanceParam, property.DeclaringType);
-            var valueCast = Expression.Convert(valueParam, property.PropertyType);
-            var propertyCast = Expression.Property(instanceCast, property);
-            var assign = Expression.Assign(propertyCast, valueCast);
-            return Expression.Lambda<Action<object, object>>(assign, instanceParam, valueParam).Compile();
+            var obj = Expression.Parameter(typeof(object), "obj");
+            var value = Expression.Parameter(typeof(object), "value");
+            var castObj = Expression.Convert(obj, p.DeclaringType);
+            var castValue = Expression.Convert(value, p.PropertyType);
+            var assign = Expression.Assign(Expression.Property(castObj, p), castValue);
+            return Expression.Lambda<Action<object, object>>(assign, obj, value).Compile();
         }
     }
 }

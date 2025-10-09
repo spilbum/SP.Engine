@@ -1,6 +1,7 @@
 ﻿
 using System;
 using System.Buffers;
+using System.Buffers.Binary;
 using K4os.Compression.LZ4;
 
 namespace SP.Engine.Runtime.Compression
@@ -22,24 +23,23 @@ namespace SP.Engine.Runtime.Compression
             
             var maxCompressedSize = LZ4Codec.MaximumOutputSize(source.Length);  
             var buffer = ArrayPool<byte>.Shared.Rent(HeaderSize + maxCompressedSize);
-
+            var target = buffer.AsSpan();
+            
             try
             {
-                var span = buffer.AsSpan();
                 // 원본 길이 저장
-                span.WriteInt32(0, source.Length);
+                target.WriteInt32(0, source.Length);
 
                 // 압축
-                var compressedSize = LZ4Codec.Encode(
-                    source.AsSpan(),
-                    span[HeaderSize..]
-                );
+                var compressedSize = LZ4Codec.Encode(source, target[HeaderSize..]);
 
+                // 실제 압축 크기
                 var totalSize = HeaderSize + compressedSize;
                 
                 // 실제 압축 결과 저장
                 var result = new byte[totalSize];
-                span[..totalSize].CopyTo(result);
+                var dst = result.AsSpan();
+                target[..totalSize].CopyTo(dst);
                 return result;
             }
             finally
@@ -53,19 +53,14 @@ namespace SP.Engine.Runtime.Compression
             if (source == null || source.Length < HeaderSize)
                 throw new ArgumentException("Invalid compressed data", nameof(source));
 
-            var span = (ReadOnlySpan<byte>)source.AsSpan();
-            var originalLength = span.ReadInt32(0);
-            if (originalLength <= 0)
-                throw new InvalidOperationException("Invalid original data length.");
+            var original = BinaryPrimitives.ReadInt32BigEndian(source);
+            if (original <= 0) throw new InvalidOperationException("Invalid original data length.");
             
-            var result = new byte[originalLength];
+            var result = new byte[original];
+            var target = result.AsSpan();
 
-            var decodedSize = LZ4Codec.Decode(
-                span[HeaderSize..],
-                result
-            );
-            
-            if (decodedSize != originalLength)
+            var decodedSize = LZ4Codec.Decode(source[HeaderSize..], target);
+            if (decodedSize != original)
                 throw new InvalidOperationException("Decompressed size mismatch.");
             
             return result;

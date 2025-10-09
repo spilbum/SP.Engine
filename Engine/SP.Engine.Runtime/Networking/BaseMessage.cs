@@ -1,5 +1,5 @@
 using System;
-using SP.Common.Buffer;
+using System.IO;
 using SP.Engine.Runtime.Compression;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Runtime.Security;
@@ -7,26 +7,13 @@ using SP.Engine.Runtime.Serialization;
 
 namespace SP.Engine.Runtime.Networking
 {
-    internal static class SegmentUtil
-    {
-        public static byte[] ToArray(ArraySegment<byte> seg)
-        {
-            if (seg is { Array: { }, Offset: 0 } && seg.Count == seg.Array.Length)
-                return seg.Array;
-            var dst = new byte[seg.Count];
-            if (seg.Count > 0)
-                Buffer.BlockCopy(seg.Array!, seg.Offset, dst, 0, seg.Count);
-            return dst;
-        }
-    }
     public abstract class BaseMessage<THeader>: IMessage
         where THeader : IHeader
     {
         protected THeader Header { get; set; }
-        public ArraySegment<byte> Body { get; private set; }
+        protected ArraySegment<byte> Body { get; private set; }
         
         public ushort Id => Header.Id;
-        public int Length => Header.Size + Body.Count;
 
         protected BaseMessage()
         {
@@ -48,63 +35,58 @@ namespace SP.Engine.Runtime.Networking
         {
             if (protocol is null) throw new ArgumentNullException(nameof(protocol));
 
-            using var buf = new BinaryBuffer(1024);
-            var w = new NetWriterBuffer(buf);
-            BinaryConverter.Serialize(protocol, protocol.GetType(), w);
-            var bodyBytes = buf.ToArray();
+            var w = new NetWriter();
+            BinaryConverter.Serialize(ref w, protocol.GetType(), protocol);
+            var payload = w.ToArray();
             
             var flags = HeaderFlags.None;
-            if (policy.UseCompress && bodyBytes.Length >= policy.CompressionThreshold && compressor != null)
+            if (policy.UseCompress && payload.Length >= policy.CompressionThreshold && compressor != null)
             {
-                bodyBytes = compressor.Compress(bodyBytes);
-                flags |= HeaderFlags.Compress;
+                payload = compressor.Compress(payload);
+                flags |= HeaderFlags.Compressed;
             }
 
             if (policy.UseEncrypt && encryptor != null)
             {
-                bodyBytes = encryptor.Encrypt(bodyBytes);
-                flags |= HeaderFlags.Encrypt;
+                payload = encryptor.Encrypt(payload);
+                flags |= HeaderFlags.Encrypted;
             }
             
-            Header = CreateHeader(flags, protocol.Id, bodyBytes.Length);
-            Body = new ArraySegment<byte>(bodyBytes);
+            Header = CreateHeader(flags, protocol.Id, payload.Length);
+            Body = new ArraySegment<byte>(payload);
         }
 
         public IProtocol Deserialize(Type type, IEncryptor encryptor, ICompressor compressor)
         {
-            var payload = SegmentUtil.ToArray(Body);
-            if (HasFlag(HeaderFlags.Encrypt))
-            {
-                if (encryptor == null) throw new InvalidOperationException("Encrypted payload but no decryptor provided");
-                payload = encryptor.Decrypt(Body);
-            }
+            var payload = Body.ToArray();
+            
+            if (HasFlag(HeaderFlags.Compressed) && compressor == null)
+                throw new InvalidDataException("Compressed payload but no compressor provided.");
+            if (HasFlag(HeaderFlags.Encrypted) && encryptor == null)
+                throw new InvalidDataException("Encrypted payload but no decryptor provided.");
 
-            if (HasFlag(HeaderFlags.Compress))
-            {
-                if (compressor == null) throw new InvalidOperationException("Compressed payload but no compressor provided");
-                payload = compressor.Decompress(payload);   
-            }
+            if (HasFlag(HeaderFlags.Encrypted))
+                payload = encryptor.Decrypt(payload);
+            
+            if (HasFlag(HeaderFlags.Compressed)) 
+                payload = compressor.Decompress(payload);
 
-            using var buf = new BinaryBuffer(payload.Length);
-            buf.Write(payload);
-            var r = new NetReaderBuffer(buf);
-            var obj = BinaryConverter.Deserialize(r, type);
+            var r = new NetReader(payload);
+            var obj = BinaryConverter.Deserialize(ref r, type);
             return (IProtocol)obj;
         }
 
-        public byte[] ToArray()
+        public ArraySegment<byte> ToArray()
         {
-            var bodyCount = Body.Count;
-            using var buf = new BinaryBuffer(Header.Size + bodyCount);
-            var w = new NetWriterBuffer(buf);
-            Header.WriteTo(w);
+            var bodyLen = Body.Count;
+            var buf = new byte[Header.Size + bodyLen];
+            var span = buf.AsSpan();
+            Header.WriteTo(span);
             
-            if (bodyCount <= 0 || Body.Array == null) 
-                return buf.ToArray();
+            if (bodyLen > 0 && Body.Array != null)
+                Buffer.BlockCopy(Body.Array, Body.Offset, buf, Header.Size, bodyLen);
             
-            var span = new ReadOnlySpan<byte>(Body.Array, Body.Offset, bodyCount);
-            w.WriteBytes(span);
-            return buf.ToArray();
+            return new ArraySegment<byte>(buf);
         }
     }
 }
