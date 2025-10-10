@@ -36,13 +36,13 @@ namespace SP.Engine.Runtime.Networking
             return true;
         }
 
-        public void WriteTo(Span<byte> destination)
+        public void WriteTo(Span<byte> dst)
         {
-            if (destination.Length < ByteSize) throw new ArgumentException("destination too small");
-            destination.WriteUInt32(0, Id);
-            destination[4] = Index;
-            destination.WriteUInt16(5, TotalCount);
-            destination.WriteUInt16(7, PayloadLength);
+            if (dst.Length < ByteSize) throw new ArgumentException("destination too small");
+            dst.WriteUInt32(0, Id);
+            dst[4] = Index;
+            dst.WriteUInt16(5, TotalCount);
+            dst.WriteUInt16(7, PayloadLength);
         }
     }
 }

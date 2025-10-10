@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
@@ -22,7 +23,7 @@ namespace SP.Engine.Server
         IEncryptor Encryptor { get; }
         ICompressor Compressor { get; }
         void ProcessBuffer(byte[] buffer, int offset, int length);
-        void ProcessDatagram(ArraySegment<byte> buffer, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint);
+        void ProcessDatagram(byte[] datagram, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint);
     }
     
     public abstract class BaseSession<TSession> : IBaseSession
@@ -30,6 +31,7 @@ namespace SP.Engine.Server
     {
         private BinaryBuffer _receiveBuffer;
         private BaseEngine<TSession> _engine;
+        private IDisposable _assemblerCleanupScheduler;
         private readonly ChannelRouter _channelRouter = new();
 
         IBaseEngine IBaseSession.Engine => _engine;
@@ -97,6 +99,19 @@ namespace SP.Engine.Server
                 LastActiveTime = DateTime.UtcNow;
             }
         }
+
+        private void StartFragmentAssemblerCleanupScheduler()
+        {
+            var timeoutSec = Config.Session.FragmentAssemblerCleanupTimeoutSec;
+            var intervalMs = timeoutSec / 2 * 1000;
+            _assemblerCleanupScheduler = _engine.Scheduler.Schedule(() =>
+                UdpSocket.Assembler.Cleanup(TimeSpan.FromSeconds(timeoutSec)), intervalMs, intervalMs);
+        }
+
+        private void StopFragmentAssemblerCleanupScheduler()
+        {
+            _assemblerCleanupScheduler?.Dispose();
+        }
         
         private void EnsureUdpSocket(Socket socket, IPEndPoint remoteEndPoint)
         {
@@ -107,6 +122,7 @@ namespace SP.Engine.Server
                     UdpSocket = new UdpSocket(socket, remoteEndPoint);
                     UdpSocket.Attach(this);
                     _channelRouter.Bind(new UnreliableChannel(UdpSocket));
+                    StartFragmentAssemblerCleanupScheduler();
                 }
                 else
                 {
@@ -115,43 +131,51 @@ namespace SP.Engine.Server
             }
         }
 
-        void IBaseSession.ProcessDatagram(ArraySegment<byte> datagram, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint)
+        void IBaseSession.ProcessDatagram(byte[] datagram, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint)
         {
             EnsureUdpSocket(socket, remoteEndPoint);
 
-            var bodyOffset = datagram.Offset + header.Size;
+            var bodyOffset = header.Size;
             var bodyLen = header.PayloadLength;
-            var bodySpan = new ReadOnlySpan<byte>(datagram.Array, bodyOffset, bodyLen);
-            
-            if (header.Flags.HasFlag(HeaderFlags.Fragment))
+            var bodySpan = new ReadOnlySpan<byte>(datagram, bodyOffset, bodyLen);
+
+            try
             {
-                if (bodyLen < UdpFragmentHeader.ByteSize) return;
-                
-                if (!UdpFragmentHeader.TryParse(bodySpan[..UdpFragmentHeader.ByteSize], out var fragHeader, out var consumed))
-                    return;
-                
-                if (bodyLen < consumed + fragHeader.PayloadLength)
-                    return;
+                if (header.Flags.HasFlag(HeaderFlags.Fragment))
+                {
+                    if (!UdpFragmentHeader.TryParse(bodySpan, out var fragHeader, out var consumed))
+                        return;
 
-                var fragPayload = new ArraySegment<byte>(
-                    datagram.Array!, bodyOffset + consumed, fragHeader.PayloadLength);
+                    Logger.Debug(
+                        $"Fragment header: {fragHeader.Id}, index={fragHeader.Index}, totalCount={fragHeader.TotalCount}, length={fragHeader.PayloadLength}");
 
-                if (!UdpSocket.Assembler.TryAssemble(header, fragHeader, fragPayload, out var assembled))
-                    return;
+                    if (bodyLen < consumed + fragHeader.PayloadLength)
+                        return;
 
-                var normalizedHeader = new UdpHeaderBuilder()
-                    .From(header)
-                    .WithPayloadLength(assembled.Count)
-                    .Build();
+                    var fragPayload = new ArraySegment<byte>(
+                        datagram, bodyOffset + consumed, fragHeader.PayloadLength);
 
-                var msg = new UdpMessage(normalizedHeader, assembled);
-                OnReceivedMessage(msg);
+                    if (!UdpSocket.Assembler.TryAssemble(header, fragHeader, fragPayload, out var assembled))
+                        return;
+
+                    var normalizedHeader = new UdpHeaderBuilder()
+                        .From(header)
+                        .WithPayloadLength(assembled.Count)
+                        .Build();
+
+                    var msg = new UdpMessage(normalizedHeader, assembled);
+                    OnReceivedMessage(msg);
+                }
+                else
+                {
+                    var payload = new ArraySegment<byte>(datagram, bodyOffset, bodyLen);
+                    var msg = new UdpMessage(header, payload);
+                    OnReceivedMessage(msg);
+                }
             }
-            else
+            finally
             {
-                var payload = new ArraySegment<byte>(datagram.Array!, bodyOffset, bodyLen);
-                var msg = new UdpMessage(header, payload);
-                OnReceivedMessage(msg);
+                ArrayPool<byte>.Shared.Return(datagram);
             }
         }
 
@@ -192,8 +216,8 @@ namespace SP.Engine.Server
                 var bodyLen = header.PayloadLength;
                 if (bodyLen <= 0 || bodyLen > Config.Network.MaxFrameBytes)
                 {
-                    Logger.Warn("Body too large/small. max={0}, got={1}, (id={2})", 
-                        Config.Network.MaxFrameBytes, bodyLen, header.Id);
+                    Logger.Warn("Too large or small. id={0}, maxFrameBytes={1}, bodyLen={2}", 
+                        header.Id, Config.Network.MaxFrameBytes, bodyLen);
                     Close(CloseReason.ProtocolError);
                     yield break;
                 }
@@ -201,7 +225,8 @@ namespace SP.Engine.Server
                 if (_receiveBuffer.ReadableBytes < bodyLen)
                     yield break;
                 
-                _receiveBuffer.Advance(headerSize);
+                _receiveBuffer.Advance(consumed);
+                
                 var payload = _receiveBuffer.ReadBytes(bodyLen);
                 yield return new TcpMessage(header, new ArraySegment<byte>(payload));
                 produced++;
@@ -216,6 +241,7 @@ namespace SP.Engine.Server
             _channelRouter.Unbind(ChannelKind.Unreliable);
             NetworkSession.Close(reason);
             UdpSocket?.Close(reason);
+            StopFragmentAssemblerCleanupScheduler();
             CloseReason = reason;
         }
 

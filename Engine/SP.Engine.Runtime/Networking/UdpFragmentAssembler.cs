@@ -62,7 +62,7 @@ namespace SP.Engine.Runtime.Networking
             out ArraySegment<byte> assembledPayload)
         {
             assembledPayload = default;
-
+            
             var key = new FragmentKey(header.PeerId, header.Id, fragHeader.Id);
             var state = _map.GetOrAdd(key, _ => new ReassemblyState(fragHeader.TotalCount));
 

@@ -14,7 +14,7 @@ namespace SP.Engine.Runtime.Compression
     
     public class Lz4Compressor : ICompressor
     {
-        private const int HeaderSize = sizeof(int);
+        private const int HeaderSize = 4;
 
         public byte[] Compress(byte[] source)
         {
@@ -28,7 +28,8 @@ namespace SP.Engine.Runtime.Compression
             try
             {
                 // 원본 길이 저장
-                target.WriteInt32(0, source.Length);
+                BinaryPrimitives.WriteInt32BigEndian(target, source.Length);
+                Console.WriteLine($"[Compress] original: {source.Length}");
 
                 // 압축
                 var compressedSize = LZ4Codec.Encode(source, target[HeaderSize..]);
@@ -54,14 +55,16 @@ namespace SP.Engine.Runtime.Compression
                 throw new ArgumentException("Invalid compressed data", nameof(source));
 
             var original = BinaryPrimitives.ReadInt32BigEndian(source);
-            if (original <= 0) throw new InvalidOperationException("Invalid original data length.");
+            Console.WriteLine($"[Decompress] original: {original}");
+            if (original <= 0)
+                throw new InvalidOperationException("Invalid original data length.");
             
             var result = new byte[original];
             var target = result.AsSpan();
 
             var decodedSize = LZ4Codec.Decode(source[HeaderSize..], target);
             if (decodedSize != original)
-                throw new InvalidOperationException("Decompressed size mismatch.");
+                throw new InvalidOperationException($"Decompressed size mismatch. decodedSize={decodedSize}, original={original}");
             
             return result;
         }

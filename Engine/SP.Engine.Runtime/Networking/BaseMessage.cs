@@ -44,12 +44,14 @@ namespace SP.Engine.Runtime.Networking
             {
                 payload = compressor.Compress(payload);
                 flags |= HeaderFlags.Compressed;
+                Console.WriteLine($"Compressed: {payload.Length} bytes, id={protocol.Id}");
             }
 
             if (policy.UseEncrypt && encryptor != null)
             {
                 payload = encryptor.Encrypt(payload);
                 flags |= HeaderFlags.Encrypted;
+                Console.WriteLine($"Encrypted: {payload.Length} bytes, id={protocol.Id}");
             }
             
             Header = CreateHeader(flags, protocol.Id, payload.Length);
@@ -66,10 +68,16 @@ namespace SP.Engine.Runtime.Networking
                 throw new InvalidDataException("Encrypted payload but no decryptor provided.");
 
             if (HasFlag(HeaderFlags.Encrypted))
+            {
+                Console.WriteLine($"Decrypt: {payload.Length} bytes, id={Id}");
                 payload = encryptor.Decrypt(payload);
-            
-            if (HasFlag(HeaderFlags.Compressed)) 
+            }
+
+            if (HasFlag(HeaderFlags.Compressed))
+            {
+                Console.WriteLine($"Decompress: {payload.Length} bytes, id={Id}");
                 payload = compressor.Decompress(payload);
+            }
 
             var r = new NetReader(payload);
             var obj = BinaryConverter.Deserialize(ref r, type);

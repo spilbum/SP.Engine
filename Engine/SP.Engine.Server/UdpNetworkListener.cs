@@ -68,7 +68,13 @@ namespace SP.Engine.Server
                 if (null == e.RemoteEndPoint)
                     throw new Exception("RemoteEndPoint is null");
 
-                OnNewClientAccepted(_listenSocket, (e.Buffer, e.Offset, e.BytesTransferred, (IPEndPoint)e.RemoteEndPoint));
+                var datagram = ArrayPool<byte>.Shared.Rent(e.BytesTransferred);
+                Buffer.BlockCopy(e.Buffer!, e.Offset, datagram, 0, e.BytesTransferred);
+                
+                var remote = (IPEndPoint)e.RemoteEndPoint;
+                remote = new IPEndPoint(remote.Address, remote.Port);
+                
+                OnNewClientAccepted(_listenSocket, (datagram, remote));
             }
             catch (Exception ex)
             {
@@ -77,6 +83,7 @@ namespace SP.Engine.Server
             
             try
             {
+                e.RemoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
                 if (!_listenSocket.ReceiveFromAsync(e))
                     OnReceiveCompleted(this, e);
             }

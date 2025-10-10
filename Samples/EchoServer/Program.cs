@@ -35,6 +35,8 @@ internal static class Program
             var config = EngineConfigBuilder.Create()
                 .WithNetwork(n => n with
                 {
+                    UseCompress = true,
+                    CompressionThreshold = 128
                 })
                 .WithSession(s => s with
                 {

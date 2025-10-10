@@ -72,8 +72,9 @@ namespace SP.Engine.Runtime.Networking
                     .AddFlag(HeaderFlags.Fragment)
                     .WithPayloadLength(fragHeader.Size + fragPayload.Count)
                     .Build();
-              
-                list.Add(ToArraySegment(header, fragHeader, fragPayload));
+                    
+                var segment = ToArraySegment(header, fragHeader, fragPayload);
+                list.Add(segment);
                 
                 offset += length;
                 index++;

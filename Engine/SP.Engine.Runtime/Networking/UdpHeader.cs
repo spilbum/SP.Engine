@@ -7,14 +7,13 @@ namespace SP.Engine.Runtime.Networking
 {
     public readonly struct UdpHeader : IHeader
     {
+        public const int ByteSize = 1 + 4 + 2 + 4; // 11 bytes
+        
         public HeaderFlags Flags { get; }
         public uint PeerId { get; }
         public ushort Id  { get; }
         public int PayloadLength { get; }
         public int Size { get; }
-        public bool IsFragmentation => Flags.HasFlag(HeaderFlags.Fragment);
-
-        public const int ByteSize = 1 + 4 + 2 + 4; // 11 bytes
 
         public UdpHeader(HeaderFlags flags, uint peerId, ushort id, int payloadLength)
         {            
@@ -43,12 +42,12 @@ namespace SP.Engine.Runtime.Networking
             }
             
             var flags = (HeaderFlags)source[0];
-            var peerId = BinaryPrimitives.ReadUInt32BigEndian(source.Slice(1, 4));
-            var id = BinaryPrimitives.ReadUInt16BigEndian(source.Slice(5, 2));
-            var len = BinaryPrimitives.ReadInt32BigEndian(source.Slice(7, 4));
-            if (len < 0) throw new InvalidOperationException("Negative payload length");
+            var peerId = source.ReadUInt32(1);
+            var id = source.ReadUInt16(5);
+            var length = source.ReadInt32(7);
+            if (length < 0) throw new InvalidOperationException("Negative payload length");
             
-            header = new UdpHeader(flags, peerId, id, len);
+            header = new UdpHeader(flags, peerId, id, length);
             consumed = ByteSize;
             return true;
         }

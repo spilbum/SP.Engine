@@ -6,12 +6,10 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
-using SP.Common.Buffer;
 using SP.Common.Fiber;
 using SP.Common.Logging;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Networking;
-using SP.Engine.Runtime.Serialization;
 using SP.Engine.Server.Configuration;
 using SP.Engine.Server.Logging;
 
@@ -22,7 +20,7 @@ namespace SP.Engine.Server
         IEngineConfig Config { get; }
         IBaseSession CreateSession(TcpNetworkSession networkSession);   
         bool RegisterSession(IBaseSession session);
-        void ProcessUdpClient(byte[] buffer, int offset, int length, Socket socket, IPEndPoint remoteEndPoint);
+        void ProcessUdpClient(byte[] datagram, Socket socket, IPEndPoint remoteEndPoint);
     }
 
     public interface ISocketServerAccessor
@@ -274,16 +272,13 @@ namespace SP.Engine.Server
             return true;
         }
 
-        void IBaseEngine.ProcessUdpClient(byte[] buffer, int offset, int length, Socket socket, IPEndPoint remoteEndPoint)
+        void IBaseEngine.ProcessUdpClient(byte[] datagram, Socket socket, IPEndPoint remoteEndPoint)
         {
-            if (buffer is null || buffer.Length < UdpHeader.ByteSize)
-                return;
-
-            var span = new ReadOnlySpan<byte>(buffer, offset, length);
+            var span = datagram.AsSpan();
             if (!UdpHeader.TryParse(span, out var header, out var consumed))
                 return;
 
-            if (buffer.Length < consumed + header.PayloadLength)
+            if (datagram.Length < consumed + header.PayloadLength)
                 return;
 
             var peer = GetBasePeer(header.PeerId);
@@ -294,7 +289,6 @@ namespace SP.Engine.Server
                 return;
             }
 
-            var datagram = new ArraySegment<byte>(buffer, offset, length);
             session.ProcessDatagram(datagram, header, socket, remoteEndPoint);
         }
 

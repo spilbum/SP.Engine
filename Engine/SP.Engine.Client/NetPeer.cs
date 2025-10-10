@@ -725,8 +725,7 @@ namespace SP.Engine.Client
             var datagram = new ArraySegment<byte>(e.Data, e.Offset, e.Length);
             if (datagram.Array == null) return;
 
-            var headerSpan = datagram.AsSpan(0, UdpHeader.ByteSize);
-            if (!UdpHeader.TryParse(headerSpan, out var header, out var consumed))
+            if (!UdpHeader.TryParse(datagram, out var header, out var consumed))
                 return;
             
             if (PeerId != header.PeerId)

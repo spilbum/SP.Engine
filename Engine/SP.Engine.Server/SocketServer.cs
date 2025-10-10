@@ -185,10 +185,10 @@ namespace SP.Engine.Server
         
         private void ProcessUdpClient(Socket socket, object state)
         {
-            if (state is not (byte[] buffer, int offset, int length, IPEndPoint remoteEndPoint))
+            if (state is not (byte[] datagram, IPEndPoint remoteEndPoint))
                 return;
             
-            Engine.ProcessUdpClient(buffer, offset, length, socket, remoteEndPoint);
+            Engine.ProcessUdpClient(datagram, socket, remoteEndPoint);
         }
 
         private void ProcessTcpClient(Socket client)
