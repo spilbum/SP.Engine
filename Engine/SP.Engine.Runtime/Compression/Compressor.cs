@@ -41,7 +41,6 @@ namespace SP.Engine.Runtime.Compression
                 var result = new byte[totalSize];
                 var dst = result.AsSpan();
                 target[..totalSize].CopyTo(dst);
-                Console.WriteLine($"Compressed: original={original}, compressed={compressedSize}, total={totalSize}");
                 return result;
             }
             finally
@@ -57,7 +56,6 @@ namespace SP.Engine.Runtime.Compression
 
             var span = new ReadOnlySpan<byte>(source);
             var original = BinaryPrimitives.ReadUInt32BigEndian(span[..HeaderSize]);
-            Console.WriteLine($"[Decompress] original: {original}");
             if (original <= 0)
                 throw new InvalidOperationException("Invalid original data length.");
             
