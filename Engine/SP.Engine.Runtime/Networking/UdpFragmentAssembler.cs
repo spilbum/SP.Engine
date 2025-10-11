@@ -22,6 +22,9 @@ namespace SP.Engine.Runtime.Networking
 
         public override bool Equals(object obj) => obj is FragmentKey k && Equals(k);
         public override int GetHashCode() => HashCode.Combine(_peerId, _msgId, _fragId);
+
+        public override string ToString()
+            => $"peerId={_peerId}, msgId={_msgId}, fragId={_fragId}";
     }
 
     internal sealed class ReassemblyState
@@ -45,7 +48,7 @@ namespace SP.Engine.Runtime.Networking
             UdpHeader header, 
             UdpFragmentHeader fragHeader,
             ArraySegment<byte> fragPayload,
-            out ArraySegment<byte> assembledPayload);
+            out ArraySegment<byte> assembled);
 
         int Cleanup(TimeSpan timeout);
     }
@@ -59,9 +62,9 @@ namespace SP.Engine.Runtime.Networking
             UdpHeader header, 
             UdpFragmentHeader fragHeader,
             ArraySegment<byte> fragPayload,
-            out ArraySegment<byte> assembledPayload)
+            out ArraySegment<byte> assembled)
         {
-            assembledPayload = default;
+            assembled = default;
             
             var key = new FragmentKey(header.PeerId, header.Id, fragHeader.Id);
             var state = _map.GetOrAdd(key, _ => new ReassemblyState(fragHeader.TotalCount));
@@ -97,7 +100,7 @@ namespace SP.Engine.Runtime.Networking
                 }
 
                 _map.TryRemove(key, out _);
-                assembledPayload = new ArraySegment<byte>(dst, 0, state.TotalLength);
+                assembled = new ArraySegment<byte>(dst, 0, dst.Length);
                 return true;
             }
         }

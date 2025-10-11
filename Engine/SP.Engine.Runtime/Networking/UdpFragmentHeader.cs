@@ -4,20 +4,20 @@ namespace SP.Engine.Runtime.Networking
 {
     public readonly struct UdpFragmentHeader
     {
-        // id(4) + index(1} + totalCount(2) + payloadLen(2) = 9 bytes
-        public const int ByteSize = 9;
+        // id(4) + index(2} + totalCount(2) + payloadLen(2) = 10 bytes
+        public const int ByteSize = 10;
         public uint Id { get; }
-        public byte Index { get; }
+        public ushort Index { get; }
         public ushort TotalCount { get; }
-        public ushort PayloadLength { get; }
+        public ushort FragmentLength { get; }
         public int Size { get; }
 
-        public UdpFragmentHeader(uint id, byte index, ushort totalCount, ushort payloadLength)
+        public UdpFragmentHeader(uint id, ushort index, ushort totalCount, ushort fragmentLength)
         {
             Id = id;
             Index = index;
             TotalCount = totalCount;
-            PayloadLength = payloadLength;
+            FragmentLength = fragmentLength;
             Size = ByteSize;
         }
         
@@ -28,9 +28,9 @@ namespace SP.Engine.Runtime.Networking
             if (source.Length < ByteSize) return false;
 
             var id = source.ReadUInt32(0);
-            var index = source[4];
-            var totalCount = source.ReadUInt16(5);
-            var payloadLength = source.ReadUInt16(7);
+            var index = source.ReadUInt16(4);
+            var totalCount = source.ReadUInt16(6);
+            var payloadLength = source.ReadUInt16(8);
             header = new UdpFragmentHeader(id, index, totalCount, payloadLength);
             consumed = ByteSize;
             return true;
@@ -40,9 +40,9 @@ namespace SP.Engine.Runtime.Networking
         {
             if (dst.Length < ByteSize) throw new ArgumentException("destination too small");
             dst.WriteUInt32(0, Id);
-            dst[4] = Index;
-            dst.WriteUInt16(5, TotalCount);
-            dst.WriteUInt16(7, PayloadLength);
+            dst.WriteUInt16(4, Index);
+            dst.WriteUInt16(6, TotalCount);
+            dst.WriteUInt16(8, FragmentLength);
         }
     }
 }

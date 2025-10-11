@@ -1,7 +1,4 @@
 using System;
-using System.Buffers.Binary;
-using SP.Engine.Runtime.Protocol;
-using SP.Engine.Runtime.Serialization;
 
 namespace SP.Engine.Runtime.Networking
 {
@@ -45,8 +42,6 @@ namespace SP.Engine.Runtime.Networking
             var peerId = source.ReadUInt32(1);
             var id = source.ReadUInt16(5);
             var length = source.ReadInt32(7);
-            if (length < 0) throw new InvalidOperationException("Negative payload length");
-            
             header = new UdpHeader(flags, peerId, id, length);
             consumed = ByteSize;
             return true;

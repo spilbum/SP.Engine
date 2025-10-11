@@ -46,7 +46,7 @@ namespace SP.Engine.Runtime.Networking
             }
 
             // 조각화
-            var maxChunk = maxDatagramSize - UdpHeader.ByteSize - UdpFragmentHeader.ByteSize;
+            var maxChunk = maxDatagramSize - Header.Size - UdpFragmentHeader.ByteSize;
             if (maxChunk <= 0)
                 throw new ArgumentOutOfRangeException(nameof(maxChunk), "Too small for headers.");
 
@@ -59,24 +59,24 @@ namespace SP.Engine.Runtime.Networking
             
             var fragId = getFragId();
             var offset = 0;
-            byte index = 0;
+            ushort index = 0;
 
             while (offset < bodyLen)
             {
-                var length = Math.Min(maxChunk, bodyLen - offset);
-                var fragHeader = new UdpFragmentHeader(fragId, index, totalCount, (ushort)length);
-                var fragPayload = new ArraySegment<byte>(body.Array!, body.Offset + offset, length);
+                var fragLen = (ushort)Math.Min(maxChunk, bodyLen - offset);
+                var fragHeader = new UdpFragmentHeader(fragId, index, totalCount, fragLen);
+                var fragPayload = new ArraySegment<byte>(body.Array!, body.Offset + offset, fragLen);
                 
                 var header = new UdpHeaderBuilder()
                     .From(Header)
                     .AddFlag(HeaderFlags.Fragment)
-                    .WithPayloadLength(fragHeader.Size + fragPayload.Count)
+                    .WithPayloadLength(fragHeader.Size + fragLen)
                     .Build();
                     
                 var segment = ToArraySegment(header, fragHeader, fragPayload);
                 list.Add(segment);
-                
-                offset += length;
+      
+                offset += fragLen;
                 index++;
             }
             
@@ -90,7 +90,7 @@ namespace SP.Engine.Runtime.Networking
             var span = buf.AsSpan();
             
             header.WriteTo(span[..header.Size]);
-            Buffer.BlockCopy(payload.Array!, payload.Offset, buf, header.Size, payload.Count);
+            payload.AsSpan().CopyTo(span.Slice(header.Size, payload.Count));
             return new ArraySegment<byte>(buf);
         }
 
@@ -110,7 +110,7 @@ namespace SP.Engine.Runtime.Networking
             fragHeader.WriteTo(span.Slice(offset, fragHeader.Size));
             offset += fragHeader.Size;
             
-            Buffer.BlockCopy(fragPayload.Array!, fragPayload.Offset, buf, offset, fragPayload.Count);
+            fragPayload.AsSpan().CopyTo(span.Slice(offset, fragPayload.Count));
             return new ArraySegment<byte>(buf);
         }
         

@@ -68,7 +68,7 @@ namespace SP.Engine.Server
                 if (null == e.RemoteEndPoint)
                     throw new Exception("RemoteEndPoint is null");
 
-                var datagram = ArrayPool<byte>.Shared.Rent(e.BytesTransferred);
+                var datagram = new byte[e.BytesTransferred];
                 Buffer.BlockCopy(e.Buffer!, e.Offset, datagram, 0, e.BytesTransferred);
                 
                 var remote = (IPEndPoint)e.RemoteEndPoint;

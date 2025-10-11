@@ -42,8 +42,6 @@ namespace SP.Engine.Runtime.Networking
             var sequenceNumber = source.ReadInt64(1);
             var id = source.ReadUInt16(9);
             var len = source.ReadInt32(11);
-            if (len < 0) throw new InvalidOperationException("Negative payload length");
-            
             header = new TcpHeader(flags, sequenceNumber, id, len);
             consumed = ByteSize;
             return true;

@@ -49,7 +49,7 @@ namespace SP.Engine.Client
             _receiveBuffer = new byte[config.ReceiveBufferSize];
         }
 
-        public void SetMtu(ushort mtu)
+        public void SetDatagramSize(ushort mtu)
         {
             _maxDatagramSize = (ushort)(mtu - 20 /* IP header size */ - 8 /* UDP header size*/);
         }

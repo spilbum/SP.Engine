@@ -139,43 +139,33 @@ namespace SP.Engine.Server
             var bodyLen = header.PayloadLength;
             var bodySpan = new ReadOnlySpan<byte>(datagram, bodyOffset, bodyLen);
 
-            try
+            if (header.Flags.HasFlag(HeaderFlags.Fragment))
             {
-                if (header.Flags.HasFlag(HeaderFlags.Fragment))
-                {
-                    if (!UdpFragmentHeader.TryParse(bodySpan, out var fragHeader, out var consumed))
-                        return;
+                if (!UdpFragmentHeader.TryParse(bodySpan, out var fragHeader, out var consumed))
+                    return;
 
-                    Logger.Debug(
-                        $"Fragment header: {fragHeader.Id}, index={fragHeader.Index}, totalCount={fragHeader.TotalCount}, length={fragHeader.PayloadLength}");
+                if (bodyLen < consumed + fragHeader.FragmentLength)
+                    return;
 
-                    if (bodyLen < consumed + fragHeader.PayloadLength)
-                        return;
+                var fragPayload = new ArraySegment<byte>(
+                    datagram, bodyOffset + consumed, fragHeader.FragmentLength);
 
-                    var fragPayload = new ArraySegment<byte>(
-                        datagram, bodyOffset + consumed, fragHeader.PayloadLength);
+                if (!UdpSocket.Assembler.TryAssemble(header, fragHeader, fragPayload, out var assembled))
+                    return;
 
-                    if (!UdpSocket.Assembler.TryAssemble(header, fragHeader, fragPayload, out var assembled))
-                        return;
+                var normalizedHeader = new UdpHeaderBuilder()
+                    .From(header)
+                    .WithPayloadLength(assembled.Count)
+                    .Build();
 
-                    var normalizedHeader = new UdpHeaderBuilder()
-                        .From(header)
-                        .WithPayloadLength(assembled.Count)
-                        .Build();
-
-                    var msg = new UdpMessage(normalizedHeader, assembled);
-                    OnReceivedMessage(msg);
-                }
-                else
-                {
-                    var payload = new ArraySegment<byte>(datagram, bodyOffset, bodyLen);
-                    var msg = new UdpMessage(header, payload);
-                    OnReceivedMessage(msg);
-                }
+                var msg = new UdpMessage(normalizedHeader, assembled);
+                OnReceivedMessage(msg);
             }
-            finally
+            else
             {
-                ArrayPool<byte>.Shared.Return(datagram);
+                var payload = new ArraySegment<byte>(datagram, bodyOffset, bodyLen);
+                var msg = new UdpMessage(header, payload);
+                OnReceivedMessage(msg);
             }
         }
 

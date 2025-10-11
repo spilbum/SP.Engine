@@ -24,6 +24,19 @@ namespace SP.Engine.Runtime.Networking
                 .Build();
         }
         
+        public ArraySegment<byte> ToArraySegment()
+        {
+            var bodyLen = Body.Count;
+            var buf = new byte[Header.Size + bodyLen];
+            var span = buf.AsSpan();
+            Header.WriteTo(span);
+            
+            if (bodyLen > 0 && Body.Array != null)
+                Buffer.BlockCopy(Body.Array, Body.Offset, buf, Header.Size, bodyLen);
+            
+            return new ArraySegment<byte>(buf);
+        }
+        
         protected override TcpHeader CreateHeader(HeaderFlags flags, ushort id, int payloadLength)
         {
             return new TcpHeaderBuilder()

@@ -265,7 +265,7 @@ namespace SP.Engine.Client
             if (!IsConnected)
                 return false;
 
-            var seg = message.ToArray();
+            var seg = message.ToArraySegment();
             if (!_sendQueue.Enqueue(seg))
                 return false;
             

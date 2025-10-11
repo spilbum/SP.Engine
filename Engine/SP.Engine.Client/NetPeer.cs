@@ -722,43 +722,44 @@ namespace SP.Engine.Client
         {
             if (_udpSocket == null) return;
 
-            var datagram = new ArraySegment<byte>(e.Data, e.Offset, e.Length);
-            if (datagram.Array == null) return;
-
-            if (!UdpHeader.TryParse(datagram, out var header, out var consumed))
+            var datagram = new byte[e.Length];
+            Buffer.BlockCopy(e.Data, e.Offset, datagram, 0, datagram.Length);
+            var headerSpan = datagram.AsSpan(0, UdpHeader.ByteSize);
+            
+            if (!UdpHeader.TryParse(headerSpan, out var header, out var consumed))
                 return;
             
             if (PeerId != header.PeerId)
                 return;
 
-            var bodyOffset = datagram.Offset + consumed;
+            var bodyOffset = consumed;
             var bodyLen = header.PayloadLength;
             var bodySpan = datagram.AsSpan(bodyOffset, bodyLen);
             
             if (header.Flags.HasFlag(HeaderFlags.Fragment))
             {
-                if (!UdpFragmentHeader.TryParse(bodySpan.Slice(0, UdpFragmentHeader.ByteSize), out var fragHeader, out consumed))
+                if (!UdpFragmentHeader.TryParse(bodySpan, out var fragHeader, out consumed))
                     return;
                 
-                if (bodySpan.Length < consumed + fragHeader.PayloadLength)
+                if (bodySpan.Length < consumed + fragHeader.FragmentLength)
                     return;
     
-                var fragPayload = new ArraySegment<byte>(datagram.Array, bodyOffset + consumed, fragHeader.PayloadLength);
+                var fragPayload = new ArraySegment<byte>(datagram, bodyOffset + consumed, fragHeader.FragmentLength);
                 
-                if (!_udpSocket.Assembler.TryAssemble(header, fragHeader, fragPayload, out var assembledPayload)) 
+                if (!_udpSocket.Assembler.TryAssemble(header, fragHeader, fragPayload, out var assembled)) 
                     return;
 
                 var normalizedHeader = new UdpHeaderBuilder()
                     .From(header)
-                    .WithPayloadLength(assembledPayload.Count)
+                    .WithPayloadLength(assembled.Count)
                     .Build();
                 
-                var message = new UdpMessage(normalizedHeader, assembledPayload);
+                var message = new UdpMessage(normalizedHeader, assembled);
                 OnReceivedMessage(message);
             }
             else
             {
-                var payload = new ArraySegment<byte>(datagram.Array, bodyOffset, bodyLen);
+                var payload = new ArraySegment<byte>(datagram, bodyOffset, bodyLen);
                 var normalizedHeader = new UdpHeaderBuilder()
                     .From(header)
                     .WithPayloadLength(payload.Count)
@@ -845,7 +846,7 @@ namespace SP.Engine.Client
                 return;
             }
             
-            _udpSocket.SetMtu(p.Mtu);
+            _udpSocket.SetDatagramSize(p.Mtu);
             UdpOpened?.Invoke(this, EventArgs.Empty);
 
             if (Config.EnableUdpKeepAlive)

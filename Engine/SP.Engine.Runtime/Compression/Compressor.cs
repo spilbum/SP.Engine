@@ -28,8 +28,8 @@ namespace SP.Engine.Runtime.Compression
             try
             {
                 // 원본 길이 저장
-                BinaryPrimitives.WriteInt32BigEndian(target, source.Length);
-                Console.WriteLine($"[Compress] original: {source.Length}");
+                var original = (uint)source.Length;
+                BinaryPrimitives.WriteUInt32BigEndian(target, original);
 
                 // 압축
                 var compressedSize = LZ4Codec.Encode(source, target[HeaderSize..]);
@@ -41,6 +41,7 @@ namespace SP.Engine.Runtime.Compression
                 var result = new byte[totalSize];
                 var dst = result.AsSpan();
                 target[..totalSize].CopyTo(dst);
+                Console.WriteLine($"Compressed: original={original}, compressed={compressedSize}, total={totalSize}");
                 return result;
             }
             finally
@@ -54,7 +55,8 @@ namespace SP.Engine.Runtime.Compression
             if (source == null || source.Length < HeaderSize)
                 throw new ArgumentException("Invalid compressed data", nameof(source));
 
-            var original = BinaryPrimitives.ReadInt32BigEndian(source);
+            var span = new ReadOnlySpan<byte>(source);
+            var original = BinaryPrimitives.ReadUInt32BigEndian(span[..HeaderSize]);
             Console.WriteLine($"[Decompress] original: {original}");
             if (original <= 0)
                 throw new InvalidOperationException("Invalid original data length.");
@@ -62,7 +64,7 @@ namespace SP.Engine.Runtime.Compression
             var result = new byte[original];
             var target = result.AsSpan();
 
-            var decodedSize = LZ4Codec.Decode(source[HeaderSize..], target);
+            var decodedSize = LZ4Codec.Decode(span[HeaderSize..], target);
             if (decodedSize != original)
                 throw new InvalidOperationException($"Decompressed size mismatch. decodedSize={decodedSize}, original={original}");
             

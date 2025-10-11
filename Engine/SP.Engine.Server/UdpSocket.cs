@@ -30,9 +30,9 @@ namespace SP.Engine.Server
             return datagrams.All(TrySend);
         }
         
-        public void SetMaxDatagramSize(ushort maxDatagramSize)
+        public void SetMaxDatagramSize(ushort mtu)
         {
-            _maxDatagramSize = maxDatagramSize;
+            _maxDatagramSize = (ushort)(mtu - 20 /* IP header size */ - 8 /* UDP header size*/);;
         }
         
         public void UpdateRemoteEndPoint(IPEndPoint remoteEndPoint)
