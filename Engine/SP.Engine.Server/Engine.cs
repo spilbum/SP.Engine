@@ -7,11 +7,11 @@ using System.Threading;
 using SP.Common.Fiber;
 using SP.Common.Logging;
 using SP.Engine.Runtime;
-using SP.Engine.Runtime.Handler;
 using SP.Engine.Server.Configuration;
 using SP.Engine.Server.Connector;
 using SP.Engine.Protocol;
 using SP.Engine.Runtime.Networking;
+using SP.Engine.Runtime.Protocol;
 using SP.Engine.Server.ProtocolHandler;
 
 namespace SP.Engine.Server

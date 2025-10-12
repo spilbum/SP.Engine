@@ -12,12 +12,12 @@ namespace SP.Engine.Client
     public class LatencyStats
     {
         private readonly DataSampler _sampler;
-        private readonly EwmaFilter _srtt;
+        private readonly EwmaFilter _smoothedRtt;
         private int _sentCount;
         private int _receivedCount;
 
         public double LastRttMs { get; private set; }
-        public double SmoothedRttMs => _srtt.Value;
+        public double SmoothedRttMs => _smoothedRtt.Value;
         public double MinRttMs => _sampler.Min;
         public double MaxRttMs => _sampler.Max;
         public double AvgRttMs => _sampler.Avg;
@@ -27,7 +27,7 @@ namespace SP.Engine.Client
         public LatencyStats(int windowSize = 20)
         {
             _sampler = new DataSampler(windowSize);
-            _srtt = new EwmaFilter(0.125);
+            _smoothedRtt = new EwmaFilter(0.125);
         }
 
         public void OnSent() => _sentCount++;
@@ -36,13 +36,13 @@ namespace SP.Engine.Client
             LastRttMs = rawRtt;
             _receivedCount++;
             _sampler.Add(rawRtt);
-            _srtt.Update(rawRtt);
+            _smoothedRtt.Update(rawRtt);
         }
 
         public void Clear()
         {
             _sampler.Clear();
-            _srtt.Reset();
+            _smoothedRtt.Reset();
             _sentCount = 0;
             _receivedCount = 0;
             LastRttMs = 0;

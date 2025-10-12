@@ -39,9 +39,9 @@ namespace EchoClient
                 .WithUdpKeepAlive(true, 30)
                 .WithLatencySampleWindowSize(20)
                 .Build();
-
+            
             var logger = new ConsoleLogger("EchoClient");
-            _client = new EchoClient(logger, config);
+            _client = new EchoClient(config, logger);
             _client.Open(host, port);
             
             while (true)

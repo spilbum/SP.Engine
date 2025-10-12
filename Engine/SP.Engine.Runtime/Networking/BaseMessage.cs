@@ -37,7 +37,7 @@ namespace SP.Engine.Runtime.Networking
             if (protocol is null) throw new ArgumentNullException(nameof(protocol));
 
             var w = new NetWriter();
-            BinaryConverter.Serialize(ref w, protocol.GetType(), protocol);
+            NetSerializer.Serialize(ref w, protocol.GetType(), protocol);
             var payload = w.ToArray();
             
             var flags = HeaderFlags.None;
@@ -57,6 +57,24 @@ namespace SP.Engine.Runtime.Networking
             Body = new ArraySegment<byte>(payload);
         }
 
+        public TProtocol Deserialize<TProtocol>(IEncryptor encryptor, ICompressor compressor)
+            where TProtocol : IProtocol
+        {
+            var payload = new byte[Body.Count];
+            Buffer.BlockCopy(Body.Array!, Body.Offset, payload, 0, Body.Count);
+
+            if (HasFlag(HeaderFlags.Compressed) && compressor == null)
+                throw new InvalidDataException("Compressed payload but no compressor provided.");
+            if (HasFlag(HeaderFlags.Encrypted) && encryptor == null)
+                throw new InvalidDataException("Encrypted payload but no decryptor provided.");
+
+            if (HasFlag(HeaderFlags.Encrypted)) payload = encryptor.Decrypt(payload);
+            if (HasFlag(HeaderFlags.Compressed))  payload = compressor.Decompress(payload);
+
+            var r = new NetReader(payload);
+            return NetSerializer.Deserialize<TProtocol>(ref r);
+        }
+
         public IProtocol Deserialize(Type type, IEncryptor encryptor, ICompressor compressor)
         {
             var payload = new byte[Body.Count];
@@ -71,7 +89,7 @@ namespace SP.Engine.Runtime.Networking
             if (HasFlag(HeaderFlags.Compressed))  payload = compressor.Decompress(payload);
 
             var r = new NetReader(payload);
-            var obj = BinaryConverter.Deserialize(ref r, type);
+            var obj = NetSerializer.Deserialize(ref r, type);
             return (IProtocol)obj;
         }
     }

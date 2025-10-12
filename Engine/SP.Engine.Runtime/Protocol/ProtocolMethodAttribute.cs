@@ -1,6 +1,6 @@
 using System;
 
-namespace SP.Engine.Runtime.Handler
+namespace SP.Engine.Runtime.Protocol
 {
     [AttributeUsage(AttributeTargets.Method)]
     public class ProtocolMethodAttribute : Attribute

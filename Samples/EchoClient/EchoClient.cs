@@ -2,7 +2,6 @@ using Common;
 using SP.Common.Logging;
 using SP.Engine.Client;
 using SP.Engine.Client.Configuration;
-using SP.Engine.Runtime.Handler;
 using SP.Engine.Runtime.Protocol;
 
 namespace EchoClient;
@@ -10,27 +9,18 @@ namespace EchoClient;
 public class EchoClient
 {
     private NetPeer? _peer;
-    private readonly Dictionary<ushort, ProtocolMethodInvoker> _invokerDict = new();
 
     public ILogger Logger => _peer?.Logger ?? throw new NullReferenceException(nameof(_peer));
-    public Action<S2CProtocolData.TcpEchoAck>? TcpEchoAckHandler { get; set; }
-    public Action<S2CProtocolData.UdpEchoAck>? UdpEchoAckHandler { get; set; }
     
-    public EchoClient(ILogger logger, EngineConfig config)
+    public EchoClient(EngineConfig config, ILogger logger)
     {
-        _peer = new NetPeer(config, logger);
+        var assembly = GetType().Assembly;
+        _peer = new NetPeer(config, assembly, logger);
         _peer.Connected += OnConnected;
         _peer.Disconnected += OnDisconnected;
         _peer.Error += OnError;
-        _peer.MessageReceived += OnMessageReceived;
         _peer.Offline += OnOffline;
         _peer.StateChanged += OnStateChanged;
-
-        if (!ProtocolMethodInvoker.LoadInvokers(GetType())
-                .All(invoker => _invokerDict.TryAdd(invoker.Id, invoker)))
-        {
-            throw new Exception("LoadInvokers failed.");
-        }
     }
 
     public void Open(string host, int port)
@@ -76,13 +66,6 @@ public class EchoClient
         _peer?.Logger.Debug("[OnOffline] Offline");
     }
 
-    private void OnMessageReceived(object? sender, MessageReceivedEventArgs e)
-    {
-        var message = e.Message;
-        if (_invokerDict.TryGetValue(message.Id, out var invoker))
-            invoker.Invoke(this, message, _peer?.Encryptor, _peer?.Compressor);
-    }
-
     private void OnError(object? sender, ErrorEventArgs e)
     {
         _peer?.Logger.Error(e.GetException());
@@ -96,17 +79,5 @@ public class EchoClient
     private void OnConnected(object? sender, EventArgs e)
     {
         _peer?.Logger.Info("[OnConnected] Connected");
-    }
-
-    [ProtocolMethod(S2CProtocol.TcpEchoAck)]
-    private void _(S2CProtocolData.TcpEchoAck packet)
-    {
-        TcpEchoAckHandler?.Invoke(packet);
-    }
-    
-    [ProtocolMethod(S2CProtocol.UdpEchoAck)]
-    private void _(S2CProtocolData.UdpEchoAck packet)
-    {
-        UdpEchoAckHandler?.Invoke(packet);
     }
 }

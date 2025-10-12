@@ -4,8 +4,6 @@ using System.IO;
 using System.Linq;
 using SP.Common.Logging;
 using SP.Engine.Client;
-using SP.Engine.Runtime;
-using SP.Engine.Runtime.Handler;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Server.Configuration;
 using SP.Engine.Server.ProtocolHandler;
@@ -31,7 +29,7 @@ namespace SP.Engine.Server.Connector
         private bool _isDisposed;
         private bool _isOffline;        
         private NetPeer _netPeer;
-        private readonly Dictionary<ushort, ProtocolMethodInvoker> _invokerDict = new();
+        private readonly Dictionary<ushort, ProtocolMethodInvoker> _invokers = new();
         
         public event Action Connected;
         public event Action Disconnected;
@@ -61,10 +59,14 @@ namespace SP.Engine.Server.Connector
             try
             {
                 _netPeer = CreateNetPeer(config);
-                if (!ProtocolMethodInvoker.LoadInvokers(GetType()).All(RegisterInvoker))
-                    return false;
+
+                foreach (var invoker in ProtocolMethodInvoker.Load(GetType()))
+                {
+                    if (!_invokers.TryAdd(invoker.Id, invoker))
+                        logger.Warn("Invoker {0} already exists.", invoker.Id);
+                }
                 
-                Logger.Debug("Invoker loaded: {0}", string.Join(", ", _invokerDict.Keys.ToArray()));
+                logger.Debug("Invoker loaded: {0}", string.Join(", ", _invokers.Keys.ToArray()));
                 return true;
             }
             catch (Exception e)
@@ -73,17 +75,10 @@ namespace SP.Engine.Server.Connector
                 return false;
             }
         }
-
-        private bool RegisterInvoker(ProtocolMethodInvoker invoker)
-        {
-            if (_invokerDict.TryAdd(invoker.Id, invoker)) return true;
-            Logger.Error("Invoker '{0}' already exists.", invoker.Id);
-            return false;
-        }
-
+        
         private ProtocolMethodInvoker GetInvoker(ushort id)
         {
-            _invokerDict.TryGetValue(id, out var invoker);
+            _invokers.TryGetValue(id, out var invoker);
             return invoker;
         }
 
@@ -94,8 +89,9 @@ namespace SP.Engine.Server.Connector
                 .WithConnectAttempt(config.MaxConnectAttempts, config.ConnectAttemptIntervalSec)
                 .WithReconnectAttempt(config.MaxReconnectAttempts, config.ReconnectAttemptIntervalSec)
                 .Build();
-            
-            var netPeer = new NetPeer(engineConfig, Logger);
+
+            var assembly = GetType().Assembly;
+            var netPeer = new NetPeer(engineConfig, assembly, Logger);
             netPeer.Connected += OnConnected;
             netPeer.Error += OnError;
             netPeer.Offline += OnOffline;

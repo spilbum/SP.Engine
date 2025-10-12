@@ -12,6 +12,6 @@ namespace SP.Engine.Client.ProtocolHandler
             ExecuteProtocol(peer, protocol);
         }
 
-        protected abstract void ExecuteProtocol(NetPeer peer, TProtocol data);
+        protected abstract void ExecuteProtocol(NetPeer peer, TProtocol protocol);
     }
 }

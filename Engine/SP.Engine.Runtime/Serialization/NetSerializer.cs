@@ -6,9 +6,8 @@ using SP.Common.Accessor;
 
 namespace SP.Engine.Runtime.Serialization
 {
-    public static class BinaryConverter
+    public static class NetSerializer
     {
-
         private static readonly ConcurrentDictionary<Type, SerializerPair> Cache =
             new ConcurrentDictionary<Type, SerializerPair>();
 
@@ -39,20 +38,15 @@ namespace SP.Engine.Runtime.Serialization
         private static SerializerPair Build(Type t)
         {
             if (TryBuildPrimitive(t, out var p)) return p;
-
             if (t == typeof(string)) return BuildString();
             if (t == typeof(byte[])) return BuildByteArray();
-            
             if (t.IsEnum) return BuildEnum(t);
-        
             var ut = Nullable.GetUnderlyingType(t);
             if (ut != null) return BuildNullable(ut);
-            
             if (t.IsArray) return BuildArray(t);
             if (TryBuildList(t, out p)) return p;
             if (TryBuildDictionary(t, out p)) return p;
-            
-            return t == typeof(DateTime) ? BuildDateTime() : BuildPoco(t);
+            return t == typeof(DateTime) ? BuildDateTime() : BuildDataClass(t);
         }
 
         private static bool TryBuildPrimitive(Type t, out SerializerPair pair)
@@ -60,84 +54,95 @@ namespace SP.Engine.Runtime.Serialization
             pair = null;
             if (t == typeof(bool))
             {
-                pair = Generate((ref NetReader r) => r.ReadBool(),
+                pair = new SerializerPair(
+                    (ref NetReader r) => r.ReadBool(),
                     (ref NetWriter w, object v) => w.WriteBool((bool)v));
                 return true;
             }
 
             if (t == typeof(byte))
             {
-                pair = Generate((ref NetReader r) => r.ReadByte(),
+                pair = new SerializerPair(
+                    (ref NetReader r) => r.ReadByte(),
                     (ref NetWriter w, object v) => w.WriteByte((byte)v));
                 return true;
             }
 
             if (t == typeof(sbyte))
             {
-                pair = Generate((ref NetReader r) => (sbyte)r.ReadByte(),
+                pair = new SerializerPair(
+                    (ref NetReader r) => (sbyte)r.ReadByte(),
                     (ref NetWriter w, object v) => w.WriteByte(unchecked((byte)(sbyte)v)));
                 return true;
             }
 
             if (t == typeof(short))
             {
-                pair = Generate((ref NetReader r) => r.ReadInt16(),
+                pair = new SerializerPair(
+                    (ref NetReader r) => r.ReadInt16(),
                     (ref NetWriter w, object v) => w.WriteInt16((short)v));
                 return true;
             }
 
             if (t == typeof(ushort))
             {
-                pair = Generate((ref NetReader r) => r.ReadUInt16(),
+                pair = new SerializerPair(
+                    (ref NetReader r) => r.ReadUInt16(),
                     (ref NetWriter w, object v) => w.WriteUInt16((ushort)v));
                 return true;
             }
 
             if (t == typeof(int))
             {
-                pair = Generate((ref NetReader r) => r.ReadInt32(),
+                pair = new SerializerPair(
+                    (ref NetReader r) => r.ReadInt32(),
                     (ref NetWriter w, object v) => w.WriteInt32((int)v));
                 return true;
             }
 
             if (t == typeof(uint))
             {
-                pair = Generate((ref NetReader r) => r.ReadUInt32(),
+                pair = new SerializerPair(
+                    (ref NetReader r) => r.ReadUInt32(),
                     (ref NetWriter w, object v) => w.WriteUInt32((uint)v));
                 return true;
             }
 
             if (t == typeof(long))
             {
-                pair = Generate((ref NetReader r) => r.ReadInt64(),
+                pair = new SerializerPair(
+                    (ref NetReader r) => r.ReadInt64(),
                     (ref NetWriter w, object v) => w.WriteInt64((long)v));
                 return true;
             }
 
             if (t == typeof(ulong))
             {
-                pair = Generate((ref NetReader r) => r.ReadUInt64(),
+                pair = new SerializerPair(
+                    (ref NetReader r) => r.ReadUInt64(),
                     (ref NetWriter w, object v) => w.WriteUInt64((ulong)v));
                 return true;
             }
 
             if (t == typeof(float))
             {
-                pair = Generate((ref NetReader r) => r.ReadSingle(),
+                pair = new SerializerPair(
+                    (ref NetReader r) => r.ReadSingle(),
                     (ref NetWriter w, object v) => w.WriteSingle((float)v));
                 return true;
             }
 
             if (t == typeof(double))
             {
-                pair = Generate((ref NetReader r) => r.ReadDouble(),
+                pair = new SerializerPair(
+                    (ref NetReader r) => r.ReadDouble(),
                     (ref NetWriter w, object v) => w.WriteDouble((double)v));
                 return true;
             }
 
             if (t == typeof(decimal))
             {
-                pair = Generate(
+                pair = new SerializerPair(
                     (ref NetReader r) =>
                     {
                         var a = r.ReadInt32();
@@ -158,9 +163,6 @@ namespace SP.Engine.Runtime.Serialization
             }
 
             return false;
-
-            SerializerPair Generate(SerializerPair.ReadFn r, SerializerPair.WriteFn w)
-                => new SerializerPair(r, w);
         }
 
         private static SerializerPair BuildString()
@@ -340,11 +342,21 @@ namespace SP.Engine.Runtime.Serialization
         private static SerializerPair BuildDateTime()
         {
             return new SerializerPair(Read, Write);
-            void Write(ref NetWriter w, object v) => w.WriteInt64(((DateTime)v).ToUniversalTime().Ticks);
-            object Read(ref NetReader r) => new DateTime(r.ReadInt64(), DateTimeKind.Utc);
+
+            void Write(ref NetWriter w, object v)
+            {
+                var ticks = ((DateTime)v).ToUniversalTime().Ticks;
+                w.WriteInt64(ticks);
+            }
+
+            object Read(ref NetReader r)
+            {
+                var ticks = r.ReadInt64();
+                return new DateTime(ticks, DateTimeKind.Utc);
+            }
         }
 
-        private static SerializerPair BuildPoco(Type t)
+        private static SerializerPair BuildDataClass(Type t)
         {
             var accessor = RuntimeTypeAccessor.GetOrCreate(t);
             var members = accessor.Members;

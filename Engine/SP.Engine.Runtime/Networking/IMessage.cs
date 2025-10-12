@@ -9,5 +9,7 @@ namespace SP.Engine.Runtime.Networking
     {
         ushort Id { get; }
         IProtocol Deserialize(Type type, IEncryptor encryptor, ICompressor compressor);
+        TProtocol Deserialize<TProtocol>(IEncryptor encryptor, ICompressor compressor)
+            where TProtocol : IProtocol;
     }
 }

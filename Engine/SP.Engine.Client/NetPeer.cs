@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using System.Threading;
 using SP.Common.Buffer;
 using SP.Common.Logging;
@@ -80,16 +81,18 @@ namespace SP.Engine.Client
         private TickTimer _timer;
         private AesCbcEncryptor _encryptor;
         private readonly Lz4Compressor _compressor = new Lz4Compressor();
-        private readonly BinaryBuffer _recvBuffer = new BinaryBuffer(1024);
+        private readonly BinaryBuffer _receiveBuffer = new BinaryBuffer(1024);
         private readonly ConcurrentQueue<IMessage> _receivedMessageQueue = new ConcurrentQueue<IMessage>();
         private readonly Dictionary<ushort, IHandler<NetPeer, IMessage>> _engineHandlers =
+            new Dictionary<ushort, IHandler<NetPeer, IMessage>>();
+        private readonly Dictionary<ushort, IHandler<NetPeer, IMessage>> _handlers =
             new Dictionary<ushort, IHandler<NetPeer, IMessage>>();
         private double _serverTimeOffsetMs;
         private TickTimer _keepAliveTimer;
         private readonly DiffieHellman _diffieHellman = new DiffieHellman(DhKeySize.Bit2048);
         private readonly ChannelRouter _channelRouter = new ChannelRouter();
         private IPolicyView _networkPolicy = new NetworkPolicyView(in PolicyDefaults.Globals);
-        private int _recvBudgetMs = 1;
+        private int _receiveBudgetMs = 1;
         private int _tcpParseBudgetMs = 1;
         private int _maxTcpBytesPerTick = 128 * 1024;
         private int _maxTcpFramesPerTickCap = 512;
@@ -117,7 +120,7 @@ namespace SP.Engine.Client
         public event EventHandler UdpOpened;
         public event EventHandler UdpClosed;
         
-        public NetPeer(EngineConfig config, ILogger logger)
+        public NetPeer(EngineConfig config, Assembly assembly, ILogger logger)
         {
             Config = config;
             Logger = logger;
@@ -129,14 +132,45 @@ namespace SP.Engine.Client
             _engineHandlers[S2CEngineProtocolId.MessageAck] = new MessageAck();
             _engineHandlers[S2CEngineProtocolId.Pong] = new Pong();
             _engineHandlers[S2CEngineProtocolId.UdpHelloAck] = new UdpHelloAck();
+
+            if (assembly != null)
+                DiscoverHandlers(assembly);
         }
 
         ~NetPeer()
         {
             Dispose(false);
         }
+
+        private void DiscoverHandlers(Assembly assembly)
+        {
+            foreach (var type in assembly.GetTypes())
+            {
+                if (!type.IsClass || type.IsAbstract)
+                    continue;
+
+                var attr = type.GetCustomAttribute<ProtocolHandlerAttribute>();
+                if (attr == null)
+                    continue;
+                
+                if (!typeof(IHandler).IsAssignableFrom(type))
+                    continue;
+
+                if (!(Activator.CreateInstance(type) is IHandler<NetPeer, IMessage> handler)) 
+                    continue;
+                
+                if (!_handlers.TryAdd(attr.Id, handler))
+                    Logger?.Warn("Handler {0} already exists.", attr.Id);
+            }
+        }
+
+        private IHandler<NetPeer, IMessage> GetHandler(ushort id)
+        {
+            _handlers.TryGetValue(id, out var handler);
+            return handler;
+        }
         
-        public void SetRecvBudgetMs(int ms) => _recvBudgetMs = ms;
+        public void SetReceiveBudgetMs(int ms) => _receiveBudgetMs = ms;
         public void SetTcpBudgetMs(int ms) => _tcpParseBudgetMs = ms;
         public void SetMaxTcpBytesPerTick(int bytes) => _maxTcpBytesPerTick = bytes;
         public void SetMaxTcpFramesPerTickCap(int cap) => _maxTcpFramesPerTickCap = cap;
@@ -506,9 +540,9 @@ namespace SP.Engine.Client
             if (!IsConnected) return;
 
             var sw = Stopwatch.StartNew();
-            var budgetTicks = _recvBudgetMs <= 0
+            var budgetTicks = _receiveBudgetMs <= 0
                 ? long.MaxValue
-                : TimeSpan.FromMilliseconds(_recvBudgetMs).Ticks;
+                : TimeSpan.FromMilliseconds(_receiveBudgetMs).Ticks;
 
             while (sw.ElapsedTicks < budgetTicks && _receivedMessageQueue.TryDequeue(out var message))
             {
@@ -531,7 +565,7 @@ namespace SP.Engine.Client
         private void OnSessionDataReceived(object sender, DataEventArgs e)
         {
             var span = e.Data.AsSpan(e.Offset, e.Length);
-            _recvBuffer.WriteSpan(span);
+            _receiveBuffer.WriteSpan(span);
 
             try
             {
@@ -544,7 +578,7 @@ namespace SP.Engine.Client
             }
             finally
             {
-                _recvBuffer.MaybeTrim(TcpHeader.ByteSize);
+                _receiveBuffer.MaybeTrim(TcpHeader.ByteSize);
             }
         }
 
@@ -579,10 +613,10 @@ namespace SP.Engine.Client
             
             while (frames < framesCap && tickSw.ElapsedTicks < budgetTicks)
             {
-                if (_recvBuffer.ReadableBytes < headerSize)
+                if (_receiveBuffer.ReadableBytes < headerSize)
                     yield break;
                 
-                var headerSpan = _recvBuffer.PeekSpan(headerSize);
+                var headerSpan = _receiveBuffer.PeekSpan(headerSize);
                 if (!TcpHeader.TryParse(headerSpan, out var header, out var consumed))
                     yield break;
 
@@ -595,14 +629,14 @@ namespace SP.Engine.Client
                     yield break;
                 }
 
-                if (_recvBuffer.ReadableBytes < bodyLen)
+                if (_receiveBuffer.ReadableBytes < bodyLen)
                     yield break;
 
                 if (bytesParsed + bodyLen > bytesBudget)
                     yield break;
                         
-                _recvBuffer.Advance(consumed);
-                var frameBytes = _recvBuffer.ReadBytes(bodyLen);
+                _receiveBuffer.Advance(consumed);
+                var frameBytes = _receiveBuffer.ReadBytes(bodyLen);
                 bytesParsed += bodyLen;
                 frames++;
                         
@@ -802,7 +836,11 @@ namespace SP.Engine.Client
         {
             if (p.Result != SessionHandshakeResult.Ok)
             {
+                #if DEBUG
+                OnError(new Exception($"Session auth failed: {p.Result}, reason={p.Reason}"));
+                #else 
                 OnError(new Exception($"Session auth failed: {p.Result}"));
+                #endif
                 CloseWithoutHandshake();
                 return;
             }
@@ -889,6 +927,9 @@ namespace SP.Engine.Client
         
         private void OnMessageReceived(IMessage message)
         {
+            var handler = GetHandler(message.Id);
+            handler?.ExecuteMessage(this, message);
+
             MessageReceived?.Invoke(this, new MessageReceivedEventArgs(message));
         }
 
