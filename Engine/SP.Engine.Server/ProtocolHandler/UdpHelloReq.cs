@@ -3,12 +3,11 @@ using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Server.ProtocolHandler;
 
-[ProtocolHandler(C2SEngineProtocolId.UdpHelloReq)]
-internal class UdpHelloReq<TPeer> : BaseEngineHandler<Session<TPeer>, C2SEngineProtocolData.UdpHelloReq>
-    where TPeer : BasePeer, IPeer
+[ProtocolCommand(C2SEngineProtocolId.UdpHelloReq)]
+internal class UdpHelloReq : BaseCommand<Session, C2SEngineProtocolData.UdpHelloReq>
 {
-    protected override void ExecuteProtocol(Session<TPeer> session, C2SEngineProtocolData.UdpHelloReq data)
+    protected override void ExecuteProtocol(Session session, C2SEngineProtocolData.UdpHelloReq protocol)
     {
-        session.OnUdpHandshake(data);
+        session.OnUdpHandshake(protocol);
     }
 }

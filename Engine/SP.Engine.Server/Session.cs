@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Net;
-using SP.Common.Logging;
 using SP.Engine.Runtime;
 using SP.Engine.Protocol;
 using SP.Engine.Runtime.Channel;
@@ -11,7 +10,7 @@ using SP.Engine.Server.ProtocolHandler;
 
 namespace SP.Engine.Server
 {
-    public interface ISession : ILogContext, IHandleContext
+    public interface ISession : ICommandContext
     {
         string Id { get; }
         IPEndPoint LocalEndPoint { get; }
@@ -22,19 +21,18 @@ namespace SP.Engine.Server
         void Close(CloseReason reason);
     }
     
-    public sealed class Session<TPeer> : BaseSession<Session<TPeer>>, ISession
-        where TPeer : BasePeer, IPeer
+    public sealed class Session : BaseSession, ISession
     {
-        private Engine<TPeer> _engine;
+        private Engine _engine;
         IEngine ISession.Engine => _engine;
         
-        public TPeer Peer { get; private set; }
+        public BasePeer Peer { get; private set; }
         public bool IsClosing { get; private set; }
-        
+
         public override void Initialize(IBaseEngine engine, TcpNetworkSession networkSession)
         {
             base.Initialize(engine, networkSession);
-            _engine = (Engine<TPeer>)engine;
+            _engine = (Engine)engine;
         }
 
         internal void OnSessionHandshake(C2SEngineProtocolData.SessionAuthReq data)
@@ -52,8 +50,10 @@ namespace SP.Engine.Server
                         throw new SessionAuthException(SessionHandshakeResult.InvalidRequest, 
                             $"Already created peer. sessionId={peer.Session.Id}, peerId={peer.Id}");
 
-                    peer = engine.CreatePeer(this) ??
+                    if (!engine.CreatePeer(this, out var p) || p is not BasePeer basePeer)
                            throw new SessionAuthException(SessionHandshakeResult.InternalError, "Failed to create peer.");
+                    
+                    peer = basePeer;
                     
                     if (!peer.TryKeyExchange(data.KeySize, data.ClientPublicKey))
                         throw new SessionAuthException(SessionHandshakeResult.KeyExchangeFailed, "Key exchange failed.");
@@ -63,7 +63,7 @@ namespace SP.Engine.Server
                 else
                 {
                     // 재연결
-                    var prevSession = (Session<TPeer>)engine.GetSession(data.SessionId);
+                    var prevSession = (Session)engine.GetSession(data.SessionId);
                     if (null != prevSession)
                     {
                         // 이전 세션이 살아 있는 경우
@@ -88,7 +88,6 @@ namespace SP.Engine.Server
 
                 Peer = peer ?? throw new InvalidOperationException("peer is null.");
                 Peer.OnSessionAuthed();
-                Encryptor = Peer.Encryptor;
                 IsAuthorized = true;
                 ack.Result = SessionHandshakeResult.Ok;
                 Logger.Debug("Session authentication succeeded. sessionId={0}, peerId={1}", Id, peer.Id);
@@ -126,7 +125,7 @@ namespace SP.Engine.Server
                         if (network.UseEncrypt)
                         {
                             ack.UseEncrypt = true;
-                            ack.ServerPublicKey = ((IBasePeer)peer).LocalPublicKey;
+                            ack.ServerPublicKey = peer.LocalPublicKey;
                         }
 
                         if (network.UseCompress)
@@ -176,7 +175,7 @@ namespace SP.Engine.Server
                 var minMtu = Math.Max(minIpv4Mtu, net.MinMtu);
                 var maxMtu = Math.Max(minMtu, net.MaxMtu);
                 var negotiated = (ushort)Math.Min(Math.Max(data.Mtu, minMtu), maxMtu);
-                UdpSocket.SetMaxDatagramSize(negotiated);
+                UdpSocket.SetMaxFrameSize(negotiated);
                 ack.Mtu = negotiated;
                 
                 Logger.Debug("UDP hello OK - pid={0}, sid={1}, mtu={2}", Peer.Id, Id, negotiated);
@@ -198,8 +197,8 @@ namespace SP.Engine.Server
         {
             var channel = data.Channel;
             var policy = Peer.GetNetworkPolicy(data.GetType());
-            var encryptor = policy.UseEncrypt ? Encryptor : null;
-            var compressor = policy.UseCompress ? Compressor : null;
+            var encryptor = policy.UseEncrypt ? Peer.Encryptor : null;
+            var compressor = policy.UseCompress ? Peer.Compressor : null;
             switch (channel)
             {
                 case ChannelKind.Reliable:
@@ -270,5 +269,8 @@ namespace SP.Engine.Server
 
             base.Close(reason);
         }
+        
+        TProtocol ICommandContext.Deserialize<TProtocol>(IMessage message)
+            => message.Deserialize<TProtocol>(Peer?.Encryptor, Peer?.Compressor);
     }
 }

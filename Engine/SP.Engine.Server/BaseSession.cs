@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Buffers;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
@@ -11,26 +10,25 @@ using SP.Engine.Runtime.Compression;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Security;
 using SP.Engine.Server.Configuration;
-using SP.Engine.Server.ProtocolHandler;
 
 namespace SP.Engine.Server
 {
-    public interface IBaseSession : ILogContext, IHandleContext
+    public interface IBaseSession : ILogContext
     {
+        string Id { get; }
         IBaseEngine Engine { get; }
         INetworkSession NetworkSession { get; }
         IEngineConfig Config { get; }
-        IEncryptor Encryptor { get; }
-        ICompressor Compressor { get; }
+        DateTime LastActiveTime { get; }
         void ProcessBuffer(byte[] buffer, int offset, int length);
         void ProcessDatagram(byte[] datagram, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint);
+        void Close(CloseReason reason);
     }
     
-    public abstract class BaseSession<TSession> : IBaseSession
-        where TSession : BaseSession<TSession>, IBaseSession, new()
+    public abstract class BaseSession : IBaseSession
     {
         private BinaryBuffer _receiveBuffer;
-        private BaseEngine<TSession> _engine;
+        private BaseEngine _engine;
         private IDisposable _assemblerCleanupScheduler;
         private readonly ChannelRouter _channelRouter = new();
 
@@ -47,8 +45,6 @@ namespace SP.Engine.Server
         public INetworkSession NetworkSession { get; private set; }
         public UdpSocket UdpSocket { get; private set; }
         public CloseReason CloseReason { get; private set; }
-        public IEncryptor Encryptor { get; protected set; }
-        public ICompressor Compressor { get; protected set; }
         public bool IsConnected { get; internal set; }
         public bool IsClosed { get; internal set; }
 
@@ -56,12 +52,11 @@ namespace SP.Engine.Server
         {
             StartTime = DateTime.UtcNow;
             LastActiveTime = StartTime;
-            Compressor = new Lz4Compressor();
         }
 
         public virtual void Initialize(IBaseEngine engine, TcpNetworkSession networkSession)
         {
-            _engine = (BaseEngine<TSession>)engine;
+            _engine = (BaseEngine)engine;
             NetworkSession = networkSession;
             Id = networkSession.SessionId;
             _receiveBuffer = new BinaryBuffer(engine.Config.Network.ReceiveBufferSize);
@@ -134,14 +129,14 @@ namespace SP.Engine.Server
         void IBaseSession.ProcessDatagram(byte[] datagram, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint)
         {
             EnsureUdpSocket(socket, remoteEndPoint);
-
+            
             var bodyOffset = header.Size;
             var bodyLen = header.PayloadLength;
             var bodySpan = new ReadOnlySpan<byte>(datagram, bodyOffset, bodyLen);
 
             if (header.Flags.HasFlag(HeaderFlags.Fragment))
             {
-                if (!UdpFragmentHeader.TryParse(bodySpan, out var fragHeader, out var consumed))
+                if (!FragmentHeader.TryParse(bodySpan, out var fragHeader, out var consumed))
                     return;
 
                 if (bodyLen < consumed + fragHeader.FragmentLength)
@@ -200,7 +195,7 @@ namespace SP.Engine.Server
                     yield break;
 
                 var headerSpan = _receiveBuffer.PeekSpan(headerSize);
-                if (!TcpHeader.TryParse(headerSpan, out var header, out var consumed))
+                if (!TcpHeader.TryRead(headerSpan, out var header, out var consumed))
                     yield break;
                 
                 var bodyLen = header.PayloadLength;

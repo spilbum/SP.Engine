@@ -1,12 +1,12 @@
 using SP.Engine.Protocol;
 using SP.Engine.Runtime.Protocol;
 
-namespace SP.Engine.Client.ProtocolHandler
+namespace SP.Engine.Client.Command
 {
-    [ProtocolHandler(S2CEngineProtocolId.Close)]
-    public class Close : BaseProtocolHandler<S2CEngineProtocolData.Close>
+    [ProtocolCommand(S2CEngineProtocolId.Close)]
+    public class Close : BaseCommand<BaseNetPeer, S2CEngineProtocolData.Close>
     {
-        protected override void ExecuteProtocol(NetPeer peer, S2CEngineProtocolData.Close protocol)
+        protected override void ExecuteProtocol(BaseNetPeer peer, S2CEngineProtocolData.Close protocol)
         {
             if (peer.State == NetPeerState.Closing)
             {

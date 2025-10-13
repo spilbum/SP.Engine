@@ -48,8 +48,7 @@ namespace SP.Engine.Server
         public const int Stopping = 5;
     }
 
-    public abstract class BaseEngine<TSession> : IBaseEngine, ISocketServerAccessor, IDisposable
-        where TSession : BaseSession<TSession>, IBaseSession, new()
+    public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposable
     {
         private SocketServer _socketServer;
         private ListenerInfo[] _listenerInfos;
@@ -61,7 +60,7 @@ namespace SP.Engine.Server
         public IEngineConfig Config { get; private set; }
         public abstract IFiberScheduler Scheduler { get; }
         
-        protected abstract IBasePeer GetBasePeer(uint peerId);
+        protected abstract BasePeer GetBasePeer(uint peerId);
         
         public virtual bool Initialize(string name, EngineConfig config)
         {
@@ -176,7 +175,7 @@ namespace SP.Engine.Server
             return session;
         }
 
-        public IEnumerable<TSession> GetAllSessions()
+        public IEnumerable<IBaseSession> GetAllSessions()
         {
             var sessions = SessionsSource;
             return sessions.Select(x => x.Value);
@@ -248,14 +247,14 @@ namespace SP.Engine.Server
 
         IBaseSession IBaseEngine.CreateSession(TcpNetworkSession networkSession)
         {
-            var session = new TSession();
+            var session = new Session();
             session.Initialize(this, networkSession);
             return session;
         }
 
         bool IBaseEngine.RegisterSession(IBaseSession session)
         {
-            if (session is not TSession s)
+            if (session is not BaseSession s)
                 return false;
 
             if (!_sessions.TryAdd(s.Id, s))
@@ -275,15 +274,20 @@ namespace SP.Engine.Server
         void IBaseEngine.ProcessUdpClient(byte[] datagram, Socket socket, IPEndPoint remoteEndPoint)
         {
             var span = datagram.AsSpan();
-            if (!UdpHeader.TryParse(span, out var header, out var consumed))
+            if (!UdpHeader.TryRead(span, out var header, out var consumed))
                 return;
 
             if (datagram.Length < consumed + header.PayloadLength)
                 return;
 
             var peer = GetBasePeer(header.PeerId);
-            var session = peer?.BaseSession;
-            if (session == null)
+            if (peer == null)
+            {
+                Logger.Warn("Not found peer: {0}", header.PeerId);
+                return;
+            }
+
+            if (peer.Session is not IBaseSession session)
             {
                 Logger.Warn("Not found session. peerId={0}", header.PeerId);
                 return;
@@ -294,7 +298,7 @@ namespace SP.Engine.Server
 
         private void OnNetworkSessionClosed(INetworkSession networkSession, CloseReason reason)
         {
-            if (networkSession.Session is not TSession session) 
+            if (networkSession.Session is not Session session) 
                 return;
          
             session.IsConnected = false;
@@ -302,7 +306,7 @@ namespace SP.Engine.Server
             OnSessionClosed(session, reason);
         }
 
-        protected virtual void OnSessionClosed(TSession session, CloseReason reason)
+        protected virtual void OnSessionClosed(Session session, CloseReason reason)
         {
             if (!_sessions.TryRemove(session.Id, out var removed))
             {
@@ -371,7 +375,7 @@ namespace SP.Engine.Server
             }
         }
 
-        protected KeyValuePair<string, TSession>[] SessionsSource
+        protected KeyValuePair<string, BaseSession>[] SessionsSource
         {
             get
             {
@@ -383,9 +387,9 @@ namespace SP.Engine.Server
         }
 
         private Timer _sessionSnapshotTimer;
-        private KeyValuePair<string, TSession>[] _sessionSnapshot;
+        private KeyValuePair<string, BaseSession>[] _sessionSnapshot;
         private readonly object _snapshotLock = new();        
-        private readonly ConcurrentDictionary<string, TSession> _sessions = new(Environment.ProcessorCount, 3000, StringComparer.OrdinalIgnoreCase);        
+        private readonly ConcurrentDictionary<string, BaseSession> _sessions = new(Environment.ProcessorCount, 3000, StringComparer.OrdinalIgnoreCase);        
 
         private void StartSessionSnapshotTimer()
         {
@@ -437,8 +441,8 @@ namespace SP.Engine.Server
         }
 
         private Timer _handshakePendingTimer;
-        private readonly ConcurrentQueue<TSession> _authHandshakePendingQueue = new();
-        private readonly ConcurrentQueue<TSession> _closeHandshakePendingQueue = new();
+        private readonly ConcurrentQueue<BaseSession> _authHandshakePendingQueue = new();
+        private readonly ConcurrentQueue<BaseSession> _closeHandshakePendingQueue = new();
 
         private void StartHandshakePendingTimer()
         {
@@ -510,12 +514,12 @@ namespace SP.Engine.Server
             }
         }
 
-        private void EnqueueAuthHandshakePending(TSession session)
+        private void EnqueueAuthHandshakePending(BaseSession session)
         {
             _authHandshakePendingQueue.Enqueue(session);
         }
         
-        internal void EnqueueCloseHandshakePending(TSession session)
+        internal void EnqueueCloseHandshakePending(BaseSession session)
         {
             _closeHandshakePendingQueue.Enqueue(session);
         }

@@ -7,6 +7,6 @@ namespace SP.Engine.Runtime.Networking
         HeaderFlags Flags { get; }
         ushort Id { get; }
         int Size { get; }
-        void WriteTo(Span<byte> s);
+        void WriteTo(Span<byte> destination);
     }
 }

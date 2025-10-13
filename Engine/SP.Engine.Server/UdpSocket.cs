@@ -1,4 +1,6 @@
-﻿using System.Linq;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -9,11 +11,11 @@ namespace SP.Engine.Server
 {
     public class UdpSocket : BaseNetworkSession, IUnreliableSender
     {
-        private uint _nextFragmentId;
-        private ushort _maxDatagramSize = 512;
-        private readonly UdpFragmentAssembler _assembler = new();
+        private uint _fragSeq;
+        private ushort _maxFrameSize = 512;
+        private readonly FragmentAssembler _assembler = new();
         
-        public IUdpFragmentAssembler Assembler => _assembler;
+        public IFragmentAssembler Assembler => _assembler;
         
         public UdpSocket(Socket client, IPEndPoint remoteEndPoint)
             : base (SocketMode.Udp, client)
@@ -22,17 +24,29 @@ namespace SP.Engine.Server
             LocalEndPoint = (IPEndPoint)client.LocalEndPoint;
         }
         
+        private uint AllocateFragId()
+            => Interlocked.Increment(ref _fragSeq);
+        
         public bool TrySend(UdpMessage message)
         {
-            var datagrams = message.ToDatagrams(
-                _maxDatagramSize, 
-                () => Interlocked.Increment(ref _nextFragmentId));
-            return datagrams.All(TrySend);
+            var items = new List<ArraySegment<byte>>();
+            if (message.FrameLength <= _maxFrameSize)
+            {
+                items.Add(message.ToArraySegment());
+            }
+            else
+            {
+                var fragId = AllocateFragId();
+                var maxFragBodyLen = (ushort)(_maxFrameSize - UdpHeader.ByteSize - FragmentHeader.ByteSize);
+                items.AddRange(message.Split(fragId, maxFragBodyLen));
+            }
+            
+            return items.All(TrySend);
         }
         
-        public void SetMaxDatagramSize(ushort mtu)
+        public void SetMaxFrameSize(ushort mtu)
         {
-            _maxDatagramSize = (ushort)(mtu - 20 /* IP header size */ - 8 /* UDP header size*/);;
+            _maxFrameSize = (ushort)(mtu - 20 /* IP header size */ - 8 /* UDP header size*/);;
         }
         
         public void UpdateRemoteEndPoint(IPEndPoint remoteEndPoint)

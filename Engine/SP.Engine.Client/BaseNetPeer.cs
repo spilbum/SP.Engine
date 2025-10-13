@@ -8,8 +8,8 @@ using System.Reflection;
 using System.Threading;
 using SP.Common.Buffer;
 using SP.Common.Logging;
+using SP.Engine.Client.Command;
 using SP.Engine.Client.Configuration;
-using SP.Engine.Client.ProtocolHandler;
 using SP.Engine.Protocol;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Channel;
@@ -20,16 +20,6 @@ using SP.Engine.Runtime.Security;
 
 namespace SP.Engine.Client
 {
-    public class MessageReceivedEventArgs : EventArgs
-    {
-        public MessageReceivedEventArgs(IMessage message)
-        {
-            Message = message;
-        }
-
-        public IMessage Message { get; private set; }
-    }
-
     public class StateChangedEventArgs : EventArgs
     {
         public NetPeerState OldState { get; private set; }
@@ -71,7 +61,7 @@ namespace SP.Engine.Client
         Closed = 6
     }
 
-    public sealed class NetPeer : ReliableMessageProcessor, IDisposable
+    public abstract class BaseNetPeer : ReliableMessageProcessor, ICommandContext, IDisposable
     {
         private string _sessionId;
         private int _stateCode;
@@ -83,10 +73,8 @@ namespace SP.Engine.Client
         private readonly Lz4Compressor _compressor = new Lz4Compressor();
         private readonly BinaryBuffer _receiveBuffer = new BinaryBuffer(1024);
         private readonly ConcurrentQueue<IMessage> _receivedMessageQueue = new ConcurrentQueue<IMessage>();
-        private readonly Dictionary<ushort, IHandler<NetPeer, IMessage>> _engineHandlers =
-            new Dictionary<ushort, IHandler<NetPeer, IMessage>>();
-        private readonly Dictionary<ushort, IHandler<NetPeer, IMessage>> _handlers =
-            new Dictionary<ushort, IHandler<NetPeer, IMessage>>();
+        private readonly Dictionary<ushort, ICommand> _internalCommands = new Dictionary<ushort, ICommand>();
+        private readonly Dictionary<ushort, ICommand> _commands = new Dictionary<ushort, ICommand>();
         private double _serverTimeOffsetMs;
         private TickTimer _keepAliveTimer;
         private readonly DiffieHellman _diffieHellman = new DiffieHellman(DhKeySize.Bit2048);
@@ -103,9 +91,9 @@ namespace SP.Engine.Client
         public long LastSendPingTime { get; private set; }
         public EndPoint RemoteEndPoint { get; private set; }
         public uint PeerId { get; private set; }
-        public ILogger Logger { get; }
-        public EngineConfig Config { get; }
-        public LatencyStats LatencyStats { get; }
+        public ILogger Logger { get; private set; }
+        public EngineConfig Config { get; private set; }
+        public LatencyStats LatencyStats { get; private set; }
         public NetPeerState State => (NetPeerState)_stateCode;
         public bool IsConnected => State == NetPeerState.Open;
         public IEncryptor Encryptor => _encryptor;
@@ -115,58 +103,53 @@ namespace SP.Engine.Client
         public event EventHandler Disconnected;
         public event EventHandler Offline;
         public event EventHandler<ErrorEventArgs> Error;
-        public event EventHandler<MessageReceivedEventArgs> MessageReceived;
         public event EventHandler<StateChangedEventArgs> StateChanged;
         public event EventHandler UdpOpened;
         public event EventHandler UdpClosed;
-        
-        public NetPeer(EngineConfig config, Assembly assembly, ILogger logger)
+
+        protected void Initialize(EngineConfig config, ILogger logger)
         {
             Config = config;
             Logger = logger;
             MaxFrameBytes = 64 * 1024;
             LatencyStats = new LatencyStats(config.LatencySampleWindowSize);
             
-            _engineHandlers[S2CEngineProtocolId.SessionAuthAck] = new SessionAuth();
-            _engineHandlers[S2CEngineProtocolId.Close] = new Close();
-            _engineHandlers[S2CEngineProtocolId.MessageAck] = new MessageAck();
-            _engineHandlers[S2CEngineProtocolId.Pong] = new Pong();
-            _engineHandlers[S2CEngineProtocolId.UdpHelloAck] = new UdpHelloAck();
+            _internalCommands[S2CEngineProtocolId.SessionAuthAck] = new SessionAuth();
+            _internalCommands[S2CEngineProtocolId.Close] = new Close();
+            _internalCommands[S2CEngineProtocolId.MessageAck] = new MessageAck();
+            _internalCommands[S2CEngineProtocolId.Pong] = new Pong();
+            _internalCommands[S2CEngineProtocolId.UdpHelloAck] = new UdpHelloAck();
 
-            if (assembly != null)
-                DiscoverHandlers(assembly);
+            DiscoverCommands();
+            Logger.Debug("Discover commands: [{0}]", string.Join(", ", _commands.Keys));
         }
 
-        ~NetPeer()
+        ~BaseNetPeer()
         {
             Dispose(false);
         }
+        
+        TProtocol ICommandContext.Deserialize<TProtocol>(IMessage message)
+            => message.Deserialize<TProtocol>(_encryptor, _compressor);
 
-        private void DiscoverHandlers(Assembly assembly)
+        private void DiscoverCommands()
         {
+            var assembly = GetType().Assembly;
             foreach (var type in assembly.GetTypes())
             {
-                if (!type.IsClass || type.IsAbstract)
-                    continue;
-
-                var attr = type.GetCustomAttribute<ProtocolHandlerAttribute>();
-                if (attr == null)
-                    continue;
-                
-                if (!typeof(IHandler).IsAssignableFrom(type))
-                    continue;
-
-                if (!(Activator.CreateInstance(type) is IHandler<NetPeer, IMessage> handler)) 
-                    continue;
-                
-                if (!_handlers.TryAdd(attr.Id, handler))
-                    Logger?.Warn("Handler {0} already exists.", attr.Id);
+                if (!type.IsClass || type.IsAbstract) continue;
+                var attr = type.GetCustomAttribute<ProtocolCommandAttribute>();
+                if (attr == null) continue;
+                if (!typeof(ICommand).IsAssignableFrom(type)) continue;
+                if (!(Activator.CreateInstance(type) is ICommand command)) continue;
+                if (!_commands.TryAdd(attr.Id, command))
+                    throw new Exception($"Duplicate command: {attr.Id}");
             }
         }
 
-        private IHandler<NetPeer, IMessage> GetHandler(ushort id)
+        private ICommand GetCommand(ushort id)
         {
-            _handlers.TryGetValue(id, out var handler);
+            _commands.TryGetValue(id, out var handler);
             return handler;
         }
         
@@ -570,7 +553,17 @@ namespace SP.Engine.Client
             try
             {
                 foreach (var message in Filter())
-                    ProcessMessage(message);
+                {
+                    if (_internalCommands.TryGetValue(message.Id, out var command))
+                    {
+                        command.Execute(this, message);
+                    }
+                    else
+                    {
+                        SendMessageAck(message.SequenceNumber);
+                        EnqueueReceivedMessage(message);
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -579,21 +572,6 @@ namespace SP.Engine.Client
             finally
             {
                 _receiveBuffer.MaybeTrim(TcpHeader.ByteSize);
-            }
-        }
-
-        private void ProcessMessage(IMessage message)
-        {
-            if (_engineHandlers.TryGetValue(message.Id, out var handler))
-            {
-                handler.ExecuteMessage(this, message);
-            }
-            else
-            {
-                if (message is TcpMessage tcp)
-                    SendMessageAck(tcp.SequenceNumber);
-                            
-                EnqueueReceivedMessage(message);
             }
         }
         
@@ -617,7 +595,7 @@ namespace SP.Engine.Client
                     yield break;
                 
                 var headerSpan = _receiveBuffer.PeekSpan(headerSize);
-                if (!TcpHeader.TryParse(headerSpan, out var header, out var consumed))
+                if (!TcpHeader.TryRead(headerSpan, out var header, out var consumed))
                     yield break;
 
                 var bodyLen = header.PayloadLength;
@@ -760,7 +738,7 @@ namespace SP.Engine.Client
             Buffer.BlockCopy(e.Data, e.Offset, datagram, 0, datagram.Length);
             var headerSpan = datagram.AsSpan(0, UdpHeader.ByteSize);
             
-            if (!UdpHeader.TryParse(headerSpan, out var header, out var consumed))
+            if (!UdpHeader.TryRead(headerSpan, out var header, out var consumed))
                 return;
             
             if (PeerId != header.PeerId)
@@ -769,10 +747,11 @@ namespace SP.Engine.Client
             var bodyOffset = consumed;
             var bodyLen = header.PayloadLength;
             var bodySpan = datagram.AsSpan(bodyOffset, bodyLen);
-            
+
+            IMessage message;
             if (header.Flags.HasFlag(HeaderFlags.Fragment))
             {
-                if (!UdpFragmentHeader.TryParse(bodySpan, out var fragHeader, out consumed))
+                if (!FragmentHeader.TryParse(bodySpan, out var fragHeader, out consumed))
                     return;
                 
                 if (bodySpan.Length < consumed + fragHeader.FragmentLength)
@@ -788,8 +767,7 @@ namespace SP.Engine.Client
                     .WithPayloadLength(assembled.Count)
                     .Build();
                 
-                var message = new UdpMessage(normalizedHeader, assembled);
-                OnReceivedMessage(message);
+                message = new UdpMessage(normalizedHeader, assembled);
             }
             else
             {
@@ -799,19 +777,17 @@ namespace SP.Engine.Client
                     .WithPayloadLength(payload.Count)
                     .Build();
                 
-                var message = new UdpMessage(normalizedHeader, payload);
-                OnReceivedMessage(message);
+                message = new UdpMessage(normalizedHeader, payload);
             }
-        }
-
-        private void OnReceivedMessage(IMessage message)
-        {
+            
             try
             {
-                if (_engineHandlers.TryGetValue(message.Id, out var handler))
-                    handler.ExecuteMessage(this, message);
+                if (_internalCommands.TryGetValue(message.Id, out var command))
+                    command.Execute(this, message);
                 else
+                {
                     EnqueueReceivedMessage(message);
+                }
             }
             catch (Exception ex)
             {
@@ -884,7 +860,7 @@ namespace SP.Engine.Client
                 return;
             }
             
-            _udpSocket.SetDatagramSize(p.Mtu);
+            _udpSocket.SetMaxFrameSize(p.Mtu);
             UdpOpened?.Invoke(this, EventArgs.Empty);
 
             if (Config.EnableUdpKeepAlive)
@@ -927,10 +903,14 @@ namespace SP.Engine.Client
         
         private void OnMessageReceived(IMessage message)
         {
-            var handler = GetHandler(message.Id);
-            handler?.ExecuteMessage(this, message);
-
-            MessageReceived?.Invoke(this, new MessageReceivedEventArgs(message));
+            var command = GetCommand(message.Id);
+            if (command == null)
+            {
+                Logger.Warn("Not found command: {0}", message.Id);
+                return;
+            }
+            
+            command.Execute(this, message);
         }
 
         internal void OnPong(long sendTimeMs, long serverTimeMs)

@@ -42,7 +42,7 @@ namespace EchoClient
             
             var logger = new ConsoleLogger("EchoClient");
             _client = new EchoClient(config, logger);
-            _client.Open(host, port);
+            _client.Connect(host, port);
             
             while (true)
             {
@@ -205,7 +205,7 @@ commands:
             
             var tcpInfo = _client.GetTcpTrafficInfo();
             var udpInfo = _client.GetUdpTrafficInfo();
-            var ls = _client.GetLatencyStats();
+            var ls = _client.LatencyStats;
 
             _client.Logger.Info($"[Stats] TCP sent/recv={tcpInfo.SentBytes}/{tcpInfo.ReceivedBytes} bytes | UDP sent/recv={udpInfo.SentBytes}/{udpInfo.ReceivedBytes} bytes | " +
                          $"RTT last={ls.LastRttMs:F1}ms avg={ls.AvgRttMs:F1}ms jitter={ls.JitterMs:F1}ms loss={ls.PacketLossRate:F2}%");

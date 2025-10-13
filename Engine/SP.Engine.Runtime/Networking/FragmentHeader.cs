@@ -2,7 +2,7 @@ using System;
 
 namespace SP.Engine.Runtime.Networking
 {
-    public readonly struct UdpFragmentHeader
+    public readonly struct FragmentHeader
     {
         // id(4) + index(2} + totalCount(2) + payloadLen(2) = 10 bytes
         public const int ByteSize = 10;
@@ -12,7 +12,7 @@ namespace SP.Engine.Runtime.Networking
         public ushort FragmentLength { get; }
         public int Size { get; }
 
-        public UdpFragmentHeader(uint id, ushort index, ushort totalCount, ushort fragmentLength)
+        public FragmentHeader(uint id, ushort index, ushort totalCount, ushort fragmentLength)
         {
             Id = id;
             Index = index;
@@ -21,7 +21,7 @@ namespace SP.Engine.Runtime.Networking
             Size = ByteSize;
         }
         
-        public static bool TryParse(ReadOnlySpan<byte> source, out UdpFragmentHeader header, out int consumed)
+        public static bool TryParse(ReadOnlySpan<byte> source, out FragmentHeader header, out int consumed)
         {
             header = default;
             consumed = 0;
@@ -31,7 +31,7 @@ namespace SP.Engine.Runtime.Networking
             var index = source.ReadUInt16(4);
             var totalCount = source.ReadUInt16(6);
             var payloadLength = source.ReadUInt16(8);
-            header = new UdpFragmentHeader(id, index, totalCount, payloadLength);
+            header = new FragmentHeader(id, index, totalCount, payloadLength);
             consumed = ByteSize;
             return true;
         }

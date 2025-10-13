@@ -26,13 +26,17 @@ namespace SP.Engine.Runtime.Networking
         
         public ArraySegment<byte> ToArraySegment()
         {
-            var bodyLen = Body.Count;
-            var buf = new byte[Header.Size + bodyLen];
+            var header = Header;
+            var body = Body;
+            var buf = new byte[header.Size + body.Count];
             var span = buf.AsSpan();
-            Header.WriteTo(span);
             
-            if (bodyLen > 0 && Body.Array != null)
-                Buffer.BlockCopy(Body.Array, Body.Offset, buf, Header.Size, bodyLen);
+            // Tcp 헤더
+            header.WriteTo(span);
+            
+            // 페이로드
+            if (body.Count > 0 && body.Array != null)
+                Buffer.BlockCopy(body.Array, body.Offset, buf, header.Size, body.Count);
             
             return new ArraySegment<byte>(buf);
         }

@@ -3,12 +3,11 @@ using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Server.ProtocolHandler;
 
-[ProtocolHandler(C2SEngineProtocolId.MessageAck)]
-internal class MessageAck<TPeer> : BaseEngineHandler<Session<TPeer>, C2SEngineProtocolData.MessageAck>
-    where TPeer : BasePeer, IPeer
+[ProtocolCommand(C2SEngineProtocolId.MessageAck)]
+internal class MessageAck : BaseCommand<Session, C2SEngineProtocolData.MessageAck>
 {
-    protected override void ExecuteProtocol(Session<TPeer> session, C2SEngineProtocolData.MessageAck data)
+    protected override void ExecuteProtocol(Session session, C2SEngineProtocolData.MessageAck protocol)
     {
-        session.Peer.OnMessageAck(data.SequenceNumber);
+        session.Peer.OnMessageAck(protocol.SequenceNumber);
     }
 }

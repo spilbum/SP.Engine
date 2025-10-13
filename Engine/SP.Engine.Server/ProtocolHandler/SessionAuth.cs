@@ -3,12 +3,11 @@ using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Server.ProtocolHandler;
 
-[ProtocolHandler(C2SEngineProtocolId.SessionAuthReq)]
-internal class SessionAuth<TPeer> : BaseEngineHandler<Session<TPeer>, C2SEngineProtocolData.SessionAuthReq>
-    where TPeer : BasePeer, IPeer
+[ProtocolCommand(C2SEngineProtocolId.SessionAuthReq)]
+internal class SessionAuth : BaseCommand<Session, C2SEngineProtocolData.SessionAuthReq>
 {
-    protected override void ExecuteProtocol(Session<TPeer> session, C2SEngineProtocolData.SessionAuthReq data)
+    protected override void ExecuteProtocol(Session session, C2SEngineProtocolData.SessionAuthReq protocol)
     {   
-        session.OnSessionHandshake(data);
+        session.OnSessionHandshake(protocol);
     }
 }

@@ -29,13 +29,13 @@ namespace SP.Engine.Client
         private readonly byte[] _receiveBuffer;
         private readonly int _sendBufferSize;
         private int _isSending;
-        private int _nextFragmentId;
-        private ushort _maxDatagramSize = 512;
+        private int _fragSeq;
+        private ushort _maxFrameSize = 512;
         private long _totalSentBytes;
         private long _totalReceivedBytes;
         private TickTimer _cleanupTimer;
-        private readonly UdpFragmentAssembler _assembler = new UdpFragmentAssembler();
-        public IUdpFragmentAssembler Assembler => _assembler;
+        private readonly FragmentAssembler _assembler = new FragmentAssembler();
+        public IFragmentAssembler Assembler => _assembler;
         
         public bool IsRunning { get; private set; }
         public event EventHandler<DataEventArgs> DataReceived;
@@ -49,9 +49,12 @@ namespace SP.Engine.Client
             _receiveBuffer = new byte[config.ReceiveBufferSize];
         }
 
-        public void SetDatagramSize(ushort mtu)
+        private uint AllocateFragId()
+            => unchecked((uint)Interlocked.Increment(ref _fragSeq));
+
+        public void SetMaxFrameSize(ushort mtu)
         {
-            _maxDatagramSize = (ushort)(mtu - 20 /* IP header size */ - 8 /* UDP header size*/);
+            _maxFrameSize = (ushort)(mtu - 20 /* IP header size */ - 8 /* UDP header size*/);
         }
 
         public void Tick()
@@ -150,8 +153,17 @@ namespace SP.Engine.Client
             if (!IsRunning)
                 return false;
 
-            var items = message.ToDatagrams(
-                _maxDatagramSize, () => (uint)Interlocked.Increment(ref _nextFragmentId)); 
+            var items = new List<ArraySegment<byte>>();
+            if (message.FrameLength <= _maxFrameSize)
+            {
+                items.Add(message.ToArraySegment());
+            }
+            else
+            {
+                var fragId = AllocateFragId();
+                var maxFragBodyLen = (ushort)(_maxFrameSize - UdpHeader.ByteSize - FragmentHeader.ByteSize);
+                items.AddRange(message.Split(fragId, maxFragBodyLen));
+            }
             
             if (!_sendQueue.Enqueue(items))
                 return false;

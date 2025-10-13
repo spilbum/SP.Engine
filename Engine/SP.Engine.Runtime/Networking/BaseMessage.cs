@@ -1,5 +1,4 @@
 using System;
-using System.Buffers;
 using System.IO;
 using SP.Engine.Runtime.Compression;
 using SP.Engine.Runtime.Protocol;
@@ -14,6 +13,7 @@ namespace SP.Engine.Runtime.Networking
         protected THeader Header { get; set; }
         protected ArraySegment<byte> Body { get; private set; }
         
+        public int FrameLength => Header.Size + Body.Count;
         public ushort Id => Header.Id;
 
         protected BaseMessage()

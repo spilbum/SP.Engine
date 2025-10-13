@@ -3,11 +3,11 @@ using System;
 namespace SP.Engine.Runtime.Protocol
 {
     [AttributeUsage(AttributeTargets.Class)]
-    public class ProtocolHandlerAttribute : Attribute
+    public class ProtocolCommandAttribute : Attribute
     {
         public ushort Id { get; }
         
-        public ProtocolHandlerAttribute(ushort id)
+        public ProtocolCommandAttribute(ushort id)
         {
             Id = id;
         }

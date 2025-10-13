@@ -1,11 +1,11 @@
 using System;
-using SP.Engine.Runtime.Serialization;
 
 namespace SP.Engine.Runtime.Networking
 {
     public readonly struct TcpHeader : IHeader
     {
-        public const int ByteSize = 15;
+        public const int ByteSize = 1 + 8 + 2 + 4; // 15 bytes
+        
         public HeaderFlags Flags { get; }
         public long SequenceNumber { get; }
         public ushort Id { get; }
@@ -14,22 +14,22 @@ namespace SP.Engine.Runtime.Networking
 
         public TcpHeader(HeaderFlags flags, long sequenceNumber, ushort id, int payloadLength)
         {
+            Flags = flags;
             SequenceNumber = sequenceNumber;
             Id = id;
-            Flags = flags;
             PayloadLength = payloadLength;
             Size = ByteSize;
         }
 
-        public void WriteTo(Span<byte> s)
+        public void WriteTo(Span<byte> destination)
         {
-            s[0] = (byte)Flags;
-            s.WriteInt64(1, SequenceNumber);
-            s.WriteUInt16(9, Id);
-            s.WriteInt32(11, PayloadLength);
+            destination[0] = (byte)Flags;
+            destination.WriteInt64(1, SequenceNumber);
+            destination.WriteUInt16(9, Id);
+            destination.WriteInt32(11, PayloadLength);
         }
 
-        public static bool TryParse(ReadOnlySpan<byte> source, out TcpHeader header, out int consumed)
+        public static bool TryRead(ReadOnlySpan<byte> source, out TcpHeader header, out int consumed)
         {
             if (source.Length < ByteSize)
             {

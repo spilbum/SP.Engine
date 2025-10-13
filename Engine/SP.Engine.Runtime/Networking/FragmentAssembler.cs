@@ -42,25 +42,25 @@ namespace SP.Engine.Runtime.Networking
         }
     }
 
-    public interface IUdpFragmentAssembler
+    public interface IFragmentAssembler
     {
         bool TryAssemble(
             UdpHeader header, 
-            UdpFragmentHeader fragHeader,
+            FragmentHeader fragHeader,
             ArraySegment<byte> fragPayload,
             out ArraySegment<byte> assembled);
 
         int Cleanup(TimeSpan timeout);
     }
 
-    public sealed class UdpFragmentAssembler : IUdpFragmentAssembler
+    public sealed class FragmentAssembler : IFragmentAssembler
     {
         private readonly ConcurrentDictionary<FragmentKey, ReassemblyState> _map =
             new ConcurrentDictionary<FragmentKey, ReassemblyState>();
 
         public bool TryAssemble(
             UdpHeader header, 
-            UdpFragmentHeader fragHeader,
+            FragmentHeader fragHeader,
             ArraySegment<byte> fragPayload,
             out ArraySegment<byte> assembled)
         {
@@ -68,7 +68,7 @@ namespace SP.Engine.Runtime.Networking
             
             var key = new FragmentKey(header.PeerId, header.Id, fragHeader.Id);
             var state = _map.GetOrAdd(key, _ => new ReassemblyState(fragHeader.TotalCount));
-
+  
             if (fragHeader.Index >= state.TotalCount || fragHeader.TotalCount != state.TotalCount)
                 return false;
 

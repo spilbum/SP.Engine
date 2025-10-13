@@ -39,7 +39,7 @@ namespace SP.Engine.Server
         public const int Closed = 4;        
     }
     
-    public interface IPeer
+    public interface IPeer : ICommandContext
     {
         uint Id { get; }
         PeerKind Kind { get; }
@@ -49,13 +49,7 @@ namespace SP.Engine.Server
         void Close(CloseReason reason);
     }
 
-    public interface IBasePeer
-    {
-        byte[] LocalPublicKey { get; }
-        IBaseSession BaseSession { get; }
-    }
-    
-    public abstract class BasePeer : ReliableMessageProcessor, IPeer, IBasePeer, IHandleContext, IDisposable
+    public abstract class BasePeer : ReliableMessageProcessor, IPeer, IDisposable
     {
         private static class PeerIdGenerator
         {
@@ -98,13 +92,12 @@ namespace SP.Engine.Server
         public IPEndPoint RemoteEndPoint => Session.RemoteEndPoint;
         public bool IsConnected => _stateCode is PeerStateConst.Authorized or PeerStateConst.Online;
         
-        IBaseSession IBasePeer.BaseSession => (IBaseSession)Session;
-        byte[] IBasePeer.LocalPublicKey => _diffieHellman?.PublicKey;
+        internal byte[] LocalPublicKey => _diffieHellman?.PublicKey;
         
-        protected BasePeer(PeerKind peerType, ISession session)
+        protected BasePeer(PeerKind kind, ISession session)
         {
             Id = PeerIdGenerator.Generate();
-            Kind = peerType;
+            Kind = kind;
             Logger = session.Logger;
             SetSendTimeoutMs(session.Config.Network.SendTimeoutMs);
             SetMaxRetryCount(session.Config.Network.MaxRetryCount);
@@ -127,6 +120,9 @@ namespace SP.Engine.Server
             Dispose(false);
         }
 
+        TProtocol ICommandContext.Deserialize<TProtocol>(IMessage message)
+            => message.Deserialize<TProtocol>(_encryptor, _compressor);
+        
         protected override void OnDebug(string format, params object[] args)
         {
             Logger?.Debug(format, args);

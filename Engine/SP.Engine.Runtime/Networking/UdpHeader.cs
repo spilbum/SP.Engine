@@ -21,15 +21,15 @@ namespace SP.Engine.Runtime.Networking
             Size = ByteSize;
         }
 
-        public void WriteTo(Span<byte> s)
+        public void WriteTo(Span<byte> destination)
         {
-            s[0] = (byte)Flags;
-            s.WriteUInt32(1, PeerId);
-            s.WriteUInt16(5, Id);
-            s.WriteInt32(7, PayloadLength);
+            destination[0] = (byte)Flags;
+            destination.WriteUInt32(1, PeerId);
+            destination.WriteUInt16(5, Id);
+            destination.WriteInt32(7, PayloadLength);
         }
 
-        public static bool TryParse(ReadOnlySpan<byte> source, out UdpHeader header, out int consumed)
+        public static bool TryRead(ReadOnlySpan<byte> source, out UdpHeader header, out int consumed)
         {
             if (source.Length < ByteSize)
             {
@@ -79,6 +79,12 @@ namespace SP.Engine.Runtime.Networking
         public UdpHeaderBuilder AddFlag(HeaderFlags flags)
         {
             _flags |= flags;
+            return this;
+        }
+
+        public UdpHeaderBuilder RemoveFlag(HeaderFlags flags)
+        {
+            _flags &= ~flags;
             return this;
         }
         
