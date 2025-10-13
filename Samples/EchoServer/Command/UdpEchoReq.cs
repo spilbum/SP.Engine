@@ -1,8 +1,8 @@
 using Common;
 using SP.Engine.Runtime.Protocol;
-using SP.Engine.Server.ProtocolHandler;
+using SP.Engine.Server.Command;
 
-namespace EchoServer.ProtocolHandler;
+namespace EchoServer.Command;
 
 [ProtocolCommand(C2SProtocol.UdpEchoReq)]
 public class UdpEchoReq : BaseCommand<EchoPeer, C2SProtocolData.UdpEchoReq>

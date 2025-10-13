@@ -149,8 +149,8 @@ namespace SP.Engine.Client
 
         private ICommand GetCommand(ushort id)
         {
-            _commands.TryGetValue(id, out var handler);
-            return handler;
+            _commands.TryGetValue(id, out var command);
+            return command;
         }
         
         public void SetReceiveBudgetMs(int ms) => _receiveBudgetMs = ms;

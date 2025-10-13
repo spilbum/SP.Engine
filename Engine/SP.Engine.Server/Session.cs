@@ -5,8 +5,8 @@ using SP.Engine.Protocol;
 using SP.Engine.Runtime.Channel;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
+using SP.Engine.Server.Command;
 using SP.Engine.Server.Configuration;
-using SP.Engine.Server.ProtocolHandler;
 
 namespace SP.Engine.Server
 {

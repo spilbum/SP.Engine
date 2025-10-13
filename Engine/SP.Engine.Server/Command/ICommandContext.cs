@@ -2,7 +2,7 @@ using SP.Common.Logging;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
 
-namespace SP.Engine.Server.ProtocolHandler;
+namespace SP.Engine.Server.Command;
 
 public interface ICommandContext : ILogContext
 {

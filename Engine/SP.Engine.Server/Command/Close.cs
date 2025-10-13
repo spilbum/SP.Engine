@@ -2,7 +2,7 @@ using SP.Engine.Protocol;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Protocol;
 
-namespace SP.Engine.Server.ProtocolHandler;
+namespace SP.Engine.Server.Command;
 
 [ProtocolCommand(C2SEngineProtocolId.Close)]
 internal class Close : BaseCommand<Session, C2SEngineProtocolData.Close>

@@ -2,7 +2,7 @@ using Common;
 using SP.Engine.Client.Command;
 using SP.Engine.Runtime.Protocol;
 
-namespace EchoServer.Connector.ProtocolHandler;
+namespace EchoServer.Connector.Command;
 
 [ProtocolCommand(S2SProtocol.RegisterAck)]
 public class RegisterAck : BaseCommand<DummyConnector, S2SProtocolData.RegisterAck>

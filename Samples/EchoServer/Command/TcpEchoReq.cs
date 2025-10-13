@@ -1,8 +1,8 @@
 using Common;
 using SP.Engine.Runtime.Protocol;
-using SP.Engine.Server.ProtocolHandler;
+using SP.Engine.Server.Command;
 
-namespace EchoServer.ProtocolHandler;
+namespace EchoServer.Command;
 
 [ProtocolCommand(C2SProtocol.TcpEchoReq)]
 public class TcpEchoReq : BaseCommand<EchoPeer, C2SProtocolData.TcpEchoReq>

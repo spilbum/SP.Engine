@@ -1,7 +1,7 @@
 using SP.Engine.Protocol;
 using SP.Engine.Runtime.Protocol;
 
-namespace SP.Engine.Server.ProtocolHandler;
+namespace SP.Engine.Server.Command;
 
 [ProtocolCommand(C2SEngineProtocolId.Ping)]
 internal class Ping : BaseCommand<Session, C2SEngineProtocolData.Ping>

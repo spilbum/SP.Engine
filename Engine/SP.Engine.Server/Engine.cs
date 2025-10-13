@@ -12,7 +12,7 @@ using SP.Engine.Server.Connector;
 using SP.Engine.Protocol;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
-using SP.Engine.Server.ProtocolHandler;
+using SP.Engine.Server.Command;
 
 namespace SP.Engine.Server
 {
@@ -141,8 +141,8 @@ namespace SP.Engine.Server
         
         private ICommand GetCommand(ushort id)
         {
-            _commands.TryGetValue(id, out var handler);
-            return handler;
+            _commands.TryGetValue(id, out var command);
+            return command;
         }
         
         internal void ExecuteMessage(Session session, IMessage message)
