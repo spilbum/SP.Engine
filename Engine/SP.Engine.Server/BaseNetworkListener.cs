@@ -11,14 +11,14 @@ namespace SP.Engine.Server
 
     public class ListenerInfo
     {
-        public IPEndPoint EndPoint { get; set; }
-        public int BackLog { get; set; }
-        public SocketMode Mode { get; set; }
+        public IPEndPoint EndPoint { get; init; }
+        public int BackLog { get; init; }
+        public SocketMode Mode { get; init; }
     }
 
     internal interface ISocketListener
     {
-        SocketMode Mode { get; set; }
+        SocketMode Mode { get; }
         IPEndPoint EndPoint { get; }
         int BackLog { get; }
         event EventHandler Stopped;

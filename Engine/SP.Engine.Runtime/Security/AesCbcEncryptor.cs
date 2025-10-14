@@ -3,12 +3,6 @@ using System.Security.Cryptography;
 
 namespace SP.Engine.Runtime.Security
 {
-    public interface IEncryptor : IDisposable
-    {
-        byte[] Encrypt(byte[] plain);
-        byte[] Decrypt(byte[] cipher);
-    }
-    
     public class AesCbcEncryptor : IEncryptor
     {
         private readonly byte[] _key;

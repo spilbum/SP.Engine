@@ -9,26 +9,23 @@ namespace SP.Engine.Runtime.Serialization
  public ref struct NetReader
     {
         private readonly ReadOnlySpan<byte> _span;
-        private int _pos;
+        private int _position;
 
         public NetReader(ReadOnlySpan<byte> span)
         {
             _span = span;
-            _pos = 0;
+            _position = 0;
         }
 
-        public int Position => _pos;
-        public int Length => _span.Length;
-        public int Remaining => _span.Length - _pos;
-        public bool EndOfSpan => _pos >= _span.Length;
+        public int Remaining => _span.Length - _position;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private ReadOnlySpan<byte> Slice(int count)
         {
             if (count > Remaining)
                 throw new InvalidDataException($"Insufficient data: need {count}, remaining {Remaining}");
-            var s = _span.Slice(_pos, count);
-            _pos += count;
+            var s = _span.Slice(_position, count);
+            _position += count;
             return s;
         }
 
@@ -37,7 +34,7 @@ namespace SP.Engine.Runtime.Serialization
         {
             if (count > Remaining)
                 throw new InvalidDataException($"Advance overflow: {count} > {Remaining}");
-            _pos += count;
+            _position += count;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -45,7 +42,7 @@ namespace SP.Engine.Runtime.Serialization
         {
             if (count > Remaining)
                 throw new InvalidDataException($"Insufficient data: need {count}, remaining {Remaining}");
-            return _span.Slice(_pos, count);
+            return _span.Slice(_position, count);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -205,7 +202,7 @@ namespace SP.Engine.Runtime.Serialization
         public void Align(int alignment)
         {
             if (alignment <= 1) return;
-            var mis = _pos % alignment;
+            var mis = _position % alignment;
             if (mis == 0) return;
             
             var pad = alignment - mis;

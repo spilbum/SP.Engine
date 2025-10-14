@@ -5,6 +5,8 @@ namespace SP.Engine.Runtime.Networking
 {
     public class UdpMessage : BaseMessage<UdpHeader>
     {
+        public int FrameLength => Header.Size + Body.Count + 1 /* 조각화 플래그 */;
+        
         public UdpMessage()
         {
             
@@ -42,14 +44,15 @@ namespace SP.Engine.Runtime.Networking
             {
                 var remaining = bodyLen - index * maxFragBodyLen;
                 var fragLen = (ushort)Math.Min(remaining, maxFragBodyLen);
-                
-                var buf = new byte[headerSize + fragHeaderSize + fragLen];
+
+                var frameSize = headerSize + fragHeaderSize + fragLen + 1;
+                var buf = new byte[frameSize];
                 var offset = 0;
                 
                 // Udp 헤더
                 var header = new UdpHeaderBuilder()
                     .From(Header)
-                    .AddFlag(HeaderFlags.Fragment)
+                    .WithFragmented(1)
                     .WithPayloadLength(fragHeaderSize + fragLen)
                     .Build();
                 
@@ -64,7 +67,7 @@ namespace SP.Engine.Runtime.Networking
                 // 페이로드
                 Buffer.BlockCopy(src, srcOffset + index * maxFragBodyLen, buf, offset, fragLen);
                
-                result.Add(new ArraySegment<byte>(buf));
+                result.Add(new ArraySegment<byte>(buf, 0, frameSize));
             }
             
             return result;
@@ -75,7 +78,7 @@ namespace SP.Engine.Runtime.Networking
             var body = Body;
             var header = new UdpHeaderBuilder()
                 .From(Header)
-                .RemoveFlag(HeaderFlags.Fragment)
+                .WithFragmented(0)
                 .WithPayloadLength((ushort)body.Count)
                 .Build();
             
@@ -83,11 +86,13 @@ namespace SP.Engine.Runtime.Networking
             var span = buf.AsSpan();
             
             // Udp 헤더
+            var offset = 0;
             header.WriteTo(span[..header.Size]);
+            offset += header.Size;
             
             // 페이로드
             if (body.Count > 0 && body.Array != null)
-                Buffer.BlockCopy(body.Array, body.Offset, buf, header.Size, body.Count);
+                Buffer.BlockCopy(body.Array, body.Offset, buf, offset, body.Count);
             
             return new ArraySegment<byte>(buf);
         }

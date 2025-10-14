@@ -4,19 +4,21 @@ namespace SP.Engine.Runtime.Networking
 {
     public readonly struct UdpHeader : IHeader
     {
-        public const int ByteSize = 1 + 4 + 2 + 4; // 11 bytes
+        public const int ByteSize = 1 + 4 + 2 + 1 + 4; // 12 bytes
         
         public HeaderFlags Flags { get; }
         public uint PeerId { get; }
-        public ushort Id  { get; }
+        public ushort MsdId  { get; }
+        public byte Fragmented { get; }
         public int PayloadLength { get; }
         public int Size { get; }
 
-        public UdpHeader(HeaderFlags flags, uint peerId, ushort id, int payloadLength)
+        public UdpHeader(HeaderFlags flags, uint peerId, ushort msdId, byte fragmented, int payloadLength)
         {            
             Flags = flags;
             PeerId = peerId;
-            Id = id;
+            MsdId = msdId;
+            Fragmented = fragmented;
             PayloadLength = payloadLength;
             Size = ByteSize;
         }
@@ -25,8 +27,9 @@ namespace SP.Engine.Runtime.Networking
         {
             destination[0] = (byte)Flags;
             destination.WriteUInt32(1, PeerId);
-            destination.WriteUInt16(5, Id);
-            destination.WriteInt32(7, PayloadLength);
+            destination.WriteUInt16(5, MsdId);
+            destination[7] = Fragmented;
+            destination.WriteInt32(8, PayloadLength);
         }
 
         public static bool TryRead(ReadOnlySpan<byte> source, out UdpHeader header, out int consumed)
@@ -40,9 +43,10 @@ namespace SP.Engine.Runtime.Networking
             
             var flags = (HeaderFlags)source[0];
             var peerId = source.ReadUInt32(1);
-            var id = source.ReadUInt16(5);
-            var length = source.ReadInt32(7);
-            header = new UdpHeader(flags, peerId, id, length);
+            var msgId = source.ReadUInt16(5);
+            var fragmented = source[7];
+            var payloadLength = source.ReadInt32(8);
+            header = new UdpHeader(flags, peerId, msgId, fragmented, payloadLength);
             consumed = ByteSize;
             return true;
         }
@@ -52,14 +56,16 @@ namespace SP.Engine.Runtime.Networking
     {
         private HeaderFlags _flags;
         private uint _peerId;
-        private ushort _id;
+        private ushort _msgId;
+        private byte _fragmented;
         private int _payloadLength;
 
         public UdpHeaderBuilder From(UdpHeader header)
         {
             _flags = header.Flags;
             _peerId = header.PeerId;
-            _id = header.Id;
+            _msgId = header.MsdId;
+            _fragmented = header.Fragmented;
             _payloadLength = header.PayloadLength;
             return this;
         }
@@ -72,7 +78,7 @@ namespace SP.Engine.Runtime.Networking
 
         public UdpHeaderBuilder WithId(ushort id)
         {
-            _id = id;
+            _msgId = id;
             return this;
         }
 
@@ -82,9 +88,9 @@ namespace SP.Engine.Runtime.Networking
             return this;
         }
 
-        public UdpHeaderBuilder RemoveFlag(HeaderFlags flags)
+        public UdpHeaderBuilder WithFragmented(byte fragmented)
         {
-            _flags &= ~flags;
+            _fragmented = fragmented;
             return this;
         }
         
@@ -95,6 +101,6 @@ namespace SP.Engine.Runtime.Networking
         }
 
         public UdpHeader Build()
-            => new UdpHeader(_flags, _peerId, _id, _payloadLength);
+            => new UdpHeader(_flags, _peerId, _msgId, _fragmented, _payloadLength);
     }
 }

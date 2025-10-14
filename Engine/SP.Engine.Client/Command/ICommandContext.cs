@@ -7,6 +7,6 @@ namespace SP.Engine.Client.Command
     public interface ICommandContext
     {
         ILogger Logger { get; }
-        TProtocol Deserialize<TProtocol>(IMessage message) where TProtocol : IProtocol;
+        TProtocol Deserialize<TProtocol>(IMessage message) where TProtocol : IProtocolData;
     }
 }

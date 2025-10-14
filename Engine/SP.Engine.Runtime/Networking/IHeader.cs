@@ -5,8 +5,7 @@ namespace SP.Engine.Runtime.Networking
     public interface IHeader
     {
         HeaderFlags Flags { get; }
-        ushort Id { get; }
+        ushort MsdId { get; }
         int Size { get; }
-        void WriteTo(Span<byte> destination);
     }
 }

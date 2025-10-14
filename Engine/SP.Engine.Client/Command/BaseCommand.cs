@@ -6,7 +6,7 @@ namespace SP.Engine.Client.Command
 {
     public abstract class BaseCommand<TPeer, TProtocol> : ICommand
         where TPeer : BaseNetPeer
-        where TProtocol : class, IProtocol, new()
+        where TProtocol : class, IProtocolData, new()
     {
         public void Execute(ICommandContext context, IMessage message)
         {

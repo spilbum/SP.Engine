@@ -42,14 +42,14 @@ namespace SP.Engine.Runtime.Protocol
         public static ProtocolPolicy Resolve(Type protocolType, in PolicyGlobals globals)
         {
             if (protocolType == null) throw new ArgumentNullException(nameof(protocolType));
-            if (!typeof(IProtocol).IsAssignableFrom(protocolType))
+            if (!typeof(IProtocolData).IsAssignableFrom(protocolType))
                 throw new ArgumentException($"Type {protocolType.FullName} must implement IProtocol.", nameof(protocolType));
 
             var ov = Overrides.GetOrAdd(protocolType, ReadOverrides);
             return Merge(ov, globals);
         }
 
-        public static ProtocolPolicy Resolve<TProtocol>(in PolicyGlobals globals) where TProtocol : IProtocol
+        public static ProtocolPolicy Resolve<TProtocol>(in PolicyGlobals globals) where TProtocol : IProtocolData
             => Resolve(typeof(TProtocol), globals);
     }
 }

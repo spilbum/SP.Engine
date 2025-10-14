@@ -19,14 +19,14 @@ namespace Common
     public static class C2SProtocolData
     {
         [Protocol(C2SProtocol.TcpEchoReq)]
-        public class TcpEchoReq : BaseProtocol
+        public class TcpEchoReq : BaseProtocolData
         {
             public float SendTime;
             public byte[]? Data;
         }
         
         [Protocol(C2SProtocol.UdpEchoReq, ChannelKind.Unreliable)]
-        public class UdpEchoReq : BaseProtocol
+        public class UdpEchoReq : BaseProtocolData
         {
             public float SendTime;
             public byte[]? Data;
@@ -36,14 +36,14 @@ namespace Common
     public static class S2CProtocolData
     {
         [Protocol(S2CProtocol.TcpEchoAck)]
-        public class TcpEchoAck : BaseProtocol
+        public class TcpEchoAck : BaseProtocolData
         {
             public float SentTime;
             public byte[]? Data;
         }
         
         [Protocol(S2CProtocol.UdpEchoAck, ChannelKind.Unreliable)]
-        public class UdpEchoAck : BaseProtocol
+        public class UdpEchoAck : BaseProtocolData
         {
             public float SentTime;
             public byte[]? Data;

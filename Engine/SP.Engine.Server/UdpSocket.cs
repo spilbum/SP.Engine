@@ -57,10 +57,6 @@ namespace SP.Engine.Server
             RemoteEndPoint = remoteEndPoint;
         }
 
-        public override void Start()
-        {
-        }
-
         protected override void Send(SegmentQueue queue)
         {
             var e = new SocketAsyncEventArgs();

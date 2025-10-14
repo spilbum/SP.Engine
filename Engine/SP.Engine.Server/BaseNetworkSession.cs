@@ -1,5 +1,4 @@
-﻿
-using System;
+﻿using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
@@ -96,8 +95,6 @@ namespace SP.Engine.Server
             _sendingQueue = queue;
             queue.StartEnqueue();
         }
-
-        public abstract void Start();
 
         protected virtual void OnClosed(CloseReason reason)
         {

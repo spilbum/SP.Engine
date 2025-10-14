@@ -10,7 +10,7 @@ namespace SP.Engine.Server.Logging
 {
     public static class LogManager
     {
-        private static ILoggerFactory _loggerFactory = new ConsoleLoggerFactory();
+        private static ILoggerFactory _loggerFactory;
         private static readonly ConcurrentDictionary<string, ILogger> Loggers = new();
         private static readonly List<ThreadFiber> Fibers = [];
         private static int _fiberIndex;
@@ -47,10 +47,7 @@ namespace SP.Engine.Server.Logging
         {
             foreach (var fiber in Fibers)
                 fiber.Dispose();
-
-            if (_loggerFactory is IDisposable disposableFactory)
-                disposableFactory.Dispose();
-
+            
             try
             {
                 Serilog.Log.CloseAndFlush();

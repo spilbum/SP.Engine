@@ -6,7 +6,7 @@ namespace SP.Engine.Server.Command;
 
 public abstract class BaseCommand<TContext, TProtocol> : ICommand
     where TContext : ICommandContext
-    where TProtocol : IProtocol
+    where TProtocol : IProtocolData
 {
     public void Execute(ICommandContext context, IMessage message)
     {

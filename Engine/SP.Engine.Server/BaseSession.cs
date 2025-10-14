@@ -132,10 +132,10 @@ namespace SP.Engine.Server
             
             var bodyOffset = header.Size;
             var bodyLen = header.PayloadLength;
-            var bodySpan = new ReadOnlySpan<byte>(datagram, bodyOffset, bodyLen);
 
-            if (header.Flags.HasFlag(HeaderFlags.Fragment))
+            if (header.Fragmented == 0x01)
             {
+                var bodySpan = new ReadOnlySpan<byte>(datagram, bodyOffset, bodyLen);
                 if (!FragmentHeader.TryParse(bodySpan, out var fragHeader, out var consumed))
                     return;
 
@@ -202,7 +202,7 @@ namespace SP.Engine.Server
                 if (bodyLen <= 0 || bodyLen > Config.Network.MaxFrameBytes)
                 {
                     Logger.Warn("Too large or small. id={0}, maxFrameBytes={1}, bodyLen={2}", 
-                        header.Id, Config.Network.MaxFrameBytes, bodyLen);
+                        header.MsdId, Config.Network.MaxFrameBytes, bodyLen);
                     Close(CloseReason.ProtocolError);
                     yield break;
                 }

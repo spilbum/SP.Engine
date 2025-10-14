@@ -54,7 +54,7 @@ namespace SP.Engine.Runtime.Protocol
 
     public interface IPolicyView
     {
-        ProtocolPolicy Resolve<TProtocol>() where TProtocol : IProtocol;
+        ProtocolPolicy Resolve<TProtocol>() where TProtocol : IProtocolData;
         ProtocolPolicy Resolve(Type protocolType);
     }
 
@@ -66,7 +66,7 @@ namespace SP.Engine.Runtime.Protocol
             _globals = globals;
         }
         
-        public ProtocolPolicy Resolve<TProtocol>() where TProtocol : IProtocol
+        public ProtocolPolicy Resolve<TProtocol>() where TProtocol : IProtocolData
             => ProtocolPolicyResolver.Resolve<TProtocol>(_globals);
         
         public ProtocolPolicy Resolve(Type protocolType)

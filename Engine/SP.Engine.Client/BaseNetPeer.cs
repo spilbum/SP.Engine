@@ -166,12 +166,12 @@ namespace SP.Engine.Client
 
         protected override void OnDebug(string format, params object[] args)
         {
-            Logger?.Debug(format, args);
+            Logger.Debug(format, args);
         }
 
         protected override void OnRetryLimitExceeded(IMessage message, int count, int maxCount)
         {
-            Logger?.Error("Message {0} exceeded max resend count ({1}/{2}).", message.Id, count, maxCount);
+            Logger.Error("Message {0} exceeded max resend count ({1}/{2}).", message.Id, count, maxCount);
             // 재전송 횟수 초가로 종료함
             Close();
         }
@@ -229,7 +229,7 @@ namespace SP.Engine.Client
                 TrySend(ChannelKind.Reliable, msg);
         }
         
-        public bool Send(IProtocol data)
+        public bool Send(IProtocolData data)
         {
             var sequenceNumber = data.Channel == ChannelKind.Reliable ? GetNextReliableSeq() : 0;
             var policy = _networkPolicy.Resolve(data.GetType());
@@ -238,7 +238,7 @@ namespace SP.Engine.Client
             return TrySend(sequenceNumber, data, policy, encryptor, compressor);
         }
 
-        private bool InternalSend(IProtocol data)
+        private bool InternalSend(IProtocolData data)
         { 
             var policy = _networkPolicy.Resolve(data.GetType());
             var encryptor = policy.UseEncrypt ? Encryptor : null;
@@ -246,7 +246,7 @@ namespace SP.Engine.Client
             return TrySend(0, data, policy, encryptor, compressor);
         }
         
-        private bool TrySend(long sequenceNumber, IProtocol data, IPolicy policy, IEncryptor encryptor, ICompressor compressor)
+        private bool TrySend(long sequenceNumber, IProtocolData data, IPolicy policy, IEncryptor encryptor, ICompressor compressor)
         {
             var channel = data.Channel;
 
@@ -388,7 +388,7 @@ namespace SP.Engine.Client
         {
             if (++ConnectTryCount > Config.MaxConnectAttempts)
             {
-                Logger?.Warn("Max connect attempts exceeded: {0} > {1}", ConnectTryCount, Config.MaxConnectAttempts);
+                Logger.Warn("Max connect attempts exceeded: {0} > {1}", ConnectTryCount, Config.MaxConnectAttempts);
                 Close();
                 return;
             }
@@ -416,14 +416,14 @@ namespace SP.Engine.Client
         {
             if (++ReconnectTryCount > Config.MaxReconnectAttempts)
             {
-                Logger?.Warn("Max reconnect attempts exceeded: {0} > {1}", ReconnectTryCount, Config.MaxReconnectAttempts);
+                Logger.Warn("Max reconnect attempts exceeded: {0} > {1}", ReconnectTryCount, Config.MaxReconnectAttempts);
                 Close();
                 return;
             }
             
             try
             {
-                Logger?.Debug("Reconnecting... {0}", ReconnectTryCount);
+                Logger.Debug("Reconnecting... {0}", ReconnectTryCount);
                 _session = CreateNetworkSession();
                 _session.Connect(RemoteEndPoint);
             }
@@ -602,7 +602,7 @@ namespace SP.Engine.Client
                 if (bodyLen <= 0 || bodyLen > MaxFrameBytes)
                 {
                     Logger.Warn("Body too large/small. max={0}, got={1}, (id={2})", 
-                        MaxFrameBytes, bodyLen, header.Id);
+                        MaxFrameBytes, bodyLen, header.MsdId);
                     Close();
                     yield break;
                 }
@@ -736,8 +736,8 @@ namespace SP.Engine.Client
 
             var datagram = new byte[e.Length];
             Buffer.BlockCopy(e.Data, e.Offset, datagram, 0, datagram.Length);
-            var headerSpan = datagram.AsSpan(0, UdpHeader.ByteSize);
             
+            var headerSpan = datagram.AsSpan(0, UdpHeader.ByteSize);
             if (!UdpHeader.TryRead(headerSpan, out var header, out var consumed))
                 return;
             
@@ -746,11 +746,11 @@ namespace SP.Engine.Client
 
             var bodyOffset = consumed;
             var bodyLen = header.PayloadLength;
-            var bodySpan = datagram.AsSpan(bodyOffset, bodyLen);
-
+            
             IMessage message;
-            if (header.Flags.HasFlag(HeaderFlags.Fragment))
+            if (header.Fragmented == 0x01)
             {
+                var bodySpan = datagram.AsSpan(bodyOffset, bodyLen);
                 if (!FragmentHeader.TryParse(bodySpan, out var fragHeader, out consumed))
                     return;
                 
@@ -856,7 +856,7 @@ namespace SP.Engine.Client
                 _udpSocket = null;
                 _channelRouter.Unbind(ChannelKind.Unreliable);
                 UdpClosed?.Invoke(this, EventArgs.Empty);
-                Logger?.Error("UDP handshake failed: {0}", p.Result);
+                Logger.Error("UDP handshake failed: {0}", p.Result);
                 return;
             }
             

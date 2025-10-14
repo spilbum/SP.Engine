@@ -6,5 +6,5 @@ namespace SP.Engine.Server.Command;
 
 public interface ICommandContext : ILogContext
 {
-    TProtocol Deserialize<TProtocol>(IMessage message) where TProtocol : IProtocol;
+    TProtocol Deserialize<TProtocol>(IMessage message) where TProtocol : IProtocolData;
 }

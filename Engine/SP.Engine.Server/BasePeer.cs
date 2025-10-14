@@ -45,7 +45,7 @@ namespace SP.Engine.Server
         PeerKind Kind { get; }
         PeerState State { get; }
         ISession Session { get; }
-        bool Send(IProtocol data);
+        bool Send(IProtocolData data);
         void Close(CloseReason reason);
     }
 
@@ -188,7 +188,7 @@ namespace SP.Engine.Server
         public IPolicy GetNetworkPolicy(Type protocolType)
             => _networkPolicy.Resolve(protocolType);
         
-        public bool Send(IProtocol data)
+        public bool Send(IProtocolData data)
         {
             var channel = data.Channel;
             var policy = GetNetworkPolicy(data.GetType());

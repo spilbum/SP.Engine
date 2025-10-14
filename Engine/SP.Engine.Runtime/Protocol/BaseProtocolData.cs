@@ -6,7 +6,7 @@ using SP.Engine.Runtime.Channel;
 
 namespace SP.Engine.Runtime.Protocol
 {
-    public abstract class BaseProtocol : IProtocol
+    public abstract class BaseProtocolData : IProtocolData
     {
         private static readonly ConcurrentDictionary<Type, ProtocolAttribute> Cache =
             new ConcurrentDictionary<Type, ProtocolAttribute>();
@@ -14,7 +14,7 @@ namespace SP.Engine.Runtime.Protocol
         [MemberIgnore] public ushort Id { get; }
         [MemberIgnore] public ChannelKind Channel { get; }
 
-        protected BaseProtocol()
+        protected BaseProtocolData()
         {
             var type = GetType();
             var attr = Cache.GetOrAdd(type, t =>

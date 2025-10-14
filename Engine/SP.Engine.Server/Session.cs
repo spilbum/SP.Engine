@@ -193,7 +193,7 @@ namespace SP.Engine.Server
             }
         }
         
-        private bool InternalSend(IProtocol data)
+        private bool InternalSend(IProtocolData data)
         {
             var channel = data.Channel;
             var policy = Peer.GetNetworkPolicy(data.GetType());

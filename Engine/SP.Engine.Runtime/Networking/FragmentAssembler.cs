@@ -66,7 +66,7 @@ namespace SP.Engine.Runtime.Networking
         {
             assembled = default;
             
-            var key = new FragmentKey(header.PeerId, header.Id, fragHeader.Id);
+            var key = new FragmentKey(header.PeerId, header.MsdId, fragHeader.Id);
             var state = _map.GetOrAdd(key, _ => new ReassemblyState(fragHeader.TotalCount));
   
             if (fragHeader.Index >= state.TotalCount || fragHeader.TotalCount != state.TotalCount)

@@ -12,9 +12,7 @@ namespace SP.Engine.Runtime.Networking
     {
         protected THeader Header { get; set; }
         protected ArraySegment<byte> Body { get; private set; }
-        
-        public int FrameLength => Header.Size + Body.Count;
-        public ushort Id => Header.Id;
+        public ushort Id => Header.MsdId;
 
         protected BaseMessage()
         {
@@ -32,7 +30,7 @@ namespace SP.Engine.Runtime.Networking
 
         protected abstract THeader CreateHeader(HeaderFlags flags, ushort id, int payloadLength);
 
-        public void Serialize(IProtocol protocol, IPolicy policy, IEncryptor encryptor, ICompressor compressor)
+        public void Serialize(IProtocolData protocol, IPolicy policy, IEncryptor encryptor, ICompressor compressor)
         {
             if (protocol is null) throw new ArgumentNullException(nameof(protocol));
 
@@ -58,7 +56,7 @@ namespace SP.Engine.Runtime.Networking
         }
 
         public TProtocol Deserialize<TProtocol>(IEncryptor encryptor, ICompressor compressor)
-            where TProtocol : IProtocol
+            where TProtocol : IProtocolData
         {
             var payload = new byte[Body.Count];
             Buffer.BlockCopy(Body.Array!, Body.Offset, payload, 0, Body.Count);
@@ -72,25 +70,7 @@ namespace SP.Engine.Runtime.Networking
             if (HasFlag(HeaderFlags.Compressed))  payload = compressor.Decompress(payload);
 
             var r = new NetReader(payload);
-            return NetSerializer.Deserialize<TProtocol>(ref r);
-        }
-
-        public IProtocol Deserialize(Type type, IEncryptor encryptor, ICompressor compressor)
-        {
-            var payload = new byte[Body.Count];
-            Buffer.BlockCopy(Body.Array!, Body.Offset, payload, 0, Body.Count);
-
-            if (HasFlag(HeaderFlags.Compressed) && compressor == null)
-                throw new InvalidDataException("Compressed payload but no compressor provided.");
-            if (HasFlag(HeaderFlags.Encrypted) && encryptor == null)
-                throw new InvalidDataException("Encrypted payload but no decryptor provided.");
-
-            if (HasFlag(HeaderFlags.Encrypted)) payload = encryptor.Decrypt(payload);
-            if (HasFlag(HeaderFlags.Compressed))  payload = compressor.Decompress(payload);
-
-            var r = new NetReader(payload);
-            var obj = NetSerializer.Deserialize(ref r, type);
-            return (IProtocol)obj;
+            return (TProtocol)NetSerializer.Deserialize(ref r, typeof(TProtocol));
         }
     }
 }

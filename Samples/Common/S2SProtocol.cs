@@ -11,13 +11,13 @@ namespace Common
     public static class S2SProtocolData
     {
         [Protocol(S2SProtocol.RegisterReq)]
-        public class RegisterReq : BaseProtocol
+        public class RegisterReq : BaseProtocolData
         {
             
         }
 
         [Protocol(S2SProtocol.RegisterAck)]
-        public class RegisterAck : BaseProtocol
+        public class RegisterAck : BaseProtocolData
         {
             
         }

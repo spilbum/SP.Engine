@@ -29,7 +29,7 @@ namespace SP.Engine.Server
             _sendEventArgs.Completed += OnSendCompleted;
         }
 
-        public override void Start()
+        public void Start()
         {
             StartReceive(ReceiveContext.SocketEventArgs);
         }

@@ -34,27 +34,5 @@ namespace SP.Engine.Runtime
         
         public static void WriteUInt32(this Span<byte> span, int offset, uint value) 
             => BinaryPrimitives.WriteUInt32BigEndian(span.Slice(offset, sizeof(int)), value);
-
-        public static void WriteSessionId(this Span<byte> span, int offset, string sessionId)
-        {
-            var guid = Guid.Parse(sessionId);
-            guid.ToByteArray().CopyTo(span.Slice(offset, 16));
-        }
-
-        public static string ReadSessionId(this ReadOnlySpan<byte> span, int offset)
-            => new Guid(span.Slice(offset, 16)).ToString();
-        
-        public static Guid ReadGuid(this ReadOnlySpan<byte> span, int offset)
-        {
-            return new Guid(span.CheckedSlice(offset, 16));
-        }
-
-        public static void WriteGuid(this Span<byte> span, int offset, Guid value)
-        {
-            var bytes = value.ToByteArray();
-            if (span.Length < offset + 16)
-                throw new ArgumentOutOfRangeException(nameof(offset));
-            bytes.CopyTo(span.Slice(offset, 16));
-        }
     }
 }

@@ -27,7 +27,7 @@ namespace SP.Engine.Protocol
     public static class C2SEngineProtocolData
     {
         [Protocol(C2SEngineProtocolId.SessionAuthReq, encrypt: Toggle.Off, compress: Toggle.Off)]
-        public class SessionAuthReq : BaseProtocol
+        public class SessionAuthReq : BaseProtocolData
         {
             public string? SessionId;
             public uint PeerId;
@@ -36,13 +36,13 @@ namespace SP.Engine.Protocol
         }
             
         [Protocol(C2SEngineProtocolId.MessageAck)]
-        public class MessageAck : BaseProtocol
+        public class MessageAck : BaseProtocolData
         {
             public long SequenceNumber;
         }
             
         [Protocol(C2SEngineProtocolId.Ping)]
-        public class Ping : BaseProtocol
+        public class Ping : BaseProtocolData
         {
             public double RawRttMs;
             public double AvgRttMs;
@@ -52,12 +52,12 @@ namespace SP.Engine.Protocol
         }
             
         [Protocol(C2SEngineProtocolId.Close)]
-        public class Close : BaseProtocol
+        public class Close : BaseProtocolData
         {
         }
 
         [Protocol(C2SEngineProtocolId.UdpHelloReq, ChannelKind.Unreliable)]
-        public class UdpHelloReq : BaseProtocol
+        public class UdpHelloReq : BaseProtocolData
         {
             public string? SessionId;
             public uint PeerId;
@@ -65,7 +65,7 @@ namespace SP.Engine.Protocol
         }
 
         [Protocol(C2SEngineProtocolId.UdpKeepAlive, ChannelKind.Unreliable)]
-        public class UdpKeepAlive : BaseProtocol
+        public class UdpKeepAlive : BaseProtocolData
         {
         }
     }
@@ -73,7 +73,7 @@ namespace SP.Engine.Protocol
     public static class S2CEngineProtocolData
     {
         [Protocol(S2CEngineProtocolId.SessionAuthAck, encrypt: Toggle.Off, compress: Toggle.Off)]
-        public class SessionAuthAck : BaseProtocol
+        public class SessionAuthAck : BaseProtocolData
         {
             public SessionHandshakeResult Result;
             public string? SessionId;
@@ -90,25 +90,25 @@ namespace SP.Engine.Protocol
         }
 
         [Protocol(S2CEngineProtocolId.Pong)]
-        public class Pong : BaseProtocol
+        public class Pong : BaseProtocolData
         {
             public long SendTimeMs;
             public long ServerTimeMs;
         }
 
         [Protocol(S2CEngineProtocolId.MessageAck)]
-        public class MessageAck : BaseProtocol
+        public class MessageAck : BaseProtocolData
         {
             public long SequenceNumber;
         }
 
         [Protocol(S2CEngineProtocolId.Close)]
-        public class Close : BaseProtocol
+        public class Close : BaseProtocolData
         {
         }
 
         [Protocol(S2CEngineProtocolId.UdpHelloAck, ChannelKind.Unreliable)]
-        public class UdpHelloAck : BaseProtocol
+        public class UdpHelloAck : BaseProtocolData
         {
             public UdpHandshakeResult Result;
             public ushort Mtu;
