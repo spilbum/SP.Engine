@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Reflection;
-using SP.Common.Accessor;
+using SP.Core.Accessor;
 using SP.Engine.Runtime.Channel;
 
 namespace SP.Engine.Runtime.Protocol
@@ -10,9 +10,6 @@ namespace SP.Engine.Runtime.Protocol
     {
         private static readonly ConcurrentDictionary<Type, ProtocolAttribute> Cache =
             new ConcurrentDictionary<Type, ProtocolAttribute>();
-        
-        [MemberIgnore] public ushort Id { get; }
-        [MemberIgnore] public ChannelKind Channel { get; }
 
         protected BaseProtocolData()
         {
@@ -24,8 +21,11 @@ namespace SP.Engine.Runtime.Protocol
                     throw new InvalidOperationException($"[{t.FullName}] requires {nameof(ProtocolAttribute)}");
                 return a;
             });
-            Id = attr.Id;
+            ProtocolId = attr.ProtocolId;
             Channel = attr.Channel;
         }
+
+        [Member(IgnoreGet = true)] public ushort ProtocolId { get; }
+        [Member(IgnoreGet = true)] public ChannelKind Channel { get; }
     }
 }

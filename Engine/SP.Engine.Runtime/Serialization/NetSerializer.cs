@@ -2,7 +2,7 @@
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using SP.Common.Accessor;
+using SP.Core.Accessor;
 
 namespace SP.Engine.Runtime.Serialization
 {
@@ -11,29 +11,30 @@ namespace SP.Engine.Runtime.Serialization
         private static readonly ConcurrentDictionary<Type, SerializerPair> Cache =
             new ConcurrentDictionary<Type, SerializerPair>();
 
-        private class SerializerPair
+        public static T Deserialize<T>(ref NetReader r)
         {
-            public delegate object ReadFn(ref NetReader r);
-
-            public delegate void WriteFn(ref NetWriter w, object value);
-
-            public ReadFn Reader { get; }
-            public WriteFn Writer { get; }
-
-            public SerializerPair(ReadFn reader, WriteFn writer)
-            {
-                Reader = reader;
-                Writer = writer;
-            }
+            return (T)Deserialize(ref r, typeof(T));
         }
 
-        public static T Deserialize<T>(ref NetReader r) => (T)Deserialize(ref r, typeof(T));
-        public static object Deserialize(ref NetReader r, Type type) => GetOrBuild(type).Reader(ref r);
+        public static object Deserialize(ref NetReader r, Type type)
+        {
+            return GetOrBuild(type).Reader(ref r);
+        }
 
-        public static void Serialize<T>(ref NetWriter w, T value) => Serialize(ref w, typeof(T), value);
-        public static void Serialize(ref NetWriter w, Type type, object value) => GetOrBuild(type).Writer(ref w, value);
+        public static void Serialize<T>(ref NetWriter w, T value)
+        {
+            Serialize(ref w, typeof(T), value);
+        }
 
-        private static SerializerPair GetOrBuild(Type type) => Cache.GetOrAdd(type, Build);
+        public static void Serialize(ref NetWriter w, Type type, object value)
+        {
+            GetOrBuild(type).Writer(ref w, value);
+        }
+
+        private static SerializerPair GetOrBuild(Type type)
+        {
+            return Cache.GetOrAdd(type, Build);
+        }
 
         private static SerializerPair Build(Type t)
         {
@@ -171,11 +172,19 @@ namespace SP.Engine.Runtime.Serialization
 
             object Read(ref NetReader r)
             {
-                return r.ReadString();
+                var has = r.ReadBool();
+                return has ? r.ReadString() : null;
             }
 
             void Write(ref NetWriter w, object v)
             {
+                if (v == null)
+                {
+                    w.WriteBool(false);
+                    return;
+                }
+
+                w.WriteBool(true);
                 w.WriteString((string)v);
             }
         }
@@ -184,14 +193,23 @@ namespace SP.Engine.Runtime.Serialization
         {
             return new SerializerPair(Read, Write);
 
-            void Write(ref NetWriter writer, object value)
+            void Write(ref NetWriter w, object value)
             {
-                var bytes = (byte[])value ?? Array.Empty<byte>();
-                writer.WriteBytes(bytes);
+                var bytes = (byte[])value;
+                if (bytes == null)
+                {
+                    w.WriteBool(false);
+                    return;
+                }
+
+                w.WriteBool(true);
+                w.WriteBytes(bytes);
             }
 
             object Read(ref NetReader r)
             {
+                var has = r.ReadBool();
+                if (!has) return null;
                 var s = r.ReadBytes();
                 var arr = new byte[s.Length];
                 s.CopyTo(arr);
@@ -206,14 +224,24 @@ namespace SP.Engine.Runtime.Serialization
 
             return new SerializerPair(Read, Write);
 
-            void Write(ref NetWriter writer, object value)
+            void Write(ref NetWriter w, object v)
             {
-                var raw = Convert.ChangeType(value, underlying);
-                uSer.Writer(ref writer, raw);
+                if (v == null)
+                {
+                    w.WriteBool(false);
+                    return;
+                }
+
+                w.WriteBool(true);
+                var raw = Convert.ChangeType(v, underlying);
+                uSer.Writer(ref w, raw);
             }
 
             object Read(ref NetReader r)
             {
+                var has = r.ReadBool();
+                if (!has) return null;
+
                 var raw = uSer.Reader(ref r);
                 return Enum.ToObject(enumType, raw);
             }
@@ -231,29 +259,31 @@ namespace SP.Engine.Runtime.Serialization
                 return !has ? null : ser.Reader(ref r);
             }
 
-            void Write(ref NetWriter writer, object value)
+            void Write(ref NetWriter w, object value)
             {
                 if (value == null)
                 {
-                    writer.WriteBool(false);
+                    w.WriteBool(false);
                     return;
                 }
 
-                writer.WriteBool(true);
-                ser.Writer(ref writer, value);
+                w.WriteBool(true);
+                ser.Writer(ref w, value);
             }
         }
 
         private static SerializerPair BuildArray(Type arrayType)
         {
-            var elemType = arrayType.GetElementType();
-            if (elemType == null) throw new InvalidOperationException("elemType is null");
+            var elemType = arrayType.GetElementType() ?? throw new InvalidOperationException("elemType is null");
             var elemSer = GetOrBuild(elemType);
 
             return new SerializerPair(Read, Write);
 
             object Read(ref NetReader r)
             {
+                var has = r.ReadBool();
+                if (!has) return null;
+
                 var n = (int)r.ReadVarUInt();
                 var arr = Array.CreateInstance(elemType, n);
                 for (var i = 0; i < n; i++)
@@ -261,12 +291,19 @@ namespace SP.Engine.Runtime.Serialization
                 return arr;
             }
 
-            void Write(ref NetWriter writer, object value)
+            void Write(ref NetWriter w, object value)
             {
-                var arr = (Array)value ?? Array.CreateInstance(elemType, 0);
-                writer.WriteVarUInt((uint)arr.Length);
+                var arr = (Array)value;
+                if (arr == null)
+                {
+                    w.WriteBool(false);
+                    return;
+                }
+
+                w.WriteBool(true);
+                w.WriteVarUInt((uint)arr.Length);
                 for (var i = 0; i < arr.Length; i++)
-                    elemSer.Writer(ref writer, arr.GetValue(i));
+                    elemSer.Writer(ref w, arr.GetValue(i));
             }
         }
 
@@ -276,7 +313,7 @@ namespace SP.Engine.Runtime.Serialization
             if (!t.IsGenericType) return false;
             var gen = t.GetGenericTypeDefinition();
             if (gen != typeof(List<>)) return false;
-            
+
             var elemType = t.GetGenericArguments()[0];
             var elemSer = GetOrBuild(elemType);
 
@@ -285,13 +322,23 @@ namespace SP.Engine.Runtime.Serialization
 
             void Write(ref NetWriter w, object v)
             {
-                var list = (IList)v ?? (IList)Activator.CreateInstance(t);
+                var list = (IList)v;
+                if (list == null)
+                {
+                    w.WriteBool(false);
+                    return;
+                }
+
+                w.WriteBool(true);
                 w.WriteVarUInt((uint)list.Count);
                 foreach (var it in list) elemSer.Writer(ref w, it);
             }
 
             object Read(ref NetReader r)
             {
+                var has = r.ReadBool();
+                if (!has) return null;
+
                 var n = (int)r.ReadVarUInt();
                 var list = (IList)Activator.CreateInstance(t);
                 for (var i = 0; i < n; i++)
@@ -306,16 +353,19 @@ namespace SP.Engine.Runtime.Serialization
             if (!t.IsGenericType) return false;
             var gen = t.GetGenericTypeDefinition();
             if (gen != typeof(Dictionary<,>)) return false;
-            
+
             var args = t.GetGenericArguments();
             var kSer = GetOrBuild(args[0]);
             var vSer = GetOrBuild(args[1]);
 
             pair = new SerializerPair(Read, Write);
             return true;
-            
+
             object Read(ref NetReader r)
             {
+                var has = r.ReadBool();
+                if (!has) return null;
+
                 var n = (int)r.ReadVarUInt();
                 var dict = (IDictionary)Activator.CreateInstance(t);
                 for (var i = 0; i < n; i++)
@@ -324,12 +374,20 @@ namespace SP.Engine.Runtime.Serialization
                     var v = vSer.Reader(ref r);
                     dict.Add(k, v);
                 }
+
                 return dict;
             }
 
             void Write(ref NetWriter w, object v)
             {
-                var dict = (IDictionary)v ?? (IDictionary)Activator.CreateInstance(t);
+                var dict = (IDictionary)v;
+                if (dict == null)
+                {
+                    w.WriteBool(false);
+                    return;
+                }
+
+                w.WriteBool(true);
                 w.WriteVarUInt((uint)dict.Count);
                 foreach (DictionaryEntry e in dict)
                 {
@@ -345,12 +403,22 @@ namespace SP.Engine.Runtime.Serialization
 
             void Write(ref NetWriter w, object v)
             {
-                var ticks = ((DateTime)v).ToUniversalTime().Ticks;
-                w.WriteInt64(ticks);
+                if (v == null)
+                {
+                    w.WriteBool(false);
+                    return;
+                }
+
+                w.WriteBool(true);
+                var dt = ((DateTime)v).ToUniversalTime();
+                w.WriteInt64(dt.Ticks);
             }
 
             object Read(ref NetReader r)
             {
+                var has = r.ReadBool();
+                if (!has) return null;
+
                 var ticks = r.ReadInt64();
                 return new DateTime(ticks, DateTimeKind.Utc);
             }
@@ -360,29 +428,67 @@ namespace SP.Engine.Runtime.Serialization
         {
             var accessor = RuntimeTypeAccessor.GetOrCreate(t);
             var members = accessor.Members;
-            
+
+            var memberSerializers = new SerializerPair[members.Count];
+            for (var i = 0; i < members.Count; i++)
+                memberSerializers[i] = GetOrBuild(members[i].Type);
+
             return new SerializerPair(Read, Write);
 
             object Read(ref NetReader r)
             {
+                var has = r.ReadBool();
+                if (!has) return null;
+
                 var obj = Activator.CreateInstance(t);
-                foreach (var m in members)
+                for (var i = 0; i < members.Count; i++)
                 {
-                    var ser = GetOrBuild(m.Type);
+                    var m = members[i];
+                    if (!m.CanSet || m.IgnoreSet) continue;
+
+                    var ser = memberSerializers[i];
                     var val = ser.Reader(ref r);
                     m.SetValue(obj, val);
                 }
+
                 return obj;
             }
 
             void Write(ref NetWriter w, object v)
             {
-                foreach (var m in members)
+                if (v == null)
                 {
-                    var ser = GetOrBuild(m.Type);
-                    ser.Writer(ref w, m.GetValue(v));
+                    w.WriteBool(false);
+                    return;
+                }
+
+                w.WriteBool(true);
+                for (var i = 0; i < members.Count; i++)
+                {
+                    var m = members[i];
+                    if (!m.CanGet || m.IgnoreGet) continue;
+
+                    var ser = memberSerializers[i];
+                    var val = m.GetValue(v);
+                    ser.Writer(ref w, val);
                 }
             }
+        }
+
+        private class SerializerPair
+        {
+            public delegate object ReadFn(ref NetReader r);
+
+            public delegate void WriteFn(ref NetWriter w, object value);
+
+            public SerializerPair(ReadFn reader, WriteFn writer)
+            {
+                Reader = reader;
+                Writer = writer;
+            }
+
+            public ReadFn Reader { get; }
+            public WriteFn Writer { get; }
         }
     }
 }

@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\Engine\SP.Engine.Server\SP.Engine.Server.csproj"/>
+        <ProjectReference Include="..\..\Shared\SP.Shared.Rank\SP.Shared.Rank.csproj"/>
+        <ProjectReference Include="..\SP.Sample.Common\SP.Sample.Common.csproj"/>
+        <ProjectReference Include="..\SP.Sample.DatabaseHandler\SP.Sample.DatabaseHandler.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Update="appsettings.json">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Folder Include="DatabaseHandler\"/>
+    </ItemGroup>
+
+</Project>

@@ -16,20 +16,32 @@ namespace SP.Engine.Runtime.Serialization
             _buffer = new ArrayBufferWriter<byte>(initialCapacity);
         }
 
-        public byte[] ToArray() => _buffer.WrittenSpan.ToArray();
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private Span<byte> GetSpan(int sizeHint) => _buffer.GetSpan(sizeHint);
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void Advance(int count) => _buffer.Advance(count);
-
-        public void Clear() => _buffer = new ArrayBufferWriter<byte>(_buffer.WrittenCount);
-
         public void Dispose()
         {
             if (_disposed) return;
             _disposed = true;
+        }
+
+        public byte[] ToArray()
+        {
+            return _buffer.WrittenSpan.ToArray();
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private Span<byte> GetSpan(int sizeHint)
+        {
+            return _buffer.GetSpan(sizeHint);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void Advance(int count)
+        {
+            _buffer.Advance(count);
+        }
+
+        public void Clear()
+        {
+            _buffer = new ArrayBufferWriter<byte>(_buffer.WrittenCount);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -41,10 +53,16 @@ namespace SP.Engine.Runtime.Serialization
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteSByte(sbyte value) => WriteByte(unchecked((byte)value));
+        public void WriteSByte(sbyte value)
+        {
+            WriteByte(unchecked((byte)value));
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteBool(bool value) => WriteByte(value ? (byte)1 : (byte)0);
+        public void WriteBool(bool value)
+        {
+            WriteByte(value ? (byte)1 : (byte)0);
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteInt16(short value)
@@ -120,6 +138,7 @@ namespace SP.Engine.Runtime.Serialization
                 tmp[i++] = (byte)(value | 0x80);
                 value >>= 7;
             }
+
             tmp[i++] = (byte)value;
 
             var span = GetSpan(i);
@@ -144,6 +163,7 @@ namespace SP.Engine.Runtime.Serialization
                 tmp[i++] = (byte)((byte)value | 0x80);
                 value >>= 7;
             }
+
             tmp[i++] = (byte)value;
             var span = GetSpan(i);
             tmp[..i].CopyTo(span);

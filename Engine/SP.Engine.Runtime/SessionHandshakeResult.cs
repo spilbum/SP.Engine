@@ -8,7 +8,6 @@ namespace SP.Engine.Runtime
         InvalidRequest,
         SessionNotFound,
         ReconnectionNotAllowed,
-        KeyExchangeFailed,
+        KeyExchangeFailed
     }
 }
-

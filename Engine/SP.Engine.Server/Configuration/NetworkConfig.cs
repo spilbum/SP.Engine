@@ -11,7 +11,7 @@ public sealed record NetworkConfig
     public bool EnableKeepAlive { get; init; } = true;
     public int KeepAliveTimeSec { get; init; } = 30;
     public int KeepAliveIntervalSec { get; init; } = 2;
-    public bool LogAllSocketError  { get; init; }
+    public bool LogAllSocketError { get; init; }
     public bool UseEncrypt { get; init; } = true;
     public bool UseCompress { get; init; } = false;
     public ushort CompressionThreshold { get; init; } = 2048;

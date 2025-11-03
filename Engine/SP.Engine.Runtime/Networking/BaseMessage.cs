@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Security.Cryptography;
 using SP.Engine.Runtime.Compression;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Runtime.Security;
@@ -7,26 +8,77 @@ using SP.Engine.Runtime.Serialization;
 
 namespace SP.Engine.Runtime.Networking
 {
-    public abstract class BaseMessage<THeader>: IMessage
+    public abstract class BaseMessage<THeader> : IMessage
         where THeader : IHeader
     {
-        protected THeader Header { get; set; }
-        protected ArraySegment<byte> Body { get; private set; }
-        public ushort Id => Header.MsdId;
-
         protected BaseMessage()
         {
-            
         }
-        
-        protected BaseMessage(THeader header, ArraySegment<byte> body)
+
+        protected BaseMessage(THeader header, byte[] body)
+        {
+            Header = header;
+            Body = new ReadOnlyMemory<byte>(body);
+        }
+
+        protected BaseMessage(THeader header, ReadOnlyMemory<byte> body)
         {
             Header = header;
             Body = body;
         }
 
+        protected THeader Header { get; set; }
+        protected ReadOnlyMemory<byte> Body { get; private set; }
+
+        public ushort Id => Header.MsdId;
+
+        public TProtocol Deserialize<TProtocol>(IEncryptor encryptor, ICompressor compressor)
+            where TProtocol : IProtocolData
+        {
+            var isEnc = HasFlag(HeaderFlags.Encrypted);
+            var isComp = HasFlag(HeaderFlags.Compressed);
+            if (!isEnc && !isComp)
+            {
+                var reader = new NetReader(Body.Span);
+                return (TProtocol)NetSerializer.Deserialize(ref reader, typeof(TProtocol));
+            }
+
+            var bodySpan = Body.Span;
+            byte[] decrypted = null;
+            byte[] decompressed = null;
+
+            try
+            {
+                if (isEnc)
+                {
+                    if (encryptor == null)
+                        throw new InvalidDataException("Encrypted payload but no encryptor provided.");
+                    decrypted = encryptor.Decrypt(bodySpan);
+                    bodySpan = decrypted;
+                }
+
+                if (isComp)
+                {
+                    if (compressor == null)
+                        throw new InvalidDataException("Compressed payload but no compressor provided.");
+                    decompressed = compressor.Decompress(bodySpan);
+                    bodySpan = decompressed;
+                }
+
+                var reader = new NetReader(bodySpan);
+                return (TProtocol)NetSerializer.Deserialize(ref reader, typeof(TProtocol));
+            }
+            finally
+            {
+                if (decrypted != null) CryptographicOperations.ZeroMemory(decrypted);
+                if (decompressed != null) CryptographicOperations.ZeroMemory(decompressed);
+            }
+        }
+
         private bool HasFlag(HeaderFlags flag)
-            => Header != null && Header.Flags.HasFlag(flag);
+        {
+            return Header != null && Header.HasFlag(flag);
+        }
 
         protected abstract THeader CreateHeader(HeaderFlags flags, ushort id, int payloadLength);
 
@@ -36,41 +88,24 @@ namespace SP.Engine.Runtime.Networking
 
             var w = new NetWriter();
             NetSerializer.Serialize(ref w, protocol.GetType(), protocol);
-            var payload = w.ToArray();
-            
+            ReadOnlyMemory<byte> payload = w.ToArray();
+
             var flags = HeaderFlags.None;
+
             if (policy.UseCompress && payload.Length >= policy.CompressionThreshold && compressor != null)
             {
-                payload = compressor.Compress(payload);
+                payload = compressor.Compress(payload.Span);
                 flags |= HeaderFlags.Compressed;
             }
 
             if (policy.UseEncrypt && encryptor != null)
             {
-                payload = encryptor.Encrypt(payload);
+                payload = encryptor.Encrypt(payload.Span);
                 flags |= HeaderFlags.Encrypted;
             }
-            
-            Header = CreateHeader(flags, protocol.Id, payload.Length);
-            Body = new ArraySegment<byte>(payload);
-        }
 
-        public TProtocol Deserialize<TProtocol>(IEncryptor encryptor, ICompressor compressor)
-            where TProtocol : IProtocolData
-        {
-            var payload = new byte[Body.Count];
-            Buffer.BlockCopy(Body.Array!, Body.Offset, payload, 0, Body.Count);
-
-            if (HasFlag(HeaderFlags.Compressed) && compressor == null)
-                throw new InvalidDataException("Compressed payload but no compressor provided.");
-            if (HasFlag(HeaderFlags.Encrypted) && encryptor == null)
-                throw new InvalidDataException("Encrypted payload but no decryptor provided.");
-
-            if (HasFlag(HeaderFlags.Encrypted)) payload = encryptor.Decrypt(payload);
-            if (HasFlag(HeaderFlags.Compressed))  payload = compressor.Decompress(payload);
-
-            var r = new NetReader(payload);
-            return (TProtocol)NetSerializer.Deserialize(ref r, typeof(TProtocol));
+            Header = CreateHeader(flags, protocol.ProtocolId, payload.Length);
+            Body = payload;
         }
     }
 }

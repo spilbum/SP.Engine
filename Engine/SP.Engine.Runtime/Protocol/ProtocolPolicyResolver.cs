@@ -6,8 +6,8 @@ namespace SP.Engine.Runtime.Protocol
 {
     public static class ProtocolPolicyResolver
     {
-        
         private const int MinThreshold = 128;
+
         private static readonly ConcurrentDictionary<Type, ProtocolOverrides> Overrides =
             new ConcurrentDictionary<Type, ProtocolOverrides>();
 
@@ -16,8 +16,7 @@ namespace SP.Engine.Runtime.Protocol
             var a = t.GetCustomAttribute<ProtocolAttribute>();
             if (a == null)
                 throw new InvalidOperationException($"[{t.FullName}] requires {nameof(ProtocolAttribute)}.");
-            var th = a.CompressionThreshold > 0 ? (int?)a.CompressionThreshold : null;
-            return new ProtocolOverrides(a.Encrypt, a.Compress, th);
+            return new ProtocolOverrides(a.Encrypt, a.Compress);
         }
 
         private static int ClampThreshold(int threshold)
@@ -33,23 +32,25 @@ namespace SP.Engine.Runtime.Protocol
 
             if (!useCompress)
                 return new ProtocolPolicy(useEncrypt, false, 0);
-            
-            var th = ov.CompressionThreshold ?? g.CompressionThreshold;
-            th = ClampThreshold(th);
-            return new ProtocolPolicy(useEncrypt, true, th);
+
+            var threshold = ClampThreshold(g.CompressionThreshold);
+            return new ProtocolPolicy(useEncrypt, true, threshold);
         }
 
         public static ProtocolPolicy Resolve(Type protocolType, in PolicyGlobals globals)
         {
             if (protocolType == null) throw new ArgumentNullException(nameof(protocolType));
             if (!typeof(IProtocolData).IsAssignableFrom(protocolType))
-                throw new ArgumentException($"Type {protocolType.FullName} must implement IProtocol.", nameof(protocolType));
+                throw new ArgumentException($"Type {protocolType.FullName} must implement IProtocol.",
+                    nameof(protocolType));
 
             var ov = Overrides.GetOrAdd(protocolType, ReadOverrides);
             return Merge(ov, globals);
         }
 
         public static ProtocolPolicy Resolve<TProtocol>(in PolicyGlobals globals) where TProtocol : IProtocolData
-            => Resolve(typeof(TProtocol), globals);
+        {
+            return Resolve(typeof(TProtocol), globals);
+        }
     }
 }

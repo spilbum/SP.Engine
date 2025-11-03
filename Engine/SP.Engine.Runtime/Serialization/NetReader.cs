@@ -6,7 +6,7 @@ using System.Text;
 
 namespace SP.Engine.Runtime.Serialization
 {
- public ref struct NetReader
+    public ref struct NetReader
     {
         private readonly ReadOnlySpan<byte> _span;
         private int _position;
@@ -46,7 +46,10 @@ namespace SP.Engine.Runtime.Serialization
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ReadOnlySpan<byte> ReadSpan(int count) => Slice(count);
+        public ReadOnlySpan<byte> ReadSpan(int count)
+        {
+            return Slice(count);
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public byte ReadByte()
@@ -56,7 +59,10 @@ namespace SP.Engine.Runtime.Serialization
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public sbyte ReadSByte() => unchecked((sbyte)ReadByte());
+        public sbyte ReadSByte()
+        {
+            return unchecked((sbyte)ReadByte());
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool ReadBool()
@@ -134,6 +140,7 @@ namespace SP.Engine.Runtime.Serialization
                 if ((b & 0x80) == 0) return result;
                 shift += 7;
             }
+
             throw new InvalidDataException("VarUInt too long");
         }
 
@@ -159,6 +166,7 @@ namespace SP.Engine.Runtime.Serialization
                 if ((b & 0x80) == 0) return result;
                 shift += 7;
             }
+
             throw new InvalidDataException("VarULong too long");
         }
 
@@ -169,7 +177,7 @@ namespace SP.Engine.Runtime.Serialization
             var value = (long)((u >> 1) ^ (ulong)-(long)(u & 1));
             return value;
         }
-        
+
         public string ReadString()
         {
             var byteLen = (int)ReadVarUInt();
@@ -186,12 +194,15 @@ namespace SP.Engine.Runtime.Serialization
         }
 
         // 고정 길이 바이트 덩어리
-        public ReadOnlySpan<byte> ReadBytes(int length) => ReadSpan(length);
+        public ReadOnlySpan<byte> ReadBytes(int length)
+        {
+            return ReadSpan(length);
+        }
 
         public byte[] ReadBytesExactArray(int length)
         {
             if (length < 0) throw new InvalidDataException("Negative length");
-            
+
             var s = ReadSpan(length);
             var arr = new byte[length];
             s.CopyTo(arr);
@@ -204,7 +215,7 @@ namespace SP.Engine.Runtime.Serialization
             if (alignment <= 1) return;
             var mis = _position % alignment;
             if (mis == 0) return;
-            
+
             var pad = alignment - mis;
             Advance(pad);
         }

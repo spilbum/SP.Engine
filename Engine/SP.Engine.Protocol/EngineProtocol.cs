@@ -29,28 +29,28 @@ namespace SP.Engine.Protocol
         [Protocol(C2SEngineProtocolId.SessionAuthReq, encrypt: Toggle.Off, compress: Toggle.Off)]
         public class SessionAuthReq : BaseProtocolData
         {
-            public string? SessionId;
-            public uint PeerId;
-            public DhKeySize KeySize;
             public byte[]? ClientPublicKey;
+            public DhKeySize KeySize;
+            public uint PeerId;
+            public string? SessionId;
         }
-            
+
         [Protocol(C2SEngineProtocolId.MessageAck)]
         public class MessageAck : BaseProtocolData
         {
             public long SequenceNumber;
         }
-            
+
         [Protocol(C2SEngineProtocolId.Ping)]
         public class Ping : BaseProtocolData
         {
-            public double RawRttMs;
             public double AvgRttMs;
             public double JitterMs;
             public float PacketLossRate;
+            public double RawRttMs;
             public long SendTimeMs;
         }
-            
+
         [Protocol(C2SEngineProtocolId.Close)]
         public class Close : BaseProtocolData
         {
@@ -59,9 +59,9 @@ namespace SP.Engine.Protocol
         [Protocol(C2SEngineProtocolId.UdpHelloReq, ChannelKind.Unreliable)]
         public class UdpHelloReq : BaseProtocolData
         {
-            public string? SessionId;
-            public uint PeerId;
             public ushort Mtu;
+            public uint PeerId;
+            public string? SessionId;
         }
 
         [Protocol(C2SEngineProtocolId.UdpKeepAlive, ChannelKind.Unreliable)]
@@ -75,18 +75,18 @@ namespace SP.Engine.Protocol
         [Protocol(S2CEngineProtocolId.SessionAuthAck, encrypt: Toggle.Off, compress: Toggle.Off)]
         public class SessionAuthAck : BaseProtocolData
         {
-            public SessionHandshakeResult Result;
-            public string? SessionId;
-            public int MaxFrameBytes;
-            public int SendTimeoutMs;
-            public int MaxRetryCount;
-            public int UdpOpenPort;
-            public uint PeerId;
-            public bool UseEncrypt;
-            public byte[]? ServerPublicKey;
-            public bool UseCompress;
             public int CompressionThreshold;
+            public int MaxFrameBytes;
+            public int MaxRetryCount;
+            public uint PeerId;
             public string? Reason;
+            public SessionHandshakeResult Result;
+            public int SendTimeoutMs;
+            public byte[]? ServerPublicKey;
+            public string? SessionId;
+            public int UdpOpenPort;
+            public bool UseCompress;
+            public bool UseEncrypt;
         }
 
         [Protocol(S2CEngineProtocolId.Pong)]
@@ -110,8 +110,8 @@ namespace SP.Engine.Protocol
         [Protocol(S2CEngineProtocolId.UdpHelloAck, ChannelKind.Unreliable)]
         public class UdpHelloAck : BaseProtocolData
         {
-            public UdpHandshakeResult Result;
             public ushort Mtu;
+            public UdpHandshakeResult Result;
         }
     }
 }

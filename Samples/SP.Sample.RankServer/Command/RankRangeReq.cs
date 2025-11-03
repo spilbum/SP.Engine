@@ -1,0 +1,39 @@
+using SP.Engine.Runtime.Command;
+using SP.Engine.Runtime.Protocol;
+using SP.Sample.Common;
+using SP.Sample.RankServer.ServerPeer;
+
+namespace SP.Sample.RankServer.Command;
+
+[ProtocolCommand(G2RProtocol.RankRangeReq)]
+public class RankRangeReq : BaseCommand<GameServerPeer, G2RProtocolData.RankRangeReq>
+{
+    protected override void ExecuteProtocol(GameServerPeer context, G2RProtocolData.RankRangeReq protocol)
+    {
+        var ack = new R2GProtocolData.RankRangeAck
+            { Result = ErrorCode.Unknown, SeasonKind = protocol.SeasonKind, Uid = protocol.Uid };
+
+        try
+        {
+            if (!RankServer.Instance.TryGetSeason(protocol.SeasonKind, out var season) ||
+                !season!.TryGetRangeInfos(protocol.StartRank, protocol.Count, out var infos))
+            {
+                ack.Result = ErrorCode.RankNotFound;
+                return;
+            }
+
+            ack.Result = ErrorCode.Ok;
+            ack.Infos = infos;
+        }
+        catch (Exception e)
+        {
+            context.Logger.Error(e);
+            ack.Result = ErrorCode.InternalError;
+        }
+        finally
+        {
+            if (!context.Send(ack))
+                context.Logger.Warn("Failed to send RankRangeAck");
+        }
+    }
+}

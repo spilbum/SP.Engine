@@ -1,335 +1,346 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Net;
 using System.Security.Cryptography;
 using System.Threading;
-using SP.Common.Logging;
+using SP.Core.Logging;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Channel;
+using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Compression;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Runtime.Security;
-using SP.Engine.Server.Command;
 
-namespace SP.Engine.Server
+namespace SP.Engine.Server;
+
+public enum PeerKind : byte
 {
-    public enum PeerKind : byte
+    None = 0,
+    User,
+    Server
+}
+
+public enum PeerState
+{
+    NotAuthenticated = PeerStateConst.NotAuthenticated,
+    Authenticated = PeerStateConst.Authenticated,
+    Online = PeerStateConst.Online,
+    Offline = PeerStateConst.Offline,
+    Closed = PeerStateConst.Closed
+}
+
+internal static class PeerStateConst
+{
+    public const int NotAuthenticated = 0;
+    public const int Authenticated = 1;
+    public const int Online = 2;
+    public const int Offline = 3;
+    public const int Closed = 4;
+}
+
+public interface IPeer : ICommandContext
+{
+    uint PeerId { get; }
+    PeerKind Kind { get; }
+    PeerState State { get; }
+    ISession Session { get; }
+    bool Send(IProtocolData data);
+    void Close(CloseReason reason);
+}
+
+public abstract class BasePeer : IPeer, IDisposable
+{
+    private readonly Lz4Compressor _compressor;
+    private readonly ReliableMessageProcessor _reliableMessageProcessor;
+    private DiffieHellman _diffieHellman;
+    private bool _disposed;
+    private AesCbcEncryptor _encryptor;
+    private IPolicyView _networkPolicy = new NetworkPolicyView(in PolicyDefaults.Globals);
+
+    private int _stateCode = PeerStateConst.NotAuthenticated;
+
+    protected BasePeer(PeerKind kind, ISession session)
     {
-        None = 0,
-        User,
-        Server,
+        PeerId = PeerIdGenerator.Generate();
+        Kind = kind;
+        Logger = session.Logger;
+        Session = session;
+        _compressor = new Lz4Compressor(session.Config.Network.MaxFrameBytes);
+        _reliableMessageProcessor = new ReliableMessageProcessor(Logger);
+        _reliableMessageProcessor.SetSendTimeoutMs(session.Config.Network.SendTimeoutMs);
+        _reliableMessageProcessor.SetMaxRetryCount(session.Config.Network.MaxRetryCount);
     }
-    
-    public enum PeerState
+
+    protected BasePeer(BasePeer other)
     {
-        NotAuthorized = PeerStateConst.NotAuthorized,
-        Authorized = PeerStateConst.Authorized,
-        Online = PeerStateConst.Online,
-        Offline = PeerStateConst.Offline,        
-        Closed = PeerStateConst.Closed,
+        PeerId = other.PeerId;
+        Kind = other.Kind;
+        Logger = other.Logger;
+        Session = other.Session;
+        _stateCode = other._stateCode;
+        _diffieHellman = other._diffieHellman;
+        _encryptor = other._encryptor;
+        _compressor = other._compressor;
+        _networkPolicy = other._networkPolicy;
+        _reliableMessageProcessor = other._reliableMessageProcessor;
     }
 
-    internal static class PeerStateConst
+    public double LatencyAvgMs { get; private set; }
+    public double LatencyJitterMs { get; private set; }
+    public float PacketLossRate { get; private set; }
+    public IEncryptor Encryptor => _encryptor;
+    public ICompressor Compressor => _compressor;
+    public IPEndPoint LocalEndPoint => Session.LocalEndPoint;
+    public IPEndPoint RemoteEndPoint => Session.RemoteEndPoint;
+    public bool IsConnected => _stateCode is PeerStateConst.Authenticated or PeerStateConst.Online;
+
+    internal byte[] LocalPublicKey => _diffieHellman?.PublicKey;
+
+    public void Dispose()
     {
-        public const int NotAuthorized = 0;
-        public const int Authorized = 1;
-        public const int Online = 2;
-        public const int Offline = 3;
-        public const int Closed = 4;        
-    }
-    
-    public interface IPeer : ICommandContext
-    {
-        uint Id { get; }
-        PeerKind Kind { get; }
-        PeerState State { get; }
-        ISession Session { get; }
-        bool Send(IProtocolData data);
-        void Close(CloseReason reason);
+        Dispose(true);
+        GC.SuppressFinalize(this);
     }
 
-    public abstract class BasePeer : ReliableMessageProcessor, IPeer, IDisposable
+    public PeerState State => (PeerState)_stateCode;
+    public uint PeerId { get; private set; }
+    public PeerKind Kind { get; }
+    public ILogger Logger { get; }
+    public ISession Session { get; private set; }
+
+    TProtocol ICommandContext.Deserialize<TProtocol>(IMessage message)
     {
-        private static class PeerIdGenerator
-        {
-            private static readonly ConcurrentQueue<uint> FreePeerIdPool = new();
-            private static uint _latestPeerId;
+        return message.Deserialize<TProtocol>(_encryptor, _compressor);
+    }
 
-            public static uint Generate()
+    public void Close(CloseReason reason)
+    {
+        Session.Close(reason);
+    }
+
+    public bool Send(IProtocolData data)
+    {
+        var channel = data.Channel;
+        var policy = GetNetworkPolicy(data.GetType());
+        var encryptor = policy.UseEncrypt ? Encryptor : null;
+        var compressor = policy.UseCompress ? Compressor : null;
+        switch (channel)
+        {
+            case ChannelKind.Reliable:
             {
-                if (_latestPeerId >= uint.MaxValue) throw new InvalidOperationException("ID overflow detected");
-                return FreePeerIdPool.TryDequeue(out var peerId) 
-                    ? peerId 
-                    : Interlocked.Increment(ref _latestPeerId);
-            }
+                var msg = new TcpMessage();
+                var seq = _reliableMessageProcessor.GetNextReliableSeq();
+                msg.SetSequenceNumber(seq);
+                msg.Serialize(data, policy, encryptor, compressor);
 
-            public static void Free(uint peerId)
-            {
-                if (peerId > 0)
-                    FreePeerIdPool.Enqueue(peerId);
-            }
-        }
-
-        private int _stateCode = PeerStateConst.NotAuthorized;
-        private bool _disposed;
-        private DiffieHellman _diffieHellman;
-        private AesCbcEncryptor _encryptor;
-        private readonly Lz4Compressor _compressor = new();
-        private IPolicyView _networkPolicy = new NetworkPolicyView(in PolicyDefaults.Globals);
-
-        public PeerState State => (PeerState)_stateCode;
-        public uint Id { get; private set; }
-        public PeerKind Kind { get; } 
-        public ILogger Logger { get; }
-        public double LatencyAvgMs { get; private set; }
-        public double LatencyJitterMs { get; private set; }
-        public float PacketLossRate { get; private set; }
-        public IEncryptor Encryptor => _encryptor;
-        public ICompressor Compressor => _compressor;
-        public ISession Session { get; private set; }
-        public IPEndPoint LocalEndPoint => Session.LocalEndPoint;
-        public IPEndPoint RemoteEndPoint => Session.RemoteEndPoint;
-        public bool IsConnected => _stateCode is PeerStateConst.Authorized or PeerStateConst.Online;
-        
-        internal byte[] LocalPublicKey => _diffieHellman?.PublicKey;
-        
-        protected BasePeer(PeerKind kind, ISession session)
-        {
-            Id = PeerIdGenerator.Generate();
-            Kind = kind;
-            Logger = session.Logger;
-            SetSendTimeoutMs(session.Config.Network.SendTimeoutMs);
-            SetMaxRetryCount(session.Config.Network.MaxRetryCount);
-            Session = session;
-        }
-
-        protected BasePeer(BasePeer other)
-        {
-            Id = other.Id;
-            Kind = other.Kind;
-            Logger = other.Logger;
-            Session = other.Session;
-            SetSendTimeoutMs(other.SendTimeoutMs);
-            SetMaxRetryCount(other.MaxRetryCount);
-            _diffieHellman = other._diffieHellman;
-        }
-
-        ~BasePeer()
-        {
-            Dispose(false);
-        }
-
-        TProtocol ICommandContext.Deserialize<TProtocol>(IMessage message)
-            => message.Deserialize<TProtocol>(_encryptor, _compressor);
-        
-        protected override void OnDebug(string format, params object[] args)
-        {
-            Logger?.Debug(format, args);
-        }
-
-        protected override void OnRetryLimitExceeded(IMessage message, int count, int maxCount)
-        {
-            Close(CloseReason.LimitExceededResend);
-        }
-
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
-
-        protected virtual void Dispose(bool disposing)
-        {
-            if (_disposed) 
-                return;
-            
-            if (disposing)
-            {
-                PeerIdGenerator.Free(Id);
-                Id = 0;
-                _diffieHellman?.Dispose();
-                _diffieHellman = null;
-                _encryptor?.Dispose();
-                _encryptor = null;
-                ResetProcessorState();
-            }
-
-            _disposed = true;
-        }
-
-        public virtual void Tick()
-        {
-            if (!IsConnected)
-                return;
-
-            foreach (var msg in FindExpiredForRetry())
-                Session.TrySend(ChannelKind.Reliable, msg);
-        }
-        
-        internal void OnPing(double rttMs, double avgRttMs, double jitterMs, float packetLossRate)
-        {
-            AddRtoSample(rttMs);
-            LatencyAvgMs = avgRttMs;
-            LatencyJitterMs = jitterMs;
-            PacketLossRate = packetLossRate;
-        }
-        
-        internal void OnMessageAck(long sequenceNumber)
-        {
-            RemoveMessageState(sequenceNumber);
-        }
-        
-        public void Close(CloseReason reason)
-        {
-            Session.Close(reason);
-        }
-        
-        public IPolicy GetNetworkPolicy(Type protocolType)
-            => _networkPolicy.Resolve(protocolType);
-        
-        public bool Send(IProtocolData data)
-        {
-            var channel = data.Channel;
-            var policy = GetNetworkPolicy(data.GetType());
-            var encryptor = policy.UseEncrypt ? Encryptor : null;
-            var compressor = policy.UseCompress ? Compressor : null;
-            switch (channel)
-            {
-                case ChannelKind.Reliable:
+                if (!IsConnected)
                 {
-                    var msg = new TcpMessage();
-                    msg.SetSequenceNumber(GetNextReliableSeq());
-                    msg.Serialize(data, policy, encryptor, compressor);
-
-                    if (!IsConnected)
-                    {
-                        EnqueuePendingMessage(msg);
-                        return true;
-                    }
-                    
-                    RegisterMessageState(msg);
-                    return Session.TrySend(channel, msg);
+                    _reliableMessageProcessor.EnqueuePendingMessage(msg);
+                    return true;
                 }
-                case ChannelKind.Unreliable:
-                {
-                    var msg = new UdpMessage();
-                    msg.SetPeerId(Id);
-                    msg.Serialize(data, policy, encryptor, compressor);
-                    return Session.TrySend(channel, msg);
-                }
-                default:
-                    throw new Exception($"Unknown channel: {channel}");
+
+                _reliableMessageProcessor.RegisterMessageState(msg);
+                return Session.TrySend(channel, msg);
             }
-        }
-        
-        internal void JoinServer()
-        {
-            if (Interlocked.CompareExchange(ref _stateCode, PeerStateConst.Authorized, PeerStateConst.NotAuthorized)
-                != PeerStateConst.NotAuthorized)
+            case ChannelKind.Unreliable:
             {
-                Logger.Error("The peer has joined the server.");
-                return;
+                var msg = new UdpMessage();
+                msg.SetPeerId(PeerId);
+                msg.Serialize(data, policy, encryptor, compressor);
+                return Session.TrySend(channel, msg);
             }
-                
-            OnJoinServer();
+            default:
+                throw new Exception($"Unknown channel: {channel}");
+        }
+    }
+
+    ~BasePeer()
+    {
+        Dispose(false);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed)
+            return;
+
+        if (disposing)
+        {
+            PeerIdGenerator.Free(PeerId);
+            PeerId = 0;
+            _diffieHellman?.Dispose();
+            _diffieHellman = null;
+            _encryptor?.Dispose();
+            _encryptor = null;
+            _reliableMessageProcessor.Reset();
         }
 
-        internal void OnSessionAuthed()
-        {
-            // 정책 생성
-            var n = Session.Config.Network;
-            var g = new PolicyGlobals(n.UseEncrypt, n.UseCompress, n.CompressionThreshold);
-            var newView = new NetworkPolicyView(g);
-            Interlocked.Exchange(ref _networkPolicy, newView);
-        }
-        
-        internal void Online(ISession session)
-        {
-            Interlocked.Exchange(ref _stateCode, PeerStateConst.Online);
-            Session = session;
-            
-            foreach (var msg in DequeuePendingMessages())
-                session.TrySend(ChannelKind.Reliable, msg);
-            
-            OnOnline();
-        }
+        _disposed = true;
+    }
 
-        internal void Offline(CloseReason reason)
-        {
-            Interlocked.Exchange(ref _stateCode, PeerStateConst.Offline);
-            _networkPolicy = new NetworkPolicyView(PolicyDefaults.Globals);
-            ResetAllMessageStates();
-            OnOffline(reason);
-        }
+    public virtual void Tick()
+    {
+        if (!IsConnected)
+            return;
 
-        internal void LeaveServer(CloseReason reason)
-        {
-            Interlocked.Exchange(ref _stateCode, PeerStateConst.Closed);
-            PeerIdGenerator.Free(Id);
-            Id = 0;
-            ResetProcessorState();
-            OnLeaveServer(reason);
-        }
+        if (_reliableMessageProcessor.TryGetRetryMessages(out var retries))
+            foreach (var message in retries)
+                Session.TrySend(ChannelKind.Reliable, message);
+        else
+            Close(CloseReason.LimitExceededRetry);
+    }
 
-        internal bool TryKeyExchange(DhKeySize keySize, byte[] peerPublicKey)
-        {
-            if (peerPublicKey == null || peerPublicKey.Length == 0)
-            {
-                Logger?.Warn("Key exchange validation failed: peer public key is empty.");
-                return false;
-            }
-            
-            byte[] shared = null;
+    internal void OnPing(double rttMs, double avgRttMs, double jitterMs, float packetLossRate)
+    {
+        _reliableMessageProcessor.AddRtoSample(rttMs);
+        LatencyAvgMs = avgRttMs;
+        LatencyJitterMs = jitterMs;
+        PacketLossRate = packetLossRate;
+    }
 
-            try
-            {
-                _diffieHellman = new DiffieHellman(keySize);
-                shared = _diffieHellman.DeriveSharedKey(peerPublicKey);
-                _encryptor = new AesCbcEncryptor(shared);
-                return true;
-            }
-            catch (ArgumentException ex)
-            {
-                Logger?.Warn("Key exchange validation failed: {0}", ex.Message);
-                return false;
-            }
-            catch (CryptographicException ex)
-            {
-                Logger?.Error("Key exchange provider error: {0}", ex.Message);
-                return false;
-            }
-            catch (Exception ex)
-            {
-                Logger?.Error(ex, "Key exchange unexpected error.");
-                return false;
-            }
-            finally
-            {
-                if (shared != null)
-                    CryptographicOperations.ZeroMemory(shared);
-            }
+    internal void OnMessageAck(long sequenceNumber)
+    {
+        _reliableMessageProcessor.RemoveMessageState(sequenceNumber);
+    }
+
+    internal List<IMessage> ProcessMessageInOrder(IMessage message)
+    {
+        return _reliableMessageProcessor.ProcessMessageInOrder(message);
+    }
+
+    public IPolicy GetNetworkPolicy(Type protocolType)
+    {
+        return _networkPolicy.Resolve(protocolType);
+    }
+
+    internal void JoinServer()
+    {
+        if (Interlocked.CompareExchange(ref _stateCode, PeerStateConst.Authenticated, PeerStateConst.NotAuthenticated)
+            != PeerStateConst.NotAuthenticated)
+        {
+            Logger.Error("The peer has joined the server.");
+            return;
         }
 
-        protected virtual void OnJoinServer()
+        OnJoinServer();
+    }
+
+    internal void OnSessionAuthenticated()
+    {
+        // 정책 생성
+        var n = Session.Config.Network;
+        var g = new PolicyGlobals(n.UseEncrypt, n.UseCompress, n.CompressionThreshold);
+        var newView = new NetworkPolicyView(g);
+        Interlocked.Exchange(ref _networkPolicy, newView);
+    }
+
+    internal void Online(ISession session)
+    {
+        Interlocked.Exchange(ref _stateCode, PeerStateConst.Online);
+        Session = session;
+
+        foreach (var message in _reliableMessageProcessor.DequeuePendingMessages())
+            session.TrySend(ChannelKind.Reliable, message);
+
+        OnOnline();
+    }
+
+    internal void Offline(CloseReason reason)
+    {
+        Interlocked.Exchange(ref _stateCode, PeerStateConst.Offline);
+        _networkPolicy = new NetworkPolicyView(PolicyDefaults.Globals);
+        _reliableMessageProcessor.ResetAllMessageStates();
+        OnOffline(reason);
+    }
+
+    internal void LeaveServer(CloseReason reason)
+    {
+        Interlocked.Exchange(ref _stateCode, PeerStateConst.Closed);
+        PeerIdGenerator.Free(PeerId);
+        PeerId = 0;
+        _reliableMessageProcessor.Reset();
+        OnLeaveServer(reason);
+    }
+
+    internal bool TryKeyExchange(DhKeySize keySize, byte[] peerPublicKey)
+    {
+        if (peerPublicKey == null || peerPublicKey.Length == 0)
         {
+            Logger?.Warn("Key exchange validation failed: peer public key is empty.");
+            return false;
         }
 
-        protected virtual void OnLeaveServer(CloseReason reason) 
+        byte[] shared = null;
+
+        try
         {
+            _diffieHellman = new DiffieHellman(keySize);
+            shared = _diffieHellman.DeriveSharedKey(peerPublicKey);
+            _encryptor = new AesCbcEncryptor(shared);
+            return true;
+        }
+        catch (ArgumentException ex)
+        {
+            Logger?.Warn("Key exchange validation failed: {0}", ex.Message);
+            return false;
+        }
+        catch (CryptographicException ex)
+        {
+            Logger?.Error("Key exchange provider error: {0}", ex.Message);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Logger?.Error(ex, "Key exchange unexpected error.");
+            return false;
+        }
+        finally
+        {
+            if (shared != null)
+                CryptographicOperations.ZeroMemory(shared);
+        }
+    }
+
+    protected virtual void OnJoinServer()
+    {
+    }
+
+    protected virtual void OnLeaveServer(CloseReason reason)
+    {
+    }
+
+    protected virtual void OnOnline()
+    {
+    }
+
+    protected virtual void OnOffline(CloseReason reason)
+    {
+    }
+
+    public override string ToString()
+    {
+        return $"sessionId={Session.Id}, peerId={PeerId}, peerType={Kind}, remoteEndPoint={RemoteEndPoint}";
+    }
+
+    private static class PeerIdGenerator
+    {
+        private static readonly ConcurrentQueue<uint> FreePeerIdPool = new();
+        private static uint _latestPeerId;
+
+        public static uint Generate()
+        {
+            if (_latestPeerId >= uint.MaxValue) throw new InvalidOperationException("ID overflow detected");
+            return FreePeerIdPool.TryDequeue(out var peerId)
+                ? peerId
+                : Interlocked.Increment(ref _latestPeerId);
         }
 
-        protected virtual void OnOnline()
+        public static void Free(uint peerId)
         {
-        }
-
-        protected virtual void OnOffline(CloseReason reason)
-        {
-        }
-
-        public override string ToString()
-        {
-            return $"sessionId={Session.Id}, peerId={Id}, peerType={Kind}, remoteEndPoint={RemoteEndPoint}";   
+            if (peerId > 0)
+                FreePeerIdPool.Enqueue(peerId);
         }
     }
 }

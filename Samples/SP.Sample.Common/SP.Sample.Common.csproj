@@ -1,0 +1,14 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>netstandard2.1</TargetFramework>
+        <Nullable>enable</Nullable>
+        <AssemblyName>SP.Sample.Common</AssemblyName>
+        <RootNamespace>SP.Sample.Common</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\Engine\SP.Engine.Runtime\SP.Engine.Runtime.csproj"/>
+    </ItemGroup>
+
+</Project>

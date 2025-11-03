@@ -1,4 +1,3 @@
-
 namespace SP.Engine.Server.Configuration;
 
 public sealed record ConnectorConfig

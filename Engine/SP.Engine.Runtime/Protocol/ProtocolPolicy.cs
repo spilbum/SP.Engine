@@ -1,4 +1,3 @@
-
 using System;
 
 namespace SP.Engine.Runtime.Protocol
@@ -9,19 +8,19 @@ namespace SP.Engine.Runtime.Protocol
         bool UseCompress { get; }
         int CompressionThreshold { get; }
     }
-    
+
     public sealed class ProtocolPolicy : IPolicy
     {
-        public bool UseEncrypt { get; }
-        public bool UseCompress { get; }
-        public int CompressionThreshold { get; }
-
         public ProtocolPolicy(bool useEncrypt, bool useCompress, int compressionThreshold)
         {
             UseEncrypt = useEncrypt;
             UseCompress = useCompress;
             CompressionThreshold = compressionThreshold;
         }
+
+        public bool UseEncrypt { get; }
+        public bool UseCompress { get; }
+        public int CompressionThreshold { get; }
     }
 
     public struct PolicyGlobals
@@ -42,13 +41,11 @@ namespace SP.Engine.Runtime.Protocol
     {
         public readonly Toggle Encrypt;
         public readonly Toggle Compress;
-        public readonly int? CompressionThreshold;
 
-        public ProtocolOverrides(Toggle encrypt, Toggle compress, int? compressionThreshold)
+        public ProtocolOverrides(Toggle encrypt, Toggle compress)
         {
             Encrypt = encrypt;
             Compress = compress;
-            CompressionThreshold = compressionThreshold;
         }
     }
 
@@ -61,16 +58,21 @@ namespace SP.Engine.Runtime.Protocol
     public sealed class NetworkPolicyView : IPolicyView
     {
         private readonly PolicyGlobals _globals;
+
         public NetworkPolicyView(in PolicyGlobals globals)
         {
             _globals = globals;
         }
-        
+
         public ProtocolPolicy Resolve<TProtocol>() where TProtocol : IProtocolData
-            => ProtocolPolicyResolver.Resolve<TProtocol>(_globals);
-        
+        {
+            return ProtocolPolicyResolver.Resolve<TProtocol>(_globals);
+        }
+
         public ProtocolPolicy Resolve(Type protocolType)
-            => ProtocolPolicyResolver.Resolve(protocolType, _globals);
+        {
+            return ProtocolPolicyResolver.Resolve(protocolType, _globals);
+        }
     }
 
     public static class PolicyDefaults

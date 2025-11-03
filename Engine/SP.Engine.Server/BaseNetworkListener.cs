@@ -3,74 +3,80 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 
-namespace SP.Engine.Server
+namespace SP.Engine.Server;
+
+internal delegate void ErrorHandler(ISocketListener listener, Exception e);
+
+internal delegate void NewClientAcceptHandler(ISocketListener listener, Socket socket, object state);
+
+public class ListenerInfo
 {
-    internal delegate void ErrorHandler(ISocketListener listener, Exception e);
+    public IPEndPoint EndPoint { get; init; }
+    public int BackLog { get; init; }
+    public SocketMode Mode { get; init; }
+}
 
-    internal delegate void NewClientAcceptHandler(ISocketListener listener, Socket socket, object state);
+internal interface ISocketListener
+{
+    SocketMode Mode { get; }
+    IPEndPoint EndPoint { get; }
+    int BackLog { get; }
+    event EventHandler Stopped;
+    event ErrorHandler Error;
+    event NewClientAcceptHandler NewClientAccepted;
 
-    public class ListenerInfo
+    bool Start();
+    void Stop();
+}
+
+internal abstract class BaseNetworkListener(ListenerInfo info) : ISocketListener, IDisposable
+{
+    public void Dispose()
     {
-        public IPEndPoint EndPoint { get; init; }
-        public int BackLog { get; init; }
-        public SocketMode Mode { get; init; }
+        Dispose(true);
+        GC.SuppressFinalize(this);
     }
 
-    internal interface ISocketListener
-    {
-        SocketMode Mode { get; }
-        IPEndPoint EndPoint { get; }
-        int BackLog { get; }
-        event EventHandler Stopped;
-        event ErrorHandler Error;
-        event NewClientAcceptHandler NewClientAccepted;
+    public SocketMode Mode { get; set; } = info.Mode;
+    public IPEndPoint EndPoint { get; } = info.EndPoint;
+    public int BackLog { get; } = info.BackLog;
 
-        bool Start();
-        void Stop();
+    public event EventHandler Stopped;
+    public event ErrorHandler Error;
+    public event NewClientAcceptHandler NewClientAccepted;
+
+    public abstract bool Start();
+    public abstract void Stop();
+
+    protected void OnStopped()
+    {
+        Stopped?.Invoke(this, EventArgs.Empty);
     }
 
-    internal abstract class BaseNetworkListener(ListenerInfo info) : ISocketListener, IDisposable
+    protected void OnError(Exception e)
     {
-        public SocketMode Mode { get; set; } = info.Mode;
-        public IPEndPoint EndPoint { get; } = info.EndPoint;
-        public int BackLog { get; } = info.BackLog;
+        Error?.Invoke(this, e);
+    }
 
-        public event EventHandler Stopped;
-        public event ErrorHandler Error;
-        public event NewClientAcceptHandler NewClientAccepted;
+    protected void OnNewClientAccepted(Socket socket, object state)
+    {
+        var handler = NewClientAccepted;
+        if (handler == null) return;
 
-        public abstract bool Start();
-        public abstract void Stop();
-
-        protected void OnStopped() => Stopped?.Invoke(this, EventArgs.Empty);
-        protected void OnError(Exception e) => Error?.Invoke(this, e);
-
-        protected void OnNewClientAccepted(Socket socket, object state)
+        switch (Mode)
         {
-            var handler = NewClientAccepted;
-            if (handler == null) return;
-            
-            switch (Mode)
-            {
-                case SocketMode.Tcp:
-                    handler.Invoke(this, socket, state);
-                    break;
-                case SocketMode.Udp:
-                    Task.Run(() => handler.Invoke(this, socket, state));
-                    break;
-            }
+            case SocketMode.Tcp:
+                handler.Invoke(this, socket, state);
+                break;
+            case SocketMode.Udp:
+                Task.Run(() => handler.Invoke(this, socket, state));
+                break;
         }
-
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
+    }
 
 
-        protected virtual void Dispose(bool disposing)
-        {
-            OnStopped();
-        }
+    protected virtual void Dispose(bool disposing)
+    {
+        OnStopped();
     }
 }

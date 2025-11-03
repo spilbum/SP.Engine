@@ -5,7 +5,7 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
-using SP.Common;
+using SP.Core;
 using SP.Engine.Client.Configuration;
 using SP.Engine.Runtime.Networking;
 
@@ -13,33 +13,48 @@ namespace SP.Engine.Client
 {
     public class TcpNetworkSession : IReliableSender
     {
-        private Socket _socket;
-        private SocketAsyncEventArgs _recvEventArgs; 
-        private SocketAsyncEventArgs _sendEventArgs; 
-        private readonly ConcurrentBatchQueue<ArraySegment<byte>> _sendQueue;
         private readonly List<ArraySegment<byte>> _itemsToSend = new List<ArraySegment<byte>>();
-        private readonly List<ArraySegment<byte>> _sendBufferList = new List<ArraySegment<byte>>();
-        private byte[] _recvBuffer;
-        private int _isSending;
-        private bool _isConnecting;
-        private long _totalSentBytes;
-        private long _totalReceivedBytes;
-        private readonly int _sendBufferSize;
         private readonly int _recvBufferSize;
-        
-        public event EventHandler Opened;
-        public event EventHandler Closed;
-        public event EventHandler<ErrorEventArgs> Error;
-        public event EventHandler<DataEventArgs> DataReceived;
+        private readonly List<ArraySegment<byte>> _sendBufferList = new List<ArraySegment<byte>>();
+        private readonly int _sendBufferSize;
+        private readonly ConcurrentBatchQueue<ArraySegment<byte>> _sendQueue;
+        private bool _isConnecting;
+        private int _isSending;
+        private byte[] _recvBuffer;
+        private SocketAsyncEventArgs _recvEventArgs;
+        private SocketAsyncEventArgs _sendEventArgs;
+        private Socket _socket;
+        private long _totalReceivedBytes;
+        private long _totalSentBytes;
 
-        public bool IsConnected { get; private set; }
-        
         public TcpNetworkSession(EngineConfig config)
         {
             _sendBufferSize = config.SendBufferSize;
             _recvBufferSize = config.ReceiveBufferSize;
             _sendQueue = new ConcurrentBatchQueue<ArraySegment<byte>>(config.SendQueueSize);
         }
+
+        public bool IsConnected { get; private set; }
+
+        public bool TrySend(TcpMessage message)
+        {
+            if (!IsConnected)
+                return false;
+
+            var seg = message.ToArraySegment();
+            if (!_sendQueue.Enqueue(seg))
+                return false;
+
+            if (Interlocked.CompareExchange(ref _isSending, 1, 0) == 0)
+                DequeueSend();
+
+            return true;
+        }
+
+        public event EventHandler Opened;
+        public event EventHandler Closed;
+        public event EventHandler<ErrorEventArgs> Error;
+        public event EventHandler<DataEventArgs> DataReceived;
 
         public TrafficInfo GetTrafficInfo()
         {
@@ -71,12 +86,20 @@ namespace SP.Engine.Client
             _isConnecting = true;
             remoteEndPoint.ResolveAndConnectAsync(ProcessConnect, null);
         }
-        
+
         private void ProcessConnect(Socket socket, object state, SocketAsyncEventArgs e, Exception error)
         {
             if (error != null)
             {
-                try { e?.Dispose(); } catch { /* ignored */ }
+                try
+                {
+                    e?.Dispose();
+                }
+                catch
+                {
+                    /* ignored */
+                }
+
                 _isConnecting = false;
                 OnError(error);
                 return;
@@ -84,7 +107,15 @@ namespace SP.Engine.Client
 
             if (socket == null)
             {
-                try { e?.Dispose(); } catch { /* ignored */ }
+                try
+                {
+                    e?.Dispose();
+                }
+                catch
+                {
+                    /* ignored */
+                }
+
                 _isConnecting = false;
                 OnError(new SocketException((int)SocketError.ConnectionAborted));
                 return;
@@ -102,11 +133,20 @@ namespace SP.Engine.Client
                 {
                     se = SocketError.ConnectionAborted;
                 }
-                try { e?.Dispose(); } catch { /* ignored */}
+
+                try
+                {
+                    e?.Dispose();
+                }
+                catch
+                {
+                    /* ignored */
+                }
+
                 OnError(new SocketException((int)se));
                 return;
             }
-            
+
             _socket = socket;
             _isConnecting = false;
 
@@ -133,8 +173,15 @@ namespace SP.Engine.Client
             {
                 /* ignored */
             }
-            
-            try { e?.Dispose(); } catch { /* ignored */ }
+
+            try
+            {
+                e?.Dispose();
+            }
+            catch
+            {
+                /* ignored */
+            }
 
             var recvEventArgs = new SocketAsyncEventArgs();
             recvEventArgs.Completed += OnReceiveCompleted;
@@ -197,7 +244,7 @@ namespace SP.Engine.Client
                     // ignored
                 }
             }
-            
+
             return isOnClosed;
         }
 
@@ -233,7 +280,7 @@ namespace SP.Engine.Client
                         OnClosed();
                     return;
                 }
-                
+
                 AddReceivedBytes(e.BytesTransferred);
 
                 try
@@ -246,7 +293,7 @@ namespace SP.Engine.Client
                 }
                 finally
                 {
-                    StartReceive(e);   
+                    StartReceive(e);
                 }
             }
             else
@@ -260,31 +307,16 @@ namespace SP.Engine.Client
             }
         }
 
-        public bool TrySend(TcpMessage message)
-        {
-            if (!IsConnected)
-                return false;
-
-            var seg = message.ToArraySegment();
-            if (!_sendQueue.Enqueue(seg))
-                return false;
-            
-            if (Interlocked.CompareExchange(ref _isSending, 1, 0) == 0)
-                DequeueSend();
-            
-            return true;
-        }
-        
         private void DequeueSend()
         {
             _sendQueue.DequeueAll(_itemsToSend);
-            
+
             if (_itemsToSend.Count == 0)
             {
                 _isSending = 0;
                 return;
             }
-            
+
             Send(_itemsToSend);
         }
 
@@ -299,12 +331,12 @@ namespace SP.Engine.Client
             try
             {
                 _sendEventArgs.SetBuffer(null, 0, 0);
-                
+
                 _sendBufferList.Clear();
                 foreach (var seg in items)
                     _sendBufferList.Add(seg);
                 _sendEventArgs.BufferList = _sendBufferList;
-                
+
                 if (!_socket.SendAsync(_sendEventArgs))
                     OnSendCompleted(null, _sendEventArgs);
             }
@@ -313,7 +345,7 @@ namespace SP.Engine.Client
                 OnError(new Exception(
                     $"Failed to send. Error: {ex.Message}, BufferList Count: {_sendEventArgs.BufferList?.Count ?? 0}",
                     ex));
-                
+
                 if (EnsureSocketClosed() && !IsIgnorableException(ex))
                     OnError(ex);
             }
@@ -346,7 +378,6 @@ namespace SP.Engine.Client
                     {
                         if (_socket.SendAsync(e)) return;
                         continue;
-
                     }
                 }
 
@@ -360,7 +391,7 @@ namespace SP.Engine.Client
         {
             _itemsToSend.Clear();
             _sendQueue.DequeueAll(_itemsToSend);
-            
+
             if (_itemsToSend.Count == 0)
             {
                 Interlocked.Exchange(ref _isSending, 0);
@@ -369,7 +400,7 @@ namespace SP.Engine.Client
                 if (_itemsToSend.Count == 0 || Interlocked.CompareExchange(ref _isSending, 1, 0) != 0)
                     return;
             }
-            
+
             Send(_itemsToSend);
         }
 
@@ -399,7 +430,7 @@ namespace SP.Engine.Client
             if (i > 0)
                 list.RemoveRange(0, i);
         }
-        
+
         private void OnConnected()
         {
             _isConnecting = false;
@@ -419,7 +450,7 @@ namespace SP.Engine.Client
             _recvEventArgs = null;
             _sendEventArgs?.Dispose();
             _sendEventArgs = null;
-            
+
             IsConnected = false;
             Closed?.Invoke(this, EventArgs.Empty);
         }

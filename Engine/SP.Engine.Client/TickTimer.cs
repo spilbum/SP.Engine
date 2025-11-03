@@ -1,19 +1,16 @@
 using System;
-using System.Collections.Generic;
 using System.Threading;
 
 namespace SP.Engine.Client
 {
     public sealed class TickTimer : IDisposable
     {
-        private DateTime _lastExecutionTime;
         private readonly int _dueTimeMs;
         private readonly int _intervalMs;
         private readonly object _state;
         private Action<object> _callback;
         private bool _isFirstExecution;
-        
-        public bool IsRunning { get; private set; }
+        private DateTime _lastExecutionTime;
 
         public TickTimer(Action<object> callback, object state, int dueTimeMs, int intervalMs)
         {
@@ -26,9 +23,17 @@ namespace SP.Engine.Client
             IsRunning = true;
         }
 
+        public bool IsRunning { get; private set; }
+
+        public void Dispose()
+        {
+            IsRunning = false;
+            _callback = null;
+        }
+
         public void Tick()
         {
-            if (!IsRunning) 
+            if (!IsRunning)
                 return;
 
             var now = DateTime.UtcNow;
@@ -38,7 +43,7 @@ namespace SP.Engine.Client
             {
                 if (_dueTimeMs == Timeout.Infinite || elapsedMs < _dueTimeMs)
                     return;
-                
+
                 Execute(now);
                 _isFirstExecution = false;
 
@@ -47,9 +52,9 @@ namespace SP.Engine.Client
             }
             else
             {
-                if (_intervalMs == Timeout.Infinite || elapsedMs < _intervalMs) 
+                if (_intervalMs == Timeout.Infinite || elapsedMs < _intervalMs)
                     return;
-                
+
                 Execute(now);
             }
         }
@@ -58,12 +63,6 @@ namespace SP.Engine.Client
         {
             _lastExecutionTime = now;
             _callback?.Invoke(_state);
-        }
-
-        public void Dispose()
-        {
-            IsRunning = false;
-            _callback = null;
         }
     }
 }

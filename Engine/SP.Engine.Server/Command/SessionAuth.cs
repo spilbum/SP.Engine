@@ -1,4 +1,5 @@
 using SP.Engine.Protocol;
+using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Server.Command;
@@ -7,7 +8,7 @@ namespace SP.Engine.Server.Command;
 internal class SessionAuth : BaseCommand<Session, C2SEngineProtocolData.SessionAuthReq>
 {
     protected override void ExecuteProtocol(Session session, C2SEngineProtocolData.SessionAuthReq protocol)
-    {   
+    {
         session.OnSessionHandshake(protocol);
     }
 }

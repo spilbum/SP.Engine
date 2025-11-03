@@ -1,41 +1,17 @@
 using System;
 using System.Collections.Concurrent;
-using System.Linq;
 
 namespace SP.Engine.Runtime.Networking
 {
-    public readonly struct FragmentKey : IEquatable<FragmentKey>
-    {
-        private readonly uint _peerId;
-        private readonly ushort _msgId;
-        private readonly uint _fragId;
-
-        public FragmentKey(uint peerId, ushort msgId, uint fragId)
-        {
-            _peerId = peerId;
-            _msgId = msgId;
-            _fragId = fragId;
-        }
-
-        public bool Equals(FragmentKey other) =>
-            _peerId == other._peerId && _msgId == other._msgId && _fragId == other._fragId;
-
-        public override bool Equals(object obj) => obj is FragmentKey k && Equals(k);
-        public override int GetHashCode() => HashCode.Combine(_peerId, _msgId, _fragId);
-
-        public override string ToString()
-            => $"peerId={_peerId}, msgId={_msgId}, fragId={_fragId}";
-    }
-
     internal sealed class ReassemblyState
     {
         public readonly DateTime CreatedAtUtc = DateTime.UtcNow;
-        public readonly ushort TotalCount;
         public readonly ArraySegment<byte>[] Parts;
+        public readonly byte TotalCount;
         public int ReceivedCount;
         public int TotalLength;
 
-        public ReassemblyState(ushort totalCount)
+        public ReassemblyState(byte totalCount)
         {
             TotalCount = totalCount;
             Parts = new ArraySegment<byte>[totalCount];
@@ -45,46 +21,50 @@ namespace SP.Engine.Runtime.Networking
     public interface IFragmentAssembler
     {
         bool TryAssemble(
-            UdpHeader header, 
+            UdpHeader header,
             FragmentHeader fragHeader,
             ArraySegment<byte> fragPayload,
             out ArraySegment<byte> assembled);
 
-        int Cleanup(TimeSpan timeout);
+        void Cleanup(TimeSpan timeout);
     }
 
     public sealed class FragmentAssembler : IFragmentAssembler
     {
-        private readonly ConcurrentDictionary<FragmentKey, ReassemblyState> _map =
-            new ConcurrentDictionary<FragmentKey, ReassemblyState>();
+        private readonly ConcurrentDictionary<uint, ReassemblyState> _map =
+            new ConcurrentDictionary<uint, ReassemblyState>();
 
         public bool TryAssemble(
-            UdpHeader header, 
+            UdpHeader header,
             FragmentHeader fragHeader,
             ArraySegment<byte> fragPayload,
             out ArraySegment<byte> assembled)
         {
             assembled = default;
-            
-            var key = new FragmentKey(header.PeerId, header.MsdId, fragHeader.Id);
+
+            if (fragPayload.Array == null || fragPayload.Count < 0) return false;
+            if (fragHeader.Index >= fragHeader.TotalCount) return false;
+
+            var key = fragHeader.FragId;
             var state = _map.GetOrAdd(key, _ => new ReassemblyState(fragHeader.TotalCount));
-  
-            if (fragHeader.Index >= state.TotalCount || fragHeader.TotalCount != state.TotalCount)
-                return false;
+
+            if (state.TotalCount != fragHeader.TotalCount) return false;
 
             lock (state)
             {
-                if (state.Parts[fragHeader.Index].Array == null)
+                var slot = state.Parts[fragHeader.Index];
+                if (slot.Array == null)
                 {
-                    state.Parts[fragHeader.Index] = fragPayload; 
-                    state.ReceivedCount++;
+                    state.Parts[fragHeader.Index] = fragPayload;
                     state.TotalLength += fragPayload.Count;
+                    state.ReceivedCount++;
                 }
 
                 if (state.ReceivedCount != state.TotalCount)
                     return false;
 
-                var dst =  new byte[state.TotalLength];
+                // 조립
+                var dst = new byte[state.TotalLength];
                 var offset = 0;
                 for (var i = 0; i < state.TotalCount; i++)
                 {
@@ -97,18 +77,30 @@ namespace SP.Engine.Runtime.Networking
 
                     Buffer.BlockCopy(seg.Array!, seg.Offset, dst, offset, seg.Count);
                     offset += seg.Count;
+                    state.Parts[i] = default;
                 }
 
                 _map.TryRemove(key, out _);
-                assembled = new ArraySegment<byte>(dst, 0, dst.Length);
+                assembled = new ArraySegment<byte>(dst);
                 return true;
             }
         }
 
-        public int Cleanup(TimeSpan timeout)
+        public void Cleanup(TimeSpan timeout)
         {
             var now = DateTime.UtcNow;
-            return _map.Count(kv => now - kv.Value.CreatedAtUtc >= timeout && _map.TryRemove(kv.Key, out _));
+
+            foreach (var (key, state) in _map.ToArray())
+            {
+                if (now - state.CreatedAtUtc < timeout) continue;
+                if (!_map.TryRemove(key, out var s)) continue;
+
+                lock (s)
+                {
+                    for (var i = 0; i < s.Parts.Length; i++)
+                        s.Parts[i] = default;
+                }
+            }
         }
     }
 }

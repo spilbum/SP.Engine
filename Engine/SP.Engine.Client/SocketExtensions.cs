@@ -3,27 +3,11 @@ using System.Net;
 using System.Net.Sockets;
 
 namespace SP.Engine.Client
-{ 
+{
     public delegate void ConnectCallback(Socket socket, object state, SocketAsyncEventArgs e, Exception error);
 
     public static class SocketExtensions
     {
-        private sealed class ConnectToken
-        {
-            public object State;
-            public ConnectCallback Callback;
-        }
-
-        private sealed class DnsConnectState
-        {
-            public IPAddress[] Addresses;
-            public int NextAddressIndex;
-            public int Port;
-            public Socket Socket;
-            public object State;
-            public ConnectCallback Callback;
-        }
-        
         public static void ResolveAndConnectAsync(this EndPoint remoteEndPoint, ConnectCallback callback, object state)
         {
             switch (remoteEndPoint)
@@ -41,7 +25,7 @@ namespace SP.Engine.Client
                         {
                             Port = dnsEndPoint.Port,
                             State = state,
-                            Callback = callback,
+                            Callback = callback
                         });
                     break;
             }
@@ -116,7 +100,8 @@ namespace SP.Engine.Client
             return address;
         }
 
-        private static SocketAsyncEventArgs CreateSocketAsyncEventArgs(EndPoint remoteEndPoint, ConnectCallback callback, object state)
+        private static SocketAsyncEventArgs CreateSocketAsyncEventArgs(EndPoint remoteEndPoint,
+            ConnectCallback callback, object state)
         {
             var e = new SocketAsyncEventArgs();
             e.RemoteEndPoint = remoteEndPoint;
@@ -130,12 +115,27 @@ namespace SP.Engine.Client
             e.Completed -= OnConnectCompleted;
             var token = (ConnectToken)e.UserToken;
             e.UserToken = null;
-            
+
             if (e.SocketError == SocketError.Success)
                 token.Callback.Invoke(sender as Socket, token.State, e, null);
             else
                 token.Callback.Invoke(null, token.State, e, new SocketException((int)e.SocketError));
         }
+
+        private sealed class ConnectToken
+        {
+            public ConnectCallback Callback;
+            public object State;
+        }
+
+        private sealed class DnsConnectState
+        {
+            public IPAddress[] Addresses;
+            public ConnectCallback Callback;
+            public int NextAddressIndex;
+            public int Port;
+            public Socket Socket;
+            public object State;
+        }
     }
-    
 }

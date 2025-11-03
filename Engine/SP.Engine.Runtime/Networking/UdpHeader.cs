@@ -5,22 +5,27 @@ namespace SP.Engine.Runtime.Networking
     public readonly struct UdpHeader : IHeader
     {
         public const int ByteSize = 1 + 4 + 2 + 1 + 4; // 12 bytes
-        
+
         public HeaderFlags Flags { get; }
         public uint PeerId { get; }
-        public ushort MsdId  { get; }
+        public ushort MsdId { get; }
         public byte Fragmented { get; }
         public int PayloadLength { get; }
         public int Size { get; }
 
         public UdpHeader(HeaderFlags flags, uint peerId, ushort msdId, byte fragmented, int payloadLength)
-        {            
+        {
             Flags = flags;
             PeerId = peerId;
             MsdId = msdId;
             Fragmented = fragmented;
             PayloadLength = payloadLength;
             Size = ByteSize;
+        }
+
+        public bool HasFlag(HeaderFlags flags)
+        {
+            return (Flags & flags) != 0;
         }
 
         public void WriteTo(Span<byte> destination)
@@ -40,7 +45,7 @@ namespace SP.Engine.Runtime.Networking
                 consumed = 0;
                 return false;
             }
-            
+
             var flags = (HeaderFlags)source[0];
             var peerId = source.ReadUInt32(1);
             var msgId = source.ReadUInt16(5);
@@ -55,10 +60,10 @@ namespace SP.Engine.Runtime.Networking
     public class UdpHeaderBuilder
     {
         private HeaderFlags _flags;
-        private uint _peerId;
-        private ushort _msgId;
         private byte _fragmented;
+        private ushort _msgId;
         private int _payloadLength;
+        private uint _peerId;
 
         public UdpHeaderBuilder From(UdpHeader header)
         {
@@ -93,7 +98,7 @@ namespace SP.Engine.Runtime.Networking
             _fragmented = fragmented;
             return this;
         }
-        
+
         public UdpHeaderBuilder WithPayloadLength(int payloadLength)
         {
             _payloadLength = payloadLength;
@@ -101,6 +106,8 @@ namespace SP.Engine.Runtime.Networking
         }
 
         public UdpHeader Build()
-            => new UdpHeader(_flags, _peerId, _msgId, _fragmented, _payloadLength);
+        {
+            return new UdpHeader(_flags, _peerId, _msgId, _fragmented, _payloadLength);
+        }
     }
 }

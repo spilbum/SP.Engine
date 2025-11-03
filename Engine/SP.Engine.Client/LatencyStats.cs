@@ -1,19 +1,25 @@
-using SP.Common;
+using SP.Core;
 
 namespace SP.Engine.Client
 {
     public class TrafficInfo
     {
-        public long SentBytes;
         public long ReceivedBytes;
+        public long SentBytes;
     }
-    
+
     public class LatencyStats
     {
         private readonly DataSampler _sampler;
         private readonly EwmaFilter _smoothedRtt;
-        private int _sentCount;
         private int _receivedCount;
+        private int _sentCount;
+
+        public LatencyStats(int windowSize = 20)
+        {
+            _sampler = new DataSampler(windowSize);
+            _smoothedRtt = new EwmaFilter(0.125);
+        }
 
         public double LastRttMs { get; private set; }
         public double SmoothedRttMs => _smoothedRtt.Value;
@@ -22,14 +28,12 @@ namespace SP.Engine.Client
         public double AvgRttMs => _sampler.Avg;
         public double JitterMs => _sampler.StdDev;
         public float PacketLossRate => _sentCount == 0 ? 0f : 1f - (float)_receivedCount / _sentCount;
-        
-        public LatencyStats(int windowSize = 20)
+
+        public void OnSent()
         {
-            _sampler = new DataSampler(windowSize);
-            _smoothedRtt = new EwmaFilter(0.125);
+            _sentCount++;
         }
 
-        public void OnSent() => _sentCount++;
         public void OnReceived(double rawRtt)
         {
             LastRttMs = rawRtt;
@@ -46,5 +50,5 @@ namespace SP.Engine.Client
             _receivedCount = 0;
             LastRttMs = 0;
         }
-   }
+    }
 }

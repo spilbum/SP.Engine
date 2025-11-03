@@ -1,120 +1,120 @@
 ﻿using System;
 using System.Net.Sockets;
+using SP.Engine.Runtime;
 
-namespace SP.Engine.Server
+namespace SP.Engine.Server;
+
+internal class TcpNetworkListener(ListenerInfo info) : BaseNetworkListener(info)
 {
-    internal class TcpNetworkListener(ListenerInfo info) : BaseNetworkListener(info)
+    private readonly int _backLog = info.BackLog;
+    private bool _disposed;
+    private Socket _socket;
+    private SocketAsyncEventArgs _socketEventArgsAccept;
+
+    public override bool Start()
     {
-        private readonly int _backLog = info.BackLog;
-        private Socket _socket;
-        private SocketAsyncEventArgs _socketEventArgsAccept;
-        private bool _disposed;
+        if (_disposed)
+            return false;
 
-        public override bool Start()
+        _socket = new Socket(EndPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+
+        try
         {
-            if (_disposed)
-                return false;
-            
-            _socket = new Socket(EndPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-            
-            try
+            _socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+            _socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.NoDelay, true);
+            _socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Linger, new LingerOption(false, 0));
+
+            _socket.Bind(EndPoint);
+            _socket.Listen(_backLog);
+
+            _socketEventArgsAccept = new SocketAsyncEventArgs();
+            _socketEventArgsAccept.Completed += AcceptCompleted;
+
+            if (!_socket.AcceptAsync(_socketEventArgsAccept))
+                ProcessAccept(_socketEventArgsAccept);
+
+            return true;
+        }
+        catch (SocketException e)
+        {
+            OnError(new Exception($"SocketException: {e.Message}, ErrorCode: {e.ErrorCode}"));
+            return false;
+        }
+        catch (Exception e)
+        {
+            OnError(e);
+            return false;
+        }
+    }
+
+    private void AcceptCompleted(object sender, SocketAsyncEventArgs e)
+    {
+        if (_disposed)
+            return;
+
+        ProcessAccept(e);
+    }
+
+    private void ProcessAccept(SocketAsyncEventArgs e)
+    {
+        try
+        {
+            if (e.SocketError == SocketError.Success)
             {
-                _socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
-                _socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.NoDelay, true);
-                _socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Linger, new LingerOption(false, 0));
-                
-                _socket.Bind(EndPoint);
-                _socket.Listen(_backLog);
+                var socket = e.AcceptSocket;
+                if (null == socket)
+                    throw new SocketException((int)SocketError.SocketError);
 
-                _socketEventArgsAccept = new SocketAsyncEventArgs();
-                _socketEventArgsAccept.Completed += AcceptCompleted;
-
-                if (!_socket.AcceptAsync(_socketEventArgsAccept))
-                    ProcessAccept(_socketEventArgsAccept);
-
-                return true;
+                OnNewClientAccepted(socket, null);
             }
-            catch (SocketException e)
+            else
             {
-                OnError(new Exception($"SocketException: {e.Message}, ErrorCode: {e.ErrorCode}"));
-                return false;
-            }
-            catch (Exception e)
-            {
-                OnError(e);
-                return false;
+                throw new SocketException((int)e.SocketError);
             }
         }
-
-        private void AcceptCompleted(object sender, SocketAsyncEventArgs e)
+        catch (SocketException ex)
         {
-            if (_disposed)
-                return;
-            
-            ProcessAccept(e);
+            OnError(new Exception($"SocketError: {ex.Message} ({ex.ErrorCode})"));
+        }
+        catch (Exception ex)
+        {
+            OnError(ex);
+        }
+        finally
+        {
+            e.AcceptSocket = null;
+            if (!_disposed && !_socket.AcceptAsync(e))
+                ProcessAccept(e);
+        }
+    }
+
+    public override void Stop()
+    {
+        if (_disposed)
+            return;
+
+        try
+        {
+            _socket?.SafeClose();
+        }
+        finally
+        {
+            Dispose();
+        }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (_disposed)
+            return;
+
+        if (disposing)
+        {
+            _socketEventArgsAccept?.Dispose();
+            _socket?.Dispose();
         }
 
-        private void ProcessAccept(SocketAsyncEventArgs e)
-        {
-            try
-            {
-                if (e.SocketError == SocketError.Success)
-                {
-                    var socket = e.AcceptSocket;
-                    if (null == socket)
-                        throw new SocketException((int)SocketError.SocketError);
-
-                    OnNewClientAccepted(socket, null);
-                }
-                else
-                {
-                    throw new SocketException((int)e.SocketError);
-                }
-            }
-            catch (SocketException ex)
-            {
-                OnError(new Exception($"SocketError: {ex.Message} ({ex.ErrorCode})"));
-            }
-            catch (Exception ex)
-            {
-                OnError(ex);
-            }
-            finally
-            {
-                e.AcceptSocket = null;
-                if (!_disposed && !_socket.AcceptAsync(e))
-                    ProcessAccept(e);
-            }
-        }
-
-        public override void Stop()
-        {
-            if (_disposed)
-                return;
-
-            try
-            {
-                _socket?.Close();
-            }
-            finally
-            {
-                Dispose();
-            }
-        }
-
-        protected override void Dispose(bool disposing)
-        {
-            if (_disposed)
-                return;
-            
-            if (disposing)
-            {
-                _socketEventArgsAccept?.Dispose();
-                _socket?.Dispose();
-            }
-            
-            _disposed = true;            
-            base.Dispose(disposing);
-        }
+        _disposed = true;
+        base.Dispose(disposing);
     }
 }

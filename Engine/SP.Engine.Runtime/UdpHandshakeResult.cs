@@ -5,6 +5,6 @@ namespace SP.Engine.Runtime
         None = 0,
         Ok,
         InternalError,
-        InvalidRequest,
+        InvalidRequest
     }
 }

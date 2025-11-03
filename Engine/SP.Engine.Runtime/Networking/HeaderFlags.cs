@@ -7,6 +7,6 @@ namespace SP.Engine.Runtime.Networking
     {
         None = 0,
         Encrypted = 1 << 0, // 암호화
-        Compressed = 1 << 1,// 압축
+        Compressed = 1 << 1 // 압축
     }
 }

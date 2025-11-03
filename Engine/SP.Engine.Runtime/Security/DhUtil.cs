@@ -10,7 +10,7 @@ namespace SP.Engine.Runtime.Security
         {
             if (a is null) throw new ArgumentNullException(nameof(a));
             if (b is null) throw new ArgumentNullException(nameof(b));
-            
+
             using var sha256 = SHA256.Create();
             if (a.Length > 0) sha256.TransformBlock(a, 0, a.Length, null, 0);
             sha256.TransformFinalBlock(b, 0, b.Length);
@@ -46,7 +46,7 @@ namespace SP.Engine.Runtime.Security
                 {
                     RandomNumberGenerator.Fill(tmp);
                     tmp[^1] = 0; // positive
-                    var v = new BigInteger(tmp, isUnsigned: true, isBigEndian: true);
+                    var v = new BigInteger(tmp, true, true);
                     if (v < maxExclusive) return v;
                 }
             }
@@ -55,11 +55,11 @@ namespace SP.Engine.Runtime.Security
                 CryptographicOperations.ZeroMemory(tmp);
             }
         }
-        
+
         // extension helper: BigInteger 비트 길이
         public static int GetBitLength(this BigInteger value)
         {
-            var bytes = value.ToByteArray(isUnsigned: true, isBigEndian: true);
+            var bytes = value.ToByteArray(true, true);
             if (bytes.Length == 0) return 0;
             var msb = bytes[0];
             var bits = (bytes.Length - 1) * 8;
@@ -68,7 +68,6 @@ namespace SP.Engine.Runtime.Security
             while (top > 0 && (msb & (1 << (top - 1))) == 0) top--;
             return bits + top;
         }
-
     }
 
     // HKDF util (RFC 5869) using HMAC-SHA256
@@ -84,11 +83,11 @@ namespace SP.Engine.Runtime.Security
         {
             if (prk == null) throw new ArgumentNullException(nameof(prk));
             if (length <= 0) throw new ArgumentOutOfRangeException(nameof(length));
-            
+
             const int hashLen = 32;
             var n = (length + hashLen - 1) / hashLen;
             if (n > 255) throw new ArgumentException("Cannot expand to more than 255 blocks");
-            
+
             var okm = new byte[length];
             var previous = Array.Empty<byte>();
             using var hmac = new HMACSHA256(prk);
@@ -96,19 +95,19 @@ namespace SP.Engine.Runtime.Security
             for (var i = 1; i <= n; i++)
             {
                 hmac.Initialize();
-                
+
                 hmac.TransformBlock(previous, 0, previous.Length, null, 0);
                 if (info != null && info.Length > 0)
                     hmac.TransformBlock(info, 0, info.Length, null, 0);
-                hmac.TransformFinalBlock(new [] { (byte)i }, 0, 1);
+                hmac.TransformFinalBlock(new[] { (byte)i }, 0, 1);
                 var t = hmac.Hash;
                 var copyLen = Math.Min(hashLen, length - written);
                 Buffer.BlockCopy(t, 0, okm, written, copyLen);
                 written += copyLen;
-                
+
                 previous = t;
             }
-            
+
             CryptographicOperations.ZeroMemory(previous);
             return okm;
         }

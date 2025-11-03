@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <LangVersion>12</LangVersion>
+        <PackageId>SP.Shared.Rank</PackageId>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\SP.Core\SP.Core.csproj"/>
+        <ProjectReference Include="..\SP.Shared.Database\SP.Shared.Database.csproj"/>
+    </ItemGroup>
+
+</Project>

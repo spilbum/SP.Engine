@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Numerics;
 
 namespace SP.Engine.Runtime.Security
@@ -11,11 +12,6 @@ namespace SP.Engine.Runtime.Security
 
     internal class DhParameters
     {
-        public BigInteger P { get; }
-        public BigInteger Q { get; } // (p-1)/2 또는 소인수 q
-        public BigInteger G { get; }
-        public int PublicKeyByteLength { get; }
-
         private DhParameters(BigInteger p, BigInteger q, BigInteger g)
         {
             P = p;
@@ -25,13 +21,18 @@ namespace SP.Engine.Runtime.Security
             PublicKeyByteLength = (p.GetBitLength() + 7) / 8;
         }
 
+        public BigInteger P { get; }
+        public BigInteger Q { get; } // (p-1)/2 또는 소인수 q
+        public BigInteger G { get; }
+        public int PublicKeyByteLength { get; }
+
         public static DhParameters From(DhKeySize keySize)
         {
             switch (keySize)
             {
                 case DhKeySize.Test512:
-                    const string pTestHex = "F7E75FDC469067FFDC4E847C51F452DF"; 
-                    var p = BigInteger.Parse("0" + pTestHex, System.Globalization.NumberStyles.HexNumber);
+                    const string pTestHex = "F7E75FDC469067FFDC4E847C51F452DF";
+                    var p = BigInteger.Parse("0" + pTestHex, NumberStyles.HexNumber);
                     var q = (p - BigInteger.One) / 2;
                     var g = new BigInteger(2);
                     return new DhParameters(p, q, g);
@@ -50,7 +51,7 @@ namespace SP.Engine.Runtime.Security
 
                     // Note: some representations include slightly different spacing/linebreaks;
                     // above string is the RFC3526 2048-bit prime concatenated.
-                    var pVal = BigInteger.Parse("0" + pHex, System.Globalization.NumberStyles.HexNumber);
+                    var pVal = BigInteger.Parse("0" + pHex, NumberStyles.HexNumber);
 
                     // For safe-prime groups, q = (p - 1) / 2
                     var qVal = (pVal - BigInteger.One) / 2;

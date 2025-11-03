@@ -4,18 +4,20 @@ namespace SP.Engine.Runtime.Networking
 {
     public class TcpMessage : BaseMessage<TcpHeader>
     {
-        public long SequenceNumber => Header.SequenceNumber;
-        
         public TcpMessage()
         {
-            
         }
 
-        public TcpMessage(TcpHeader header, ArraySegment<byte> payload)
-            : base(header, payload)
+        public TcpMessage(TcpHeader header, byte[] body) : base(header, body)
         {
         }
-        
+
+        public TcpMessage(TcpHeader header, ReadOnlyMemory<byte> payload) : base(header, payload)
+        {
+        }
+
+        public long SequenceNumber => Header.SequenceNumber;
+
         public void SetSequenceNumber(long sequenceNumber)
         {
             Header = new TcpHeaderBuilder()
@@ -23,24 +25,21 @@ namespace SP.Engine.Runtime.Networking
                 .WithSequenceNumber(sequenceNumber)
                 .Build();
         }
-        
+
         public ArraySegment<byte> ToArraySegment()
         {
-            var header = Header;
-            var body = Body;
-            var buf = new byte[header.Size + body.Count];
+            var hSize = Header.Size;
+            var bLen = Body.Length;
+            var buf = new byte[hSize + bLen];
             var span = buf.AsSpan();
-            
-            // Tcp 헤더
-            header.WriteTo(span);
-            
-            // 페이로드
-            if (body.Count > 0 && body.Array != null)
-                Buffer.BlockCopy(body.Array, body.Offset, buf, header.Size, body.Count);
-            
-            return new ArraySegment<byte>(buf);
+
+            Header.WriteTo(span[..hSize]);
+            if (bLen > 0)
+                Body.Span.CopyTo(span.Slice(hSize, bLen));
+
+            return new ArraySegment<byte>(buf, 0, buf.Length);
         }
-        
+
         protected override TcpHeader CreateHeader(HeaderFlags flags, ushort id, int payloadLength)
         {
             return new TcpHeaderBuilder()

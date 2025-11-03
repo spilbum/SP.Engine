@@ -5,7 +5,7 @@ namespace SP.Engine.Runtime.Networking
     public readonly struct TcpHeader : IHeader
     {
         public const int ByteSize = 1 + 8 + 2 + 4; // 15 bytes
-        
+
         public HeaderFlags Flags { get; }
         public long SequenceNumber { get; }
         public ushort MsdId { get; }
@@ -21,6 +21,11 @@ namespace SP.Engine.Runtime.Networking
             Size = ByteSize;
         }
 
+        public bool HasFlag(HeaderFlags flags)
+        {
+            return (Flags & flags) != 0;
+        }
+
         public void WriteTo(Span<byte> destination)
         {
             destination[0] = (byte)Flags;
@@ -34,10 +39,10 @@ namespace SP.Engine.Runtime.Networking
             if (source.Length < ByteSize)
             {
                 header = default;
-                consumed = 0;   
+                consumed = 0;
                 return false;
             }
-            
+
             var flags = (HeaderFlags)source[0];
             var sequenceNumber = source.ReadInt64(1);
             var id = source.ReadUInt16(9);
@@ -51,9 +56,9 @@ namespace SP.Engine.Runtime.Networking
     public class TcpHeaderBuilder
     {
         private HeaderFlags _flags;
-        private long _sequenceNumber;
         private ushort _id;
         private int _payloadLength;
+        private long _sequenceNumber;
 
         public TcpHeaderBuilder From(TcpHeader header)
         {
@@ -87,8 +92,10 @@ namespace SP.Engine.Runtime.Networking
             _payloadLength = payloadLength;
             return this;
         }
-        
+
         public TcpHeader Build()
-            => new TcpHeader(_flags, _sequenceNumber, _id, _payloadLength);
+        {
+            return new TcpHeader(_flags, _sequenceNumber, _id, _payloadLength);
+        }
     }
 }

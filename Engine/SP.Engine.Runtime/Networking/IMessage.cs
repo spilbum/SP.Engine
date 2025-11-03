@@ -1,4 +1,3 @@
-using System;
 using SP.Engine.Runtime.Compression;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Runtime.Security;

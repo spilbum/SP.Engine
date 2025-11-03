@@ -15,35 +15,32 @@ namespace SP.Engine.Runtime.Protocol
             };
         }
     }
-    
+
     public enum Toggle
     {
         Inherit = 0,
         On = 1,
         Off = 2
     }
-    
+
     [AttributeUsage(AttributeTargets.Class, Inherited = false)]
     public sealed class ProtocolAttribute : Attribute
     {
-        public ushort Id { get; }
-        public ChannelKind Channel { get; }
-        public Toggle Encrypt { get; }
-        public Toggle Compress { get; }
-        public int CompressionThreshold { get; }
-        
         public ProtocolAttribute(
-            ushort id, 
-            ChannelKind channel = ChannelKind.Reliable, 
-            Toggle encrypt = Toggle.Inherit, 
-            Toggle compress = Toggle.Inherit,
-            int compressionThreshold = 0)
+            ushort protocolId,
+            ChannelKind channel = ChannelKind.Reliable,
+            Toggle encrypt = Toggle.Inherit,
+            Toggle compress = Toggle.Inherit)
         {
-            Id = id;
+            ProtocolId = protocolId;
             Channel = channel;
             Encrypt = encrypt;
             Compress = compress;
-            CompressionThreshold = compressionThreshold;
         }
+
+        public ushort ProtocolId { get; }
+        public ChannelKind Channel { get; }
+        public Toggle Encrypt { get; }
+        public Toggle Compress { get; }
     }
 }
