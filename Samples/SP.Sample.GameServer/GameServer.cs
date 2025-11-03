@@ -54,8 +54,11 @@ public class GameServer : Engine.Server.Engine
         return _openPort;
     }
 
-    public bool Initialize(AppOptions options)
+    public bool Initialize(AppConfig appConfig)
     {
+        if (appConfig.Server == null)
+            return false;
+        
         var builder = new EngineConfigBuilder()
             .WithNetwork(n => n with
             {
@@ -68,28 +71,36 @@ public class GameServer : Engine.Server.Engine
                 PrefLoggerEnabled = false,
                 PerfLoggingPeriod = TimeSpan.FromSeconds(15)
             })
-            .AddListener(new ListenerConfig { Ip = "Any", Port = options.Server.Port });
+            .AddListener(new ListenerConfig { Ip = "Any", Port = appConfig.Server.Port });
 
-        foreach (var connector in options.Connector)
-            builder.AddConnector(new ConnectorConfig
-                { Name = connector.Name, Host = connector.Host, Port = connector.Port });
+        if (appConfig.Connector != null)
+        {
+            foreach (var connector in appConfig.Connector)
+            {
+                builder.AddConnector(new Engine.Server.Configuration.ConnectorConfig
+                    { Name = connector.Name, Host = connector.Host, Port = connector.Port });   
+            }
+        }
 
         var config = builder.Build();
-        if (!base.Initialize(options.Server.Name, config))
+        if (!base.Initialize(appConfig.Server.Name, config))
             return false;
 
-        foreach (var database in options.Database)
+        _openPort = appConfig.Server.Port;
+
+        if (appConfig.Database != null)
         {
-            if (!Enum.TryParse(database.Kind, true, out DbKind kind) ||
-                string.IsNullOrEmpty(database.ConnectionString))
-                return false;
+            foreach (var database in appConfig.Database)
+            {
+                if (!Enum.TryParse(database.Kind, true, out DbKind kind) ||
+                    string.IsNullOrEmpty(database.ConnectionString))
+                    return false;
 
-            _connector.Add(kind, database.ConnectionString);
+                _connector.Add(kind, database.ConnectionString);
+            }
         }
-        
-        Repository = new GameRepository(_connector);
 
-        _openPort = options.Server.Port;
+        Repository = new GameRepository(_connector);
         RoomManager = new GameRoomManager();
         Matchmaker = new Matchmaker(
             RoomManager,

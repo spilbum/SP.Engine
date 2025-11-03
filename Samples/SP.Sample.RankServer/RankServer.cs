@@ -76,8 +76,11 @@ public class RankServer : Engine.Server.Engine
     public static RankServer Instance { get; private set; } = null!;
     public RankRepository Repository { get; private set; } = null!;
 
-    public bool Initialize(AppOptions options)
+    public bool Initialize(AppConfig appConfig)
     {
+        if (appConfig.Server == null)
+            return false;
+        
         var config = new EngineConfigBuilder()
             .WithNetwork(n => n with
             {
@@ -90,19 +93,22 @@ public class RankServer : Engine.Server.Engine
                 PrefLoggerEnabled = false,
                 PerfLoggingPeriod = TimeSpan.FromSeconds(15)
             })
-            .AddListener(new ListenerConfig { Ip = "Any", Port = options.Server.Port })
+            .AddListener(new ListenerConfig { Ip = "Any", Port = appConfig.Server.Port })
             .Build();
 
-        if (!base.Initialize(options.Server.Name, config))
+        if (!base.Initialize(appConfig.Server.Name, config))
             return false;
 
-        foreach (var database in options.Database)
+        if (appConfig.Database != null)
         {
-            if (!Enum.TryParse(database.Kind, true, out DbKind kind) ||
-                string.IsNullOrEmpty(database.ConnectionString))
-                return false;
+            foreach (var database in appConfig.Database)
+            {
+                if (!Enum.TryParse(database.Kind, true, out DbKind kind) ||
+                    string.IsNullOrEmpty(database.ConnectionString))
+                    return false;
         
-            _dbConnector.Add(kind, database.ConnectionString);
+                _dbConnector.Add(kind, database.ConnectionString);
+            }   
         }
 
         Repository = new RankRepository(_dbConnector);

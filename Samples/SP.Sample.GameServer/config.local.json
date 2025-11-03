@@ -1,0 +1,19 @@
+{
+  "Server": {
+    "Name": "Game",
+    "Port": 10000
+  },
+  "Connector": [
+    {
+      "Name": "Rank",
+      "Host": "127.0.0.1",
+      "Port": 20000
+    }
+  ],
+  "Database": [
+    {
+      "Kind": "Game",
+      "ConnectionString": "Server=127.0.0.1;Database=GameDB;User ID=spilbum;Password=1234;"
+    }
+  ]
+}

@@ -1,31 +1,99 @@
 ﻿using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace SP.Sample.GameServer;
 
-public class ServerOptions
+public class ServerConfig
 {
-    public string Name { get; set; } = string.Empty;
+    public string? Name { get; set; }
     public int Port { get; set; }
 }
 
-public class DatabaseOptions
+public class DatabaseConfig
 {
-    public string Kind { get; set; } = string.Empty;
-    public string ConnectionString { get; set; } = string.Empty;
+    public string? Kind { get; set; }
+    public string? ConnectionString { get; set; }
 }
 
-public class ConnectorOptions
+public class ConnectorConfig
 {
-    public string Name { get; set; } = string.Empty;
-    public string Host { get; set; } = string.Empty;
-    public int Port { get; set; } = 0;
+    public string? Name { get; set; }
+    public string? Host { get; set; }
+    public int Port { get; set; }
 }
 
-public class AppOptions
+public class AppConfig
 {
-    public ServerOptions Server { get; set; } = new();
-    public DatabaseOptions[] Database { get; set; } = [];
-    public ConnectorOptions[] Connector { get; set; } = [];
+    public ServerConfig? Server { get; set; }
+    public DatabaseConfig[]? Database { get; set; }
+    public ConnectorConfig[]? Connector { get; set; }
+}
+
+public static class JsonConfigLoader
+{
+    private static readonly JsonSerializerOptions Options = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+    
+    public static T? Load<T>(string path, params string[] addPaths)
+    {
+        if (!File.Exists(path))
+            throw new FileNotFoundException($"File {path} not found");
+
+        var baseNode = ReadAsNode(path);
+        foreach (var addPath in addPaths)
+        {
+            var addNode = ReadAsNode(addPath);
+            DeepMerge(baseNode, addNode);
+        }
+        
+        var json = baseNode.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+        return JsonSerializer.Deserialize<T>(json, Options);
+    }
+
+    private static JsonNode ReadAsNode(string path)
+    {
+        using var fs = File.OpenRead(path);
+        var node = JsonNode.Parse(fs, new JsonNodeOptions { PropertyNameCaseInsensitive = true });
+        if (node is null) throw new InvalidDataException($"Invalid JSON file: {path}");
+        return node;
+    }
+
+    private static void DeepMerge(JsonNode baseNode, JsonNode addNode)
+    {
+        if (addNode is not JsonObject addObj ||
+            baseNode is not JsonObject baseObj)
+        {
+            return;
+        }
+        
+        foreach (var (key, addVal) in addObj)
+        {
+            if (!baseObj.TryGetPropertyValue(key, out var baseVal) || baseVal is null || addVal is null)
+            {
+                baseObj[key] = addVal?.DeepClone();
+                continue;
+            }
+
+            switch (baseVal)
+            {
+                case JsonObject when addVal is JsonObject:
+                    DeepMerge(baseVal, addVal);
+                    break;
+                case JsonArray baseArr when addVal is JsonArray addArr:
+                {
+                    // 설정 추가
+                    foreach (var item in addArr)
+                        baseArr.Add(item?.DeepClone());
+                    break;
+                }
+                default:
+                    baseObj[key] = addVal.DeepClone();
+                    break;
+            }
+        }
+    }
 }
 
 internal static class Program
@@ -34,17 +102,13 @@ internal static class Program
     {
         try
         {
-            var json = File.ReadAllText("appsettings.json");
-            var options = JsonSerializer.Deserialize<AppOptions>(json, new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            });
-
-            if (options == null)
-                throw new InvalidOperationException("Failed to deserialize appsettings.json");
+            var path = args.Length > 0 ? args[0] : "config.json";
+            var config = JsonConfigLoader.Load<AppConfig>(path);
+            if (config == null)
+                throw new InvalidOperationException("Failed to deserialize config file.");
 
             using var server = new GameServer();
-            if (!server.Initialize(options))
+            if (!server.Initialize(config))
                 throw new InvalidOperationException("Failed to initialize server");
             if (!server.Start())
                 throw new InvalidOperationException("Failed to start server");
