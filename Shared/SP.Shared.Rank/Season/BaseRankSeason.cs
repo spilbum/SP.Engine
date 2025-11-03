@@ -136,8 +136,9 @@ public abstract class BaseRankSeason<TKey, TRecord, TComparer>(ILogger logger, s
         var next = Interlocked.Exchange(ref _pendingStateValue, -1);
         if (next == -1) return;
 
-        var prev = Interlocked.CompareExchange(ref _stateValue, next, _stateValue);
-        if (prev != _stateValue)
+        var state = _stateValue;
+        var prev = Interlocked.CompareExchange(ref _stateValue, next, state);
+        if (prev != state)
             return;
 
         if (Interlocked.Exchange(ref _stateChanging, 1) == 1)

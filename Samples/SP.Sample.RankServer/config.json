@@ -2,11 +2,5 @@
   "Server": {
     "Name": "Rank",
     "Port": 20000
-  },
-  "Database": [
-    {
-      "Kind": "Rank",
-      "ConnectionString": "Server=127.0.0.1;Database=RankDB;User ID=spilbum;Password=1234;"
-    }
-  ]
+  }
 }

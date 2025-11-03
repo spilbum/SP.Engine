@@ -84,6 +84,29 @@ public class RankRepository(MySqlDbConnector connector)
         dict[season.SeasonNum] = season;
     }
 
+    public void EndRankSeason(SeasonKind kind, int seasonNum)
+    {
+        if (connector.CanOpen(DbKind.Rank))
+        {
+            using var conn = connector.Open(DbKind.Rank);
+            RankDb.EndSeason(conn, kind, seasonNum);
+            return;
+        }
+
+        if (!_seasons.TryGetValue(kind, out var bySeason) ||
+            !bySeason.TryGetValue(seasonNum, out var season))
+        {
+            return;
+        }
+        
+        season.State = (byte)SeasonState.Ended;
+        if (_records.TryGetValue(kind, out var dict) &&
+            dict.TryGetValue(season.SeasonNum, out var records))
+        {
+            records.Clear();
+        }
+    }
+
     public void UpsertRankSeasonRecord(RankDb.RankSeasonRecordEntity record)
     {
         if (connector.CanOpen(DbKind.Rank))

@@ -96,7 +96,7 @@ public class GameServer : Engine.Server.Engine
                     string.IsNullOrEmpty(database.ConnectionString))
                     return false;
 
-                _connector.Add(kind, database.ConnectionString);
+                _connector.Register(kind, database.ConnectionString);
             }
         }
 

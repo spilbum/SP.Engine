@@ -180,6 +180,8 @@ public class DailyRankSeason : BaseRankSeason<long, PlayerRankRecord, PlayerScor
     {
         try
         {
+            RankServer.Instance.Repository.EndRankSeason(Kind, SeasonNum);
+            
             var top10 = GetTopInfos(10);
             foreach (var record in top10)
             {
@@ -225,6 +227,7 @@ public class DailyRankSeason : BaseRankSeason<long, PlayerRankRecord, PlayerScor
             }
 
             LoadSeasonRewardsFromDb(Kind);
+            Clear();
             RequestState((int)SeasonState.Ended);
         }
         catch (Exception e)

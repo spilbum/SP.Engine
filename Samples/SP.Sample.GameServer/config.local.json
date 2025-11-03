@@ -13,7 +13,7 @@
   "Database": [
     {
       "Kind": "Game",
-      "ConnectionString": "Server=127.0.0.1;Database=GameDB;User ID=spilbum;Password=1234;"
+      "ConnectionString": "Server=127.0.0.1;Database=GameDB;User ID=test_user;Password=1234;"
     }
   ]
 }

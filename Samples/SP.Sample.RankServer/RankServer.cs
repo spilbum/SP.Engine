@@ -107,7 +107,7 @@ public class RankServer : Engine.Server.Engine
                     string.IsNullOrEmpty(database.ConnectionString))
                     return false;
         
-                _dbConnector.Add(kind, database.ConnectionString);
+                _dbConnector.Register(kind, database.ConnectionString);
             }   
         }
 

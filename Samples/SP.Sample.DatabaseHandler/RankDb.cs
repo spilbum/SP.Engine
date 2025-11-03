@@ -16,7 +16,7 @@ public static class RankDb
 
     public static RankSeasonEntity? LoadSeason(DbConn conn, SeasonKind kind, int seasonNum)
     {
-        using var cmd = conn.CreateCommand(CommandType.StoredProcedure, "Proc_Season_Load");
+        using var cmd = conn.CreateCommand(CommandType.StoredProcedure, "Proc_Season_LoadSeason");
         cmd.Add("season_kind", DbType.Byte, kind);
         cmd.Add("season_num", DbType.Int32, seasonNum);
         return cmd.ExecuteReader<RankSeasonEntity>();
@@ -27,6 +27,14 @@ public static class RankDb
         using var cmd = conn.CreateCommand(CommandType.StoredProcedure, "Proc_Season_Upsert");
         cmd.AddWithEntity(season);
         return cmd.ExecuteNonQuery() > 0;
+    }
+
+    public static void EndSeason(DbConn conn, SeasonKind kind, int seasonNum)
+    {
+        using var cmd = conn.CreateCommand(CommandType.StoredProcedure, "Proc_Season_EndSeason");
+        cmd.Add("season_kind", DbType.Byte, kind);
+        cmd.Add("season_num", DbType.Int32, seasonNum);
+        cmd.ExecuteNonQuery();
     }
 
     public static List<RankSeasonRecordEntity> LoadAllSeasonRecords(DbConn conn, SeasonKind kind, int seasonNum)
@@ -52,7 +60,7 @@ public static class RankDb
         cmd.AddWithEntity(record);
         cmd.ExecuteNonQuery();
     }
-
+    
     public static List<RankSeasonRewardEntity> LoadAllSeasonRewards(DbConn conn, SeasonKind kind)
     {
         using var cmd = conn.CreateCommand(CommandType.StoredProcedure, "Proc_Season_LoadAllRewards");
