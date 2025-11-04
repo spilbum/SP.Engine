@@ -354,12 +354,8 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
 
     private void StopClearIdleSessionTimer()
     {
-        if (null == _clearIdleSessionTimer)
-            return;
-
-        _clearIdleSessionTimer.Dispose();
+        _clearIdleSessionTimer?.Dispose();
         _clearIdleSessionTimer = null;
-        Logger.Debug("Timer stopped.");
     }
 
     private void ClearIdleSession(object state)

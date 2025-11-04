@@ -78,9 +78,6 @@ public class RankServer : Engine.Server.Engine
 
     public bool Initialize(AppConfig appConfig)
     {
-        if (appConfig.Server == null)
-            return false;
-        
         var config = new EngineConfigBuilder()
             .WithNetwork(n => n with
             {
@@ -99,17 +96,14 @@ public class RankServer : Engine.Server.Engine
         if (!base.Initialize(appConfig.Server.Name, config))
             return false;
 
-        if (appConfig.Database != null)
+        foreach (var database in appConfig.Database)
         {
-            foreach (var database in appConfig.Database)
-            {
-                if (!Enum.TryParse(database.Kind, true, out DbKind kind) ||
-                    string.IsNullOrEmpty(database.ConnectionString))
-                    return false;
+            if (!Enum.TryParse(database.Kind, true, out DbKind kind) ||
+                string.IsNullOrEmpty(database.ConnectionString))
+                return false;
         
-                _dbConnector.Register(kind, database.ConnectionString);
-            }   
-        }
+            _dbConnector.Register(kind, database.ConnectionString);
+        }  
 
         Repository = new RankRepository(_dbConnector);
         

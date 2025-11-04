@@ -56,9 +56,6 @@ public class GameServer : Engine.Server.Engine
 
     public bool Initialize(AppConfig appConfig)
     {
-        if (appConfig.Server == null)
-            return false;
-        
         var builder = new EngineConfigBuilder()
             .WithNetwork(n => n with
             {
@@ -73,13 +70,10 @@ public class GameServer : Engine.Server.Engine
             })
             .AddListener(new ListenerConfig { Ip = "Any", Port = appConfig.Server.Port });
 
-        if (appConfig.Connector != null)
+        foreach (var connector in appConfig.Connector)
         {
-            foreach (var connector in appConfig.Connector)
-            {
-                builder.AddConnector(new Engine.Server.Configuration.ConnectorConfig
-                    { Name = connector.Name, Host = connector.Host, Port = connector.Port });   
-            }
+            builder.AddConnector(new Engine.Server.Configuration.ConnectorConfig
+                { Name = connector.Name, Host = connector.Host, Port = connector.Port });   
         }
 
         var config = builder.Build();
@@ -88,16 +82,13 @@ public class GameServer : Engine.Server.Engine
 
         _openPort = appConfig.Server.Port;
 
-        if (appConfig.Database != null)
+        foreach (var database in appConfig.Database)
         {
-            foreach (var database in appConfig.Database)
-            {
-                if (!Enum.TryParse(database.Kind, true, out DbKind kind) ||
-                    string.IsNullOrEmpty(database.ConnectionString))
-                    return false;
+            if (!Enum.TryParse(database.Kind, true, out DbKind kind) ||
+                string.IsNullOrEmpty(database.ConnectionString))
+                return false;
 
-                _connector.Register(kind, database.ConnectionString);
-            }
+            _connector.Register(kind, database.ConnectionString);
         }
 
         Repository = new GameRepository(_connector);
