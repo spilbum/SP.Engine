@@ -8,6 +8,7 @@ public class ServerConfig
 {
     public string Name { get; set; } = "";
     public int Port { get; set; } = 0;
+    public string[] AcceptServers { get; set; } = [];
 }
 
 public class DatabaseConfig

@@ -12,20 +12,21 @@ public class RegisterReq : BaseCommand<BaseServerPeer, S2SProtocolData.RegisterR
     {
         var ack = new S2SProtocolData.RegisterAck { Result = ErrorCode.Unknown };
 
-        var peer = protocol.Name switch
+        if (string.IsNullOrEmpty(protocol.Name))
         {
-            "Game" => new GameServerPeer(context),
-            _ => throw new InvalidCastException($"Unknown server name: {protocol.Name}")
-        };
-
-        if (!RankServer.Instance.RegisterPeer(peer))
+            ack.Result = ErrorCode.InvalidRequest;
+            context.Send(ack);
+            return;
+        }
+        
+        var errorCode = RankServer.Instance.RegisterPeer(protocol.Name, context);
+        if (errorCode != ErrorCode.Ok)
         {
-            ack.Result = ErrorCode.InternalError;
+            ack.Result = errorCode;
             context.Send(ack);
             return;
         }
 
-        context.Logger.Info("Server {0} registered", protocol.Name);
         ack.Result = ErrorCode.Ok;
         context.Send(ack);
     }

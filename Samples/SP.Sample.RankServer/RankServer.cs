@@ -67,6 +67,7 @@ public class RankServer : Engine.Server.Engine
 {
     private readonly ConcurrentDictionary<SeasonKind, IRankSeason> _seasons = new();
     private readonly MySqlDbConnector _dbConnector = new();
+    private readonly List<string> _acceptServers = [];
     
     public RankServer()
     {
@@ -78,17 +79,19 @@ public class RankServer : Engine.Server.Engine
 
     public bool Initialize(AppConfig appConfig)
     {
-        var config = new EngineConfigBuilder()
+        var config = EngineConfigBuilder.Create()
             .WithNetwork(n => n with
             {
             })
             .WithSession(s => s with
             {
             })
-            .WithRuntime(r => r with
+            .WithPerf(r => r with
             {
-                PrefLoggerEnabled = false,
-                PerfLoggingPeriod = TimeSpan.FromSeconds(15)
+                MonitorEnabled = true,
+                SamplePeriod = TimeSpan.FromSeconds(1),
+                LoggerEnabled = true,
+                LoggingPeriod = TimeSpan.FromSeconds(30)
             })
             .AddListener(new ListenerConfig { Ip = "Any", Port = appConfig.Server.Port })
             .Build();
@@ -103,10 +106,14 @@ public class RankServer : Engine.Server.Engine
                 return false;
         
             _dbConnector.Register(kind, database.ConnectionString);
-        }  
+        }
+
+        foreach (var allowed in appConfig.Server.AcceptServers)
+        {
+            _acceptServers.Add(allowed);
+        }
 
         Repository = new RankRepository(_dbConnector);
-        
         CreateDailyRankSeason();
         return true;
     }
@@ -149,13 +156,29 @@ public class RankServer : Engine.Server.Engine
         throw new NotImplementedException();
     }
 
-    public bool RegisterPeer(BaseServerPeer peer)
+    public ErrorCode RegisterPeer(string name, BaseServerPeer peer)
     {
-        return AddOrUpdatePeer(peer);
+        if (!_acceptServers.Contains(name))
+            return ErrorCode.InternalError;
+        
+        BasePeer serverPeer;
+        switch (name)
+        {
+            case "Game":
+                serverPeer = new GameServerPeer(peer);
+                break;
+            default:
+                Logger.Warn("Unknown server: {0}", name);
+                return ErrorCode.InternalError;
+        }
+        
+        if (!AddOrUpdatePeer(serverPeer))
+            return ErrorCode.InternalError;
+
+        Logger.Info("Server {0} registered.", name);
+        return ErrorCode.Ok;
     }
 
     public bool TryGetSeason(SeasonKind kind, out IRankSeason? season)
-    {
-        return _seasons.TryGetValue(kind, out season);
-    }
+        => _seasons.TryGetValue(kind, out season);
 }

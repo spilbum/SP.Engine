@@ -4,6 +4,8 @@ namespace SP.Core.Fiber
 {
     public interface IFiberScheduler : IDisposable
     {
+        bool IsRunning { get; }
+        
         bool TryEnqueue(IAsyncJob job);
         bool TryEnqueue(Action action);
         bool TryEnqueue<T>(Action<T> action, T state);

@@ -56,17 +56,17 @@ public class GameServer : Engine.Server.Engine
 
     public bool Initialize(AppConfig appConfig)
     {
-        var builder = new EngineConfigBuilder()
+        var builder = EngineConfigBuilder.Create()
             .WithNetwork(n => n with
             {
             })
             .WithSession(s => s with
             {
             })
-            .WithRuntime(r => r with
+            .WithPerf(r => r with
             {
-                PrefLoggerEnabled = false,
-                PerfLoggingPeriod = TimeSpan.FromSeconds(15)
+                LoggerEnabled = false,
+                LoggingPeriod = TimeSpan.FromSeconds(15)
             })
             .AddListener(new ListenerConfig { Ip = "Any", Port = appConfig.Server.Port });
 

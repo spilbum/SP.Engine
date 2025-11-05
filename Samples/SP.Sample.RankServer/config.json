@@ -1,6 +1,7 @@
 {
   "Server": {
     "Name": "Rank",
-    "Port": 20000
+    "Port": 20000,
+    "AcceptServers": [ "Game" ]
   }
 }

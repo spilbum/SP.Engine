@@ -101,11 +101,15 @@ public abstract class BaseConnector : BaseNetPeer, IConnector, ICommandContext
     private void OnDisconnected(object sender, EventArgs e)
     {
         Interlocked.Exchange(ref _connecting, 0);
-        _reconnectSchedule ??= _scheduler.Schedule(
-            Connect,
-            Host,
-            Port,
-            TimeSpan.Zero,
-            TimeSpan.FromSeconds(Config.ReconnectAttemptIntervalSec));
+
+        if (_scheduler.IsRunning)
+        {
+            _reconnectSchedule ??= _scheduler.Schedule(
+                Connect,
+                Host,
+                Port,
+                TimeSpan.Zero,
+                TimeSpan.FromSeconds(Config.ReconnectAttemptIntervalSec));   
+        }
     }
 }

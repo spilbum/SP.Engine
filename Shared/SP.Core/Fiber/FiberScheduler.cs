@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using SP.Core.Logging;
 
 namespace SP.Core.Fiber
@@ -9,7 +10,10 @@ namespace SP.Core.Fiber
         private readonly ILogger _logger;
         private readonly Scheduler _scheduler;
         private volatile bool _disposed;
+        private volatile bool _running;
 
+        public bool IsRunning => _running;
+        
         public FiberScheduler(
             ILogger logger,
             string name,
@@ -19,6 +23,7 @@ namespace SP.Core.Fiber
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _fiber = new ThreadFiber(logger, name, maxBatchSize, queueCapacity);
             _scheduler = new Scheduler();
+            _running = true;
         }
 
         public bool TryEnqueue(IAsyncJob job)
@@ -64,7 +69,8 @@ namespace SP.Core.Fiber
         {
             if (_disposed) return;
             _disposed = true;
-
+            _running = false;
+            
             try
             {
                 _scheduler.Dispose();

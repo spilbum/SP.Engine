@@ -64,7 +64,7 @@ public abstract class Engine : BaseEngine, IEngine
         if (!SetupConnector(config.Connectors))
             return false;
 
-        SetupPerfMonitor(config.Runtime);
+        SetupPerfMonitor(config.Perf);
 
         Logger.Info("The server {0} is initialized.", name);
         return true;
@@ -101,15 +101,15 @@ public abstract class Engine : BaseEngine, IEngine
         return DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     }
 
-    private void SetupPerfMonitor(RuntimeConfig config)
+    private void SetupPerfMonitor(PerfConfig config)
     {
-        if (!config.PerfMonitorEnabled)
+        if (!config.MonitorEnabled)
             return;
 
         _perfMonitor = new PerfMonitor();
-        Scheduler.Schedule(_perfMonitor.Tick, TimeSpan.Zero, config.PerfSamplePeriod);
+        Scheduler.Schedule(_perfMonitor.Tick, TimeSpan.Zero, config.SamplePeriod);
 
-        if (!config.PrefLoggerEnabled)
+        if (!config.LoggerEnabled)
             return;
 
         _perfLogger = LogManager.GetLogger("PerfMonitor");
@@ -117,7 +117,7 @@ public abstract class Engine : BaseEngine, IEngine
         {
             if (_perfMonitor.TryGetLast(out var metrics))
                 _perfLogger.Info(metrics.ToString());
-        }, TimeSpan.Zero, config.PerfLoggingPeriod);
+        }, TimeSpan.Zero, config.LoggingPeriod);
     }
 
     private bool SetupConnector(List<ConnectorConfig> connectors)

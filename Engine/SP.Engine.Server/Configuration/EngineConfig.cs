@@ -7,7 +7,7 @@ public interface IEngineConfig
 {
     NetworkConfig Network { get; }
     SessionConfig Session { get; }
-    RuntimeConfig Runtime { get; }
+    PerfConfig Perf { get; }
 }
 
 public sealed record EngineConfig : IEngineConfig
@@ -16,7 +16,7 @@ public sealed record EngineConfig : IEngineConfig
     public List<ConnectorConfig> Connectors { get; init; } = [];
     public NetworkConfig Network { get; init; } = new();
     public SessionConfig Session { get; init; } = new();
-    public RuntimeConfig Runtime { get; init; } = new();
+    public PerfConfig Perf { get; init; } = new();
 }
 
 public class EngineConfigBuilder
@@ -24,7 +24,7 @@ public class EngineConfigBuilder
     private readonly List<ConnectorConfig> _connectors = [];
     private readonly List<ListenerConfig> _listeners = [];
     private NetworkConfig _network = new();
-    private RuntimeConfig _runtime = new();
+    private PerfConfig _perf = new();
     private SessionConfig _session = new();
 
     public static EngineConfigBuilder Create()
@@ -44,9 +44,9 @@ public class EngineConfigBuilder
         return this;
     }
 
-    public EngineConfigBuilder WithRuntime(Func<RuntimeConfig, RuntimeConfig> configure)
+    public EngineConfigBuilder WithPerf(Func<PerfConfig, PerfConfig> configure)
     {
-        _runtime = configure(_runtime);
+        _perf = configure(_perf);
         return this;
     }
 
@@ -68,7 +68,7 @@ public class EngineConfigBuilder
         {
             Network = _network,
             Session = _session,
-            Runtime = _runtime,
+            Perf = _perf,
             Listeners = _listeners,
             Connectors = _connectors
         };
