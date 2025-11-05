@@ -20,19 +20,19 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SP.Engine.Protocol", "Engin
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tools", "Tools", "{B31B4670-D650-4385-9EF4-0889497C65FB}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SP.Sample.Common", "Samples\SP.Sample.Common\SP.Sample.Common.csproj", "{6EF356FE-FC8E-4BB6-862C-02FF06CEE6DA}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Common", "Samples\Common\Common.csproj", "{6EF356FE-FC8E-4BB6-862C-02FF06CEE6DA}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SP.Shared.Database", "Shared\SP.Shared.Database\SP.Shared.Database.csproj", "{C5C42F6B-5C4E-495B-A868-31903660B4BB}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SP.Shared.Rank", "Shared\SP.Shared.Rank\SP.Shared.Rank.csproj", "{61A83767-4218-4773-8BC1-9DA1E8535D6D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SP.Sample.RankServer", "Samples\SP.Sample.RankServer\SP.Sample.RankServer.csproj", "{89FA160D-F9E1-474A-8B9D-73A20748493A}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RankServer", "Samples\RankServer\RankServer.csproj", "{89FA160D-F9E1-474A-8B9D-73A20748493A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SP.Sample.GameServer", "Samples\SP.Sample.GameServer\SP.Sample.GameServer.csproj", "{C4B09D6C-3EE9-43DD-8F8C-7C5051E49717}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GameServer", "Samples\GameServer\GameServer.csproj", "{C4B09D6C-3EE9-43DD-8F8C-7C5051E49717}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SP.Sample.GameClient", "Samples\SP.Sample.GameClient\SP.Sample.GameClient.csproj", "{0D9E6249-C92D-47D0-B3AA-1B80386EEE89}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GameClient", "Samples\GameClient\GameClient.csproj", "{0D9E6249-C92D-47D0-B3AA-1B80386EEE89}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SP.Sample.DatabaseHandler", "Samples\SP.Sample.DatabaseHandler\SP.Sample.DatabaseHandler.csproj", "{62C2DB60-0C9C-4E4B-881F-04CE68D275E5}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DatabaseHandler", "Samples\DatabaseHandler\DatabaseHandler.csproj", "{62C2DB60-0C9C-4E4B-881F-04CE68D275E5}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Samples", "Samples", "{A6E4C47F-D3A5-4709-846D-80FEFB5BCB07}"
 EndProject
