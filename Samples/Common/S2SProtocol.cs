@@ -13,7 +13,11 @@ namespace Common
         [Protocol(S2SProtocol.RegisterReq)]
         public class RegisterReq : BaseProtocolData
         {
-            public string? Name;
+            public string ServerKind = string.Empty;
+            public string BuildVersion = string.Empty;
+            public string IpAddress = string.Empty;
+            public int OpenPort;
+            public int ProcessId;
         }
 
         [Protocol(S2SProtocol.RegisterAck)]

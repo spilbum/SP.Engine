@@ -1,17 +1,31 @@
 ﻿
+using Org.BouncyCastle.Tls;
+
 namespace RankServer;
 
 internal static class Program
 {
-    private static IDisposable SubscribeCtrlC(CancellationTokenSource cts)
+    private static Unsubscriber SubscribeShutdown(CancellationTokenSource cts)
     {
-        ConsoleCancelEventHandler handler = (_, e) =>
+        ConsoleCancelEventHandler handler = (sender, e) =>
         {
             e.Cancel = true;
             if (!cts.IsCancellationRequested) cts.Cancel();
         };
+
         Console.CancelKeyPress += handler;
-        return new Unsubscriber(() => Console.CancelKeyPress -= handler);
+        AppDomain.CurrentDomain.ProcessExit += Exit;
+        
+        return new Unsubscriber(() =>
+        {
+            Console.CancelKeyPress -= handler;
+            AppDomain.CurrentDomain.ProcessExit -= Exit;
+        });
+        
+        void Exit(object? o, EventArgs eventArgs)
+        {
+            if (!cts.IsCancellationRequested) cts.Cancel();
+        }
     }
 
     private sealed class Unsubscriber(Action dispose) : IDisposable
@@ -23,15 +37,15 @@ internal static class Program
     private static async Task<int> Main(string[] args)
     {
         using var cts = new CancellationTokenSource();
-        using var _ = SubscribeCtrlC(cts);
+        using var _ = SubscribeShutdown(cts);
         
         try
         {
-            var config = JsonConfigLoader.Load<AppConfig>("config.json", "config.dev.json");
+            var config = JsonConfigLoader.Load<BuildConfig>("config.json", "config.dev.json");
             if (config == null)
                 throw new InvalidOperationException("Failed to load config file(s).");
 
-            using var server = new RankServer();
+            using var server = new RankServer(cts.Token);
             if (!server.Initialize(config)) throw new InvalidOperationException("Failed to initialize.");
             if (!server.Start()) throw new InvalidOperationException("Failed to start.");
 

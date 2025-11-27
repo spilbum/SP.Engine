@@ -113,11 +113,11 @@ public class DbCmd(DbCommand command, IDbProvider provider) : IDisposable
         }
     }
 
-    public async Task<int> ExecuteNonQueryAsync()
+    public async Task<int> ExecuteNonQueryAsync(CancellationToken ct)
     {
         try
         {
-            return await _command.ExecuteNonQueryAsync();
+            return await _command.ExecuteNonQueryAsync(ct);
         }
         catch (Exception ex)
         {
@@ -151,12 +151,12 @@ public class DbCmd(DbCommand command, IDbProvider provider) : IDisposable
         return list;
     }
 
-    public async Task<List<TDbEntity>> ExecuteReaderListAsync<TDbEntity>()
+    public async Task<List<TDbEntity>> ExecuteReaderListAsync<TDbEntity>(CancellationToken ct)
         where TDbEntity : BaseDbEntity, new()
     {
-        await using var reader = await _command.ExecuteReaderAsync();
+        await using var reader = await _command.ExecuteReaderAsync(ct);
         var list = new List<TDbEntity>();
-        while (await reader.ReadAsync())
+        while (await reader.ReadAsync(ct))
         {
             var instance = new TDbEntity();
             instance.ReadData(reader);
@@ -191,27 +191,28 @@ public class DbCmd(DbCommand command, IDbProvider provider) : IDisposable
         return instances;
     }
 
-    public TValue ExecuteReaderValue<TValue>()
+    public TValue ExecuteScalar<TValue>()
     {
-        using var reader = _command.ExecuteReader();
-        if (!reader.Read())
-            throw new InvalidOperationException("Reader not found.");
+        var obj = _command.ExecuteScalar();
+        if (obj == null)
+            throw new InvalidOperationException("Null value returned.");
 
-        var value = (TValue)Convert.ChangeType(reader.GetValue(0), typeof(TValue));
-        return value;
+        var type = typeof(TValue);
+        return type.IsEnum 
+            ? (TValue)Enum.Parse(type, obj.ToString() ?? string.Empty)
+            : (TValue)Convert.ChangeType(obj, type);
     }
 
-    public List<TValue> ExecuteReaderValues<TValue>()
+    public async Task<TValue> ExecuteScalarAsync<TValue>(CancellationToken ct)
     {
-        using var reader = _command.ExecuteReader();
-        var list = new List<TValue>();
-        while (reader.Read())
-        {
-            var value = (TValue)Convert.ChangeType(reader.GetValue(0), typeof(TValue));
-            list.Add(value);
-        }
-
-        return list;
+        var obj = await _command.ExecuteScalarAsync(ct);
+        if (obj == null)
+            throw new NullReferenceException("Null value returned.");
+        
+        var type = typeof(TValue);
+        return type.IsEnum 
+            ? (TValue)Enum.Parse(type, obj.ToString() ?? string.Empty)
+            : (TValue)Convert.ChangeType(obj, type);
     }
 
     private void Dispose(bool disposing)

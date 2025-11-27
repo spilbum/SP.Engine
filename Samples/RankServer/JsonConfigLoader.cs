@@ -5,21 +5,28 @@ namespace RankServer;
 
 public class ServerConfig
 {
-    public string Name { get; set; } = "";
+    public string Name { get; set; } = string.Empty;
     public int Port { get; set; } = 0;
     public string[] AcceptServers { get; set; } = [];
 }
 
 public class DatabaseConfig
 {
-    public string Kind { get; set; } = "";
-    public string ConnectionString { get; set; } = "";
+    public string Kind { get; set; } = string.Empty;
+    public string ConnectionString { get; set; } = string.Empty;
 }
 
-public class AppConfig
+public class ResourceConfig
+{
+    public string ServerUrl { get; set; } = string.Empty;
+    public int SyncPeriodSec { get; set; } = 0;
+}
+
+public class BuildConfig
 {
     public ServerConfig Server { get; set; } = new();
     public DatabaseConfig[] Database { get; set; } = [];
+    public ResourceConfig Resource { get; set; } = new();
 }
 
 public static class JsonConfigLoader

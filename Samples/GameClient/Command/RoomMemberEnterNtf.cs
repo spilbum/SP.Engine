@@ -5,9 +5,9 @@ using SP.Engine.Runtime.Protocol;
 namespace GameClient.Command;
 
 [ProtocolCommand(G2CProtocol.RoomMemberEnterNtf)]
-public class RoomMemberEnterNtf : BaseCommand<GameClient, G2CProtocolData.RoomMemberEnterNtf>
+public class RoomMemberEnterNtf : BaseCommand<NetworkClient, G2CProtocolData.RoomMemberEnterNtf>
 {
-    protected override void ExecuteProtocol(GameClient context, G2CProtocolData.RoomMemberEnterNtf protocol)
+    protected override void ExecuteProtocol(NetworkClient context, G2CProtocolData.RoomMemberEnterNtf protocol)
     {
         context.Logger.Debug("Room member leaved. roomId={0}, member={1} ({2}), memberCnt={3}",
             protocol.RoomId, protocol.Member?.Name, protocol.Member?.UserId, protocol.RoomMemberCount);

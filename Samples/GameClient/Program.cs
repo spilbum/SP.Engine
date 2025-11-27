@@ -1,32 +1,51 @@
 ﻿using Common;
 using SP.Core.Logging;
 using SP.Engine.Client.Configuration;
+using SP.Shared.Resource;
 
 namespace GameClient;
 
 internal static class Program
 {
-    private static GameClient _client = null!;
-
-    private static void Main(string[] args)
+    private static NetworkClient? _client;
+    private static ResourceManager? _resourceManager;
+    private static int _resourceVersion = -1;
+    
+    private static void Init()
     {
-        Console.CancelKeyPress += (_, e) =>
+        _resourceManager = new ResourceManager("http://localhost:5001");
+        var res = _resourceManager.Bootstrap(
+            PlatformKind.Android,
+            "1.0.0.1",
+            _resourceVersion);
+
+        if (!res.IsAllow)
         {
-            e.Cancel = true;
-            _client.Close();
-            Environment.Exit(0);
-        };
+            return;
+        }
 
-        var host = string.Empty;
-        var port = 0;
+        _resourceVersion = res.LatestResourceVersion;
 
-        for (var i = 0; i < args.Length; i++)
-            switch (args[i])
-            {
-                case "--host": host = args[++i]; break;
-                case "--port": port = int.Parse(args[++i]); break;
-            }
+        if (!string.IsNullOrEmpty(res.ManifestUrl))
+        {
+            StartPatch(res.ManifestUrl);
+        }
 
+        var servers = res.Servers;
+        ConnectToBestServer(servers);
+    }
+
+    private static void StartPatch(string manifestUrl)
+    {
+        Console.WriteLine("manifestUrl: {0}", manifestUrl);
+    }
+
+    private static void ConnectToBestServer(List<ServerConnectionInfo> servers)
+    {
+        var server = servers.FirstOrDefault(s => s.Status == ServerStatus.Online);
+        if (server == null)
+            throw new Exception("No server found");
+        
         var config = EngineConfigBuilder.Create()
             .WithAutoPing(true, 2)
             .WithConnectAttempt(2, 15)
@@ -38,15 +57,37 @@ internal static class Program
             .Build();
 
         var logger = new ConsoleLogger("GameClient");
+        _client = new NetworkClient(config, logger);
+        _client.Connect(server.Host, server.Port);
+    }
+    
+    private static void Main(string[] args)
+    {
+        Console.CancelKeyPress += (_, e) =>
+        {
+            e.Cancel = true;
+            _client?.Close();
+            Environment.Exit(0);
+        };
+        
+        //
+        // var host = string.Empty;
+        // var port = 0;
+        //
+        // for (var i = 0; i < args.Length; i++)
+        //     switch (args[i])
+        //     {
+        //         case "--host": host = args[++i]; break;
+        //         case "--port": port = int.Parse(args[++i]); break;
+        //     }
 
         try
         {
-            _client = new GameClient(config, logger);
-            _client.Connect(host, port);
+            Init();
 
             while (true)
             {
-                _client.Tick();
+                _client?.Tick();
 
                 if (Console.KeyAvailable)
                 {
@@ -61,16 +102,22 @@ internal static class Program
         }
         catch (Exception e)
         {
-            logger.Error(e);
+            Console.WriteLine(e.Message);
         }
     }
-
+    
     private static void HandleCommand(string line)
     {
         var splits = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var command = splits[0].ToLowerInvariant();
         var args = splits.Skip(1).ToArray();
 
+        if (_client == null)
+        {
+            Console.WriteLine("client is null");
+            return;
+        }
+        
         switch (command)
         {
             case "login":

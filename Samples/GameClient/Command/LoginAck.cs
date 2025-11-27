@@ -5,9 +5,9 @@ using SP.Engine.Runtime.Protocol;
 namespace GameClient.Command;
 
 [ProtocolCommand(G2CProtocol.LoginAck)]
-public class LoginAck : BaseCommand<GameClient, G2CProtocolData.LoginAck>
+public class LoginAck : BaseCommand<NetworkClient, G2CProtocolData.LoginAck>
 {
-    protected override void ExecuteProtocol(GameClient context, G2CProtocolData.LoginAck protocol)
+    protected override void ExecuteProtocol(NetworkClient context, G2CProtocolData.LoginAck protocol)
     {
         if (protocol.Result != ErrorCode.Ok)
         {

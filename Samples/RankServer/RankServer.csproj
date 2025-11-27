@@ -9,6 +9,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\Engine\SP.Engine.Server\SP.Engine.Server.csproj"/>
+        <ProjectReference Include="..\..\Shared\SP.Shared.Resource\SP.Shared.Resource.csproj" />
         <ProjectReference Include="..\..\Shared\SP.Shared.Rank\SP.Shared.Rank.csproj"/>
         <ProjectReference Include="..\Common\Common.csproj" />
         <ProjectReference Include="..\DatabaseHandler\DatabaseHandler.csproj" />

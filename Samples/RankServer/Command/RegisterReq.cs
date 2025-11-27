@@ -12,14 +12,14 @@ public class RegisterReq : BaseCommand<BaseServerPeer, S2SProtocolData.RegisterR
     {
         var ack = new S2SProtocolData.RegisterAck { Result = ErrorCode.Unknown };
 
-        if (string.IsNullOrEmpty(protocol.Name))
+        if (string.IsNullOrEmpty(protocol.ServerKind))
         {
             ack.Result = ErrorCode.InvalidRequest;
             context.Send(ack);
             return;
         }
         
-        var errorCode = RankServer.Instance.RegisterPeer(protocol.Name, context);
+        var errorCode = RankServer.Instance.RegisterPeer(protocol, context);
         if (errorCode != ErrorCode.Ok)
         {
             ack.Result = errorCode;

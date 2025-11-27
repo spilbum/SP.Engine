@@ -1,10 +1,10 @@
 using System;
 using System.IO;
 using System.Security.Cryptography;
+using SP.Core.Serialization;
 using SP.Engine.Runtime.Compression;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Runtime.Security;
-using SP.Engine.Runtime.Serialization;
 
 namespace SP.Engine.Runtime.Networking
 {

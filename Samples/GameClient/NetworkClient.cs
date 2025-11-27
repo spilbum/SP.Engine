@@ -5,26 +5,20 @@ using SP.Engine.Client.Configuration;
 
 namespace GameClient;
 
-public class GameClient : BaseNetPeer
+public class NetworkClient : BaseNetPeer
 {
     private int _seqNo = 1;
 
-    public GameClient(EngineConfig config, ILogger logger)
+    public NetworkClient(EngineConfig config, ILogger logger)
     {
         Initialize(config, logger);
-
         Connected += OnConnected;
         Disconnected += OnDisconnected;
         Offline += OnOffline;
-        Error += OnError;
         StateChanged += OnStateChanged;
+        Error += OnError;
     }
-
-    public long Uid { get; private set; } = 1000001;
-    public string AccessToken { get; private set; } = "303d5ba6-5a31-4414-b742-c1434fb669a8";
-    public string Name { get; private set; } = "Test";
-    public string CountryCode { get; private set; } = "kr";
-
+    
     private void OnStateChanged(object? sender, StateChangedEventArgs e)
     {
         Logger.Debug("State changed: {0} -> {1}", e.OldState, e.NewState);
@@ -51,6 +45,11 @@ public class GameClient : BaseNetPeer
         Logger.Debug("Connected");
     }
 
+    public long Uid { get; private set; } = 1000001;
+    public string AccessToken { get; private set; } = "303d5ba6-5a31-4414-b742-c1434fb669a8";
+    public string Name { get; private set; } = "Test";
+    public string CountryCode { get; private set; } = "kr";
+    
     public void OnLogin(long userId, string? accessToken)
     {
         Uid = userId;

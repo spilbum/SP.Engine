@@ -4,7 +4,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using SP.Core.Accessor;
 
-namespace SP.Engine.Runtime.Serialization
+namespace SP.Core.Serialization
 {
     public static class NetSerializer
     {

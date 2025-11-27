@@ -4,7 +4,7 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text;
 
-namespace SP.Engine.Runtime.Serialization
+namespace SP.Core.Serialization
 {
     public ref struct NetReader
     {

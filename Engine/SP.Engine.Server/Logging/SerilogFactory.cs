@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.IO;
-using System.Linq;
 using Serilog;
 using Serilog.Core;
 using Serilog.Events;
@@ -23,41 +22,46 @@ public class SerilogFactory : ILoggerFactory
 {
     private readonly ConcurrentDictionary<string, ILogger> _loggers = new();
     private readonly ThreadIdEnricher _threadIdEnricher = new();
+    private readonly Logger _root;
+
+    public SerilogFactory()
+    {
+        Directory.CreateDirectory("logs");
+        
+        _root = new LoggerConfiguration()
+            .MinimumLevel.Debug()
+            .Enrich.FromLogContext()
+            .Enrich.With(_threadIdEnricher)
+            .WriteTo.Async(a => a.Console(
+                outputTemplate:
+                "[{Timestamp:HH:mm:ss.fff} {Level:u3}] [T:{ThreadId}] [{SourceContext}] {Message:lj}{NewLine}{Exception}"
+            ), 16384, true)
+            .WriteTo.Async(a => a.File(
+                $"logs/app.log",
+                rollingInterval: RollingInterval.Day,
+                rollOnFileSizeLimit: true,
+                fileSizeLimitBytes: 256 * 1024 * 1024, //256MB
+                retainedFileCountLimit: 7,
+                shared: false,
+                buffered: true,
+                flushToDiskInterval: TimeSpan.FromSeconds(2),
+                outputTemplate:
+                "[{Timestamp:HH:mm:ss.fff} {Level:u3}] [T:{ThreadId}] [{SourceContext}] {Message:lj}{NewLine}{Exception}"
+            ), 16384, true)
+            .CreateLogger();
+    }
 
     public ILogger GetLogger(string category)
     {
-        return _loggers.GetOrAdd(category, static (cat, state) =>
+        return _loggers.GetOrAdd(category, cat =>
         {
-            var serilog = new LoggerConfiguration()
-                .MinimumLevel.Debug()
-                .Enrich.FromLogContext()
-                .Enrich.With(state)
-                .WriteTo.Async(a => a.Console(
-                    outputTemplate:
-                    "[{Timestamp:HH:mm:ss.fff} {Level:u3}] [T:{ThreadId}] [{SourceContext}] {Message:lj}{NewLine}{Exception}"
-                ), 65536, true)
-                .WriteTo.Async(a => a.File(
-                    $"logs/{Safe(cat)}.log",
-                    rollingInterval: RollingInterval.Day,
-                    rollOnFileSizeLimit: true,
-                    fileSizeLimitBytes: 256 * 1024 * 1024, //256MB
-                    retainedFileCountLimit: 7,
-                    shared: false,
-                    buffered: true,
-                    flushToDiskInterval: TimeSpan.FromSeconds(2),
-                    outputTemplate:
-                    "[{Timestamp:HH:mm:ss.fff} {Level:u3}] [T:{ThreadId}] [{SourceContext}] {Message:lj}{NewLine}{Exception}"
-                ), 65536, true)
-                .CreateLogger();
-
-            var logger = serilog.ForContext(Constants.SourceContextPropertyName, cat);
+            var logger = _root.ForContext(Constants.SourceContextPropertyName, cat);
             return new SerilogLogger(logger);
-        }, _threadIdEnricher);
+        });
     }
 
-    private static string Safe(string s)
+    public void Dispose()
     {
-        return Path.GetInvalidFileNameChars()
-            .Aggregate(s, (current, ch) => current.Replace(ch, '_'));
+        if (_root is IDisposable d) d.Dispose();
     }
 }

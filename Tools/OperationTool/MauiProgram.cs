@@ -1,0 +1,60 @@
+﻿using CommunityToolkit.Maui;
+using CommunityToolkit.Maui.Storage;
+using Microsoft.Extensions.Logging;
+using Microsoft.Maui.LifecycleEvents;
+using OperationTool.DatabaseHandler;
+using OperationTool.Excel;
+using OperationTool.Pages;
+using OperationTool.Storage;
+using OperationTool.ViewModels;
+using SP.Shared.Database;
+
+#if MACCATALYST
+using UIKit;
+using CoreGraphics;
+#endif
+
+namespace OperationTool;
+
+public static class MauiProgram
+{
+    public static MauiApp CreateMauiApp()
+    {
+        var builder = MauiApp.CreateBuilder();
+        builder
+            .UseMauiApp<App>()
+            .UseMauiCommunityToolkit()
+            .ConfigureFonts(fonts =>
+            {
+                fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
+            });
+
+        builder.Services.AddSingleton<AppShell>();
+        
+        builder.Services.AddTransient<PatchTabPage>();
+        builder.Services.AddTransient<PatchTabViewModel>();
+        builder.Services.AddTransient<RunPatchPage>();
+        builder.Services.AddTransient<RunPatchViewModel>();
+        builder.Services.AddTransient<GenerateFilePage>();
+        builder.Services.AddTransient<GenerateFileViewModel>();
+        builder.Services.AddTransient<VersionTabPage>();
+        builder.Services.AddTransient<VersionTabViewModel>();
+        builder.Services.AddTransient<SettingsTabPage>();
+        builder.Services.AddTransient<SettingsTabViewModel>();
+
+        builder.Services.AddSingleton<IExcelService, ExcelService>();
+        builder.Services.AddSingleton<ISettingsStorage, ToolSettingsStorage>();
+        builder.Services.AddSingleton<ISettingsProvider, SettingsProvider>();
+
+        builder.Services.AddSingleton<IDbConnector, MySqlDbConnector>();
+        builder.Services.AddSingleton<IDbProvider, MySqlDbProvider>();
+        
+        builder.Services.AddSingleton(FolderPicker.Default);
+
+#if DEBUG
+        builder.Logging.AddDebug();
+#endif
+
+        return builder.Build();
+    }
+}

@@ -87,5 +87,8 @@ public abstract class BaseDbConnector
     protected void Unregister(string dbKind)
         => _connections.TryRemove(dbKind, out _);
     
+    protected string GetConnectionString(string dbKind)
+        => _connections.TryGetValue(dbKind, out var entry) ? entry.ConnectionString : string.Empty;
+    
     private sealed record Entry(string ConnectionString, IDbProvider Provider);
 }

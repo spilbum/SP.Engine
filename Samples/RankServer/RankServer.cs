@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Net;
 using Common;
 using RankServer.Season;
 using RankServer.ServerPeer;
@@ -6,7 +7,10 @@ using SP.Engine.Server;
 using SP.Engine.Server.Configuration;
 using SP.Engine.Server.Connector;
 using DatabaseHandler;
+using SP.Core;
+using SP.Shared.Resource;
 using SP.Shared.Rank.Season;
+using ErrorCode = Common.ErrorCode;
 
 namespace RankServer;
 
@@ -65,19 +69,33 @@ public static class RankSeasonExtensions
 
 public class RankServer : Engine
 {
+    private static readonly HttpClient Http = new(
+        new SocketsHttpHandler
+        {
+            PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+            PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
+            AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
+        })
+    {
+        Timeout = TimeSpan.FromSeconds(15)
+    };
+    
     private readonly ConcurrentDictionary<SeasonKind, IRankSeason> _seasons = new();
     private readonly MySqlDbConnector _dbConnector = new();
     private readonly List<string> _acceptServers = [];
+    private readonly CancellationToken _shutdown;
+    private IRpc? _resourceRpc;
     
-    public RankServer()
+    public RankServer(CancellationToken shutdown)
     {
         Instance = this;
+        _shutdown = shutdown;
     }
 
     public static RankServer Instance { get; private set; } = null!;
     public RankRepository Repository { get; private set; } = null!;
 
-    public bool Initialize(AppConfig appConfig)
+    public bool Initialize(BuildConfig buildConfig)
     {
         var config = EngineConfigBuilder.Create()
             .WithNetwork(n => n with
@@ -93,13 +111,13 @@ public class RankServer : Engine
                 LoggerEnabled = true,
                 LoggingPeriod = TimeSpan.FromSeconds(30)
             })
-            .AddListener(new ListenerConfig { Ip = "Any", Port = appConfig.Server.Port })
+            .AddListener(new ListenerConfig { Ip = "Any", Port = buildConfig.Server.Port })
             .Build();
 
-        if (!base.Initialize(appConfig.Server.Name, config))
+        if (!base.Initialize(buildConfig.Server.Name, config))
             return false;
 
-        foreach (var database in appConfig.Database)
+        foreach (var database in buildConfig.Database)
         {
             if (!Enum.TryParse(database.Kind, true, out DbKind kind) ||
                 string.IsNullOrEmpty(database.ConnectionString))
@@ -108,14 +126,52 @@ public class RankServer : Engine
             _dbConnector.Register(kind, database.ConnectionString);
         }
 
-        foreach (var allowed in appConfig.Server.AcceptServers)
+        foreach (var allowed in buildConfig.Server.AcceptServers)
         {
             _acceptServers.Add(allowed);
         }
 
         Repository = new RankRepository(_dbConnector);
         CreateDailyRankSeason();
+        
+        SetupResource(buildConfig.Resource);
         return true;
+    }
+
+    private void SetupResource(ResourceConfig config)
+    {
+        _resourceRpc = new HttpRpc(Http, config.ServerUrl);
+        
+        var ts = TimeSpan.FromSeconds(config.SyncPeriodSec);
+        Scheduler.ScheduleAsync(async ct =>
+        {
+            var list = new List<ServerSyncInfo>();
+            var sessions = GetAllSessions();
+            foreach (var session in sessions)
+            {
+                if (session is Session { Peer: GameServerPeer game })
+                {
+                    list.Add(new ServerSyncInfo(
+                        $"{game.ProcessId}",
+                        "Game",
+                        "kr",
+                        game.Host,
+                        game.Port,
+                        ServerStatus.Online,
+                        null,
+                        game.UpdatedUtc
+                    ));
+                }
+            }
+
+            var req = new SyncServerListReq
+            {
+                List = list,
+                UpdatedUtcMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+            };
+
+            await _resourceRpc.CallAsync<SyncServerListReq, SyncServerListRes>(MsgId.SyncServerListReq, req, ct);
+        }, ts, ts, _shutdown);
     }
 
     private void CreateDailyRankSeason()
@@ -156,26 +212,30 @@ public class RankServer : Engine
         throw new NotImplementedException();
     }
 
-    public ErrorCode RegisterPeer(string name, BaseServerPeer peer)
+    public ErrorCode RegisterPeer(S2SProtocolData.RegisterReq req, BaseServerPeer peer)
     {
-        if (!_acceptServers.Contains(name))
+        if (!_acceptServers.Contains(req.ServerKind))
             return ErrorCode.InternalError;
         
         BasePeer serverPeer;
-        switch (name)
+        switch (req.ServerKind)
         {
             case "Game":
-                serverPeer = new GameServerPeer(peer);
+                var gs = new GameServerPeer(peer, req.ProcessId);
+                gs.BuildVersion = req.BuildVersion;
+                gs.Host = req.IpAddress;
+                gs.Port = req.OpenPort;
+                serverPeer = gs;
                 break;
             default:
-                Logger.Warn("Unknown server: {0}", name);
+                Logger.Warn("Unknown server: {0}", req.ServerKind);
                 return ErrorCode.InternalError;
         }
         
         if (!AddOrUpdatePeer(serverPeer))
             return ErrorCode.InternalError;
 
-        Logger.Info("Server {0} registered.", name);
+        Logger.Info("Server {0} registered.", req.ServerKind);
         return ErrorCode.Ok;
     }
 

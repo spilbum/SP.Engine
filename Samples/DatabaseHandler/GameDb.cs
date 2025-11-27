@@ -29,7 +29,7 @@ public static class GameDb
         cmd.Add("access_token", DbType.StringFixedLength, accessToken, 36);
         cmd.Add("name", DbType.String, name, 64);
         cmd.Add("country_code", DbType.StringFixedLength, countryCode, 2);
-        return cmd.ExecuteReaderValue<long>();
+        return cmd.ExecuteScalar<long>();
     }
 
     public class UserEntity : BaseDbEntity

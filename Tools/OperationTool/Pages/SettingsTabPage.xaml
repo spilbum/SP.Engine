@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="OperationTool.Pages.SettingsTabPage">
+    
+    <ContentPage.Content>
+        <ScrollView>
+            <VerticalStackLayout Padding="16" Spacing="16">
+                
+                <Frame Padding="12"
+                       HasShadow="False"
+                       BorderColor="{DynamicResource Gray300}">
+                    <VerticalStackLayout Spacing="8">
+                        <Label Text="Database Connection"
+                               FontAttributes="Bold"
+                               FontSize="Medium" />
+                        
+                        <HorizontalStackLayout Spacing="8">
+                            <Label Text="Host:"
+                                   WidthRequest="120"
+                                   VerticalTextAlignment="Center" />
+                            <Entry Text="{Binding Host}"
+                                   HorizontalOptions="FillAndExpand"
+                                   WidthRequest="250" />
+                        </HorizontalStackLayout>
+                        
+                        <HorizontalStackLayout Spacing="8">
+                            <Label Text="Port:"
+                                   WidthRequest="120"
+                                   VerticalTextAlignment="Center"/>
+                            <Entry Text="{Binding Port}"
+                                   Keyboard="Numeric"
+                                   WidthRequest="100" />
+                        </HorizontalStackLayout>
+
+                        <HorizontalStackLayout Spacing="8">
+                            <Label Text="Database:"
+                                   WidthRequest="120"
+                                   VerticalTextAlignment="Center"/>
+                            <Entry Text="{Binding Database}"
+                                   WidthRequest="250" />
+                        </HorizontalStackLayout>
+
+                        <HorizontalStackLayout Spacing="8">
+                            <Label Text="User:"
+                                   WidthRequest="120"
+                                   VerticalTextAlignment="Center"/>
+                            <Entry Text="{Binding User}"
+                                   WidthRequest="250" />
+                        </HorizontalStackLayout>
+
+                        <HorizontalStackLayout Spacing="8">
+                            <Label Text="Password:"
+                                   WidthRequest="120"
+                                   VerticalTextAlignment="Center"/>
+                            <Entry Text="{Binding Password}"
+                                   IsPassword="True"
+                                   WidthRequest="250" />
+                        </HorizontalStackLayout>
+                        
+                        <HorizontalStackLayout HorizontalOptions="End">
+                            <Button Text="Test Connection"
+                                    Command="{Binding TestConnectionCommand}" />                            
+                        </HorizontalStackLayout>
+                    </VerticalStackLayout>
+                </Frame>
+                
+                <HorizontalStackLayout HorizontalOptions="End">
+                    <Button Text="Save"
+                            Command="{Binding SaveCommand}" />
+                </HorizontalStackLayout>
+            </VerticalStackLayout>
+        </ScrollView>
+    </ContentPage.Content>
+</ContentPage>

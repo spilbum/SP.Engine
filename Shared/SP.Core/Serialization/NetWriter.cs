@@ -4,7 +4,7 @@ using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Text;
 
-namespace SP.Engine.Runtime.Serialization
+namespace SP.Core.Serialization
 {
     public sealed class NetWriter : IDisposable
     {

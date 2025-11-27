@@ -18,40 +18,36 @@ public class GameServer : Engine
     private readonly ConcurrentDictionary<long, uint> _byUid = new();
 
     private HostNetworkInfo? _networkInfo;
-    private int _openPort;
 
     public GameServer()
     {
         Instance = this;
-        ServerId = 1;
+        BuildVersion = Version.Server.BuildVersion;
     }
 
     public static GameServer Instance { get; private set; } = null!;
 
     private readonly MySqlDbConnector _connector = new();
-    public byte ServerId { get; private set; }
     public NetworkEnv Env => _networkInfo?.Env ?? NetworkEnv.Unknown;
     public string Region => _networkInfo?.Region ?? string.Empty;
     public string PublicIpAddress => _networkInfo?.PublicIpAddress ?? string.Empty;
     public string PrivateIpAddress => _networkInfo?.PrivateIpAddress ?? string.Empty;
     public string PublicDnsName => _networkInfo?.DnsName ?? string.Empty;
+    public int OpenPort { get; private set; }
+    public string BuildVersion { get; private set; }
+
     public GameRoomManager RoomManager { get; private set; } = null!;
     public Matchmaker Matchmaker { get; private set; } = null!;
     public GameRepository Repository { get; private set; } = null!;
 
-    public string? GetIpAddress()
+    public string GetIpAddress()
     {
         return Env switch
         {
             NetworkEnv.Local => PrivateIpAddress,
             NetworkEnv.AwsEc2 => PublicIpAddress,
-            _ => null
+            _ => "127.0.0.1"
         };
-    }
-
-    public int GetPort()
-    {
-        return _openPort;
     }
 
     public bool Initialize(AppConfig appConfig)
@@ -80,7 +76,7 @@ public class GameServer : Engine
         if (!base.Initialize(appConfig.Server.Name, config))
             return false;
 
-        _openPort = appConfig.Server.Port;
+        OpenPort = appConfig.Server.Port;
 
         foreach (var database in appConfig.Database)
         {
@@ -97,6 +93,10 @@ public class GameServer : Engine
             RoomManager,
             TimeSpan.FromMilliseconds(200),
             TimeSpan.FromSeconds(5));
+        
+        if (!HostNetworkInfoProvider.TryGet(out _networkInfo, TimeSpan.FromSeconds(5)))
+            Logger.Warn("No network info available.");
+        
         return true;
     }
 
@@ -104,10 +104,7 @@ public class GameServer : Engine
     {
         if (!base.Start())
             return false;
-
-        if (!HostNetworkInfoProvider.TryGet(out _networkInfo))
-            Logger.Warn("No network info available.");
-
+        
         Logger.Info("Env={0}, Region={1}, Public={2}, Private={3}, DnsName={4}", Env, Region, PublicIpAddress,
             PrivateIpAddress, PublicDnsName);
         return true;
@@ -180,6 +177,6 @@ public class GameServer : Engine
             return;
 
         Unbind(gp);
-        Logger.Debug("Peer leaved. uid={0}, reason={2}", gp.Uid, reason);
+        Logger.Debug("Peer leaved. uid={0}, reason={1}", gp.Uid, reason);
     }
 }

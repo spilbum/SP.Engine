@@ -73,14 +73,14 @@ public sealed class DbConn(DbConnection connection, IDbProvider provider) : IDis
         _transaction = _connection.BeginTransaction();
     }
 
-    public async Task BeginTransactionAsync()
+    public async Task BeginTransactionAsync(CancellationToken ct)
     {
         ThrowIfDisposed();
 
         if (_transaction != null)
             throw new InvalidOperationException("Transaction already started.");
 
-        _transaction = await _connection.BeginTransactionAsync();
+        _transaction = await _connection.BeginTransactionAsync(ct);
     }
 
     public void Commit()
@@ -92,12 +92,12 @@ public sealed class DbConn(DbConnection connection, IDbProvider provider) : IDis
         _transaction = null;
     }
 
-    public async Task CommitAsync()
+    public async Task CommitAsync(CancellationToken ct)
     {
         if (_transaction == null)
             throw new InvalidOperationException("No active transaction to commit.");
 
-        await _transaction.CommitAsync();
+        await _transaction.CommitAsync(ct);
         _transaction = null;
     }
 
@@ -110,12 +110,12 @@ public sealed class DbConn(DbConnection connection, IDbProvider provider) : IDis
         _transaction = null;
     }
 
-    public async Task RollbackAsync()
+    public async Task RollbackAsync(CancellationToken ct)
     {
         if (_transaction == null)
             throw new InvalidOperationException("No active transaction to rollback.");
 
-        await _transaction.RollbackAsync();
+        await _transaction.RollbackAsync(ct);
         _transaction = null;
     }
 
@@ -134,6 +134,7 @@ public sealed class DbConn(DbConnection connection, IDbProvider provider) : IDis
         var command = _connection.CreateCommand();
         command.CommandType = commandType;
         command.CommandText = commandText;
+        command.Transaction = _transaction;
         return new DbCmd(command, provider);
     }
 }

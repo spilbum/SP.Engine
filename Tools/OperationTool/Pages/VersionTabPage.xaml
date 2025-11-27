@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="OperationTool.Pages.VersionTabPage">
+    <ContentPage.Content>
+        <ScrollView>
+            <Grid Padding="16"
+                  HorizontalOptions="Center">
+                <Frame HasShadow="False"
+                       BorderColor="{DynamicResource Gray300}"
+                       BackgroundColor="{DynamicResource White}"
+                       Padding="12"
+                       Margin="0"
+                       HorizontalOptions="Center"
+                       MaximumWidthRequest="900">
+                    
+                    <Grid RowSpacing="12">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <!-- 타이틀 -->
+                        <Label Grid.Row="0"
+                               Text="Client Build Version"
+                               FontAttributes="Bold" 
+                               FontSize="18"
+                               Margin="0,0,0,4" />
+                        
+                        <!-- 필터 영역 -->
+                        <Grid Grid.Row="1"
+                              ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="200" />
+                            </Grid.ColumnDefinitions>
+                            
+                            <Label Grid.Column="0"
+                                   Text="Store Type:"
+                                   VerticalTextAlignment="Center" />
+                            
+                            <Picker Grid.Column="1"
+                                    ItemsSource="{Binding StoreTypes}"
+                                    SelectedItem="{Binding SelectedStoreType}" />
+                        </Grid>
+                        
+                        <!-- 리스트 영역 -->
+                        <CollectionView Grid.Row="2"
+                                        Margin="0,4,0,0"
+                                        ItemsSource="{Binding ClientBuildVersions}"
+                                        SelectedItem="{Binding SelectedClientBuildVersion}"
+                                        SelectionMode="Single">
+                            
+                            <!-- 컬럼 헤더 -->
+                            <CollectionView.Header>
+                                <Grid Padding="0,4"
+                                      ColumnSpacing="8"
+                                      BackgroundColor="{DynamicResource Gray100}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="150" />
+                                    </Grid.ColumnDefinitions>
+                                    
+                                    <Label Grid.Column="0" Text="ServerGroupType" FontAttributes="Bold" />
+                                    <Label Grid.Column="1" Text="StoreType" FontAttributes="Bold" />
+                                    <Label Grid.Column="2" Text="BeginBuildVersion" FontAttributes="Bold" />
+                                    <Label Grid.Column="3" Text="EndBuildVersion" FontAttributes="Bold" />
+                                </Grid>
+                            </CollectionView.Header>
+                            
+                            <!-- 데이터 행 -->
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Padding="0,2"
+                                          ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="150" />
+                                            <ColumnDefinition Width="150" />
+                                            <ColumnDefinition Width="150" />
+                                            <ColumnDefinition Width="150" />
+                                        </Grid.ColumnDefinitions>
+                                        
+                                        <Label Grid.Column="0" Text="{Binding ServerGroupType}" />
+                                        <Label Grid.Column="1" Text="{Binding StoreType}" />
+                                        <Label Grid.Column="2" Text="{Binding BeginBuildVersion}" />
+                                        <Label Grid.Column="3" Text="{Binding EndBuildVersion}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                        </CollectionView>
+                    </Grid>
+                </Frame>
+            </Grid>
+        </ScrollView>
+    </ContentPage.Content>
+</ContentPage>

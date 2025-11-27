@@ -5,9 +5,9 @@ using SP.Engine.Runtime.Protocol;
 namespace GameClient.Command;
 
 [ProtocolCommand(G2CProtocol.GameEndNtf)]
-public class GameEndNtf : BaseCommand<GameClient, G2CProtocolData.GameEndNtf>
+public class GameEndNtf : BaseCommand<NetworkClient, G2CProtocolData.GameEndNtf>
 {
-    protected override void ExecuteProtocol(GameClient context, G2CProtocolData.GameEndNtf protocol)
+    protected override void ExecuteProtocol(NetworkClient context, G2CProtocolData.GameEndNtf protocol)
     {
         context.OnGameEnd(protocol.Rank, protocol.Reward);
     }

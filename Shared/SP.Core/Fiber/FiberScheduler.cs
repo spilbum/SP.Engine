@@ -7,20 +7,20 @@ namespace SP.Core.Fiber
     public class FiberScheduler : IFiberScheduler
     {
         private readonly ThreadFiber _fiber;
-        private readonly ILogger _logger;
         private readonly Scheduler _scheduler;
         private volatile bool _disposed;
         private volatile bool _running;
 
         public bool IsRunning => _running;
-        
+        public ILogger Logger { get; }
+
         public FiberScheduler(
             ILogger logger,
             string name,
             int maxBatchSize = 1024,
             int queueCapacity = -1)
         {
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            Logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _fiber = new ThreadFiber(logger, name, maxBatchSize, queueCapacity);
             _scheduler = new Scheduler();
             _running = true;
@@ -77,7 +77,7 @@ namespace SP.Core.Fiber
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Scheduler dispose failed");
+                Logger.Error(e, "Scheduler dispose failed");
             }
 
             try
@@ -86,7 +86,7 @@ namespace SP.Core.Fiber
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Fiber dispose failed");
+                Logger.Error(e, "Fiber dispose failed");
             }
         }
     }

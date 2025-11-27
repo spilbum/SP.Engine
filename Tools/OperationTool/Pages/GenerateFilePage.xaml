@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+             x:Class="OperationTool.Pages.GenerateFilePage">
+    
+    <ContentPage.Resources>
+        <toolkit:InvertedBoolConverter x:Key="InvertedBoolConverter" />
+    </ContentPage.Resources>
+    
+    <ContentPage.Content>
+      <ScrollView>
+            <Grid Padding="16"
+                  HorizontalOptions="Center">
+
+                <Frame Padding="12"
+                       HasShadow="False"
+                       BorderColor="{DynamicResource Gray300}"
+                       BackgroundColor="{DynamicResource White}"
+                       HorizontalOptions="Center"
+                       MaximumWidthRequest="1000">
+
+                    <Grid RowSpacing="12"
+                          ColumnSpacing="12">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <!-- Browse 영역 -->
+                        <Grid Grid.Row="0">
+                            <VerticalStackLayout Spacing="8">
+                                <HorizontalStackLayout Spacing="4">
+                                    <Label Text="Output Folder:"
+                                           VerticalTextAlignment="Center"
+                                           WidthRequest="100"></Label>
+                                    
+                                    <BoxView WidthRequest="10"
+                                             HeightRequest="10"
+                                             CornerRadius="5"
+                                             Color="{Binding OutputFolderColor}" 
+                                             VerticalOptions="Center" />
+                                    
+                                    <Button Text="Browse..."
+                                            Command="{Binding BrowseOutputFolderCommand}"/>
+                                </HorizontalStackLayout>
+                                
+                                <HorizontalStackLayout Spacing="4">
+                                    <Label Text="Excel Folder:"
+                                           VerticalTextAlignment="Center"
+                                           WidthRequest="100"></Label>
+                                    
+                                    <BoxView WidthRequest="10"
+                                             HeightRequest="10"
+                                             CornerRadius="5"
+                                             Color="{Binding ExcelFolderColor}"
+                                             VerticalOptions="Center"/>
+                                    
+                                    <Button Text="Browse..."
+                                            Command="{Binding BrowseExcelFolderCommand}"/>
+                                </HorizontalStackLayout>
+                            </VerticalStackLayout>
+                        </Grid>
+
+                        <!-- 본문: 좌측 테이블 선택 / 우측 패치 옵션 -->
+                        <Grid Grid.Row="1"
+                              ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="320" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Excel 테이블 목록 -->
+                            <Border Grid.Column="0"
+                                    Stroke="LightGray"
+                                    StrokeThickness="1"
+                                    Padding="8"
+                                    IsEnabled="{Binding IsExcelLoaded}">
+                                <Grid RowDefinitions="Auto,*"
+                                      RowSpacing="4">
+                                    <HorizontalStackLayout Grid.Row="0"
+                                                           Spacing="4">
+                                        <CheckBox
+                                            IsChecked="{Binding IsAllChecked}" />
+                                        <Label
+                                            Text="All"
+                                            VerticalTextAlignment="Center" />
+                                    </HorizontalStackLayout>
+
+                                    <CollectionView Grid.Row="1"
+                                                    ItemsSource="{Binding ExcelTables}">
+                                        <CollectionView.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Padding="4,2"
+                                                      ColumnDefinitions="Auto,*">
+                                                    <CheckBox Grid.Column="0"
+                                                              IsChecked="{Binding IsChecked}" />
+                                                    <Label Grid.Column="1"
+                                                           Text="{Binding Name}"
+                                                           VerticalTextAlignment="Center"
+                                                           Margin="4,0,0,0" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </CollectionView.ItemTemplate>
+                                    </CollectionView>
+                                </Grid>
+                            </Border>
+
+                            <!-- 우측 옵션들 -->
+                            <VerticalStackLayout Grid.Column="1"
+                                                 Spacing="8">
+
+                                <!-- Dev 플래그 -->
+                                <HorizontalStackLayout Spacing="4">
+                                    <CheckBox IsChecked="{Binding IsDevelopment}" />
+                                    <Label Text="Is Development"
+                                           VerticalTextAlignment="Center" />
+                                </HorizontalStackLayout>
+
+                                <!-- Origin Patch -->
+                                <Border Stroke="LightGray"
+                                        StrokeThickness="1"
+                                        Padding="8"
+                                        IsEnabled="{Binding IsOriginEnabled}">
+                                    <VerticalStackLayout Spacing="4">
+                                        <Label Text="Origin Refs File's"
+                                               FontAttributes="Bold" />
+
+                                        <Picker ItemsSource="{Binding OriginRefsFiles}"
+                                                ItemDisplayBinding="{Binding FileId}"
+                                                SelectedItem="{Binding SelectedOriginRefsFile}"
+                                                HorizontalOptions="Start" />
+
+                                        <Editor Text="{Binding SelectedOriginRefsFile.Comment}"
+                                                HeightRequest="80"
+                                                AutoSize="TextChanges" />
+                                    </VerticalStackLayout>
+                                </Border>
+
+                                <!-- Patch File -->
+                                <Border Stroke="LightGray"
+                                        StrokeThickness="1"
+                                        Padding="8">
+                                    <VerticalStackLayout Spacing="8">
+                                        <Label Text="Patch File"
+                                               FontAttributes="Bold" />
+
+                                        <HorizontalStackLayout Spacing="4">
+                                            <Label Text="File ID:"
+                                                   VerticalTextAlignment="Center" />
+                                            <Entry Text="{Binding FileId}"
+                                                   WidthRequest="60"
+                                                   IsEnabled="False" />
+                                        </HorizontalStackLayout>
+
+                                        <VerticalStackLayout Spacing="4">
+                                            <Label Text="Comment:" />
+                                            <Editor Text="{Binding Comment}"
+                                                    HeightRequest="80"
+                                                    AutoSize="TextChanges"
+                                                    IsEnabled="{Binding IsAutoComment,
+                                                                        Converter={StaticResource InvertedBoolConverter}}" />
+                                        </VerticalStackLayout>
+
+                                        <HorizontalStackLayout Spacing="12">
+                                            <HorizontalStackLayout Spacing="4">
+                                                <CheckBox IsChecked="{Binding IsAutoComment}" />
+                                                <Label Text="Auto comment"
+                                                       VerticalTextAlignment="Center" />
+                                            </HorizontalStackLayout>
+
+                                            <HorizontalStackLayout Spacing="4">
+                                                <CheckBox IsChecked="{Binding IsGenerateCode}" />
+                                                <Label Text="Generate code (*.cs)"
+                                                       VerticalTextAlignment="Center" />
+                                            </HorizontalStackLayout>
+                                        </HorizontalStackLayout>
+                                    </VerticalStackLayout>
+                                </Border>
+                            </VerticalStackLayout>
+                        </Grid>
+
+                        <!-- 하단 버튼 -->
+                        <Grid Grid.Row="2">
+                            <Button Text="Generate"
+                                    Command="{Binding GenerateCommand}"
+                                    HorizontalOptions="End"
+                                    WidthRequest="120" />
+                        </Grid>
+                    </Grid>
+                </Frame>
+            </Grid>
+        </ScrollView>
+    </ContentPage.Content>
+</ContentPage>

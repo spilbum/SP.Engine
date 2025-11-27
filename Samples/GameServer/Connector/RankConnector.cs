@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Common;
 using GameServer.UserPeer;
 using SP.Engine.Client;
@@ -43,7 +44,11 @@ public class RankConnector : BaseConnector
 
         var req = new S2SProtocolData.RegisterReq
         {
-            Name = GameServer.Instance.Name
+            ProcessId = Environment.ProcessId,
+            ServerKind = "Game",
+            BuildVersion = GameServer.Instance.BuildVersion,
+            IpAddress = GameServer.Instance.GetIpAddress(),
+            OpenPort = GameServer.Instance.OpenPort
         };
         Send(req);
     }

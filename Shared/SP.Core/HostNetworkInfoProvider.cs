@@ -29,41 +29,38 @@ namespace SP.Core
     {
         private const string TokenPath = "api/token";
         private const string MetaPath = "meta-data/";
-        private const int DefaultTimeoutMs = 1500;
         private static readonly Uri ImdsBase = new Uri("http://169.254.169.254/latest");
 
-        public static bool TryGet(out HostNetworkInfo info, int timeoutMs = DefaultTimeoutMs)
+        public static bool TryGet(out HostNetworkInfo info, TimeSpan timeout)
         {
+            using var cts = new CancellationTokenSource(timeout);
             try
             {
-                using var cts = new CancellationTokenSource(timeoutMs * 2);
                 info = GetAsync(cts.Token).GetAwaiter().GetResult();
-                return info != null && info.Env != NetworkEnv.Unknown;
+                return true;
             }
             catch
             {
-                info = new HostNetworkInfo();
+                info = null;
                 return false;
             }
         }
-
+        
         private static async Task<HostNetworkInfo> GetAsync(CancellationToken ct)
         {
-            using var http = CreateHttpClient(DefaultTimeoutMs);
+            using var http = CreateHttpClient();
             var ec2 = await TryGetEc2Async(http, ct).ConfigureAwait(false);
             if (ec2 != null) return ec2;
-
             return await GetFromLocalAsync(http, ct).ConfigureAwait(false);
         }
 
-        private static HttpClient CreateHttpClient(int timeoutMs)
+        private static HttpClient CreateHttpClient()
         {
             var handler = new HttpClientHandler
             {
                 AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
             };
             var client = new HttpClient(handler);
-            client.Timeout = TimeSpan.FromMilliseconds(timeoutMs);
             return client;
         }
 

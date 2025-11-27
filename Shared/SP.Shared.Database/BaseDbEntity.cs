@@ -74,7 +74,6 @@ public abstract class BaseDbEntity : IDbEntity
 
             var value = reader[name];
             if (value == DBNull.Value) continue;
-
             m.SetValue(this, value);
         }
     }

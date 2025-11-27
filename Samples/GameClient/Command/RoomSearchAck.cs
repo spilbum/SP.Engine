@@ -5,9 +5,9 @@ using SP.Engine.Runtime.Protocol;
 namespace GameClient.Command;
 
 [ProtocolCommand(G2CProtocol.RoomSearchAck)]
-public class RoomSearchAck : BaseCommand<GameClient, G2CProtocolData.RoomSearchAck>
+public class RoomSearchAck : BaseCommand<NetworkClient, G2CProtocolData.RoomSearchAck>
 {
-    protected override void ExecuteProtocol(GameClient context, G2CProtocolData.RoomSearchAck protocol)
+    protected override void ExecuteProtocol(NetworkClient context, G2CProtocolData.RoomSearchAck protocol)
     {
         if (protocol.Result != ErrorCode.Ok)
         {

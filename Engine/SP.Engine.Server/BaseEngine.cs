@@ -54,24 +54,19 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
     private readonly ConcurrentQueue<BaseSession> _authHandshakePendingQueue = new();
     private readonly object _clearIdleSessionLock = new();
     private readonly ConcurrentQueue<BaseSession> _closeHandshakePendingQueue = new();
-
     private readonly ConcurrentDictionary<string, BaseSession> _sessions = new(Environment.ProcessorCount, 3000,
         StringComparer.OrdinalIgnoreCase);
-
     private readonly object _snapshotLock = new();
-
     private Timer _clearIdleSessionTimer;
-
-    private bool _disposed;
-
     private Timer _handshakePendingTimer;
+    private Timer _sessionSnapshotTimer;
     private ListenerInfo[] _listenerInfos;
     private FiberScheduler _scheduler;
-    private KeyValuePair<string, BaseSession>[] _sessionSnapshot;
-
-    private Timer _sessionSnapshotTimer;
     private SocketServer _socketServer;
+    private KeyValuePair<string, BaseSession>[] _sessionSnapshot;
     private int _stateCode = ServerStateConst.NotInitialized;
+    private bool _disposed;
+    
     public string Name { get; private set; }
 
     protected KeyValuePair<string, BaseSession>[] SessionsSource

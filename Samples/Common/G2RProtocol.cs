@@ -9,6 +9,8 @@ namespace Common
         public const ushort RankTopReq = 3001;
         public const ushort RankRangeReq = 3002;
         public const ushort RankMyReq = 3003;
+        
+        public const ushort ServerSyncNtf = 3999;
     }
 
     public static class R2GProtocol
@@ -21,6 +23,12 @@ namespace Common
 
     public static class G2RProtocolData
     {
+        [Protocol(G2RProtocol.ServerSyncNtf)]
+        public class ServerSyncNtf : BaseProtocolData
+        {
+            public int UserCount;
+        }
+        
         [Protocol(G2RProtocol.RankUpdateReq)]
         public class RankUpdateReq : BaseProtocolData
         {

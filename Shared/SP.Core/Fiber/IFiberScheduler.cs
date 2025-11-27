@@ -1,8 +1,9 @@
 using System;
+using SP.Core.Logging;
 
 namespace SP.Core.Fiber
 {
-    public interface IFiberScheduler : IDisposable
+    public interface IFiberScheduler : ILogContext, IDisposable
     {
         bool IsRunning { get; }
         

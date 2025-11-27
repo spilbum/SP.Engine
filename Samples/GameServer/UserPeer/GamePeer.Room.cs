@@ -48,7 +48,7 @@ public partial class GamePeer
             ack.Result = ErrorCode.Ok;
             ack.RoomId = room.RoomId;
             ack.ServerIp = GameServer.Instance.GetIpAddress();
-            ack.ServerPort = GameServer.Instance.GetPort();
+            ack.ServerPort = GameServer.Instance.OpenPort;
             ack.Options = room.ToRoomOptionsInfo();
             return ack;
         }
@@ -98,7 +98,7 @@ public partial class GamePeer
         ack.Result = ErrorCode.Ok;
         ack.RoomId = room.RoomId;
         ack.ServerIp = GameServer.Instance.GetIpAddress();
-        ack.ServerPort = GameServer.Instance.GetPort();
+        ack.ServerPort = GameServer.Instance.OpenPort;
         ack.Options = room.ToRoomOptionsInfo();
         return ack;
     }
@@ -115,7 +115,7 @@ public partial class GamePeer
             {
                 ack.RoomId = roomId.Value;
                 ack.ServerIp = GameServer.Instance.GetIpAddress();
-                ack.ServerPort = GameServer.Instance.GetPort();
+                ack.ServerPort = GameServer.Instance.OpenPort;
                 if (GameServer.Instance.RoomManager.TryGet(roomId.Value, out var room) && room != null)
                     ack.Options = room.ToRoomOptionsInfo();
             }

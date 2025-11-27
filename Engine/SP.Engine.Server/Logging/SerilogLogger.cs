@@ -26,14 +26,12 @@ public class SerilogLogger(Serilog.ILogger logger) : ILogger
     private readonly Serilog.ILogger _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     public ILogger With(string key, object value)
-    {
-        return new SerilogLogger(_logger.ForContext(key, value));
-    }
+        => new SerilogLogger(_logger.ForContext(key, value, destructureObjects: true));
 
     public void Log(LogLevel level, string message)
     {
         if (!IsEnabled(level)) return;
-        _logger.Write(level.ToSerilogLevel(), message);
+        _logger.Write(level.ToSerilogLevel(), "{Message}", message);
     }
 
     public void Log(LogLevel level, string format, params object[] args)
@@ -45,7 +43,7 @@ public class SerilogLogger(Serilog.ILogger logger) : ILogger
     public void Log(LogLevel level, Exception ex)
     {
         if (!IsEnabled(level)) return;
-        _logger.Write(level.ToSerilogLevel(), ex, "Unhandled exception");
+        _logger.Write(level.ToSerilogLevel(), ex, ex.Message);
     }
 
     public void Log(LogLevel level, Exception ex, string format, params object[] args)

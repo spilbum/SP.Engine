@@ -46,18 +46,6 @@ public abstract class Engine : BaseEngine, IEngine
         if (!base.Initialize(name, config))
             return false;
 
-        var connectorUpdatePeriod = TimeSpan.FromMilliseconds(config.Session.ConnectorUpdateIntervalMs);
-        Scheduler.Schedule(ScheduleUpdateConnectors, connectorUpdatePeriod, connectorUpdatePeriod);
-
-        var fiberCnt = Math.Max(config.Network.LimitConnectionCount / 300, 10);
-        for (var index = 0; index < fiberCnt; index++)
-        {
-            var fiber = new ThreadFiber(Logger, $"PeerFiber-{index:D2}");
-            var peerUpdatePeriod = TimeSpan.FromMilliseconds(config.Session.PeerUpdateIntervalMs);
-            Scheduler.Schedule(ScheduleUpdatePeers, index, peerUpdatePeriod, peerUpdatePeriod);
-            _updatePeerFibers.Add(fiber);
-        }
-
         if (!SetupCommand())
             return false;
 
@@ -75,9 +63,22 @@ public abstract class Engine : BaseEngine, IEngine
         if (!base.Start())
             return false;
 
-        foreach (var connector in _connectors) connector.Connect();
-        StartWaitingReconnectCheckingTimer();
+        var connectorUpdatePeriod = TimeSpan.FromMilliseconds(Config.Session.ConnectorUpdateIntervalMs);
+        Scheduler.Schedule(ScheduleUpdateConnectors, connectorUpdatePeriod, connectorUpdatePeriod);
 
+        var fiberCnt = Math.Max(Config.Network.LimitConnectionCount / 300, 10);
+        for (var index = 0; index < fiberCnt; index++)
+        {
+            var fiber = new ThreadFiber(Logger, $"PeerFiber-{index:D2}");
+            var peerUpdatePeriod = TimeSpan.FromMilliseconds(Config.Session.PeerUpdateIntervalMs);
+            Scheduler.Schedule(ScheduleUpdatePeers, index, peerUpdatePeriod, peerUpdatePeriod);
+            _updatePeerFibers.Add(fiber);
+        }
+        
+        foreach (var connector in _connectors) 
+            connector.Connect();
+        
+        StartWaitingReconnectCheckingTimer();
         return true;
     }
 
