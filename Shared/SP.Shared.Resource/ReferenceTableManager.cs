@@ -6,7 +6,7 @@ using SP.Core;
 
 namespace SP.Shared.Resource;
 
-public sealed partial class RefTableManager : Singleton<RefTableManager>
+public sealed partial class ReferenceTableManager : Singleton<ReferenceTableManager>
 {
     private readonly Dictionary<string, RefTableSchema> _schemaMap =
         new(StringComparer.Ordinal);
@@ -42,7 +42,7 @@ public sealed partial class RefTableManager : Singleton<RefTableManager>
         IsInitialized = true;
     }
 
-    internal bool TryGetTable(string name, out RefTableSchema schema, out RefTableData table)
+    internal bool TryGet(string name, out RefTableSchema schema, out RefTableData table)
     {
         if (_schemaMap.TryGetValue(name, out schema!) &&
             _tableMap.TryGetValue(name, out table!))
@@ -55,7 +55,7 @@ public sealed partial class RefTableManager : Singleton<RefTableManager>
 
     private void BuildAll()
     {
-        var methods = typeof(RefTableManager)
+        var methods = typeof(ReferenceTableManager)
             .GetMethods(BindingFlags.Instance | BindingFlags.NonPublic)
             .Where(m => 
                 m.Name.StartsWith("BuildRef", StringComparison.Ordinal) &&

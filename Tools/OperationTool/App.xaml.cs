@@ -8,16 +8,4 @@ public partial class App : Application
         Current!.UserAppTheme = AppTheme.Light;
         MainPage = shell;
     }
-
-    protected override Window CreateWindow(IActivationState? activationState)
-    {
-        var window = base.CreateWindow(activationState);
-
-#if MACCALALYST
-        window.Width = 1200;
-        window.Height = 800;
-#endif
-
-        return window;
-    }
 }

@@ -11,10 +11,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="Refs\" />
-    </ItemGroup>
-
-    <ItemGroup>
       <ProjectReference Include="..\SP.Core\SP.Core.csproj" />
     </ItemGroup>
 

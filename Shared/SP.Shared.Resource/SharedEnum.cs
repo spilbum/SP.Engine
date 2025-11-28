@@ -43,3 +43,14 @@ public enum StoreType : byte
     AppStore = 2,
     Steam = 3
 }
+
+public enum ColumnType
+{
+    String,
+    Int32,
+    Int64,
+    Float,
+    Double,
+    Boolean,
+    DateTime
+}

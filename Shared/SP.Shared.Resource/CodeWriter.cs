@@ -1,7 +1,7 @@
 using System;
 using System.Text;
 
-namespace SP.Shared.Resource.CodeGen;
+namespace SP.Shared.Resource;
 
 public sealed class CodeWriter(int indentSize = 4)
 {

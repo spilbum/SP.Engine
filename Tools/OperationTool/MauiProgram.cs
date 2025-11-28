@@ -42,6 +42,9 @@ public static class MauiProgram
         builder.Services.AddTransient<SettingsTabPage>();
         builder.Services.AddTransient<SettingsTabViewModel>();
 
+        builder.Services.AddTransient<RefsDiffTabPage>();
+        builder.Services.AddTransient<RefsDiffTabViewModel>();
+
         builder.Services.AddSingleton<IExcelService, ExcelService>();
         builder.Services.AddSingleton<ISettingsStorage, ToolSettingsStorage>();
         builder.Services.AddSingleton<ISettingsProvider, SettingsProvider>();
@@ -50,6 +53,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<IDbProvider, MySqlDbProvider>();
         
         builder.Services.AddSingleton(FolderPicker.Default);
+        builder.Services.AddSingleton(FilePicker.Default);
 
 #if DEBUG
         builder.Logging.AddDebug();

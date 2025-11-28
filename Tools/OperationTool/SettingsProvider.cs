@@ -1,4 +1,6 @@
-namespace OperationTool.Storage;
+using OperationTool.Storage;
+
+namespace OperationTool;
 
 public interface ISettingsProvider
 {

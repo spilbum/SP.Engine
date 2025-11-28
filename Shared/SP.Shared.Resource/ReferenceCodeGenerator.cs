@@ -3,11 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using SP.Shared.Resource.CodeGen;
 
 namespace SP.Shared.Resource;
 
-public sealed class RefCodeGenerator
+public static class ReferenceCodeGenerator
 {
     public static void Generate(
         List<RefTableSchema> schemas,
@@ -87,7 +86,7 @@ public sealed class RefCodeGenerator
             
             cw.WriteLine();
         
-            using (cw.Block("public sealed partial class RefTableManager"))
+            using (cw.Block($"public sealed partial class {nameof(ReferenceTableManager)}"))
             {
                 cw.WriteLine($"public Dictionary<{keyTypeName}, {className}> {dicName} {{ get; }} = new();");
                 cw.WriteLine();
@@ -95,7 +94,7 @@ public sealed class RefCodeGenerator
                 using (cw.Block($"private void {buildName}()"))
                 {
                     cw.WriteLine($"const string tableName = \"{tableName}\";");
-                    cw.WriteLine("if (!TryGetTable(tableName, out var schema, out var table))");
+                    cw.WriteLine("if (!TryGet(tableName, out var schema, out var table))");
                     cw.WriteLine("{");
                     cw.Indent();
                     cw.WriteLine("return;");

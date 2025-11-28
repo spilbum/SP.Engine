@@ -18,6 +18,10 @@
                 Route="PatchTab"
                 ContentTemplate="{DataTemplate pages:PatchTabPage}" />
             <ShellContent
+                Title="Diff"
+                Route="DiffTab"
+                ContentTemplate="{DataTemplate pages:RefsDiffTabPage}" />
+            <ShellContent
                 Title="Settings"
                 Route="SettingsTab"
                 ContentTemplate="{DataTemplate pages:SettingsTabPage}" />

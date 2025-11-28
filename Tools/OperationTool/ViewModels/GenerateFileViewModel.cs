@@ -31,6 +31,7 @@ public sealed class GenerateFileViewModel : ViewModelBase
     private bool _isAutoComment = true;
     private bool _isGenerateCode = true;
     private bool _isOriginEnabled;
+    private bool _isOutputSelected;
 
     public string OutputFolder
     {
@@ -138,9 +139,22 @@ public sealed class GenerateFileViewModel : ViewModelBase
             }
         }
     }
+
+    public bool IsOutputSelected
+    {
+        get => _isOutputSelected;
+        private set
+        {
+            if (SetProperty(ref _isOutputSelected, value))
+            {
+                OnPropertyChanged(nameof(OutputFolderColor));
+                GenerateCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
     
     public Color OutputFolderColor => 
-        string.IsNullOrEmpty(OutputFolder) ? Colors.Red : Colors.Green;
+        string.IsNullOrEmpty(OutputFolder) || !IsOutputSelected ? Colors.Red : Colors.Green;
     
     public Color ExcelFolderColor =>
         string.IsNullOrEmpty(ExcelFolder) || !IsExcelLoaded ? Colors.Red : Colors.Green;
@@ -242,7 +256,7 @@ public sealed class GenerateFileViewModel : ViewModelBase
             if (IsGenerateCode)
             {
                 var schemas = tables.Select(t => t.GetSchema()).ToList();
-                RefCodeGenerator.Generate(schemas, codeDir, "SP.Shared.Resource");
+                ReferenceCodeGenerator.Generate(schemas, codeDir, "SP.Shared.Resource");
             }
             
             // todo:S3 업로드
@@ -259,7 +273,7 @@ public sealed class GenerateFileViewModel : ViewModelBase
     }
 
     private bool CanGenerate()
-        => isExcelLoaded && CheckedTableCount > 0;
+        => isExcelLoaded && IsOutputSelected && CheckedTableCount > 0;
 
     private async Task LoadExcelAsync(CancellationToken ct)
     {
@@ -354,6 +368,7 @@ public sealed class GenerateFileViewModel : ViewModelBase
             return;
         
         OutputFolder = result.Folder.Path;
+        IsOutputSelected = true;
         
         var s = _settingsProvider.Current;
         s.OutputFolder = OutputFolder;
