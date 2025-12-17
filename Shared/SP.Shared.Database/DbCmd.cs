@@ -121,7 +121,7 @@ public class DbCmd(DbCommand command, IDbProvider provider) : IDisposable
         }
         catch (Exception ex)
         {
-            throw new Exception($"Error executing SQL command: {_command.CommandText}", ex);
+            throw new Exception($"Error executing SQL command: {ex.Message}. commandText={_command.CommandText}");
         }
     }
 

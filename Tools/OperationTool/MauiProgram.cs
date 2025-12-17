@@ -1,18 +1,10 @@
 ﻿using CommunityToolkit.Maui;
 using CommunityToolkit.Maui.Storage;
 using Microsoft.Extensions.Logging;
-using Microsoft.Maui.LifecycleEvents;
-using OperationTool.DatabaseHandler;
 using OperationTool.Excel;
 using OperationTool.Pages;
-using OperationTool.Storage;
+using OperationTool.Services;
 using OperationTool.ViewModels;
-using SP.Shared.Database;
-
-#if MACCATALYST
-using UIKit;
-using CoreGraphics;
-#endif
 
 namespace OperationTool;
 
@@ -24,13 +16,10 @@ public static class MauiProgram
         builder
             .UseMauiApp<App>()
             .UseMauiCommunityToolkit()
-            .ConfigureFonts(fonts =>
-            {
-                fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
-            });
+            .ConfigureFonts(fonts => { fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular"); });
 
         builder.Services.AddSingleton<AppShell>();
-        
+
         builder.Services.AddTransient<PatchTabPage>();
         builder.Services.AddTransient<PatchTabViewModel>();
         builder.Services.AddTransient<RunPatchPage>();
@@ -47,13 +36,23 @@ public static class MauiProgram
 
         builder.Services.AddSingleton<IExcelService, ExcelService>();
         builder.Services.AddSingleton<ISettingsStorage, ToolSettingsStorage>();
-        builder.Services.AddSingleton<ISettingsProvider, SettingsProvider>();
-
+        builder.Services.AddSingleton<ISettingsProvider, ToolSettingsProvider>();
         builder.Services.AddSingleton<IDbConnector, MySqlDbConnector>();
-        builder.Services.AddSingleton<IDbProvider, MySqlDbProvider>();
-        
+
+        builder.Services.AddSingleton<IResourceConfigStore, ResourceConfigStore>();
         builder.Services.AddSingleton(FolderPicker.Default);
         builder.Services.AddSingleton(FilePicker.Default);
+        builder.Services.AddSingleton<IFileUploader, MinioUploader>();
+
+        builder.Services.AddSingleton<HttpClient>();
+        builder.Services.AddSingleton<ResourceServerWebService>();
+
+        builder.Services.AddTransient<RefsSqlTabPage>();
+        builder.Services.AddTransient<RefsSqlTabViewModel>();
+
+        builder.Services.AddSingleton<ToolWarmupService>();
+
+        builder.Services.AddSingleton<LoadingPage>();
 
 #if DEBUG
         builder.Logging.AddDebug();

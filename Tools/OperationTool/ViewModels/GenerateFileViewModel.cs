@@ -6,8 +6,13 @@ using CommunityToolkit.Maui.Storage;
 using OperationTool.DatabaseHandler;
 using OperationTool.Excel;
 using OperationTool.Models;
-using OperationTool.Storage;
+using OperationTool.Services;
 using SP.Shared.Resource;
+using SP.Shared.Resource.CodeGen;
+using SP.Shared.Resource.Refs;
+using SP.Shared.Resource.Schs;
+using SP.Shared.Resource.Table;
+using UIKit;
 
 namespace OperationTool.ViewModels;
 
@@ -16,7 +21,7 @@ public sealed class GenerateFileViewModel : ViewModelBase
     private readonly IExcelService _excelService;
     private readonly IDbConnector _dbConnector;
     private readonly IFolderPicker _folderPicker;
-    private readonly ISettingsProvider _settingsProvider;
+    private readonly IFileUploader _fileUploader;
 
     private string _outputFolder = string.Empty;
     private string _excelFolder = string.Empty;
@@ -168,17 +173,13 @@ public sealed class GenerateFileViewModel : ViewModelBase
     public GenerateFileViewModel(
         IExcelService excelService,
         IDbConnector dbConnector,
-        IFolderPicker folderPicker, 
-        ISettingsProvider settingsProvider)
+        IFolderPicker folderPicker,
+        IFileUploader fileUploader)
     {
         _excelService = excelService;
         _dbConnector = dbConnector;
         _folderPicker = folderPicker;
-        _settingsProvider = settingsProvider;
-
-        var s = settingsProvider.Current;
-        OutputFolder = s.OutputFolder;
-        ExcelFolder = s.LastExcelFolder;
+        _fileUploader = fileUploader;
         
         BrowseExcelFolderCommand = new AsyncRelayCommand(BrowseExcelFolderAsync);
         BrowseOutputFolderCommand = new AsyncRelayCommand(BrowseOutputFolderAsync);
@@ -188,9 +189,9 @@ public sealed class GenerateFileViewModel : ViewModelBase
     private async Task GenerateAsync(object? state)
     {
         var confirm = await Shell.Current.DisplayAlert(
-            "Confirm",
-            "Are you sure you want to generate the refs file?",
-            "Generate",
+            "",
+            "Would you like to generate a file?",
+            "Ok",
             "Cancel");
         
         if (!confirm)
@@ -222,31 +223,33 @@ public sealed class GenerateFileViewModel : ViewModelBase
             var schsDir = Path.Combine(versionDir, "schs");
             foreach (var table in tables)
             {
-                await RefsSchemaWriter.WriteSchFileAsync(
+                await SchFileWriter.WriteAsync(
                     table.GetSchema(), 
                     Path.Combine(schsDir, $"{table.Name}.sch"), 
                     ct);   
             }
 
-            await RefsPackWriter.CreateSchsFileAsync(
+            var schsFilePath = Path.Combine(versionDir, $"{FileId}.schs");
+            await SchsPackWriter.WriteAsync(
                 schsDir,
-                Path.Combine(versionDir, $"{FileId}.schs"),
+                schsFilePath,
                 ct);
             
             // .ref
             var refsDir = Path.Combine(versionDir, "refs");
             foreach (var table in tables)
             {
-                await RefsDataWriter.WriteRefFileAsync(
+                await RefFileWriter.WriteAsync(
                     table.GetSchema(),
                     table.GetData(),
                     Path.Combine(refsDir, $"{table.Name}.ref"),
                     ct);
             }
 
-            await RefsPackWriter.CreateRefsFileAsync(
+            var refsFilePath = Path.Combine(versionDir, $"{FileId}.refs");
+            await RefsPackWriter.WriteAsync(
                 refsDir,
-                Path.Combine(versionDir, $"{FileId}.refs"),
+                refsFilePath,
                 ct);
 
             var codeDir = IsDevelopment
@@ -259,7 +262,23 @@ public sealed class GenerateFileViewModel : ViewModelBase
                 ReferenceCodeGenerator.Generate(schemas, codeDir, "SP.Shared.Resource");
             }
             
-            // todo:S3 업로드
+            // schs 파일 업로드
+            var schsFileInfo = new FileInfo(schsFilePath);
+            if (schsFileInfo.Exists)
+            {
+                var key = $"patch/{FileId}.schs";
+                await using var stream = File.OpenRead(schsFilePath);
+                await _fileUploader.UploadAsync(key, stream, schsFileInfo.Length, ct);
+            }
+            
+            // refs 파일 업로드
+            var refsFileInfo = new FileInfo(refsFilePath);
+            if (refsFileInfo.Exists)
+            {
+                var key = $"patch/{FileId}.refs";
+                await using var stream = File.OpenRead(refsFilePath);
+                await _fileUploader.UploadAsync(key, stream, refsFileInfo.Length, ct);
+            }
             
             await conn.CommitAsync(ct);
             await Utils.OpenFolderAsync(versionDir);
@@ -346,10 +365,6 @@ public sealed class GenerateFileViewModel : ViewModelBase
                 return;
 
             ExcelFolder = result.Folder.Path;
-
-            var s = _settingsProvider.Current;
-            s.LastExcelFolder = ExcelFolder;
-            await _settingsProvider.SaveAsync();
             
             await LoadExcelAsync(ct);
             await LoadOriginAsync(ct);
@@ -369,10 +384,6 @@ public sealed class GenerateFileViewModel : ViewModelBase
         
         OutputFolder = result.Folder.Path;
         IsOutputSelected = true;
-        
-        var s = _settingsProvider.Current;
-        s.OutputFolder = OutputFolder;
-        await _settingsProvider.SaveAsync();
     }
     
     private void OnTableItemPropertyChanged(object? sender, PropertyChangedEventArgs e)

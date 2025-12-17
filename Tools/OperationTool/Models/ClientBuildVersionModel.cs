@@ -1,3 +1,4 @@
+using CloudKit;
 using OperationTool.DatabaseHandler;
 using OperationTool.ViewModels;
 using SP.Shared.Resource;
@@ -26,26 +27,87 @@ public sealed class ClientBuildVersionModel : ViewModelBase
     public string BeginBuildVersion
     {
         get => _beginBuildVersion;
-        set => SetProperty(ref _beginBuildVersion, value);
+        set
+        {
+            if (!SetProperty(ref _beginBuildVersion, value)) return;
+            OnPropertyChanged(nameof(IsDirty));
+            OnPropertyChanged(nameof(IsValid));
+        }
     }
 
     public string EndBuildVersion
     {
         get => _endBuildVersion;
-        set => SetProperty(ref _endBuildVersion, value);
+        set
+        {
+            if (!SetProperty(ref _endBuildVersion, value)) return;
+            OnPropertyChanged(nameof(IsDirty));
+            OnPropertyChanged(nameof(IsValid));
+        }
+    }
+
+    public string OriginBegin { get; private set; }
+    public string OriginEnd { get; private set; }
+
+    public bool IsUpdatable =>
+        ServerGroupType is ServerGroupType.Dev or ServerGroupType.Live;
+    
+    public bool IsPromotable =>
+        ServerGroupType is ServerGroupType.Dev or ServerGroupType.QA or ServerGroupType.Stage;
+    
+    public bool IsDirty =>
+        !string.Equals(BeginBuildVersion, OriginBegin, StringComparison.Ordinal) ||
+        !string.Equals(EndBuildVersion, OriginEnd, StringComparison.Ordinal);
+
+    public bool IsValid
+    {
+        get
+        {
+            if (!BuildVersion.TryParse(BeginBuildVersion, out var b)) return false;
+            if (!BuildVersion.TryParse(EndBuildVersion, out var e)) return false;
+            return b.CompareTo(e) <= 0;
+        }
+    }
+
+    public static explicit operator ResourceDb.ClientBuildVersionEntity(ClientBuildVersionModel model)
+    {
+        return new ResourceDb.ClientBuildVersionEntity
+        {
+            ServerGroupType = (byte)model.ServerGroupType,
+            StoreType = (byte)model.StoreType,
+            BeginBuildVersion = model.BeginBuildVersion,
+            EndBuildVersion = model.EndBuildVersion
+        };
+    }
+
+    public ClientBuildVersionModel(
+        StoreType storeType,
+        ServerGroupType serverGroupType,
+        string beginBuildVersion,
+        string endBuildVersion)
+    {
+        ServerGroupType = serverGroupType;
+        StoreType = storeType;
+        BeginBuildVersion = beginBuildVersion;
+        EndBuildVersion = endBuildVersion;
+        OriginBegin = BeginBuildVersion;
+        OriginEnd = EndBuildVersion;
     }
 
     public ClientBuildVersionModel(ResourceDb.ClientBuildVersionEntity entity)
     {
-        if (!Enum.TryParse(entity.ServerGroupType, out ServerGroupType serverGroupType) ||
-            !Enum.TryParse(entity.StoreType, out StoreType storeType))
-        {
-            throw new ArgumentException("Invalid ServerGroupType or StoreType");
-        }
-        
-        ServerGroupType = serverGroupType;
-        StoreType = storeType;
+        ServerGroupType = (ServerGroupType)entity.ServerGroupType;
+        StoreType = (StoreType)entity.StoreType;
         BeginBuildVersion = entity.BeginBuildVersion;
         EndBuildVersion = entity.EndBuildVersion;
+        OriginBegin = entity.BeginBuildVersion;
+        OriginEnd = entity.EndBuildVersion;
+    }
+
+    public void AcceptChanges()
+    {
+        OriginBegin = BeginBuildVersion;
+        OriginEnd = EndBuildVersion;
+        OnPropertyChanged(nameof(IsDirty));
     }
 }

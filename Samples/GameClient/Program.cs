@@ -2,6 +2,9 @@
 using SP.Core.Logging;
 using SP.Engine.Client.Configuration;
 using SP.Shared.Resource;
+using SP.Shared.Resource.Refs;
+using SP.Shared.Resource.Schs;
+using SP.Shared.Resource.Table;
 
 namespace GameClient;
 
@@ -11,41 +14,95 @@ internal static class Program
     private static ResourceManager? _resourceManager;
     private static int _resourceVersion = -1;
     
-    private static void Init()
+    private static async Task CheckResourceServer(
+        StoreType storeType, 
+        string buildVersion,
+        CancellationToken ct)
     {
         _resourceManager = new ResourceManager("http://localhost:5001");
-        var res = _resourceManager.Bootstrap(
-            PlatformKind.Android,
-            "1.0.0.1",
-            _resourceVersion);
+        var response = await _resourceManager.BootstrapAsync(
+            storeType,
+            buildVersion,
+            _resourceVersion,
+            ct);
 
-        if (!res.IsAllow)
+        if (!response.IsAllow)
         {
+            Console.WriteLine("Not allowed");
             return;
         }
 
-        _resourceVersion = res.LatestResourceVersion;
+        _resourceVersion = response.LatestResourceVersion;
 
-        if (!string.IsNullOrEmpty(res.ManifestUrl))
+        if (!string.IsNullOrEmpty(response.DownloadSchsFileUrl) && !string.IsNullOrEmpty(response.DownloadRefsFileUrl))
         {
-            StartPatch(res.ManifestUrl);
+            var outputPath = Path.Combine(Environment.CurrentDirectory, "patch");
+            if (!Directory.Exists(outputPath))
+                Directory.CreateDirectory(outputPath);
+            
+            var schsPath = await DownloadFileAsync(
+                response.DownloadSchsFileUrl,
+                outputPath,
+                ct);
+            if (string.IsNullOrEmpty(schsPath))
+                throw new InvalidOperationException("Invalid schs file url.");
+            
+            var refsPath = await DownloadFileAsync(
+                response.DownloadRefsFileUrl, 
+                outputPath,
+                ct);
+            
+            if (string.IsNullOrEmpty(refsPath))
+                throw new InvalidOperationException("Invalid refs file url.");
+
+            var schemas = await SchsPackReader.ReadAsync(schsPath, ct);
+            var tables = await RefsPackReader.ReadAsync(schemas, refsPath, ct);
+            ReferenceTableManager.Instance.Initialize(schemas, tables);
         }
 
-        var servers = res.Servers;
-        ConnectToBestServer(servers);
-    }
-
-    private static void StartPatch(string manifestUrl)
-    {
-        Console.WriteLine("manifestUrl: {0}", manifestUrl);
-    }
-
-    private static void ConnectToBestServer(List<ServerConnectionInfo> servers)
-    {
-        var server = servers.FirstOrDefault(s => s.Status == ServerStatus.Online);
+        var server = response.Server;
         if (server == null)
-            throw new Exception("No server found");
+        {
+            return;
+        }
         
+        ConnectTo(server);
+    }
+
+    private static async Task<string?> DownloadFileAsync(string url, string? outputPath = null, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var http = new HttpClient();
+
+            var path = null == outputPath 
+                ? Path.GetFileName(url)
+                : Path.Combine(outputPath, Path.GetFileName(url));
+            
+            await using var fs = File.Create(path);
+            using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"Failed: {url}");
+                Console.WriteLine($"Status: {response.StatusCode}");
+                return null;
+            }
+            
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            await stream.CopyToAsync(fs, cancellationToken);
+            
+            return path;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            return null;
+        }
+    }
+
+    private static void ConnectTo(ServerConnectInfo server)
+    {
         var config = EngineConfigBuilder.Create()
             .WithAutoPing(true, 2)
             .WithConnectAttempt(2, 15)
@@ -61,7 +118,7 @@ internal static class Program
         _client.Connect(server.Host, server.Port);
     }
     
-    private static void Main(string[] args)
+    private static async Task Main(string[] args)
     {
         Console.CancelKeyPress += (_, e) =>
         {
@@ -70,20 +127,18 @@ internal static class Program
             Environment.Exit(0);
         };
         
-        //
-        // var host = string.Empty;
-        // var port = 0;
-        //
-        // for (var i = 0; i < args.Length; i++)
-        //     switch (args[i])
-        //     {
-        //         case "--host": host = args[++i]; break;
-        //         case "--port": port = int.Parse(args[++i]); break;
-        //     }
-
         try
         {
-            Init();
+            if (args.Length != 2)
+                throw new InvalidOperationException("Invalid number of arguments.");
+            
+            if (!Enum.TryParse(args[0], out StoreType storeType))
+                throw new ArgumentException($"Invalid store type: {args[1]}");
+            
+            var buildVersion = args[1];
+            
+            var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+            await CheckResourceServer(storeType, buildVersion, cts.Token);
 
             while (true)
             {

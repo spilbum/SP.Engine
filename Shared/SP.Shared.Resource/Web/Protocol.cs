@@ -1,0 +1,45 @@
+using System.Collections.Generic;
+
+namespace SP.Shared.Resource.Web;
+
+public sealed class CheckClientReq
+{
+    public StoreType StoreType { get; set; }
+    public string BuildVersion { get; set; } = string.Empty;
+    public int? ResourceVersion { get; set; }
+    public ServerGroupType? ForceServerGroupType { get; set; }
+}
+
+public sealed class CheckClientRes
+{
+    public bool IsAllow { get; set; }
+    public bool IsForceUpdate { get; set; }
+    public bool IsSoftUpdate { get; set; }
+    public string LatestBuildVersion { get; set; } = string.Empty;
+    public int LatestResourceVersion { get; set; }
+    public string? DownloadSchsFileUrl { get; set; }
+    public string? DownloadRefsFileUrl { get; set; }
+    public string? StoreUrl { get; set; }
+    public ServerConnectInfo? Server { get; set; }
+}
+
+public sealed class SyncServerListReq
+{
+    public long UpdatedUtcMs { get; set; }
+    public ServerGroupType ServerGroupType { get; set; }
+    public List<ServerSyncInfo> List { get; set; } = [];
+}
+
+public sealed class SyncServerListRes
+{
+    public long AppliedUtcMs { get; set; }
+}
+
+public sealed class RefreshResourceServerReq
+{
+}
+
+public sealed class RefreshResourceServerRes
+{
+}
+

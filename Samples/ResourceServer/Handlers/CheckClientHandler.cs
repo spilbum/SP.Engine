@@ -1,85 +1,101 @@
+
 using ResourceServer.Services;
 using SP.Shared.Resource;
+using SP.Shared.Resource.Web;
 
 namespace ResourceServer.Handlers;
 
-public sealed class CheckClientHandler(PatchPolicyStore store, IServerDirectory dir) : IJsonHandler
+public sealed class CheckClientHandler(
+    IBuildPolicyStore buildStore,
+    IResourcePatchStore patchStore,
+    IServerStore serverStore,
+    IResourceConfigStore configStore) : JsonHandlerBase<CheckClientReq, CheckClientRes>
 {
-    public int ReqId => MsgId.CheckClientReq;
-    public int ResId => MsgId.CheckClientRes;
-    public Type ReqType => typeof(JsonCmd<CheckClientReq>);
+    public override int ReqId => ResourceMsgId.CheckClientReq;
+    public override int ResId => ResourceMsgId.CheckClientRes;
 
-    public ValueTask<object> HandleAsync(object req, CancellationToken ct)
+    protected override ValueTask<CheckClientRes> HandlePayloadAsync(CheckClientReq req, CancellationToken ct)
     {
-        var cmd = (JsonCmd<CheckClientReq>)req;
-        var payload = cmd.Payload;
-        if (payload == null)
-        {
-            return ValueTask.FromResult<object>(
-                JsonResult.Error(ResId, ErrorCode.InvalidFormat, "payload is null"));
-        }
+        var response = new CheckClientRes();
 
-        if (!store.TryGet(payload.Platform, out var info))
+        if (!BuildVersion.TryParse(req.BuildVersion, out var buildVersion))
+            throw new ErrorCodeException(ErrorCode.InvalidFormat, $"Invalid build version: {req.BuildVersion}");
+        
+        var policy = buildStore.GetPolicy(req.StoreType, buildVersion, req.ForceServerGroupType);
+        if (policy == null)
         {
-            var snap = dir.GetSnapshot();
-            var allowRes = new CheckClientRes
+            var storeUrl = req.StoreType switch
             {
-                IsAllow = true,
-                LatestBuildVersion = payload.BuildVersion,
-                LatestResourceVersion = payload.ResourceVersion ?? 0,
-                Servers = snap.List.ToList()
+                StoreType.GooglePlay => configStore.Get("google_play_store_url"),
+                StoreType.AppStore => configStore.Get("app_store_url"),
+                _ => null
             };
-            return ValueTask.FromResult<object>(JsonResult.Ok(ResId, allowRes));
+
+            response.IsAllow = false;
+            response.IsForceUpdate = true;
+            response.StoreUrl = storeUrl;
+            return ValueTask.FromResult(response);
         }
 
-        var isForce = CompareVersion(payload.BuildVersion, info.MinVersion) < 0;
-        var isSoft = !isForce && CompareVersion(payload.BuildVersion, info.LatestVersion) < 0;
-        
-        var isPatch = payload.ResourceVersion < info.LatestResourceVersion;
-        
-        string? manifestUrl = null;
+        response.IsAllow = true;
+        response.IsForceUpdate = false;
+        response.IsSoftUpdate = policy.IsSoftUpdate(buildVersion);
+        response.LatestBuildVersion = policy.LatestBuildVersion.ToString();
 
-        if (isPatch && !string.IsNullOrEmpty(info.PatchBaseUrl))
+        var latestPatch = patchStore.GetLatestPatch(policy.ServerGroupType, buildVersion.Major);
+        if (latestPatch != null)
         {
-            var baseUrl = info.PatchBaseUrl.TrimEnd('/');
-            var version = info.LatestResourceVersion;
-            manifestUrl = $"{baseUrl}/{version}/manifest.json";
+            var latest = latestPatch.ResourceVersion;
+            var current = req.ResourceVersion ?? 0;
+
+            response.LatestResourceVersion = latest;
+
+            if (current < latest)
+            {
+                var endpoint = configStore.Get("minio_endpoint");
+                var bucket = configStore.Get("minio_bucket");
+                if (!string.IsNullOrEmpty(endpoint) && !string.IsNullOrEmpty(bucket))
+                {
+                    response.DownloadSchsFileUrl = $"http://{endpoint}/{bucket}/patch/{latestPatch.FileId}.schs";
+                    response.DownloadRefsFileUrl =  $"http://{endpoint}/{bucket}/patch/{latestPatch.FileId}.refs";
+                }
+            }
         }
-        
-        var snapshot = dir.GetSnapshot();
-        var res = new CheckClientRes
-        {
-            IsAllow = !isForce,
-            IsForceUpdate = isForce,
-            IsSoftUpdate = isSoft,
-            LatestBuildVersion = info.LatestVersion,
-            LatestResourceVersion = info.LatestResourceVersion,
-            ManifestUrl = manifestUrl,
-            StoreUrl = info.StoreUrl,
-            Servers = snapshot.List.ToList()
-        };
-        
-        return ValueTask.FromResult<object>(JsonResult.Ok(ResId, res));
+
+        var server = FindAvailableServer(policy.ServerGroupType, buildVersion);
+        if (server == null)
+            throw new ErrorCodeException(ErrorCode.NoServerAvailable, "No server available");
+
+        response.Server = server;
+        return ValueTask.FromResult(response);
     }
     
-    private static int CompareVersion(string a, string b)
+    private ServerConnectInfo? FindAvailableServer(ServerGroupType serverGroupType, BuildVersion buildVersion)
     {
-        var va = Normalize(a);
-        var vb = Normalize(b);
+        var snapshot = serverStore.GetSnapshot(serverGroupType);
+        if (snapshot == null || snapshot.Servers.IsDefaultOrEmpty)
+            return null;
 
-        for (int i = 0, n = Math.Max(va.Length, vb.Length); i < n; ++i)
-        {
-            var ai = i < va.Length ? va[i] : 0;
-            var bi = i < vb.Length ? vb[i] : 0;
-            if (ai != bi) return ai.CompareTo(bi);
-        }
-        return 0;
+        var candidates = 
+            from info in snapshot.Servers
+            where info.Status == ServerStatus.Online
+            where info.BuildVersion.Major == buildVersion.Major
+            where info.MaxUserCount <= 0 || info.UserCount < info.MaxUserCount
+            select info;
 
-        static int[] Normalize(string s) =>
-            new string(s.Where(ch => char.IsDigit(ch) || ch == '.').ToArray())
-                .Split('.', StringSplitOptions.RemoveEmptyEntries)
-                .Select(x => int.TryParse(x, out var n) ? n : 0)
-                .DefaultIfEmpty(0)
-                .ToArray();
+        var selected = candidates
+            .OrderByDescending(s => s.BuildVersion)
+            .ThenBy(s =>
+            {
+                if (s.MaxUserCount <= 0) return 0.0;
+                return (double)s.UserCount / s.MaxUserCount;
+            })
+            .ThenBy(s => s.UserCount)
+            .ThenBy(s => s.Id)
+            .FirstOrDefault();
+
+        return selected?.ToInfo();
     }
 }
+
+

@@ -9,15 +9,14 @@ public abstract class BaseDbConnector
     protected bool HasConnection(string dbKind)
         => !string.IsNullOrWhiteSpace(dbKind) && _connections.ContainsKey(dbKind);
 
-    protected void Register(string dbKind, string connectionString, IDbProvider provider)
+    protected void AddOrUpdate(string dbKind, string connectionString, IDbProvider provider)
     {
         if (string.IsNullOrEmpty(dbKind)) throw new ArgumentNullException(nameof(dbKind));
         if (string.IsNullOrEmpty(connectionString)) throw new ArgumentNullException(nameof(connectionString));
         ArgumentNullException.ThrowIfNull(provider);
 
         var entry = new Entry(connectionString, provider);
-        if (!_connections.TryAdd(dbKind, entry))
-            throw new InvalidOperationException($"{dbKind} is already registered.");
+        _connections.AddOrUpdate(dbKind, entry, (_, _) => entry);
     }
 
     protected DbConn Open(string dbKind)
@@ -83,9 +82,6 @@ public abstract class BaseDbConnector
             return false;
         }
     }
-    
-    protected void Unregister(string dbKind)
-        => _connections.TryRemove(dbKind, out _);
     
     protected string GetConnectionString(string dbKind)
         => _connections.TryGetValue(dbKind, out var entry) ? entry.ConnectionString : string.Empty;

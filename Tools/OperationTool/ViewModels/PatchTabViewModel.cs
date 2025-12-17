@@ -4,6 +4,7 @@ using CommunityToolkit.Maui.Core;
 using OperationTool.DatabaseHandler;
 using OperationTool.Models;
 using OperationTool.Pages;
+using OperationTool.Services;
 using SP.Shared.Resource;
 
 namespace OperationTool.ViewModels;
@@ -40,8 +41,10 @@ public sealed class PatchTabViewModel : ViewModelBase
 
         foreach (ServerGroupType serverGroupType in Enum.GetValues(typeof(ServerGroupType)))
         {
+            if (serverGroupType == ServerGroupType.None) continue;
             ServerGroupTypes.Add(serverGroupType);
         }
+        
         SelectedServerGroupType = ServerGroupTypes.FirstOrDefault();
         
         GoToGenerateFileCommand = new AsyncRelayCommand(NavigateToGenerateFilePageAsync);

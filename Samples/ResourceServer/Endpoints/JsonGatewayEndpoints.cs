@@ -1,6 +1,7 @@
 
 using System.Diagnostics;
 using SP.Shared.Resource;
+using SP.Shared.Resource.Web;
 
 namespace ResourceServer.Endpoints;
 
@@ -34,11 +35,8 @@ public static class JsonGatewayEndpoints
             var res = await dispatcher.DispatchAsync(mem, ct);
             sw.Stop();
 
-            if (res is JsonResBase json)
-            {
-                logger.LogInformation("rpc handled: msgId={MsgId} elapsedMs={ElapsedMs} ok={Ok}",
-                    json.MsgId, sw.ElapsedMilliseconds, json.Ok);
-            }
+            logger.LogInformation("rpc handled: msgId={MsgId} elapsedMs={ElapsedMs} code={Ok}, message={Message}",
+                res.MsgId, sw.ElapsedMilliseconds, res.Code, res.Message);
 
             return Results.Json(res);
         });

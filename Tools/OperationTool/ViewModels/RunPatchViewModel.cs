@@ -3,13 +3,16 @@ using CommunityToolkit.Maui.Alerts;
 using CommunityToolkit.Maui.Core;
 using OperationTool.DatabaseHandler;
 using OperationTool.Models;
+using OperationTool.Services;
 using SP.Shared.Resource;
+using SP.Shared.Resource.Web;
 
 namespace OperationTool.ViewModels;
 
 public sealed class RunPatchViewModel : ViewModelBase
 {
     private readonly IDbConnector _dbConnector;
+    private readonly ResourceServerWebService _webService;
     private ServerGroupType _selectedServerGroupType;
     private RefsFileModel? _selectedRefsFile;
     private int _resourceVersion;
@@ -62,9 +65,10 @@ public sealed class RunPatchViewModel : ViewModelBase
     
     public AsyncRelayCommand ExecuteCommand { get; }
 
-    public RunPatchViewModel(IDbConnector dbConnector)
+    public RunPatchViewModel(IDbConnector dbConnector, ResourceServerWebService webService)
     {
         _dbConnector = dbConnector;
+        _webService = webService;
         
         foreach (ServerGroupType serverGroupType in Enum.GetValues(typeof(ServerGroupType)))
             ServerGroupTypes.Add(serverGroupType);
@@ -76,9 +80,9 @@ public sealed class RunPatchViewModel : ViewModelBase
     private async Task ExecuteAsync(object? state)
     {
         var confirm = await Shell.Current.DisplayAlert(
-            "Confirm",
-            "Are you sure you want to execute the patch?",
-            "Run",
+            "Patch",
+            "Would you like to run the patch?",
+            "Ok",
             "Cancel");
         
         if (!confirm)
@@ -102,12 +106,26 @@ public sealed class RunPatchViewModel : ViewModelBase
             };
             
             await ResourceDb.InsertResourcePatchVersionAsync(conn, entity, ct);
+            await NotifyPatchAsync(ct);
             await Utils.GoToPageAsync("..");
             await Toast.Make("Execute patch successfully").Show(ct);
         }
         catch (Exception e)
         {
             await Toast.Make($"An exception occurred: {e.Message}", ToastDuration.Long).Show(ct);
+        }
+    }
+
+    private async Task NotifyPatchAsync(CancellationToken ct)
+    {
+        try
+        {
+            await _webService.RefreshAsync(ct);
+            await Toast.Make("Patch notification sent").Show(ct);
+        }
+        catch (RpcException ex)
+        {
+            await Toast.Make($"Notify failed: {ex.Message}").Show(ct);
         }
     }
 
@@ -145,8 +163,7 @@ public sealed class RunPatchViewModel : ViewModelBase
             ClientMajorVersions.Clear();
             foreach (var entity in versions)
             {
-                if (!Enum.TryParse(entity.ServerGroupType, out ServerGroupType t) || 
-                    t != serverGroupType ||
+                if ((ServerGroupType)entity.ServerGroupType != serverGroupType ||
                     !BuildVersion.TryParse(entity.BeginBuildVersion, out var begin) ||
                     !BuildVersion.TryParse(entity.EndBuildVersion, out var end))
                     continue;

@@ -10,64 +10,106 @@
             <local:StringNotEmptyConverter x:Key="StringNotEmptyConverter" />
         </ResourceDictionary>
     </ContentPage.Resources>
+    
     <ContentPage.Content>
-        <Grid RowDefinitions="Auto,*" Padding="10">
-            
-            <Grid Row="0" ColumnDefinitions="*,*" ColumnSpacing="20">
+        <Grid RowDefinitions="Auto,*" 
+              Padding="10">
+            <Grid Row="0" 
+                  ColumnDefinitions="*,*,*" 
+                  ColumnSpacing="20">
 
                 <VerticalStackLayout Grid.Column="0" Spacing="8">
                     <Label Text="Base Version (Old)" FontAttributes="Bold" />
 
-                    <HorizontalStackLayout Spacing="4">
-                        <Label Text="Schs File:" VerticalOptions="Center" WidthRequest="70" />
-                        <Entry Text="{Binding OldSchsPath}" WidthRequest="250" HorizontalOptions="Fill" />
-                        <Button Text="..." Command="{Binding BrowseOldSchsCommand}" WidthRequest="40" />
-                    </HorizontalStackLayout>
+                    <Grid ColumnDefinitions="70,*,40" ColumnSpacing="4">
+                        <Label Grid.Column="0"
+                               Text="Schs File:" 
+                               VerticalOptions="Center" />
+                        <Entry Grid.Column="1"
+                               Text="{Binding OldSchsPath}"
+                               IsReadOnly="True"
+                               HorizontalOptions="FillAndExpand" />
+                        <Button Grid.Column="2"
+                                Text="..." 
+                                Command="{Binding BrowseOldSchsCommand}" />
+                    </Grid>
 
-                    <HorizontalStackLayout Spacing="4">
-                        <Label Text="Refs File:" VerticalOptions="Center" WidthRequest="70" />
-                        <Entry Text="{Binding OldRefsPath}" WidthRequest="250" HorizontalOptions="Fill" />
-                        <Button Text="..." Command="{Binding BrowseOldRefsCommand}" WidthRequest="40" />
-                    </HorizontalStackLayout>
+                    <Grid ColumnDefinitions="70,*,40" ColumnSpacing="4">
+                        <Label Grid.Column="0"
+                               Text="Refs File:" 
+                               VerticalOptions="Center" />
+                        <Entry Grid.Column="1"
+                               Text="{Binding OldRefsPath}"
+                               IsReadOnly="True"
+                               HorizontalOptions="FillAndExpand" />
+                        <Button Grid.Column="2"
+                                Text="..." 
+                                Command="{Binding BrowseOldRefsCommand}" />
+                    </Grid>
                 </VerticalStackLayout>
 
-                <VerticalStackLayout Grid.Column="1" Spacing="8">
+                <VerticalStackLayout Grid.Column="1" 
+                                     Spacing="8">
+                    
                     <Label Text="Target Version (New)" FontAttributes="Bold" />
-
-                    <HorizontalStackLayout Spacing="4">
-                        <Label Text="Schs File:" VerticalOptions="Center" WidthRequest="70" />
-                        <Entry Text="{Binding NewSchsPath}" WidthRequest="250" HorizontalOptions="Fill" />
-                        <Button Text="..." Command="{Binding BrowseNewSchsCommand}" WidthRequest="40" />
-                    </HorizontalStackLayout>
-
-                    <HorizontalStackLayout Spacing="4">
-                        <Label Text="Refs File:" VerticalOptions="Center" WidthRequest="70" />
-                        <Entry Text="{Binding NewRefsPath}" WidthRequest="250" HorizontalOptions="Fill" />
-                        <Button Text="..." Command="{Binding BrowseNewRefsCommand}" WidthRequest="40" />
-                    </HorizontalStackLayout>
+                    <Grid ColumnDefinitions="70,*,40" ColumnSpacing="4">
+                        <Label Grid.Column="0"
+                               Text="Schs File:" 
+                               VerticalOptions="Center" />
+                        <Entry Grid.Column="1"
+                               Text="{Binding NewSchsPath}"
+                               IsReadOnly="True"
+                               HorizontalOptions="FillAndExpand" />
+                        <Button Grid.Column="2"
+                                Text="..." 
+                                Command="{Binding BrowseNewSchsCommand}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="70,*,40" ColumnSpacing="4">
+                        <Label Grid.Column="0"
+                               Text="Refs File:" 
+                               VerticalOptions="Center" />
+                        <Entry Grid.Column="1"
+                               Text="{Binding NewRefsPath}"
+                               IsReadOnly="True"
+                               HorizontalOptions="FillAndExpand" />
+                        <Button Grid.Column="2"
+                                Text="..." 
+                                Command="{Binding BrowseNewRefsCommand}" />
+                    </Grid>
                 </VerticalStackLayout>
 
-                <HorizontalStackLayout
-                    Grid.ColumnSpan="2"
-                    Margin="0,10,0,0"
-                    HorizontalOptions="End">
-                    <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
+                <HorizontalStackLayout Grid.Column="2"
+                                       HorizontalOptions="End">
+                    <ActivityIndicator IsRunning="{Binding IsBusy}" 
+                                       IsVisible="{Binding IsBusy}" />
                     <Button
                         Text="Run Diff"
-                        Margin="10,0,0,0"
                         Command="{Binding RunDiffCommand}" />
                 </HorizontalStackLayout>
             </Grid>
 
-            <Grid Row="1" ColumnDefinitions="2*,3*" ColumnSpacing="10" Margin="0,10,0,0">
+            <Grid Row="1" 
+                  ColumnDefinitions="2*,3*" 
+                  ColumnSpacing="10" 
+                  Margin="0,10,0,0">
 
-                <Border Stroke="{DynamicResource Gray500}" StrokeThickness="1" Grid.Column="0">
+                <Border Grid.Column="0" 
+                        Stroke="{DynamicResource Gray500}" 
+                        StrokeThickness="1">
+                    
                     <VerticalStackLayout Padding="4">
                         <Label Text="Table List" FontAttributes="Bold" />
                         <CollectionView
                             ItemsSource="{Binding Tables}"
                             SelectionMode="Single"
-                            SelectedItem="{Binding SelectedTable, Mode=TwoWay}">
+                            SelectedItem="{Binding SelectedTable}">
+                            <CollectionView.EmptyView>
+                                <Label Text="No tables changed."
+                                       HorizontalOptions="Center"
+                                       VerticalOptions="Center"
+                                       Margin="0,10,0,0" />
+                            </CollectionView.EmptyView>
+                            
                             <CollectionView.ItemTemplate>
                                 <DataTemplate>
                                     <Grid ColumnDefinitions="*,Auto" Padding="4">
@@ -90,11 +132,19 @@
                     </VerticalStackLayout>
                 </Border>
                 
-                <Border Stroke="{DynamicResource Gray500}" StrokeThickness="1" Grid.Column="1">
-                    <Grid RowDefinitions="Auto,*,*" Padding="4"
+                <Border Grid.Column="1"
+                        Stroke="{DynamicResource Gray500}" 
+                        StrokeThickness="1">
+                    
+                    <Grid RowDefinitions="Auto,*,*" 
+                          RowSpacing="12"
+                          Padding="4"
                           BindingContext="{Binding SelectedTable}">
-
-                        <StackLayout Orientation="Horizontal" Spacing="10" Grid.Row="0">
+                        
+                        <StackLayout Grid.Row="0" 
+                                     Orientation="Horizontal" 
+                                     Spacing="10" >
+                            
                             <Label Text="{Binding Name}" FontAttributes="Bold" />
                             <Label Text="{Binding Kind}" />
                             <Label
@@ -102,11 +152,19 @@
                                 TextColor="Red"
                                 IsVisible="{Binding PrimaryKeyChanged}" />
                         </StackLayout>
-
-                        <VerticalStackLayout Grid.Row="1" Spacing="4">
-                            <Label Text="Column Changes" FontAttributes="Bold" />
+                        
+                        <VerticalStackLayout Grid.Row="1" 
+                                             Spacing="4">
                             
+                            <Label Text="Column Changes" FontAttributes="Bold" />
                             <CollectionView ItemsSource="{Binding Columns}">
+                                <CollectionView.EmptyView>
+                                    <Label Text="No column changes."
+                                           HorizontalOptions="Center"
+                                           VerticalOptions="Center"
+                                           Margin="0,10,0,0" />
+                                </CollectionView.EmptyView>
+                                    
                                 <CollectionView.ItemTemplate>
                                     <DataTemplate>
                                         <Grid RowDefinitions="Auto,Auto"
@@ -129,7 +187,7 @@
                                                                    Grid.ColumnSpan="2"
                                                                    Spacing="12">
                                                 
-                                                <Label Text="{Binding TypChangeText}"
+                                                <Label Text="{Binding TypeChangeText}"
                                                        IsVisible="{Binding TypeChangeText, Converter={StaticResource StringNotEmptyConverter}}" />
                                                 
                                                 <Label Text="{Binding KeyChangeText}"
@@ -141,13 +199,20 @@
                             </CollectionView>
                         </VerticalStackLayout>
 
-                        <VerticalStackLayout Grid.Row="2" Spacing="4">
+                        <VerticalStackLayout Grid.Row="2" 
+                                             Spacing="4">
                             <Label Text="Row Changes" FontAttributes="Bold" />
-                            
                             <CollectionView
                                 ItemsSource="{Binding Rows}"
                                 SelectionMode="Single"
                                 SelectedItem="{Binding SelectedRow}">
+                                <CollectionView.EmptyView>
+                                    <Label Text="No row changes."
+                                           HorizontalOptions="Center"
+                                           VerticalOptions="Center"
+                                           Margin="0,10,0,0" />
+                                </CollectionView.EmptyView>
+                                
                                 <CollectionView.ItemTemplate>
                                     <DataTemplate>
                                         <Grid ColumnDefinitions="*,Auto" Padding="4">
@@ -166,12 +231,19 @@
                                     </DataTemplate>
                                 </CollectionView.ItemTemplate>
                             </CollectionView>
-                            
+                                
                             <VerticalStackLayout Spacing="4"
                                                  IsVisible="{Binding SelectedRow, Converter={StaticResource NullToFalseConverter}}">
                                 <Label Text="Cell Changes" FontAttributes="Bold" />
                                 
                                 <CollectionView ItemsSource="{Binding SelectedRowCells}">
+                                    <CollectionView.EmptyView>
+                                        <Label Text="No cell changes."
+                                               HorizontalOptions="Center"
+                                               VerticalOptions="Center"
+                                               Margin="0,10,0,0" />
+                                    </CollectionView.EmptyView>
+                                    
                                     <CollectionView.ItemTemplate>
                                         <DataTemplate>
                                             <Grid ColumnDefinitions="2*,Auto,2*,2*" Padding="2">

@@ -18,8 +18,4 @@
       <ProjectReference Include="..\..\Shared\SP.Shared.Database\SP.Shared.Database.csproj" />
     </ItemGroup>
 
-    <ItemGroup>
-      <Folder Include="Models\" />
-    </ItemGroup>
-
 </Project>

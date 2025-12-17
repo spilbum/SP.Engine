@@ -8,7 +8,7 @@ public sealed class MySqlDbConnector : BaseDbConnector
     private readonly MySqlDbProvider _provider = new();
     
     public void Register(DbKind kind, string connectionString)
-        => Register(Key(kind), connectionString, _provider);
+        => AddOrUpdate(Key(kind), connectionString, _provider);
     
     public DbConn Open(DbKind kind)
         => Open(Key(kind));

@@ -5,8 +5,9 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using ResourceServer.Handlers;
 using SP.Shared.Resource;
+using SP.Shared.Resource.Web;
 using JsonException = System.Text.Json.JsonException;
-using JsonResult = SP.Shared.Resource.JsonResult;
+using JsonResult = SP.Shared.Resource.Web.JsonResult;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace ResourceServer;
@@ -46,13 +47,13 @@ public sealed class JsonDispatcher
         }
     }
     
-    public async Task<object> DispatchAsync(ReadOnlyMemory<byte> body, CancellationToken ct)
+    public async Task<JsonResBase> DispatchAsync(ReadOnlyMemory<byte> body, CancellationToken ct)
     {
         if (!TryReadMsgId(body.Span, out var msgId))
-            return JsonResult.Error(0, ErrorCode.MissingField, "Missing msgId");
+            return JsonResult.Error<object>(0, ErrorCode.InvalidFormat, "Missing msgId");
         
         if (!_map.TryGetValue(msgId, out var handler))
-            return JsonResult.Error(0, ErrorCode.UnknownMsgId, $"Unknown msgId: {msgId}");
+            return JsonResult.Error<object>(0, ErrorCode.UnknownMsgId, $"Unknown msgId: {msgId}");
 
         object? reqObj;
         try
@@ -61,25 +62,15 @@ public sealed class JsonDispatcher
             reqObj = JsonConvert.DeserializeObject(json, handler.ReqType, Settings);
             
             if (reqObj is null)
-                return JsonResult.Error(handler.ResId, ErrorCode.InvalidFormat,
+                return JsonResult.Error<object>(
+                    handler.ResId, ErrorCode.InvalidFormat,
                     $"Failed to deserialize request: {handler.ReqType.Name}");
         }
         catch (Exception e)
         {
-            return JsonResult.Error(handler.ResId, ErrorCode.InvalidFormat, e.Message);
+            return JsonResult.Error<object>(handler.ResId, ErrorCode.InvalidFormat, e.Message);
         }
 
-        try
-        {
-            return await handler.HandleAsync(reqObj, ct);
-        }
-        catch (OperationCanceledException)
-        {
-            return JsonResult.Error(handler.ResId, ErrorCode.InternalError, "Canceled");
-        }
-        catch (Exception e)
-        {
-            return JsonResult.Error(handler.ResId, ErrorCode.InternalError, e.Message);
-        }
+        return await handler.HandleAsync(reqObj, ct).ConfigureAwait(false);
     }
 }

@@ -1,14 +1,11 @@
 using CommunityToolkit.Maui.Alerts;
-using CommunityToolkit.Maui.Storage;
-using OperationTool.DatabaseHandler;
-using OperationTool.Models;
-using OperationTool.Storage;
+using OperationTool.Services;
 
 namespace OperationTool.ViewModels;
 
 public sealed class SettingsTabViewModel : ViewModelBase
 {
-    private readonly ISettingsProvider _provider;
+    private readonly ISettingsProvider _settingsProvider;
     private readonly IDbConnector _dbConnector;
     private bool _saveEnabled;
 
@@ -18,28 +15,23 @@ public sealed class SettingsTabViewModel : ViewModelBase
         set
         {
             if (SetProperty(ref _saveEnabled, value))
-            {
                 SaveCommand.RaiseCanExecuteChanged();
-                TestConnectionCommand.RaiseCanExecuteChanged();
-            }
         }
     }
 
-    private string _host = "127.0.0.1";
-    private string _port = "3306";
-    private string _database = "resource_db";
-    private string _user = "root";
-    private string _password = "";
-
+    private string _host;
+    private string _port;
+    private string _database;
+    private string _user;
+    private string _password;
+    
     public string Host
     {
         get => _host;
         set
         {
             if (SetProperty(ref _host, value))
-            {
                 SaveEnabled = true;
-            }
         }
     }
 
@@ -49,9 +41,7 @@ public sealed class SettingsTabViewModel : ViewModelBase
         set
         {
             if (SetProperty(ref _port, value))
-            {
                 SaveEnabled = true;
-            }
         }
     }
 
@@ -61,9 +51,7 @@ public sealed class SettingsTabViewModel : ViewModelBase
         set
         {
             if (SetProperty(ref _database, value))
-            {
                 SaveEnabled = true;
-            }
         }
     }
 
@@ -73,9 +61,7 @@ public sealed class SettingsTabViewModel : ViewModelBase
         set
         {
             if (SetProperty(ref _user, value))
-            {
                 SaveEnabled = true;
-            }
         }
     }
 
@@ -85,42 +71,45 @@ public sealed class SettingsTabViewModel : ViewModelBase
         set
         {
             if (SetProperty(ref _password, value))
-            {
                 SaveEnabled = true;
-            }
         }
     }
     
     public AsyncRelayCommand SaveCommand { get; }
-    public AsyncRelayCommand TestConnectionCommand { get; }
+    public AsyncRelayCommand CheckDatabaseCommand { get; }
     
     public SettingsTabViewModel(
-        ISettingsProvider provider,
+        ISettingsProvider settingsProvider,
         IDbConnector dbConnector)
     {
-        _provider = provider;
+        _settingsProvider = settingsProvider;
         _dbConnector = dbConnector;
-        
-        var s = provider.Current.Database;
-        _host = s.Host;
-        _port = s.Port.ToString();
-        _database = s.Database;
-        _user = s.User;
-        _password = s.Password;
+
+        var s = settingsProvider.Settings;
+        _host = s.Database.Host;
+        _port = s.Database.Port.ToString();
+        _database = s.Database.Database;
+        _user = s.Database.User;
+        _password = s.Database.Password;
         
         SaveCommand = new AsyncRelayCommand(SaveAsync, CanSave);
-        TestConnectionCommand = new AsyncRelayCommand(TestConnectionAsync, CanTestConnection);
+        CheckDatabaseCommand = new AsyncRelayCommand(CheckDatabaseAsync);
     }
+
 
     private async Task SaveAsync(object? parameter)
     {
-        var s = _provider.Current;
+        var s = _settingsProvider.Settings;
         s.Database.Host = Host;
         s.Database.Port = int.Parse(Port);
         s.Database.Database = Database;
         s.Database.User = User;
         s.Database.Password = Password;
-        await _provider.SaveAsync();
+        
+        var connStr = $"Server={Host};Port={Port};Database={Database};User Id={User};Password={Password}";
+        _dbConnector.AddOrUpdate(connStr);
+        
+        await _settingsProvider.SaveAsync();
         await Toast.Make("Save settings successfully.").Show(CancellationToken.None);
         
         SaveEnabled = false;
@@ -129,24 +118,22 @@ public sealed class SettingsTabViewModel : ViewModelBase
     private bool CanSave()
         => SaveEnabled;
 
-    private async Task TestConnectionAsync(object? parameter)
+    private async Task CheckDatabaseAsync(object? parameter)
     {
         var cts = new CancellationTokenSource();
         var ct = cts.Token;
         
         try
         {
-            using var conn = await _dbConnector.OpenAsync(ct);
-            await Toast.Make("Test connection successfully.").Show(ct);
+            var connStr = $"Server={Host};Port={Port};Database={Database};User Id={User};Password={Password}";
+            var connector = new MySqlDbConnector();
+            connector.AddOrUpdate(connStr);
+            using var conn = await connector.OpenAsync(ct);
+            await Toast.Make("Database connection successful.").Show(ct);
         }
         catch (Exception e)
         {
-            await Toast.Make($"An exception occurred: {e.Message}").Show(ct);
+            await Toast.Make($"Failed to connect to database: {e.Message}").Show(ct);
         }
     }
-
-    private bool CanTestConnection()
-        => _dbConnector.CanOpen() && !SaveEnabled;
-
-
 }

@@ -1,36 +1,30 @@
 using ResourceServer.Services;
-using SP.Shared.Resource;
+using SP.Shared.Resource.Web;
 
 namespace ResourceServer.Handlers;
 
-public sealed class SyncServerListHandler(IServerDirectory dir, ILogger<SyncServerListHandler> logger) : IJsonHandler
+public sealed class SyncServerListHandler(
+    IServerStore store, 
+    ILogger<SyncServerListHandler> logger) : JsonHandlerBase<SyncServerListReq, SyncServerListRes>
 {
-    public int ReqId => MsgId.SyncServerListReq;
-    public int ResId => MsgId.SyncServerListRes;
-    public Type ReqType => typeof(JsonCmd<SyncServerListReq>);
+    public override int ReqId => ResourceMsgId.SyncServerListReq;
+    public override int ResId => ResourceMsgId.SyncServerListRes;
 
-    public ValueTask<object> HandleAsync(object req, CancellationToken ct)
+    protected override ValueTask<SyncServerListRes> HandlePayloadAsync(SyncServerListReq req, CancellationToken ct)
     {
-        var cmd = (JsonCmd<SyncServerListReq>)req;
-        var payload = cmd.Payload;
-        if (payload == null)
-            return ValueTask.FromResult<object>(
-                JsonResult.Error(ResId, ErrorCode.InvalidFormat, "Payload is null"));
+        var res = new SyncServerListRes();
+        var updatedUtc = DateTimeOffset.FromUnixTimeMilliseconds(req.UpdatedUtcMs);
 
-        var updatedUtc = DateTimeOffset.FromUnixTimeMilliseconds(payload.UpdatedUtcMs);
+        var snapshot = store.GetSnapshot(req.ServerGroupType);
+        if (snapshot != null && updatedUtc <= snapshot.UpdatedUtc)
+            return ValueTask.FromResult(res);
 
-        var snapshot = dir.GetSnapshot();
-        if (updatedUtc <= snapshot.UpdatedUtc)
-        {
-            return ValueTask.FromResult<object>(
-                JsonResult.Error(ResId, ErrorCode.OutdatedSnapshot, "Outdated sync snapshot"));
-        }
-
-        dir.ReplaceAll(payload.List, updatedUtc);
-        logger.LogInformation("Server list replaced: {List}", 
-            string.Join(", ", payload.List.Select(x => $"{x.Id} - {x.Kind} - {x.Host}:{x.Port}")));
+        store.ReplaceAll(req.ServerGroupType, req.List, updatedUtc);
+        logger.LogInformation("Server list replaced: {List}, ServerGroupType={ServerGroupType}", 
+            string.Join(", ", req.List.Select(x => $"{x.Id} - {x.Kind} - {x.Host}:{x.Port}")),
+            req.ServerGroupType);
         
-        var res = new SyncServerListRes { AppliedUtcMs = updatedUtc.ToUnixTimeMilliseconds() };
-        return ValueTask.FromResult<object>(JsonResult.Ok(ResId, res));
+        res.AppliedUtcMs = updatedUtc.ToUnixTimeMilliseconds();
+        return ValueTask.FromResult(res);
     }
 }

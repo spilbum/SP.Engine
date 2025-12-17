@@ -1,23 +1,39 @@
 using System.Windows.Input;
+using CommunityToolkit.Maui.Alerts;
 
 namespace OperationTool;
 
-public sealed class AsyncRelayCommand : ICommand
+public sealed class AsyncRelayCommand(
+    Func<object?, Task> execute,
+    Func<bool>? canExecute = null)
+    : AsyncRelayCommand<object>(
+        execute,
+        canExecute == null ? null : _ => canExecute());
+
+public class AsyncRelayCommand<T>(
+    Func<T?, Task> execute,
+    Func<T?, bool>? canExecute = null) 
+    : ICommand
 {
-    private readonly Func<object?, Task> _execute;
-    private readonly Func<bool>? _canExecute;
     private bool _isExecuting;
 
     public event EventHandler? CanExecuteChanged;
-    
-    public AsyncRelayCommand(Func<object?, Task> execute, Func<bool>? canExecute = null)
-    {
-        _execute = execute;
-        _canExecute = canExecute;
-    }
-    
+
     public bool CanExecute(object? parameter)
-        => !_isExecuting && (_canExecute?.Invoke() ?? true);
+    {
+        if (_isExecuting)
+            return false;
+        
+        if (canExecute == null)
+            return true;
+
+        return parameter switch
+        {
+            T t => canExecute!(t),
+            null => canExecute(default),
+            _ => false
+        };
+    }
 
     public async void Execute(object? parameter)
     {
@@ -29,12 +45,12 @@ public sealed class AsyncRelayCommand : ICommand
 
         try
         {
-            await _execute(parameter);
+            var value = parameter is T t ? t : default;
+            await execute(value);
         }
         catch (Exception ex)
         {
-            // 예외 처리: 로그 남기거나 UI 알림
-            Console.WriteLine(ex);
+            await Toast.Make($"Failed to execute command: {ex.Message}").Show();
         }
         finally
         {

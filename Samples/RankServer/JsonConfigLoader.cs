@@ -1,10 +1,12 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using SP.Shared.Resource;
 
 namespace RankServer;
 
 public class ServerConfig
 {
+    public string GroupType { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public int Port { get; set; } = 0;
     public string[] AcceptServers { get; set; } = [];
@@ -18,7 +20,7 @@ public class DatabaseConfig
 
 public class ResourceConfig
 {
-    public string ServerUrl { get; set; } = string.Empty;
+    public string BaseUrl { get; set; } = string.Empty;
     public int SyncPeriodSec { get; set; } = 0;
 }
 

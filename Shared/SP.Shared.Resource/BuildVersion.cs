@@ -8,18 +8,21 @@ public readonly struct BuildVersion : IComparable<BuildVersion>, IEquatable<Buil
 {
     public int Major { get; }
     public int Minor { get; }
-    public int BuildNum { get; }
+    public int Build { get; }
 
-    public BuildVersion(int major, int minor, int buildNum)
+    public BuildVersion(int major, int minor, int build)
     {
         if (major < 0) throw new ArgumentOutOfRangeException(nameof(major));
         if (minor < 0) throw new ArgumentOutOfRangeException(nameof(minor));
-        if (buildNum < 0) throw new ArgumentOutOfRangeException(nameof(buildNum));
+        if (build < 0) throw new ArgumentOutOfRangeException(nameof(build));
         
         Major = major;
         Minor = minor;
-        BuildNum = buildNum;
+        Build = build;
     }
+
+    public BuildVersion IncrementBuild()
+        => new(Major, Minor, Build + 1);
 
     public static BuildVersion Parse(string s)
     {
@@ -69,11 +72,11 @@ public readonly struct BuildVersion : IComparable<BuildVersion>, IEquatable<Buil
         if (c != 0) return c;
         
         c = Minor.CompareTo(other.Minor);
-        return c != 0 ? c : BuildNum.CompareTo(other.BuildNum);
+        return c != 0 ? c : Build.CompareTo(other.Build);
     }
 
     public bool Equals(BuildVersion other)
-        => Major == other.Major && Minor == other.Minor && BuildNum == other.BuildNum;
+        => Major == other.Major && Minor == other.Minor && Build == other.Build;
 
     public override bool Equals(object? obj)
         => obj is BuildVersion v && Equals(v);
@@ -85,7 +88,7 @@ public readonly struct BuildVersion : IComparable<BuildVersion>, IEquatable<Buil
             var hash = 17;
             hash = hash * 31 + Major;
             hash = hash * 31 + Minor;
-            hash = hash * 31 + BuildNum;
+            hash = hash * 31 + Build;
             return hash;
         }
     }
@@ -98,8 +101,8 @@ public readonly struct BuildVersion : IComparable<BuildVersion>, IEquatable<Buil
     public static bool operator >=(BuildVersion left, BuildVersion right) => left.CompareTo(right) >= 0;
     
     public override string ToString()
-        => $"{Major}.{Minor}.{BuildNum}";
+        => $"{Major}.{Minor}.{Build}";
     
-    public bool IsZero => Major == 0 && Minor == 0 && BuildNum == 0;
+    public bool IsZero => Major == 0 && Minor == 0 && Build == 0;
 }
 

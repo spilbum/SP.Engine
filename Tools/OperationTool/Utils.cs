@@ -15,6 +15,11 @@ public static class Utils
     
     public static Task GoToPageAsync(string pageName)
         => Shell.Current.GoToAsync(pageName);
+    
+    public static bool ValidateExtension(FileResult file, string extension)
+    {
+        return file.FileName.EndsWith(extension, StringComparison.OrdinalIgnoreCase);
+    }
 }
 
 public sealed class NullToFalseConverter : IValueConverter

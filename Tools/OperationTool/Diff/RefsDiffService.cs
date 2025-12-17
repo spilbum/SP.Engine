@@ -1,4 +1,5 @@
 using SP.Shared.Resource;
+using SP.Shared.Resource.Table;
 
 namespace OperationTool.Diff;
 

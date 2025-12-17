@@ -3,6 +3,7 @@ using CommunityToolkit.Maui.Alerts;
 using OperationTool.Diff;
 using OperationTool.Diff.Models;
 using OperationTool.Models;
+using SP.Shared.Resource;
 
 namespace OperationTool.ViewModels;
 
@@ -97,18 +98,13 @@ public sealed class RefsDiffTabViewModel : ViewModelBase
                && !IsBusy;
     }
     
-    private bool ValidateExtension(FileResult file, string extension)
-    {
-        return file.FileName.EndsWith(extension, StringComparison.OrdinalIgnoreCase);
-    }
-
     private async Task BrowseOldSchsAsync(object? state)
     {
         var result = await _filePicker.PickAsync();
         if (string.IsNullOrEmpty(result?.FileName))
             return;
         
-        if (!ValidateExtension(result, "schs"))
+        if (!Utils.ValidateExtension(result, "schs"))
         {
             await Toast.Make("Only SCHS files can be selected.").Show(CancellationToken.None);
             return;
@@ -123,7 +119,7 @@ public sealed class RefsDiffTabViewModel : ViewModelBase
         if (string.IsNullOrEmpty(result?.FileName))
             return;
         
-        if (!ValidateExtension(result, "refs"))
+        if (!Utils.ValidateExtension(result, "refs"))
         {
             await Toast.Make("Only REFS files can be selected.").Show(CancellationToken.None);
             return;
@@ -138,7 +134,7 @@ public sealed class RefsDiffTabViewModel : ViewModelBase
         if (string.IsNullOrEmpty(result?.FileName))
             return;
         
-        if (!ValidateExtension(result, "schs"))
+        if (!Utils.ValidateExtension(result, "schs"))
         {
             await Toast.Make("Only SCHS files can be selected.").Show(CancellationToken.None);
             return;
@@ -153,7 +149,7 @@ public sealed class RefsDiffTabViewModel : ViewModelBase
         if (string.IsNullOrEmpty(result?.FileName))
             return;
         
-        if (!ValidateExtension(result, "refs"))
+        if (!Utils.ValidateExtension(result, "refs"))
         {
             await Toast.Make("Only REFS files can be selected.").Show(CancellationToken.None);
             return;

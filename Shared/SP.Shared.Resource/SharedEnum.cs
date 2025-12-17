@@ -1,13 +1,15 @@
 namespace SP.Shared.Resource;
 
-public enum ErrorCode : byte
+public enum ErrorCode : int
 {
-    None = 0,
-    InvalidFormat = 1,
-    MissingField = 2,
-    UnknownMsgId = 3,
-    OutdatedSnapshot = 4,
-    InternalError = 100,
+    InternalError = -99,
+    UnknownMsgId = -3,
+    InvalidFormat = -2,
+    Unknown = -1,
+    Success = 0,
+    ForceUpdateRequired= 1,
+    NoServerAvailable = 2,
+    Maintenance = 3,
 }
 
 public enum ServerStatus : byte
@@ -30,6 +32,7 @@ public enum PlatformKind : byte
 
 public enum ServerGroupType : byte
 {
+    None = 0,
     Dev = 1,
     QA = 2,
     Stage = 3,
@@ -38,7 +41,7 @@ public enum ServerGroupType : byte
 
 public enum StoreType : byte
 {
-    Unknown = 0,
+    None = 0,
     GooglePlay = 1,
     AppStore = 2,
     Steam = 3
@@ -47,6 +50,7 @@ public enum StoreType : byte
 public enum ColumnType
 {
     String,
+    Byte,
     Int32,
     Int64,
     Float,

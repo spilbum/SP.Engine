@@ -1,10 +1,11 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using ClosedXML.Excel;
 using SP.Shared.Resource;
 
 namespace OperationTool.Excel;
 
-public static class ExcelTableParser
+public static partial class ExcelTableParser
 {
     public static List<ExcelTable> LoadWorkbook(string path)
     {
@@ -43,20 +44,18 @@ public static class ExcelTableParser
         {
             var nameCell = headerRow.Cell(col);
             var name = nameCell.GetString().Trim();
-            if (string.IsNullOrWhiteSpace(name))
-                continue;
+            if (!ValidateColumnName(name))
+                throw new InvalidDataException($"Invalid column name: {name}");
 
             var typeStr = typeRow.Cell(col).GetString().Trim();
             if (string.IsNullOrEmpty(typeStr))
-                typeStr = "string";
+                throw new InvalidDataException("Column type is empty");
 
             var pkMark = pkRow.Cell(col).GetString().Trim();
-            var isPk = !string.IsNullOrEmpty(pkMark) &&
-                       (pkMark.Equals("key", StringComparison.OrdinalIgnoreCase) ||
-                       pkMark.Equals("pk", StringComparison.OrdinalIgnoreCase));
+            var isPk = !string.IsNullOrEmpty(pkMark) && pkMark.Equals("key", StringComparison.OrdinalIgnoreCase);
 
-            var colType = ParseColumnType(typeStr);
-            var column = new ExcelColumn(col, name, colType, isPk);
+            var (colType, colLength) = ParseColumnType(typeStr);
+            var column = new ExcelColumn(col, name, colType, isPk, colLength);
             columns.Add(column);
         }
         
@@ -71,6 +70,19 @@ public static class ExcelTableParser
         );
         
         return table;
+    }
+
+    private static bool ValidateColumnName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return false;
+        
+        // 숫자 시작 금지
+        if (char.IsDigit(name[0]))
+            return false;
+        
+        // 허용 문자: 알파벳, 숫자, 언더스코어
+        return name.All(c => char.IsLetterOrDigit(c) || c == '_');
     }
     
     private static List<ExcelRow> ReadDataRows(
@@ -114,19 +126,36 @@ public static class ExcelTableParser
         return true;
     }
 
-    private static ColumnType ParseColumnType(string type)
+    private static (ColumnType type, int? length) ParseColumnType(string input)
     {
-        return type.Trim().ToLowerInvariant() switch
+        var (type, length) = ParseTypeWithLength(input);
+        return type switch
         {
-            "text" or "string" => ColumnType.String,
-            "int" or "int32" => ColumnType.Int32,
-            "long" or "int64" => ColumnType.Int64,
-            "float" => ColumnType.Float,
-            "double" => ColumnType.Double,
-            "bool" or "boolean" => ColumnType.Boolean,
-            "date" or "datetime" => ColumnType.DateTime,
-            _ => ColumnType.String
+            "string" => (ColumnType.String, length),
+            "byte" => (ColumnType.Byte, length),
+            "int32" => (ColumnType.Int32, length),
+            "int64" => (ColumnType.Int64, length),
+            "float" => (ColumnType.Float, length),
+            "double" => (ColumnType.Double, length),
+            "boolean" => (ColumnType.Boolean, length),
+            "datetime" => (ColumnType.DateTime, length),
+            _ => throw new NotSupportedException($"Unsupported: {type}")
         };
+    }
+    
+    private static (string type, int? length) ParseTypeWithLength(string input)
+    {
+        var match = ColumnTypeRegex().Match(input.Trim());
+        if (!match.Success)
+            throw new FormatException($"Invalid type format: {input}");
+
+        var type = match.Groups["type"].Value.ToLowerInvariant();
+
+        int? length = null;
+        if (match.Groups["len"].Success)
+            length = int.Parse(match.Groups["len"].Value);
+
+        return (type, length);
     }
    
     private static object? ConvertCellValue(IXLCell cell, ColumnType type)
@@ -142,6 +171,11 @@ public static class ExcelTableParser
         {
             case ColumnType.String:
                 return s;
+            
+            case ColumnType.Byte:
+                if(!byte.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var bt))
+                    throw new FormatException($"Invalid type format: {s}");
+                return bt;
 
             case ColumnType.Int32:
                 if (!int.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var i))
@@ -185,6 +219,9 @@ public static class ExcelTableParser
                 return s;
         }
     }
+
+    [GeneratedRegex(@"^(?<type>[a-zA-Z0-9]+)(\((?<len>\d+)\))?$", RegexOptions.IgnoreCase, "ko-KR")]
+    private static partial Regex ColumnTypeRegex();
 }
 
 

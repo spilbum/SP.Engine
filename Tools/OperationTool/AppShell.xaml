@@ -22,6 +22,10 @@
                 Route="DiffTab"
                 ContentTemplate="{DataTemplate pages:RefsDiffTabPage}" />
             <ShellContent
+                Title="Sql"
+                Route="SqlTab"
+                ContentTemplate="{DataTemplate pages:RefsSqlTabPage}" />
+            <ShellContent
                 Title="Settings"
                 Route="SettingsTab"
                 ContentTemplate="{DataTemplate pages:SettingsTabPage}" />

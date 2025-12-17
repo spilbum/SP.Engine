@@ -1,4 +1,7 @@
 using SP.Shared.Resource;
+using SP.Shared.Resource.Refs;
+using SP.Shared.Resource.Schs;
+using SP.Shared.Resource.Table;
 
 namespace OperationTool.Diff;
 
@@ -20,10 +23,10 @@ public static class RefsSnapshotFactory
         string refsPath,
         CancellationToken ct)
     {
-        var schemas = await RefsPackReader.ReadSchsFileAsync(schsPath, ct);
+        var schemas = await SchsPackReader.ReadAsync(schsPath, ct);
         var schemaMap = schemas.ToDictionary(s => s.Name, StringComparer.Ordinal);
         
-        var list = await RefsPackReader.ReadRefsFileAsync(schemas, refsPath, ct);
+        var list = await RefsPackReader.ReadAsync(schemas, refsPath, ct);
         var tableMap = new Dictionary<string, RefsTableSnapshot>(StringComparer.Ordinal);
 
         foreach (var data in list)

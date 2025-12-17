@@ -1,0 +1,12 @@
+[10:31:11.815 DBG] [T:75] [Game] A new session connected. sessionId=efcc63fc-0d33-4cf0-9883-7e342ce86988, remoteEndPoint=192.168.0.109:64332
+[10:31:11.898 DBG] [T:66] [Game] Session authentication succeeded. sessionId=efcc63fc-0d33-4cf0-9883-7e342ce86988, peerId=1
+[10:36:24.385 DBG] [T:86] [Game] Received a termination request from the client. isClosing=false
+[10:36:24.387 DBG] [T:86] [Game] The session efcc63fc-0d33-4cf0-9883-7e342ce86988 has been closed. reason="ClientClosing"
+[10:36:24.390 DBG] [T:86] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[10:45:30.033 DBG] [T:81] [Game] A new session connected. sessionId=197a2ea9-87ac-4589-8d84-ca249b5c68fe, remoteEndPoint=192.168.0.109:64642
+[10:45:30.058 DBG] [T:73] [Game] Session authentication succeeded. sessionId=197a2ea9-87ac-4589-8d84-ca249b5c68fe, peerId=1
+[10:45:37.059 DBG] [T:74] [Game] Received a termination request from the client. isClosing=false
+[10:45:37.060 DBG] [T:74] [Game] The session 197a2ea9-87ac-4589-8d84-ca249b5c68fe has been closed. reason="ClientClosing"
+[10:45:37.060 DBG] [T:74] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[11:08:31.766 DBG] [T:73] [Game] A new session connected. sessionId=2cdac757-7c07-4517-8e13-1858430c0237, remoteEndPoint=192.168.0.109:65208
+[11:08:31.792 DBG] [T:73] [Game] Session authentication succeeded. sessionId=2cdac757-7c07-4517-8e13-1858430c0237, peerId=1

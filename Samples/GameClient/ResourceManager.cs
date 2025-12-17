@@ -1,4 +1,5 @@
 using SP.Shared.Resource;
+using SP.Shared.Resource.Web;
 
 namespace GameClient;
 
@@ -16,25 +17,22 @@ public sealed class ResourceManager : IDisposable
         _resourceRpc = new HttpRpc(_http, resourceServerUrl);
     }
     
-    public CheckClientRes Bootstrap(
-        PlatformKind platform,
+    public async Task<CheckClientRes> BootstrapAsync(
+        StoreType storeType,
         string buildVersion,
         int resourceVersion,
-        int timeoutMs = 5000)
+        CancellationToken ct)
     {
-        using var cts = new CancellationTokenSource(timeoutMs);
         var req = new CheckClientReq
         {
-            Platform = platform,
+            StoreType = storeType,
             BuildVersion = buildVersion,
-            ResourceVersion = resourceVersion,
+            ResourceVersion = resourceVersion
         };
-        
-        var res = _resourceRpc
-            .CallAsync<CheckClientReq, CheckClientRes>(MsgId.CheckClientReq, req, cts.Token)
-            .GetAwaiter()
-            .GetResult();
-        return res;
+
+        var response = await _resourceRpc
+            .CallAsync<CheckClientReq, CheckClientRes>(ResourceMsgId.CheckClientReq, req, ct);
+        return response;
     }
 
     public TRes Call<TReq, TRes>(

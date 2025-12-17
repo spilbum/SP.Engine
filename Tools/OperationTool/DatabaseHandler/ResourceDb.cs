@@ -26,10 +26,22 @@ public static class ResourceDb
 
     public class ClientBuildVersionEntity : BaseDbEntity
     {
-        [Member("server_group_type")] public string ServerGroupType = string.Empty;
-        [Member("store_type")] public string StoreType = string.Empty;
+        [Member("server_group_type")] public byte ServerGroupType;
+        [Member("store_type")] public byte StoreType;
         [Member("begin_build_version")] public string BeginBuildVersion = string.Empty;
         [Member("end_build_version")] public string EndBuildVersion = string.Empty;
+    }
+    
+    public class ResourceConfigEntity : BaseDbEntity
+    {
+        [Member("config_key")] public string Key = string.Empty;
+        [Member("config_value")] public string Value = string.Empty;
+    }
+
+    public static async Task<List<ResourceConfigEntity>> GetResourceConfigsAsync(DbConn conn, CancellationToken ct)
+    {
+        using var cmd = conn.CreateCommand(CommandType.StoredProcedure, "proc_get_resource_configs");
+        return await cmd.ExecuteReaderListAsync<ResourceConfigEntity>(ct);
     }
 
     public static async Task<List<ClientBuildVersionEntity>> GetClientBuildVersions(DbConn conn, CancellationToken ct)
@@ -63,6 +75,16 @@ public static class ResourceDb
         cmd.Add("server_group_type", DbType.String, serverGroupType.ToString());
         var latest = await cmd.ExecuteScalarAsync<int>(ct);
         return latest;
+    }
+
+    public static async Task UpsertClientBuildVersionAsync(
+        DbConn conn,
+        ClientBuildVersionEntity entity,
+        CancellationToken ct)
+    {
+        using var cmd = conn.CreateCommand(CommandType.StoredProcedure, "proc_upsert_client_build_version");
+        cmd.AddWithEntity(entity);
+        await cmd.ExecuteNonQueryAsync(ct);
     }
 
     public static async Task InsertResourcePatchVersionAsync(

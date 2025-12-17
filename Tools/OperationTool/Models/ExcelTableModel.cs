@@ -1,6 +1,7 @@
 using OperationTool.Excel;
 using OperationTool.ViewModels;
 using SP.Shared.Resource;
+using SP.Shared.Resource.Table;
 
 namespace OperationTool.Models;
 
@@ -31,7 +32,8 @@ public sealed class ExcelTableModel : ViewModelBase
     public RefTableSchema GetSchema()
     {
         var schema = new RefTableSchema(Name);
-        schema.Columns.AddRange(_excelTable.Columns.Select(column => new RefColumn(column.Name, column.Type, column.IsKey)));
+        schema.Columns.AddRange(
+            _excelTable.Columns.Select(c => new RefColumn(c.Name, c.Type, c.IsKey, c.Length)));
         return schema;
     }
 

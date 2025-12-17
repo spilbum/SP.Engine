@@ -10,6 +10,7 @@ using DatabaseHandler;
 using SP.Core;
 using SP.Shared.Resource;
 using SP.Shared.Rank.Season;
+using SP.Shared.Resource.Web;
 using ErrorCode = Common.ErrorCode;
 
 namespace RankServer;
@@ -84,7 +85,9 @@ public class RankServer : Engine
     private readonly MySqlDbConnector _dbConnector = new();
     private readonly List<string> _acceptServers = [];
     private readonly CancellationToken _shutdown;
-    private IRpc? _resourceRpc;
+    private HttpRpc? _resourceRpc;
+    
+    public ServerGroupType GroupType { get; private set; }
     
     public RankServer(CancellationToken shutdown)
     {
@@ -117,6 +120,11 @@ public class RankServer : Engine
         if (!base.Initialize(buildConfig.Server.Name, config))
             return false;
 
+        if (!Enum.TryParse(buildConfig.Server.GroupType, out ServerGroupType groupType))
+            return false;
+        
+        GroupType = groupType;
+
         foreach (var database in buildConfig.Database)
         {
             if (!Enum.TryParse(database.Kind, true, out DbKind kind) ||
@@ -140,7 +148,7 @@ public class RankServer : Engine
 
     private void SetupResource(ResourceConfig config)
     {
-        _resourceRpc = new HttpRpc(Http, config.ServerUrl);
+        _resourceRpc = new HttpRpc(Http, config.BaseUrl);
         
         var ts = TimeSpan.FromSeconds(config.SyncPeriodSec);
         Scheduler.ScheduleAsync(async ct =>
@@ -157,6 +165,7 @@ public class RankServer : Engine
                         "kr",
                         game.Host,
                         game.Port,
+                        "1.0.1",
                         ServerStatus.Online,
                         null,
                         game.UpdatedUtc
@@ -167,10 +176,20 @@ public class RankServer : Engine
             var req = new SyncServerListReq
             {
                 List = list,
+                ServerGroupType = GroupType,
                 UpdatedUtcMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
             };
 
-            await _resourceRpc.CallAsync<SyncServerListReq, SyncServerListRes>(MsgId.SyncServerListReq, req, ct);
+            try
+            {
+                await _resourceRpc.CallAsync<SyncServerListReq, SyncServerListRes>(
+                    ResourceMsgId.SyncServerListReq, req, ct);
+            }
+            catch (RpcException ex)
+            {
+                Logger.Error($"RpcException: {ex.Message}, error={ex.Error}");
+            }
+          
         }, ts, ts, _shutdown);
     }
 
