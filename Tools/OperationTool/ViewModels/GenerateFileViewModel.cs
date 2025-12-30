@@ -7,21 +7,21 @@ using OperationTool.DatabaseHandler;
 using OperationTool.Excel;
 using OperationTool.Models;
 using OperationTool.Services;
+using SP.Shared.Database;
 using SP.Shared.Resource;
 using SP.Shared.Resource.CodeGen;
 using SP.Shared.Resource.Refs;
 using SP.Shared.Resource.Schs;
-using SP.Shared.Resource.Table;
-using UIKit;
 
 namespace OperationTool.ViewModels;
 
 public sealed class GenerateFileViewModel : ViewModelBase
 {
-    private readonly IExcelService _excelService;
-    private readonly IDbConnector _dbConnector;
+    private readonly IDialogService _dialog;
+    private readonly IExcelService _excel;
+    private readonly IDbConnector _db;
     private readonly IFolderPicker _folderPicker;
-    private readonly IFileUploader _fileUploader;
+    private readonly IFileUploader _uploader;
 
     private string _outputFolder = string.Empty;
     private string _excelFolder = string.Empty;
@@ -33,8 +33,8 @@ public sealed class GenerateFileViewModel : ViewModelBase
     private RefsFileModel? _selectedOriginRefsFile;
     private int _fileId;
     private string _comment = string.Empty;
-    private bool _isAutoComment = true;
-    private bool _isGenerateCode = true;
+    private bool _isAutoComment;
+    private bool _isGenerateCode;
     private bool _isOriginEnabled;
     private bool _isOutputSelected;
 
@@ -77,7 +77,11 @@ public sealed class GenerateFileViewModel : ViewModelBase
     public bool IsAutoComment
     {
         get => _isAutoComment;
-        set => SetProperty(ref _isAutoComment, value);
+        set
+        {
+            if (!SetProperty(ref _isAutoComment, value)) return;
+            if (value) Comment = string.Join(",", ExcelTables.Select(x => x.Name));
+        }
     }
 
     public int FileId
@@ -164,6 +168,8 @@ public sealed class GenerateFileViewModel : ViewModelBase
     public Color ExcelFolderColor =>
         string.IsNullOrEmpty(ExcelFolder) || !IsExcelLoaded ? Colors.Red : Colors.Green;
 
+    public bool HasDirtyTargets => ExcelTables.Any(x => x.IsTargetDirty);
+
     public ObservableCollection<ExcelTableModel> ExcelTables { get; } = [];
     public ObservableCollection<RefsFileModel> OriginRefsFiles { get; } = [];
     public AsyncRelayCommand BrowseExcelFolderCommand { get; }
@@ -171,40 +177,66 @@ public sealed class GenerateFileViewModel : ViewModelBase
     public AsyncRelayCommand GenerateCommand { get; }
 
     public GenerateFileViewModel(
-        IExcelService excelService,
-        IDbConnector dbConnector,
+        IDialogService dialog,
+        IExcelService excel,
+        IDbConnector db,
         IFolderPicker folderPicker,
-        IFileUploader fileUploader)
+        IFileUploader uploader)
     {
-        _excelService = excelService;
-        _dbConnector = dbConnector;
+        _dialog = dialog;
+        _excel = excel;
+        _db = db;
         _folderPicker = folderPicker;
-        _fileUploader = fileUploader;
+        _uploader = uploader;
         
         BrowseExcelFolderCommand = new AsyncRelayCommand(BrowseExcelFolderAsync);
         BrowseOutputFolderCommand = new AsyncRelayCommand(BrowseOutputFolderAsync);
         GenerateCommand = new AsyncRelayCommand(GenerateAsync, CanGenerate);
     }
 
-    private async Task GenerateAsync(object? state)
+    private async Task EnsureTargetsSaveAsync(DbConn conn, CancellationToken ct)
     {
-        var confirm = await Shell.Current.DisplayAlert(
+        var dirty = ExcelTables.Where(x => x.IsTargetDirty).ToList();
+        if (dirty.Count == 0) return;
+
+        foreach (var t in dirty)
+        {
+            await ResourceDb.UpsertResourceTableTargetAsync(
+                conn,
+                new ResourceDb.ResourceTableTargetEntity
+                {
+                    TableName = t.Name,
+                    Target = (byte)t.Target,
+                    Comment = "auto saved by generate"
+                }, ct);
+            
+            t.MarkTargetSaved();
+        }
+        
+        OnPropertyChanged(nameof(HasDirtyTargets));
+    }
+
+    private async Task GenerateAsync()
+    {
+        var ok = await Shell.Current.DisplayAlert(
             "",
             "Would you like to generate a file?",
             "Ok",
             "Cancel");
         
-        if (!confirm)
+        if (!ok)
             return;
         
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
         var ct = cts.Token;
         
-        using var conn = await _dbConnector.OpenAsync(ct);
-        await conn.BeginTransactionAsync(ct);
-
         try
         {
+            using var conn = await _db.OpenAsync(ct);
+            await conn.BeginTransactionAsync(ct);
+
+            await EnsureTargetsSaveAsync(conn, ct);
+            
             var entity = new ResourceDb.ResourceRefsFileEntity
             {
                 FileId = FileId,
@@ -215,69 +247,25 @@ public sealed class GenerateFileViewModel : ViewModelBase
             await ResourceDb.InsertResourceRefsFileAsync(conn, entity, ct);
 
             var versionDir = Path.Combine(OutputFolder, $"{FileId}");
-            var tables = ExcelTables
+            var selected = ExcelTables
                 .Where(table => table.IsChecked)
                 .ToList();
 
-            // .sch
-            var schsDir = Path.Combine(versionDir, "schs");
-            foreach (var table in tables)
-            {
-                await SchFileWriter.WriteAsync(
-                    table.GetSchema(), 
-                    Path.Combine(schsDir, $"{table.Name}.sch"), 
-                    ct);   
-            }
-
-            var schsFilePath = Path.Combine(versionDir, $"{FileId}.schs");
-            await SchsPackWriter.WriteAsync(
-                schsDir,
-                schsFilePath,
-                ct);
+            var clientTables = selected.Where(t => (t.Target & PatchTarget.Client) != 0).ToList();
+            var serverTables = selected.Where(t => (t.Target & PatchTarget.Server) != 0).ToList();
             
-            // .ref
-            var refsDir = Path.Combine(versionDir, "refs");
-            foreach (var table in tables)
-            {
-                await RefFileWriter.WriteAsync(
-                    table.GetSchema(),
-                    table.GetData(),
-                    Path.Combine(refsDir, $"{table.Name}.ref"),
-                    ct);
-            }
-
-            var refsFilePath = Path.Combine(versionDir, $"{FileId}.refs");
-            await RefsPackWriter.WriteAsync(
-                refsDir,
-                refsFilePath,
-                ct);
-
+            await BuildAndUploadAsync(FileId, PatchDeliveryTarget.Client, clientTables, versionDir, ct);
+            await BuildAndUploadAsync(FileId, PatchDeliveryTarget.Server, serverTables, versionDir, ct);
+         
+            // {table}.cs 파일 생성
             var codeDir = IsDevelopment
                 ? Path.Combine(versionDir, "code", "dev")
                 : Path.Combine(versionDir, "code");
 
             if (IsGenerateCode)
             {
-                var schemas = tables.Select(t => t.GetSchema()).ToList();
+                var schemas = selected.Select(t => t.GetSchema()).ToList();
                 ReferenceCodeGenerator.Generate(schemas, codeDir, "SP.Shared.Resource");
-            }
-            
-            // schs 파일 업로드
-            var schsFileInfo = new FileInfo(schsFilePath);
-            if (schsFileInfo.Exists)
-            {
-                var key = $"patch/{FileId}.schs";
-                await using var stream = File.OpenRead(schsFilePath);
-                await _fileUploader.UploadAsync(key, stream, schsFileInfo.Length, ct);
-            }
-            
-            // refs 파일 업로드
-            var refsFileInfo = new FileInfo(refsFilePath);
-            if (refsFileInfo.Exists)
-            {
-                var key = $"patch/{FileId}.refs";
-                await using var stream = File.OpenRead(refsFilePath);
-                await _fileUploader.UploadAsync(key, stream, refsFileInfo.Length, ct);
             }
             
             await conn.CommitAsync(ct);
@@ -286,8 +274,110 @@ public sealed class GenerateFileViewModel : ViewModelBase
         }
         catch (Exception e)
         {
-            await Toast.Make($"An exception occurred: {e.Message}", ToastDuration.Long).Show(ct);
-            await conn.RollbackAsync(ct);
+            await _dialog.AlertAsync("Error", $"Generate failed: {e.Message}");
+        }
+    }
+
+    private async Task BuildAndUploadAsync(
+        int fileId,
+        PatchDeliveryTarget target,
+        List<ExcelTableModel> excelTables,
+        string versionDir,
+        CancellationToken ct)
+    {
+        if (excelTables.Count == 0)
+            return;
+
+        var suffix = target.ToSuffix();
+
+        const string schExt = "sch";
+        const string refExt = "ref";
+        
+        var schsExt = PatchFileKind.Schs.ToExt();
+        var refsExt = PatchFileKind.Refs.ToExt();
+        
+        // .sch
+        var schsDir = Path.Combine(versionDir, $"{schsExt}.{suffix}");
+        foreach (var table in excelTables)
+        {
+            await SchFileWriter.WriteAsync(
+                table.GetSchema(),
+                Path.Combine(schsDir, $"{table.Name}.{schExt}"),
+                ct);
+        }
+
+        var schsFilePath = Path.Combine(versionDir, $"{fileId}.{suffix}.{schsExt}");
+        await SchsPackWriter.WriteAsync(schsDir, schsFilePath, ct);
+
+        // .ref
+        var refsDir = Path.Combine(versionDir, $"{refsExt}.{suffix}");
+        foreach (var table in excelTables)
+        {
+            await RefFileWriter.WriteAsync(
+                table.GetSchema(),
+                table.GetData(),
+                Path.Combine(refsDir, $"{table.Name}.{refExt}"),
+                ct);
+        }
+
+        var refsFilePath = Path.Combine(versionDir, $"{fileId}.{suffix}.{refsExt}");
+        await RefsPackWriter.WriteAsync(refsDir, refsFilePath, ct);
+        
+        // 파일 업로드
+        await UploadIfExistsAsync($"patch/{fileId}.{suffix}.{schsExt}", schsFilePath, ct);
+        await UploadIfExistsAsync($"patch/{fileId}.{suffix}.{refsExt}", refsFilePath, ct);
+    }
+
+    private async Task UploadIfExistsAsync(string key, string filePath, CancellationToken ct)
+    {
+        var info = new FileInfo(filePath);
+        if (!info.Exists)
+            return;
+        
+        await using var stream = File.OpenRead(filePath);
+        await _uploader.UploadAsync(key, stream, info.Length, ct);
+    }
+
+    private async Task<Dictionary<string, PatchTarget>> SyncAndLoadTargetAsync(
+        IEnumerable<string> excelTableNames,
+        CancellationToken ct)
+    {
+        using var conn = await _db.OpenAsync(ct);
+        await conn.BeginTransactionAsync(ct);
+
+        var targets = await ResourceDb.GetResourceTableTargetsAsync(conn, ct);
+        
+        var map = new Dictionary<string, PatchTarget>(StringComparer.OrdinalIgnoreCase);
+        foreach (var t in targets)
+            map[t.TableName] = (PatchTarget)t.Target;
+
+        foreach (var name in excelTableNames)
+        {
+            if (map.ContainsKey(name))
+                continue;
+
+            await ResourceDb.UpsertResourceTableTargetAsync(
+                conn,
+                new ResourceDb.ResourceTableTargetEntity
+                {
+                    TableName = name,
+                    Target = (byte)PatchTarget.Shared,
+                    Comment = "auto created"
+                }, ct);
+            
+            map[name] = PatchTarget.Shared;
+        }
+        
+        await conn.CommitAsync(ct);
+        return map;
+    }
+
+    private void ApplyTargetsToModels(Dictionary<string, PatchTarget> map)
+    {
+        foreach (var t in ExcelTables)
+        {
+            var target = map.GetValueOrDefault(t.Name, PatchTarget.Shared);
+            t.SetTarget(target);
         }
     }
 
@@ -302,57 +392,42 @@ public sealed class GenerateFileViewModel : ViewModelBase
             return;
         }
         
-        try
-        {
-            ExcelTables.Clear();
+        ExcelTables.Clear();
 
-            var tables = await _excelService.LoadFromFolderAsync(ExcelFolder, ct);
-            foreach (var vm in tables.Select(table => new ExcelTableModel(table)))
-            {
-                vm.PropertyChanged += OnTableItemPropertyChanged;
-                ExcelTables.Add(vm);
-            }
-
-            TotalTableCount = ExcelTables.Count;
-            IsExcelLoaded = TotalTableCount > 0;
-        }
-        catch (Exception ex)
+        var tables = await _excel.LoadFromFolderAsync(ExcelFolder, ct);
+        foreach (var vm in tables.Select(table => new ExcelTableModel(table)))
         {
-            IsExcelLoaded = false;
-            await Toast.Make($"An exception occurred: {ex.Message}", ToastDuration.Long).Show(ct);
+            vm.PropertyChanged += OnTableItemPropertyChanged;
+            ExcelTables.Add(vm);
         }
+
+        TotalTableCount = ExcelTables.Count;
+        IsExcelLoaded = TotalTableCount > 0;
     }
 
     private async Task LoadOriginAsync(CancellationToken ct)
     {
-        try
-        {
-            using var conn = await _dbConnector.OpenAsync(ct);
+        using var conn = await _db.OpenAsync(ct);
 
-            FileId = await ResourceDb.GetLatestResourceRefsFileIdAsync(conn, ct) + 1;
+        FileId = await ResourceDb.GetLatestResourceRefsFileIdAsync(conn, ct) + 1;
             
-            var files = await ResourceDb.GetResourceRefsFiles(conn, ct);
+        var files = await ResourceDb.GetResourceRefsFilesAsync(conn, ct);
             
-            OriginRefsFiles.Clear();
-            foreach (var entity in files.OrderByDescending(entity => entity.FileId))
-            {
-                if (entity.IsDevelopment)
-                    continue;
+        OriginRefsFiles.Clear();
+        foreach (var entity in files.OrderByDescending(entity => entity.FileId))
+        {
+            if (entity.IsDevelopment)
+                continue;
                 
-                var file = new RefsFileModel(entity);
-                OriginRefsFiles.Add(file);
-            }
+            var file = new RefsFileModel(entity);
+            OriginRefsFiles.Add(file);
+        }
 
-            SelectedOriginRefsFile = OriginRefsFiles.FirstOrDefault();
-            IsOriginEnabled = OriginRefsFiles.Count > 0;
-        }
-        catch (Exception e)
-        {
-            await Toast.Make($"An exception occurred: {e.Message}", ToastDuration.Long).Show(ct);
-        }
+        SelectedOriginRefsFile = OriginRefsFiles.FirstOrDefault();
+        IsOriginEnabled = OriginRefsFiles.Count > 0;
     }
     
-    private async Task BrowseExcelFolderAsync(object? parameter)
+    private async Task BrowseExcelFolderAsync()
     {
         
         using var cts = new CancellationTokenSource();
@@ -367,16 +442,25 @@ public sealed class GenerateFileViewModel : ViewModelBase
             ExcelFolder = result.Folder.Path;
             
             await LoadExcelAsync(ct);
+            
+            var names = ExcelTables.Select(x => x.Name).ToList();
+            var targetMap = await SyncAndLoadTargetAsync(names, ct);
+            ApplyTargetsToModels(targetMap);
+            
             await LoadOriginAsync(ct);
+
+            IsAutoComment = true;
+            IsGenerateCode = true;
+            
             await Toast.Make(IsExcelLoaded ? $"Excel '{TotalTableCount}' files loaded." : "Excel files not loaded.", ToastDuration.Long).Show(ct);
         }
         catch (Exception e)
         {
-            await Toast.Make($"An exception occurred: {e.Message}", ToastDuration.Long).Show(ct);
+            await _dialog.AlertAsync("Error", $"Failed to load excel file: {e.Message}");
         }
     }
 
-    private async Task BrowseOutputFolderAsync(object? parameter)
+    private async Task BrowseOutputFolderAsync()
     {
         var result = await _folderPicker.PickAsync();
         if (!result.IsSuccessful || result.Folder is null)
@@ -388,8 +472,15 @@ public sealed class GenerateFileViewModel : ViewModelBase
     
     private void OnTableItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(ExcelTableModel.IsChecked))
-            UpdateCheckedCount();
+        switch (e.PropertyName)
+        {
+            case nameof(ExcelTableModel.IsChecked):
+                UpdateCheckedCount();
+                break;
+            case nameof(ExcelTableModel.Target) or nameof(ExcelTableModel.IsTargetDirty):
+                OnPropertyChanged(nameof(HasDirtyTargets));
+                break;
+        }
     }
     
     private void UpdateCheckedCount()

@@ -1,0 +1,19 @@
+[10:31:38.896 INF] [T:1] [Game] Logger setup was successful: Game
+[10:31:39.030 DBG] [T:1] [Game] Discover commands: [10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[10:31:39.046 DBG] [T:1] [Game] Discover commands: [4003, 4002, 4001, 4000, 2000]
+[10:31:39.047 INF] [T:1] [Game] The server Game is initialized.
+[10:31:44.761 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[10:31:44.762 INF] [T:1] [Game] The server instance Game was been started!
+[10:31:44.763 INF] [T:1] [Game] [Rank] State changed: "None" -> "Connecting"
+[10:31:44.764 INF] [T:1] [Game] Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.109, DnsName=
+[10:31:44.796 INF] [T:43] [Game] [Rank] State changed: "Connecting" -> "Handshake"
+[10:31:44.883 INF] [T:10] [Game] [Rank] State changed: "Handshake" -> "Open"
+[10:31:44.883 DBG] [T:10] [Game] [Rank] Connected
+[10:31:44.914 INF] [T:7] [Game] Register succeeded: Rank
+[10:57:10.396 DBG] [T:43] [Game] A new session connected. sessionId=eb36c519-d3cb-415e-8be0-8bd85254f4e9, remoteEndPoint=192.168.0.109:57006
+[10:57:10.487 DBG] [T:69] [Game] Session authentication succeeded. sessionId=eb36c519-d3cb-415e-8be0-8bd85254f4e9, peerId=1
+[10:57:18.142 DBG] [T:43] [Game] Received a termination request from the client. isClosing=false
+[10:57:18.145 DBG] [T:43] [Game] The session eb36c519-d3cb-415e-8be0-8bd85254f4e9 has been closed. reason="ClientClosing"
+[10:57:18.149 DBG] [T:43] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[10:57:27.758 DBG] [T:43] [Game] A new session connected. sessionId=435e0ebc-1be6-4bf1-87ba-1e8f61b54a01, remoteEndPoint=192.168.0.109:57018
+[10:57:27.785 DBG] [T:68] [Game] Session authentication succeeded. sessionId=435e0ebc-1be6-4bf1-87ba-1e8f61b54a01, peerId=1

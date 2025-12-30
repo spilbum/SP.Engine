@@ -7,7 +7,7 @@ namespace ResourceServer.Services;
 
 public interface IBuildPolicyStore
 {
-    BuildPolicy? GetPolicy(StoreType storeType, BuildVersion buildVersion, ServerGroupType? forceServerGroupType = null);
+    BuildPolicy? Get(StoreType storeType, BuildVersion buildVersion, ServerGroupType? forceServerGroupType = null);
     Task ReloadAsync(CancellationToken ct = default);
 }
 
@@ -16,7 +16,7 @@ public class BuildPolicyStore(IDbConnector dbConnector) : IBuildPolicyStore
     private ImmutableArray<BuildPolicy> _policies = ImmutableArray<BuildPolicy>.Empty;
     private readonly SemaphoreSlim _reloadLock = new(1, 1);
 
-    public BuildPolicy? GetPolicy(StoreType storeType, BuildVersion buildVersion, ServerGroupType? forceServerGroupType = null)
+    public BuildPolicy? Get(StoreType storeType, BuildVersion buildVersion, ServerGroupType? forceServerGroupType = null)
     {
         var snapshot = _policies;
         
@@ -60,11 +60,17 @@ public sealed class BuildPolicy
 {
     public StoreType StoreType { get; }
     public ServerGroupType ServerGroupType { get; }
-    public BuildVersion MinVersion { get; }
-    public BuildVersion MaxVersion { get; }
+    public BuildVersion BeginBuildVersion { get; }
+    public BuildVersion EndBuildVersion { get; }
 
     public BuildPolicy(ResourceDb.ClientBuildVersionEntity entity)
     {
+        if (!Enum.TryParse(entity.ServerGroupType, out ServerGroupType serverGroupType))
+            throw new ArgumentException($"Invalid server group type: {entity.ServerGroupType}");
+        
+        if (!Enum.TryParse(entity.StoreType, out StoreType storeType))
+            throw new ArgumentException($"Invalid store type: {entity.StoreType}");
+        
         if (!BuildVersion.TryParse(entity.BeginBuildVersion, out var minVersion) ||
             !BuildVersion.TryParse(entity.EndBuildVersion, out var maxVersion) ||
             minVersion.CompareTo(maxVersion) > 0)
@@ -72,17 +78,17 @@ public sealed class BuildPolicy
             throw new ArgumentException("Invalid build version");
         }
         
-        StoreType = (StoreType)entity.StoreType;
-        ServerGroupType = (ServerGroupType)entity.ServerGroupType;
-        MinVersion = minVersion;
-        MaxVersion = maxVersion;
+        ServerGroupType = serverGroupType;
+        StoreType = storeType;
+        BeginBuildVersion = minVersion;
+        EndBuildVersion = maxVersion;
     }
     
     public bool Supports(BuildVersion v)
-        => v.CompareTo(MinVersion) >= 0 && v.CompareTo(MaxVersion) <= 0;
+        => v.CompareTo(BeginBuildVersion) >= 0 && v.CompareTo(EndBuildVersion) <= 0;
     
     public bool IsSoftUpdate(BuildVersion v)
-        => v.CompareTo(MaxVersion) < 0;
+        => v.CompareTo(EndBuildVersion) < 0;
     
-    public BuildVersion LatestBuildVersion => MaxVersion;
+    public BuildVersion LatestBuildVersion => EndBuildVersion;
 }

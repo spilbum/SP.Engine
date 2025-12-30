@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using OperationTool.ViewModels;
+using SP.Shared.Resource;
 
 namespace OperationTool.Pages;
 

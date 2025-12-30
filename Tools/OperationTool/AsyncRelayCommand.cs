@@ -4,10 +4,10 @@ using CommunityToolkit.Maui.Alerts;
 namespace OperationTool;
 
 public sealed class AsyncRelayCommand(
-    Func<object?, Task> execute,
+    Func<Task> execute,
     Func<bool>? canExecute = null)
     : AsyncRelayCommand<object>(
-        execute,
+        _ => execute(),
         canExecute == null ? null : _ => canExecute());
 
 public class AsyncRelayCommand<T>(

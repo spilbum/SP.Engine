@@ -49,7 +49,7 @@ public sealed class LoadingViewModel : ViewModelBase
         _warmup = warmup;
         _onSuccessNavigate = onSuccessNavigate;
 
-        RetryCommand = new AsyncRelayCommand(_ => RunAsync());
+        RetryCommand = new AsyncRelayCommand(RunAsync);
     }
 
     public async Task StartAsync() => await RunAsync();

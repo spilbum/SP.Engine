@@ -70,6 +70,12 @@
       <MauiXaml Update="Pages\PatchTabPage.xaml">
         <SubType>Designer</SubType>
       </MauiXaml>
+      <MauiXaml Update="Pages\RefsDiffTabPage.xaml">
+        <SubType>Designer</SubType>
+      </MauiXaml>
+      <MauiXaml Update="Pages\RefsSqlTabPage.xaml">
+        <SubType>Designer</SubType>
+      </MauiXaml>
       <MauiXaml Update="Pages\SettingsTabPage.xaml">
         <SubType>Designer</SubType>
       </MauiXaml>
@@ -80,15 +86,23 @@
 
     <ItemGroup>
       <Compile Update="Pages\PatchTabPage.xaml.cs">
-        <DependentUpon>PatchPage.xaml</DependentUpon>
+        <DependentUpon>PatchTabPage.xaml</DependentUpon>
+        <SubType>Code</SubType>
+      </Compile>
+      <Compile Update="Pages\RefsDiffTabPage.xaml.cs">
+        <DependentUpon>RefsDiffTabPage.xaml</DependentUpon>
+        <SubType>Code</SubType>
+      </Compile>
+      <Compile Update="Pages\RefsSqlTabPage.xaml.cs">
+        <DependentUpon>RefsSqlTabPage.xaml</DependentUpon>
         <SubType>Code</SubType>
       </Compile>
       <Compile Update="Pages\SettingsTabPage.xaml.cs">
-        <DependentUpon>SettingsPage.xaml</DependentUpon>
+        <DependentUpon>SettingsTabPage.xaml</DependentUpon>
         <SubType>Code</SubType>
       </Compile>
       <Compile Update="Pages\VersionTabPage.xaml.cs">
-        <DependentUpon>VersionPage.xaml</DependentUpon>
+        <DependentUpon>VersionTabPage.xaml</DependentUpon>
         <SubType>Code</SubType>
       </Compile>
     </ItemGroup>

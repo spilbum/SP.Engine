@@ -2,13 +2,13 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Maui.Alerts;
 using OperationTool.Diff;
 using OperationTool.Diff.Models;
-using OperationTool.Models;
-using SP.Shared.Resource;
+using OperationTool.Services;
 
 namespace OperationTool.ViewModels;
 
 public sealed class RefsDiffTabViewModel : ViewModelBase
 {
+    private readonly IDialogService _dialog;
     private readonly IFilePicker _filePicker;
     private string _oldSchsPath = string.Empty;
     private string _oldRefsPath = string.Empty;
@@ -78,8 +78,9 @@ public sealed class RefsDiffTabViewModel : ViewModelBase
     public AsyncRelayCommand RunDiffCommand { get; }
 
 
-    public RefsDiffTabViewModel(IFilePicker filePicker)
+    public RefsDiffTabViewModel(IDialogService dialog, IFilePicker filePicker)
     {
+        _dialog = dialog;
         _filePicker = filePicker;
 
         BrowseOldSchsCommand = new AsyncRelayCommand(BrowseOldSchsAsync);
@@ -98,7 +99,7 @@ public sealed class RefsDiffTabViewModel : ViewModelBase
                && !IsBusy;
     }
     
-    private async Task BrowseOldSchsAsync(object? state)
+    private async Task BrowseOldSchsAsync()
     {
         var result = await _filePicker.PickAsync();
         if (string.IsNullOrEmpty(result?.FileName))
@@ -113,7 +114,7 @@ public sealed class RefsDiffTabViewModel : ViewModelBase
         OldSchsPath = result.FullPath;
     }
 
-    private async Task BrowseOldRefsAsync(object? state)
+    private async Task BrowseOldRefsAsync()
     {
         var result = await _filePicker.PickAsync();
         if (string.IsNullOrEmpty(result?.FileName))
@@ -128,7 +129,7 @@ public sealed class RefsDiffTabViewModel : ViewModelBase
         OldRefsPath = result.FullPath;
     }
 
-    private async Task BrowseNewSchsAsync(object? state)
+    private async Task BrowseNewSchsAsync()
     {
         var result = await _filePicker.PickAsync();
         if (string.IsNullOrEmpty(result?.FileName))
@@ -143,7 +144,7 @@ public sealed class RefsDiffTabViewModel : ViewModelBase
         NewSchsPath = result.FullPath;
     }
 
-    private async Task BrowseNewRefsAsync(object? state)
+    private async Task BrowseNewRefsAsync()
     {
         var result = await _filePicker.PickAsync();
         if (string.IsNullOrEmpty(result?.FileName))
@@ -158,7 +159,7 @@ public sealed class RefsDiffTabViewModel : ViewModelBase
         NewRefsPath = result.FullPath;
     }
 
-    private async Task RunDiffAsync(object? state)
+    private async Task RunDiffAsync()
     {
         IsBusy = true;
         RunDiffCommand.RaiseCanExecuteChanged();
@@ -176,7 +177,7 @@ public sealed class RefsDiffTabViewModel : ViewModelBase
         }
         catch (Exception e)
         {
-            await Toast.Make($"Refs diff failed: {e.Message}").Show(ct);
+            await _dialog.AlertAsync("Error", $"Refs diff failed: {e.Message}");
         }
         finally
         {

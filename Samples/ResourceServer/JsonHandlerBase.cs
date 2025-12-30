@@ -3,8 +3,28 @@ using SP.Shared.Resource.Web;
 
 namespace ResourceServer;
 
-public abstract class JsonHandlerBase<TReq, TRes> : IJsonHandler
+public abstract class JsonHandlerBase<TReq, TRes>(IHttpContextAccessor http) : IJsonHandler
 {
+    protected HttpContext? HttpContext => http.HttpContext;
+
+    protected string? ClientIp
+    {
+        get
+        {
+            var ctx = http.HttpContext;
+            if (ctx == null) return null;
+
+            if (ctx.Request.Headers.TryGetValue("X-Forwarded-For", out var xff))
+            {
+                var first = xff.ToString().Split(',')[0].Trim();
+                if (!string.IsNullOrEmpty(first))
+                    return first;
+            }
+            
+            return ctx.Connection.RemoteIpAddress?.ToString();
+        }
+    }
+    
     public abstract int ReqId { get; }
     public abstract int ResId { get; }
     public Type ReqType => typeof(JsonCmd<TReq>);

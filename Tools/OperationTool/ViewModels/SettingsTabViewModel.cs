@@ -97,7 +97,7 @@ public sealed class SettingsTabViewModel : ViewModelBase
     }
 
 
-    private async Task SaveAsync(object? parameter)
+    private async Task SaveAsync()
     {
         var s = _settingsProvider.Settings;
         s.Database.Host = Host;
@@ -118,7 +118,7 @@ public sealed class SettingsTabViewModel : ViewModelBase
     private bool CanSave()
         => SaveEnabled;
 
-    private async Task CheckDatabaseAsync(object? parameter)
+    private async Task CheckDatabaseAsync()
     {
         var cts = new CancellationTokenSource();
         var ct = cts.Token;

@@ -24,11 +24,17 @@ internal static class Program
             storeType,
             buildVersion,
             _resourceVersion,
+            "1234",
             ct);
 
         if (!response.IsAllow)
         {
             Console.WriteLine("Not allowed");
+            var storeUrl = response.StoreUrl;
+            if (!string.IsNullOrWhiteSpace(storeUrl))
+            {
+                Console.WriteLine(storeUrl);
+            }
             return;
         }
 

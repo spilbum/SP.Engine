@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace SP.Shared.Resource.Web;
@@ -8,6 +9,7 @@ public sealed class CheckClientReq
     public string BuildVersion { get; set; } = string.Empty;
     public int? ResourceVersion { get; set; }
     public ServerGroupType? ForceServerGroupType { get; set; }
+    public string? DeviceId { get; set; }
 }
 
 public sealed class CheckClientRes
@@ -21,6 +23,11 @@ public sealed class CheckClientRes
     public string? DownloadRefsFileUrl { get; set; }
     public string? StoreUrl { get; set; }
     public ServerConnectInfo? Server { get; set; }
+    
+    public bool IsMaintenance { get; set; }
+    public string? MaintenanceMessageId { get; set; }
+    public DateTime? MaintenanceStartUtc { get; set; }
+    public DateTime? MaintenanceEndUtc { get; set; }
 }
 
 public sealed class SyncServerListReq

@@ -10,6 +10,13 @@ public sealed class ExcelTableModel : ViewModelBase
     private readonly ExcelTable _excelTable;
     private string _name = string.Empty;
     private bool _checked;
+    private PatchTarget _target;
+
+    public PatchTarget Target
+    {
+        get => _target;
+        set => SetProperty(ref _target, value);
+    }
 
     public string Name
     {
@@ -22,6 +29,12 @@ public sealed class ExcelTableModel : ViewModelBase
         get => _checked;
         set => SetProperty(ref _checked, value);
     }
+
+    public IReadOnlyList<PatchTarget> TargetItems { get; } =
+        [PatchTarget.Shared, PatchTarget.Client, PatchTarget.Server];
+
+    public bool IsTargetDirty => Target != OriginTarget;
+    public PatchTarget OriginTarget { get; private set; }
     
     public ExcelTableModel(ExcelTable table)
     {
@@ -53,5 +66,18 @@ public sealed class ExcelTableModel : ViewModelBase
         }
         
         return data;
+    }
+
+    public void MarkTargetSaved()
+    {
+        OriginTarget = Target;
+        OnPropertyChanged(nameof(IsTargetDirty));
+    }
+
+    public void SetTarget(PatchTarget target)
+    {
+        Target = target;
+        OriginTarget = Target;
+        OnPropertyChanged(nameof(IsTargetDirty));
     }
 }

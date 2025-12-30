@@ -65,17 +65,10 @@
                             <Grid Grid.Row="0"
                                   Padding="0,8,0,4"
                                   ColumnSpacing="8"
+                                  ColumnDefinitions="150,150,100,250,150"
                                   BackgroundColor="{DynamicResource Gray100}">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="150" />
-                                    <ColumnDefinition Width="150" />
-                                    <ColumnDefinition Width="100" />
-                                    <ColumnDefinition Width="250" />
-                                    <ColumnDefinition Width="150" />
-                                </Grid.ColumnDefinitions>
-                                
                                 <Label Grid.Column="0" Text="Resource Version" FontAttributes="Bold" />
-                                <Label Grid.Column="1" Text="Client Major Version" FontAttributes="Bold" />
+                                <Label Grid.Column="1" Text="Target Major" FontAttributes="Bold" />
                                 <Label Grid.Column="2" Text="File ID" FontAttributes="Bold" />
                                 <Label Grid.Column="3" Text="Comment" FontAttributes="Bold" />
                                 <Label Grid.Column="4" Text="Created" FontAttributes="Bold" />
@@ -89,20 +82,13 @@
                                                                 <CollectionView.ItemTemplate>
                                     <DataTemplate>
                                         <Grid Padding="0,2"
-                                              ColumnSpacing="8">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="150" />
-                                                <ColumnDefinition Width="150" />
-                                                <ColumnDefinition Width="100" />
-                                                <ColumnDefinition Width="250" />
-                                                <ColumnDefinition Width="150" />
-                                            </Grid.ColumnDefinitions>
-
+                                              ColumnSpacing="8"
+                                              ColumnDefinitions="150,150,100,250,150">
                                             <Label Grid.Column="0"
                                                    Text="{Binding ResourceVersion}"
                                                    LineBreakMode="TailTruncation" />
                                             <Label Grid.Column="1"
-                                                   Text="{Binding ClientMajorVersion}"
+                                                   Text="{Binding TargetMajor}"
                                                    LineBreakMode="TailTruncation" />
                                             <Label Grid.Column="2"
                                                    Text="{Binding FileId}"
@@ -122,26 +108,17 @@
                             </CollectionView>
                         </Grid>
                         
-                        <!-- 버튼 영역 -->
-                        <Grid Grid.Row="3"
-                              Margin="0,8,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-
-                            <Button Grid.Column="1"
-                                    Text="Generate File"
+                        <HorizontalStackLayout Grid.Row="3"
+                                               Spacing="8"
+                                               HorizontalOptions="End">
+                            <Button Text="Generate Refs"
                                     WidthRequest="150"
-                                    Margin="0,0,8,0"
                                     Command="{Binding GoToGenerateFileCommand}" />
 
-                            <Button Grid.Column="2"
-                                    Text="Run Patch"
+                            <Button Text="Run Patch"
                                     WidthRequest="150"
                                     Command="{Binding GoToRunPathCommand}" />
-                        </Grid>
+                        </HorizontalStackLayout>
                     </Grid>
                 </Frame>
             </Grid>

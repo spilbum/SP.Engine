@@ -1,6 +1,4 @@
 using System.Collections.ObjectModel;
-using CommunityToolkit.Maui.Alerts;
-using CommunityToolkit.Maui.Core;
 using OperationTool.DatabaseHandler;
 using OperationTool.Models;
 using OperationTool.Pages;
@@ -9,11 +7,10 @@ using SP.Shared.Resource;
 
 namespace OperationTool.ViewModels;
 
-
-
 public sealed class PatchTabViewModel : ViewModelBase
 {
-    private readonly IDbConnector _dbConnector;
+    private readonly IDialogService _dialog;
+    private readonly IDbConnector _db;
     private ServerGroupType _selectedServerGroupType;
 
     public ServerGroupType SelectedServerGroupType
@@ -22,9 +19,7 @@ public sealed class PatchTabViewModel : ViewModelBase
         set
         {
             if (SetProperty(ref _selectedServerGroupType, value))
-            {
                 _ = LoadResourcePatchVersionsAsync(value);
-            }
         }
     }
     
@@ -35,9 +30,10 @@ public sealed class PatchTabViewModel : ViewModelBase
     public AsyncRelayCommand GoToRunPathCommand { get; }
     public AsyncRelayCommand ReloadCommand { get; }
 
-    public PatchTabViewModel(IDbConnector dbConnector)
+    public PatchTabViewModel(IDialogService dialog, IDbConnector db)
     {
-        _dbConnector = dbConnector;
+        _dialog = dialog;
+        _db = db;
 
         foreach (ServerGroupType serverGroupType in Enum.GetValues(typeof(ServerGroupType)))
         {
@@ -47,22 +43,20 @@ public sealed class PatchTabViewModel : ViewModelBase
         
         SelectedServerGroupType = ServerGroupTypes.FirstOrDefault();
         
-        GoToGenerateFileCommand = new AsyncRelayCommand(NavigateToGenerateFilePageAsync);
-        GoToRunPathCommand = new AsyncRelayCommand(NavigateToRunPathPageAsync);
+        GoToGenerateFileCommand = new AsyncRelayCommand(GoToGenerateFileAsync);
+        GoToRunPathCommand = new AsyncRelayCommand(GoToRunPathAsync);
         ReloadCommand = new AsyncRelayCommand(ReloadAsync);
     }
     
-    private async Task NavigateToGenerateFilePageAsync(object? state)
+    private async Task GoToGenerateFileAsync()
         => await Utils.GoToPageAsync(nameof(GenerateFilePage));
     
-    private async Task NavigateToRunPathPageAsync(object? state)
+    private async Task GoToRunPathAsync()
         => await Utils.GoToPageAsync(nameof(RunPatchPage));
 
-    private async Task ReloadAsync(object? state)
-    {
-        await LoadResourcePatchVersionsAsync(SelectedServerGroupType);
-    }
-
+    private async Task ReloadAsync()   
+        => await LoadResourcePatchVersionsAsync(SelectedServerGroupType);
+    
     private async Task LoadResourcePatchVersionsAsync(ServerGroupType serverGroupType)
     {
         using var cts = new CancellationTokenSource();
@@ -70,20 +64,19 @@ public sealed class PatchTabViewModel : ViewModelBase
 
         try
         {
-            using var conn = await _dbConnector.OpenAsync(ct);
-
-            var versions = await ResourceDb.GetLatestResourcePatchVersions(
+            using var conn = await _db.OpenAsync(ct);
+            var entities = await ResourceDb.GetLatestResourcePatchVersions(
                 conn, serverGroupType, 100, ct);
             
             ResourcePatchVersions.Clear();
-            foreach (var entity in versions)
+            foreach (var entity in entities)
             {
                 ResourcePatchVersions.Add(new ResourcePatchVersionModel(entity));
             }
         }
         catch (Exception e)
         {
-            await Toast.Make($"An exception occurred: {e.Message}", ToastDuration.Long).Show(ct);
+            await _dialog.AlertAsync("Error", $"Load failed: {e.Message}");
         }
     }
 }

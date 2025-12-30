@@ -41,4 +41,26 @@ public sealed class ServerConnectInfo(
     public ServerStatus Status { get; set; } = status;
 }
 
+public static class PatchUtils
+{
+    public static string BuildPatchUrl(string baseUrl, int fileId, PatchDeliveryTarget target, PatchFileKind fileKind)
+    {
+        if (string.IsNullOrWhiteSpace(baseUrl))
+            throw new ArgumentException("baseUrl is empty.", nameof(baseUrl));
+        
+        baseUrl = baseUrl.TrimEnd('/');
+        var suffix = target.ToSuffix();
+        var ext = fileKind.ToExt();
+        return $"{baseUrl}/patch/{fileId}.{suffix}.{ext}";
+    }
+}
+
+public static class PatchUrlExtensions
+{
+    public static string ToSuffix(this PatchDeliveryTarget t)
+        => t.ToString().ToLowerInvariant();
+    
+    public static string ToExt(this PatchFileKind k)
+        => k.ToString().ToLowerInvariant();
+}
 

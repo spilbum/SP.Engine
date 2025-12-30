@@ -72,9 +72,29 @@ public abstract class BaseDbEntity : IDbEntity
             if (!reader.HasColumn(name))
                 continue;
 
-            var value = reader[name];
-            if (value == DBNull.Value) continue;
-            m.SetValue(this, value);
+            var raw = reader[name];
+            if (raw == DBNull.Value) continue;
+
+            var targetType = Nullable.GetUnderlyingType(m.Type) ?? m.Type;
+            var value = raw;
+
+            if (targetType.IsEnum)
+            {
+                value = raw is string s
+                    ? Enum.Parse(targetType, s, ignoreCase: true)
+                    : Enum.ToObject(targetType, raw);
+
+                m.SetValue(this, value);
+                continue;
+            }
+
+            if (targetType == typeof(bool))
+            {
+                m.SetValue(this, ToBool(value));
+                continue;
+            }
+            
+            m.SetValue(this, raw);
         }
     }
 
@@ -90,5 +110,15 @@ public abstract class BaseDbEntity : IDbEntity
             var spec = DbParamUtils.ResolveDbParamSpec(m.Type, val);
             command.Add(m.Name, spec.DbType, spec.Value, spec.Size);
         }
+    }
+    
+    private static bool ToBool(object raw)
+    {
+        return raw switch
+        {
+            bool b => b,
+            IConvertible => Convert.ToInt64(raw) != 0,
+            _ => Convert.ToBoolean(raw)
+        };
     }
 }

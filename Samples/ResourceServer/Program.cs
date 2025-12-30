@@ -4,6 +4,7 @@ using ResourceServer.Endpoints;
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = 256 * 1024);
 builder.Logging.AddConsole();
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddDatabaseHandler(builder.Configuration);
 builder.Services.AddResourceServices();
 builder.Services.AddJsonGateway();

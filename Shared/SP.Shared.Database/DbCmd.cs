@@ -136,6 +136,17 @@ public class DbCmd(DbCommand command, IDbProvider provider) : IDisposable
         return instance;
     }
 
+    public async Task<TDbEntity?> ExecuteReaderAsync<TDbEntity>(CancellationToken ct)
+        where TDbEntity : BaseDbEntity, new()
+    {
+        await using var reader = await _command.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct)) return null;
+
+        var instance = new TDbEntity();
+        instance.ReadData(reader);
+        return instance;
+    }
+
     public List<TDbEntity> ExecuteReaderList<TDbEntity>()
         where TDbEntity : BaseDbEntity, new()
     {

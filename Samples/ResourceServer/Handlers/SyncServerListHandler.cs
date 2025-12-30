@@ -4,8 +4,10 @@ using SP.Shared.Resource.Web;
 namespace ResourceServer.Handlers;
 
 public sealed class SyncServerListHandler(
+    IHttpContextAccessor http,
     IServerStore store, 
-    ILogger<SyncServerListHandler> logger) : JsonHandlerBase<SyncServerListReq, SyncServerListRes>
+    ILogger<SyncServerListHandler> logger) 
+    : JsonHandlerBase<SyncServerListReq, SyncServerListRes>(http)
 {
     public override int ReqId => ResourceMsgId.SyncServerListReq;
     public override int ResId => ResourceMsgId.SyncServerListRes;

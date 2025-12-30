@@ -25,7 +25,7 @@ public interface ISettingsStorage
     Task SaveAsync(ToolSettings settings, CancellationToken ct = default);
 }
 
-public sealed class ToolSettingsStorage : ISettingsStorage
+public sealed class FileSettingsStorage : ISettingsStorage
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {

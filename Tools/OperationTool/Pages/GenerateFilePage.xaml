@@ -78,29 +78,42 @@
                                     StrokeThickness="1"
                                     Padding="8"
                                     IsEnabled="{Binding IsExcelLoaded}">
-                                <Grid RowDefinitions="Auto,*"
-                                      RowSpacing="4">
+                                <Grid RowDefinitions="Auto,*" RowSpacing="8">
                                     <HorizontalStackLayout Grid.Row="0"
                                                            Spacing="4">
-                                        <CheckBox
-                                            IsChecked="{Binding IsAllChecked}" />
-                                        <Label
-                                            Text="All"
-                                            VerticalTextAlignment="Center" />
+                                        <CheckBox IsChecked="{Binding IsAllChecked}" />
+                                        <Label Text="All" VerticalTextAlignment="Center" />
                                     </HorizontalStackLayout>
 
                                     <CollectionView Grid.Row="1"
                                                     ItemsSource="{Binding ExcelTables}">
                                         <CollectionView.ItemTemplate>
                                             <DataTemplate>
-                                                <Grid Padding="4,2"
-                                                      ColumnDefinitions="Auto,*">
+                                                <Grid ColumnDefinitions="32,*"
+                                                      ColumnSpacing="8"
+                                                      Padding="0,6">
+
                                                     <CheckBox Grid.Column="0"
-                                                              IsChecked="{Binding IsChecked}" />
-                                                    <Label Grid.Column="1"
-                                                           Text="{Binding Name}"
-                                                           VerticalTextAlignment="Center"
-                                                           Margin="4,0,0,0" />
+                                                              IsChecked="{Binding IsChecked}"
+                                                              VerticalOptions="Start" />
+
+                                                    <Grid Grid.Column="1"
+                                                          ColumnDefinitions="Auto,Auto"
+                                                          ColumnSpacing="8">
+                                                        <Label Grid.Column="0"
+                                                               Text="{Binding Name}"
+                                                               LineBreakMode="TailTruncation"
+                                                               HorizontalOptions="FillAndExpand"
+                                                               VerticalTextAlignment="Center" />
+                                                            
+                                                        <Picker Grid.Column="1"
+                                                                ItemsSource="{Binding TargetItems}"
+                                                                SelectedItem="{Binding Target}"
+                                                                MinimumWidthRequest="80"
+                                                                HorizontalTextAlignment="Center"
+                                                                VerticalTextAlignment="Center" />
+                                                    </Grid>
+
                                                 </Grid>
                                             </DataTemplate>
                                         </CollectionView.ItemTemplate>
@@ -184,10 +197,10 @@
 
                         <!-- 하단 버튼 -->
                         <Grid Grid.Row="2">
-                            <Button Text="Generate"
-                                    Command="{Binding GenerateCommand}"
-                                    HorizontalOptions="End"
-                                    WidthRequest="120" />
+                            <HorizontalStackLayout Spacing="8" HorizontalOptions="End">
+                                <Button Text="Generate"
+                                        Command="{Binding GenerateCommand}"/>
+                            </HorizontalStackLayout>
                         </Grid>
                     </Grid>
                 </Frame>

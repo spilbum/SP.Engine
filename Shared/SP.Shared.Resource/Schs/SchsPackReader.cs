@@ -8,7 +8,7 @@ namespace SP.Shared.Resource.Schs;
 
 public static class SchsPackReader
 {
-    public static List<RefTableSchema> Read(string path)
+    public static List<RefTableSchema> ReadSync(string path)
     {
         var entries = ZipHelper.ReadAll(path);
         var list = new List<RefTableSchema>(entries.Count);

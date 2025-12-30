@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="OperationTool.Pages.MaintenanceTabPage"
+             Title="Maintenance">
+    
+    <ContentPage.Content>
+        <ScrollView>
+            <Grid Padding="16"
+                  ColumnDefinitions="*,Auto,*">
+
+                <Frame Grid.Column="1"
+                       Padding="12"
+                       BorderColor="{DynamicResource Gray300}"
+                       BackgroundColor="{DynamicResource White}"
+                       HasShadow="False"
+                       WidthRequest="980"
+                       HorizontalOptions="Center"
+                       MaximumHeightRequest="900">
+
+                    <Grid RowSpacing="12">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" /> <!-- Env selector -->
+                            <RowDefinition Height="Auto" /> <!-- Maintenance settings -->
+                            <RowDefinition Height="Auto" /> <!-- Bypass add -->
+                            <RowDefinition Height="*" />    <!-- Bypass list -->
+                        </Grid.RowDefinitions>
+
+                        <!-- 환경 선택 -->
+                        <Grid Grid.Row="0"
+                              ColumnSpacing="8"
+                              ColumnDefinitions="Auto,100,70,*">
+
+                            <Label Grid.Column="0"
+                                   Text="Server Group Type:"
+                                   VerticalTextAlignment="Center" />
+
+                            <Picker Grid.Column="1"
+                                    ItemsSource="{Binding ServerGroupTypes}"
+                                    SelectedItem="{Binding SelectedServerGroupType}" />
+                            
+                            <Button Grid.Column="2"
+                                    Text="Refresh"
+                                    Command="{Binding RefreshCommand}"/>
+
+                            <Label Grid.Column="3"
+                                   FontAttributes="Bold"
+                                   VerticalTextAlignment="Center"
+                                   HorizontalOptions="End"
+                                   Text="{Binding StatusText}"
+                                   TextColor="{Binding StatusKind,
+                                   Converter={StaticResource MaintenanceStatusToColorConverter}}" />
+                            
+                        </Grid>
+
+                        <!-- 점검 설정 -->
+                        <Frame Grid.Row="1"
+                               Padding="12"
+                               BorderColor="{DynamicResource Gray300}"
+                               BackgroundColor="{DynamicResource White}"
+                               HasShadow="False">
+
+                            <Grid RowSpacing="10"
+                                  RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto"
+                                  ColumnDefinitions="150,*">
+
+                                <Label Grid.Row="0" Grid.Column="0"
+                                       Text="Enabled"
+                                       VerticalTextAlignment="Center" />
+                                <Switch Grid.Row="0" Grid.Column="1"
+                                        IsToggled="{Binding IsEnabled}" />
+
+                                <Label Grid.Row="1" Grid.Column="0"
+                                       Text="Start (UTC)"
+                                       VerticalTextAlignment="Center" />
+                                <Entry Grid.Row="1" Grid.Column="1"
+                                       Text="{Binding StartUtcText}"
+                                       Placeholder="2025-12-24 03:00:00"
+                                       Keyboard="Text" />
+
+                                <Label Grid.Row="2" Grid.Column="0"
+                                       Text="End (UTC)"
+                                       VerticalTextAlignment="Center" />
+                                <Entry Grid.Row="2" Grid.Column="1"
+                                       Text="{Binding EndUtcText}"
+                                       Placeholder="2025-12-24 06:00:00"
+                                       Keyboard="Text" />
+
+                                <Label Grid.Row="3" Grid.Column="0"
+                                       Text="Message Id"
+                                       VerticalTextAlignment="Center" />
+                                <Entry Grid.Row="3" Grid.Column="1"
+                                       Text="{Binding MessageId}"
+                                       Placeholder="MAINTENANCE_DEFAULT"/>
+
+                                <Label Grid.Row="4" Grid.Column="0"
+                                       Text="Comment"
+                                       VerticalTextAlignment="Center" />
+                                <Entry Grid.Row="4" Grid.Column="1"
+                                       Text="{Binding Comment}"
+                                       Placeholder="optional" />
+                                
+                                <HorizontalStackLayout Grid.Row="5" Grid.ColumnSpan="2"
+                                                       HorizontalOptions="End"
+                                                       Spacing="8">
+                                    <Button Text="Apply"
+                                            WidthRequest="120"
+                                            Command="{Binding ApplyEnvCommand}" />
+                                </HorizontalStackLayout>
+                            </Grid>
+                        </Frame>
+
+                        <!-- Bypass add (리스트 위에) -->
+                        <Frame Grid.Row="2"
+                               Padding="12"
+                               BorderColor="{DynamicResource Gray300}"
+                               BackgroundColor="{DynamicResource White}"
+                               HasShadow="False">
+
+                            <Grid ColumnSpacing="8"
+                                  ColumnDefinitions="Auto,160,*,90">
+
+                                <Label Grid.Column="0"
+                                       Text="Kind"
+                                       VerticalTextAlignment="Center" />
+
+                                <Picker Grid.Column="1"
+                                        ItemsSource="{Binding BypassKinds}"
+                                        SelectedItem="{Binding SelectedBypassKind}" />
+
+                                <Entry Grid.Column="2"
+                                       Text="{Binding BypassValue}"
+                                       Placeholder="CIDR (203.0.113.0/24) or UUID"
+                                       ClearButtonVisibility="WhileEditing" />
+
+                                <Button Grid.Column="3"
+                                        Text="Add"
+                                        WidthRequest="80"
+                                        Command="{Binding AddBypassCommand}" />
+                            </Grid>
+                        </Frame>
+
+                        <!-- Bypass list -->
+                        <CollectionView Grid.Row="3"
+                                        Margin="0,2,0,0"
+                                        ItemsSource="{Binding Bypasses}"
+                                        SelectionMode="None">
+
+                            <CollectionView.Header>
+                                <Grid Padding="0,6"
+                                      ColumnSpacing="8"
+                                      BackgroundColor="{DynamicResource Gray100}"
+                                      ColumnDefinitions="120,*,90">
+                                    <Label Grid.Column="0" Text="Kind" FontAttributes="Bold" />
+                                    <Label Grid.Column="1" Text="Value" FontAttributes="Bold" />
+                                    <Label Grid.Column="2" Text="" />
+                                </Grid>
+                            </CollectionView.Header>
+
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Padding="0,4"
+                                          ColumnSpacing="8"
+                                          ColumnDefinitions="120,*,90">
+                                        <Label Grid.Column="0"
+                                               Text="{Binding Kind}"
+                                               LineBreakMode="TailTruncation" />
+                                        <Label Grid.Column="1"
+                                               Text="{Binding Value}"
+                                               LineBreakMode="TailTruncation" />
+                                        <Button Grid.Column="2"
+                                                Text="Remove"
+                                                Command="{Binding BindingContext.RemoveBypassCommand, 
+                                                Source={RelativeSource AncestorType={x:Type ContentPage}}}"
+                                                CommandParameter="{Binding .}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                        </CollectionView>
+
+                    </Grid>
+                </Frame>
+            </Grid>
+        </ScrollView>
+    </ContentPage.Content>
+</ContentPage>

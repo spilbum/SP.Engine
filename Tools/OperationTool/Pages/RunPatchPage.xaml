@@ -14,36 +14,29 @@
                        Padding="16"
                        MaximumWidthRequest="900">
                     
-                    <Grid RowSpacing="16">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
+                    <Grid RowSpacing="16"
+                          RowDefinitions="Auto,Auto,Auto,Auto">
 
-                        <Grid Grid.Row="0"
-                              RowSpacing="6">
+                        <Grid Grid.Row="0">
                             <HorizontalStackLayout Spacing="8">
+                                
                                 <Label Text="Server Group Type:"
                                        VerticalOptions="Center" />
+                                
                                 <Picker ItemsSource="{Binding ServerGroupTypes}"
                                         SelectedItem="{Binding SelectedServerGroupType}"
-                                        WidthRequest="200"
-                                        HorizontalOptions="Start" />
+                                        WidthRequest="60"
+                                        VerticalOptions="Center"/>
+                                
                             </HorizontalStackLayout>
                         </Grid>
 
                         <Grid Grid.Row="1"
-                              RowSpacing="8">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
+                              RowSpacing="8"
+                              RowDefinitions="Auto,Auto,Auto,Auto">
                             
-                            <Label Grid.Row="0" Text="Refs File's'"
+                            <Label Grid.Row="0" 
+                                   Text="Refs File's'"
                                    FontAttributes="Bold" />
                             
                             <HorizontalStackLayout Grid.Row="1" Spacing="8">
@@ -74,30 +67,30 @@
                         </Grid>
 
                         <Grid Grid.Row="2"
-                              RowSpacing="8">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
+                              RowSpacing="8"
+                              RowDefinitions="Auto,Auto,Auto">
                             
                             <Label Grid.Row="0" Text="Version"
                                    FontAttributes="Bold" />
 
                             <HorizontalStackLayout Grid.Row="1" Spacing="8">
                                 <Label Text="Resource Version:"
+                                       WidthRequest="120"
                                        VerticalOptions="Center" />
+                                
                                 <Entry Text="{Binding ResourceVersion}"
                                        WidthRequest="80"
                                        IsReadOnly="True" />
                             </HorizontalStackLayout>
 
                             <HorizontalStackLayout Grid.Row="2" Spacing="8">
-                                <Label Text="Client Major Version:"
+                                <Label Text="Target Major:"
+                                       WidthRequest="120"
                                        VerticalOptions="Center" />
-                                <Picker ItemsSource="{Binding ClientMajorVersions}"
-                                        SelectedItem="{Binding SelectedClientMajorVersion}"
-                                        WidthRequest="120" />
+                                
+                                <Picker ItemsSource="{Binding TargetMajors}"
+                                        SelectedItem="{Binding SelectedTargetMajor}"
+                                        WidthRequest="80" />
                             </HorizontalStackLayout>
                         </Grid>
 

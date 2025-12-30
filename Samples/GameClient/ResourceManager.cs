@@ -21,13 +21,15 @@ public sealed class ResourceManager : IDisposable
         StoreType storeType,
         string buildVersion,
         int resourceVersion,
+        string? deviceId,
         CancellationToken ct)
     {
         var req = new CheckClientReq
         {
             StoreType = storeType,
             BuildVersion = buildVersion,
-            ResourceVersion = resourceVersion
+            ResourceVersion = resourceVersion,
+            DeviceId = deviceId
         };
 
         var response = await _resourceRpc

@@ -3,12 +3,10 @@ using System.Data;
 using System.Text;
 using CommunityToolkit.Maui.Alerts;
 using CommunityToolkit.Maui.Core;
-using OperationTool.DatabaseHandler;
 using OperationTool.Diff;
 using OperationTool.Services;
 using SP.Shared.Resource;
 using SP.Shared.Resource.SQL;
-using SP.Shared.Resource.Table;
 
 namespace OperationTool.ViewModels;
 
@@ -118,7 +116,7 @@ public sealed class RefsSqlTabViewModel : ViewModelBase
     public AsyncRelayCommand GenerateSqlCommand { get; }
     public AsyncRelayCommand ExecuteQueryCommand { get; }
 
-    private async Task BrowseSchsAsync(object? state)
+    private async Task BrowseSchsAsync()
     {
         var result = await _filePicker.PickAsync();
         if (result is null) return;
@@ -131,7 +129,7 @@ public sealed class RefsSqlTabViewModel : ViewModelBase
         SchsFilePath = result.FullPath;
     }
 
-    private async Task BrowseRefsAsync(object? state)
+    private async Task BrowseRefsAsync()
     {
         var result = await _filePicker.PickAsync();
         if (result is null) return;
@@ -144,7 +142,7 @@ public sealed class RefsSqlTabViewModel : ViewModelBase
         RefsFilePath = result.FullPath;
     }
 
-    private async Task GenerateSqlAsync(object? state)
+    private async Task GenerateSqlAsync()
     {
          IsBusy = true;
         var cts = new CancellationTokenSource();
@@ -193,7 +191,7 @@ public sealed class RefsSqlTabViewModel : ViewModelBase
     private bool CanGenerateSql()
         => !IsBusy && !string.IsNullOrEmpty(SchsFilePath) && !string.IsNullOrEmpty(RefsFilePath);
 
-    private async Task ExecuteQueryAsync(object? state)
+    private async Task ExecuteQueryAsync()
     {
         IsBusy = true;
         var cts = new CancellationTokenSource();

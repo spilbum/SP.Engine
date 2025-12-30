@@ -29,8 +29,7 @@
                                Margin="0,0,0,4" />
                         
                         <!-- 필터 영역 -->
-                        <Grid Grid.Row="1"
-                              ColumnSpacing="8">
+                        <Grid Grid.Row="1" ColumnSpacing="8">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="200" />
@@ -52,18 +51,25 @@
                                         SelectedItem="{Binding SelectedClientBuildVersion}"
                                         SelectionMode="Single">
                             
+                            <CollectionView.EmptyView>
+                                <Grid Padding="16">
+                                    <VerticalStackLayout Spacing="8">
+                                        <Button Text="Initialize defaults"
+                                                Command="{Binding InitDefaultsCommand}"/>
+                                    </VerticalStackLayout>
+                                </Grid>
+                            </CollectionView.EmptyView>
+                            
                             <!-- 컬럼 헤더 -->
                             <CollectionView.Header>
                                 <Grid Padding="0,4"
                                       ColumnSpacing="8"
                                       BackgroundColor="{DynamicResource Gray100}"
-                                      ColumnDefinitions="150,150,150,150,80,80">
+                                      ColumnDefinitions="150,150,150,150">
                                     <Label Grid.Column="0" Text="ServerGroupType" FontAttributes="Bold" />
                                     <Label Grid.Column="1" Text="StoreType" FontAttributes="Bold" />
                                     <Label Grid.Column="2" Text="BeginBuildVersion" FontAttributes="Bold" />
                                     <Label Grid.Column="3" Text="EndBuildVersion" FontAttributes="Bold" />
-                                    <Label Grid.Column="4" Text="" />
-                                    <Label Grid.Column="5" Text="" />
                                 </Grid>
                             </CollectionView.Header>
                             
@@ -72,7 +78,7 @@
                                 <DataTemplate>
                                     <Grid Padding="0,2"
                                           ColumnSpacing="8"
-                                          ColumnDefinitions="150,150,150,150,80,80">
+                                          ColumnDefinitions="150,150,150,150,100">
                                         <Label Grid.Column="0" Text="{Binding ServerGroupType}" />
                                         <Label Grid.Column="1" Text="{Binding StoreType}" />
                                         
@@ -85,18 +91,12 @@
                                                IsEnabled="{Binding IsUpdatable}" />
                                         
                                         <Button Grid.Column="4"
-                                                Text="Update"
-                                                IsEnabled="{Binding IsUpdatable}"
-                                                Command="{Binding BindingContext.UpdateCommand, 
-                                                Source={RelativeSource AncestorType={x:Type ContentPage}}}" 
-                                                CommandParameter="{Binding .}"/>
+                                                Text="{Binding PrimaryActionText}"
+                                                IsVisible="{Binding IsPrimaryActionVisible}"
+                                                Command="{Binding BindingContext.PrimaryActionCommand,
+                                                Source={RelativeSource AncestorType={x:Type ContentPage}}}"
+                                                CommandParameter="{Binding .}" />
                                         
-                                        <Button Grid.Column="5"
-                                                Text="Promote"
-                                                IsEnabled="{Binding IsPromotable}"
-                                                Command="{Binding BindingContext.PromoteCommand, 
-                                                Source={RelativeSource AncestorType={x:Type ContentPage}}}" 
-                                                CommandParameter="{Binding .}"/>
                                     </Grid>
                                 </DataTemplate>
                             </CollectionView.ItemTemplate>

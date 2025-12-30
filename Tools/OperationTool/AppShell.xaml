@@ -14,6 +14,10 @@
                 Route="VersionTab"
                 ContentTemplate="{DataTemplate pages:VersionTabPage}" />
             <ShellContent
+                Title="Maintenance"
+                Route="MaintenanceTab"
+                ContentTemplate="{DataTemplate pages:MaintenanceTabPage}" />
+            <ShellContent
                 Title="Patch"
                 Route="PatchTab"
                 ContentTemplate="{DataTemplate pages:PatchTabPage}" />

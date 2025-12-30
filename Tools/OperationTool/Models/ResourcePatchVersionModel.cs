@@ -8,7 +8,7 @@ public sealed class ResourcePatchVersionModel : ViewModelBase
 {
     private ServerGroupType _serverGroupType;
     private int _resourceVersion;
-    private int _clientMajorVersion;
+    private int _targetMajor;
     private int _fileId;
     private string _comment = string.Empty;
     private DateTime _createdUtc;
@@ -25,10 +25,10 @@ public sealed class ResourcePatchVersionModel : ViewModelBase
         private set => SetProperty(ref _resourceVersion, value);
     }
 
-    public int ClientMajorVersion
+    public int TargetMajor
     {
-        get => _clientMajorVersion;
-        private set => SetProperty(ref _clientMajorVersion, value);
+        get => _targetMajor;
+        private set => SetProperty(ref _targetMajor, value);
     }
 
     public int FileId
@@ -56,7 +56,7 @@ public sealed class ResourcePatchVersionModel : ViewModelBase
         
         ServerGroupType = serverGroupType;
         ResourceVersion = entity.ResourceVersion;
-        ClientMajorVersion = entity.ClientMajorVersion;
+        TargetMajor = entity.TargetMajor;
         FileId = entity.FileId;
         Comment = entity.Comment ?? string.Empty;
         CreatedUtc = entity.CreatedUtc;

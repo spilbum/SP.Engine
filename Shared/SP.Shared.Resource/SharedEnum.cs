@@ -1,3 +1,5 @@
+using System;
+
 namespace SP.Shared.Resource;
 
 public enum ErrorCode : int
@@ -57,4 +59,34 @@ public enum ColumnType
     Double,
     Boolean,
     DateTime
+}
+
+[Flags]
+public enum PatchTarget : byte
+{
+    None = 0,
+    Client = 1 << 0,
+    Server = 1 << 1,
+    Shared = Client | Server
+}
+
+public enum PatchDeliveryTarget : byte
+{
+    None = 0,
+    Client = 1,
+    Server = 2
+}
+
+public enum PatchFileKind : byte
+{
+    None = 0,
+    Schs = 1,
+    Refs = 2,
+}
+
+public enum MaintenanceBypassKind : byte
+{
+    None = 0,
+    IpCidr = 1,
+    DeviceId = 2,
 }

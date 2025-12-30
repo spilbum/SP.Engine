@@ -29,9 +29,8 @@ public sealed class ClientBuildVersionModel : ViewModelBase
         get => _beginBuildVersion;
         set
         {
-            if (!SetProperty(ref _beginBuildVersion, value)) return;
-            OnPropertyChanged(nameof(IsDirty));
-            OnPropertyChanged(nameof(IsValid));
+            if (SetProperty(ref _beginBuildVersion, value))
+                NotifyActionStateChanged();
         }
     }
 
@@ -40,9 +39,8 @@ public sealed class ClientBuildVersionModel : ViewModelBase
         get => _endBuildVersion;
         set
         {
-            if (!SetProperty(ref _endBuildVersion, value)) return;
-            OnPropertyChanged(nameof(IsDirty));
-            OnPropertyChanged(nameof(IsValid));
+            if (SetProperty(ref _endBuildVersion, value)) 
+                NotifyActionStateChanged();
         }
     }
 
@@ -69,14 +67,39 @@ public sealed class ClientBuildVersionModel : ViewModelBase
         }
     }
 
+    public bool CanSave => IsUpdatable && IsDirty && IsValid;
+
+    public bool CanPromote =>
+        IsPromotable &&
+        !IsDirty;
+
+    public string PrimaryActionText
+    {
+        get
+        {
+            if (CanSave) return "Apply";
+
+            return ServerGroupType switch
+            {
+                ServerGroupType.Dev => "Dev → QA",
+                ServerGroupType.QA => "QA → Stage",
+                ServerGroupType.Stage => "Stage → Live",
+                _ => string.Empty
+            };
+        }
+    }
+
+    public bool IsPrimaryActionVisible => CanSave || CanPromote;
+    
     public static explicit operator ResourceDb.ClientBuildVersionEntity(ClientBuildVersionModel model)
     {
         return new ResourceDb.ClientBuildVersionEntity
         {
-            ServerGroupType = (byte)model.ServerGroupType,
-            StoreType = (byte)model.StoreType,
+            ServerGroupType = model.ServerGroupType.ToString(),
+            StoreType = model.StoreType.ToString(),
             BeginBuildVersion = model.BeginBuildVersion,
-            EndBuildVersion = model.EndBuildVersion
+            EndBuildVersion = model.EndBuildVersion,
+            ServerGroupOrder = Utils.ToOrder(model.ServerGroupType)
         };
     }
 
@@ -96,18 +119,34 @@ public sealed class ClientBuildVersionModel : ViewModelBase
 
     public ClientBuildVersionModel(ResourceDb.ClientBuildVersionEntity entity)
     {
-        ServerGroupType = (ServerGroupType)entity.ServerGroupType;
-        StoreType = (StoreType)entity.StoreType;
+        if (!Enum.TryParse(entity.ServerGroupType, out ServerGroupType serverGroupType))
+            throw new ArgumentException($"Invalid server group type:{entity.ServerGroupType}");
+        
+        if (!Enum.TryParse(entity.StoreType, out StoreType storeType))
+            throw new ArgumentException($"Invalid store type:{entity.StoreType}");
+        
+        ServerGroupType = serverGroupType;
+        StoreType = storeType;
         BeginBuildVersion = entity.BeginBuildVersion;
         EndBuildVersion = entity.EndBuildVersion;
         OriginBegin = entity.BeginBuildVersion;
         OriginEnd = entity.EndBuildVersion;
     }
 
-    public void AcceptChanges()
+    public void MarkSaved()
     {
         OriginBegin = BeginBuildVersion;
         OriginEnd = EndBuildVersion;
+        NotifyActionStateChanged();
+    }
+
+    private void NotifyActionStateChanged()
+    {
         OnPropertyChanged(nameof(IsDirty));
+        OnPropertyChanged(nameof(IsValid));
+        OnPropertyChanged(nameof(CanSave));
+        OnPropertyChanged(nameof(CanPromote));
+        OnPropertyChanged(nameof(PrimaryActionText));
+        OnPropertyChanged(nameof(IsPrimaryActionVisible));
     }
 }

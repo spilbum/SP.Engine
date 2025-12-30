@@ -1,4 +1,3 @@
-using SP.Shared.Resource;
 using SP.Shared.Resource.Refs;
 using SP.Shared.Resource.Schs;
 using SP.Shared.Resource.Table;

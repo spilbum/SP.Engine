@@ -21,8 +21,8 @@ public static class ServiceCollectionExtensions
         s.AddSingleton<IResourcePatchStore, ResourcePatchStore>();
         s.AddSingleton<IResourceConfigStore, ResourceConfigStore>();
         s.AddSingleton<IServerStore, InMemoryServerStore>();
-        s.AddSingleton<IResourceReloadService, ResourceReloadService>();
-        s.AddHostedService<ResourceWarmupHostedService>();
+        s.AddSingleton<IMaintenanceStore, MaintenanceStore>();
+        s.AddHostedService<StartupLoader>();
         return s;
     }
     

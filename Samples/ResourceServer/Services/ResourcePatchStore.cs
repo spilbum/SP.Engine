@@ -8,7 +8,7 @@ namespace ResourceServer.Services;
 public sealed class ResourcePatchPolicy
 {
     public ServerGroupType ServerGroupType { get; }
-    public int ClientMajorVersion { get; }
+    public int TargetMajor { get; }
     public int ResourceVersion { get; }
     public int FileId { get; }
     public DateTime CreatedUtc { get; }
@@ -19,20 +19,20 @@ public sealed class ResourcePatchPolicy
             throw new ArgumentException("Invalid server group type");
         
         ServerGroupType = serverGroupType;
-        ClientMajorVersion = entity.ClientMajorVersion;
+        TargetMajor = entity.TargetMajor;
         ResourceVersion = entity.ResourceVersion;
         FileId = entity.FileId;
         CreatedUtc = entity.CreatedUtc;
     }
 
     public bool IsAllowed(BuildVersion v)
-        => v.Major == ClientMajorVersion;
+        => v.Major == TargetMajor;
 }
 
 public sealed class ResourcePatchSet
 {
-    public ServerGroupType ServerGroupType { get; }
-    public int ClientMajorVersion { get; }
+    public ServerGroupType Group { get; }
+    public int TargetMajor { get; }
     
     public ImmutableArray<ResourcePatchPolicy> Patches { get; }
     
@@ -40,22 +40,22 @@ public sealed class ResourcePatchSet
         Patches.IsDefaultOrEmpty ? null : Patches[^1];
 
     public ResourcePatchSet(
-        ServerGroupType serverGroupType,
-        int majorVersion,
+        ServerGroupType group,
+        int major,
         IEnumerable<ResourcePatchPolicy> patches)
     {
-        ServerGroupType = serverGroupType;
-        ClientMajorVersion = majorVersion;
+        Group = group;
+        TargetMajor = major;
         Patches = [..patches.OrderBy(p => p.ResourceVersion)];
     }
 
     public ResourcePatchPolicy? GetLatestFor(BuildVersion buildVersion)
-        => buildVersion.Major != ClientMajorVersion ? null : Latest;
+        => buildVersion.Major != TargetMajor ? null : Latest;
 }
 
 public interface IResourcePatchStore
 {
-    ResourcePatchPolicy? GetLatestPatch(ServerGroupType groupType, int clientMajorVersion);
+    ResourcePatchPolicy? GetLatest(ServerGroupType groupType, int clientMajor);
     Task ReloadAsync(CancellationToken ct = default);
 }
 
@@ -66,10 +66,10 @@ public sealed class ResourcePatchStore(IDbConnector dbConnector) : IResourcePatc
 
     private readonly SemaphoreSlim _reloadLock = new(1, 1);
 
-    public ResourcePatchPolicy? GetLatestPatch(ServerGroupType serverGroupType, int clientMajorVersion)
+    public ResourcePatchPolicy? GetLatest(ServerGroupType serverGroupType, int clientMajor)
     {
         var snapshot = Volatile.Read(ref _patchSets);
-        return snapshot.TryGetValue((serverGroupType, clientMajorVersion), out var set)
+        return snapshot.TryGetValue((serverGroupType, clientMajor), out var set)
             ? set.Latest
             : null;
     }
@@ -93,14 +93,14 @@ public sealed class ResourcePatchStore(IDbConnector dbConnector) : IResourcePatc
                 catch { /* ignore */ }
             }
             
-            var dictBuilder =
+            ImmutableDictionary<(ServerGroupType Group, int Major), ResourcePatchSet>.Builder dictBuilder =
                 ImmutableDictionary.CreateBuilder<(ServerGroupType, int), ResourcePatchSet>();
             
-            foreach (var group in policies.GroupBy(p => (p.ServerGroupType, p.ClientMajorVersion)))
+            foreach (var group in policies.GroupBy(p => (p.ServerGroupType, p.TargetMajor)))
             {
                 var set = new ResourcePatchSet(
                     group.Key.ServerGroupType,
-                    group.Key.ClientMajorVersion,
+                    group.Key.TargetMajor,
                     group);
                 dictBuilder[group.Key] = set;
             }
