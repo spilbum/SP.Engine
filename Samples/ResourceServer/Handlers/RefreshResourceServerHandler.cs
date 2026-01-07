@@ -5,10 +5,11 @@ namespace ResourceServer.Handlers;
 
 public sealed class RefreshResourceServerHandler(
     IHttpContextAccessor http,
-    IBuildPolicyStore buildStore,
-    IResourceConfigStore configStore,
-    IResourcePatchStore patchStore,
-    IMaintenanceStore maintenanceStore
+    IBuildPolicyStore build,
+    IResourceConfigStore config,
+    IResourcePatchStore resource,
+    IMaintenanceStore maintenance,
+    ILocalizationStore localization
     ) : JsonHandlerBase<RefreshResourceServerReq, RefreshResourceServerRes>(http)
 {
     public override int ReqId => ResourceMsgId.RefreshResourceServerReq;
@@ -16,10 +17,11 @@ public sealed class RefreshResourceServerHandler(
 
     protected override async ValueTask<RefreshResourceServerRes> HandlePayloadAsync(RefreshResourceServerReq req, CancellationToken ct)
     {
-        await buildStore.ReloadAsync(ct);
-        await configStore.ReloadAsync(ct);
-        await patchStore.ReloadAsync(ct);
-        await maintenanceStore.ReloadAsync(ct);
+        await build.ReloadAsync(ct);
+        await config.ReloadAsync(ct);
+        await resource.ReloadAsync(ct);
+        await maintenance.ReloadAsync(ct);
+        await localization.ReloadAsync(ct);
         
         var res = new RefreshResourceServerRes();
         return res;

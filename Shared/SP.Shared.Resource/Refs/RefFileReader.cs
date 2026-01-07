@@ -11,10 +11,10 @@ public static class RefFileReader
     {
         var r = new NetReader(data);
 
-        if (r.ReadByte() != 'R' || 
-            r.ReadByte() != 'R' || 
-            r.ReadByte() != 'E' || 
-            r.ReadByte() != 'F')
+        if (r.ReadByte() != (byte)'R' || 
+            r.ReadByte() != (byte)'R' || 
+            r.ReadByte() != (byte)'E' || 
+            r.ReadByte() != (byte)'F')
             throw new InvalidDataException("Invalid .ref magic");
         
         var name = r.ReadString();

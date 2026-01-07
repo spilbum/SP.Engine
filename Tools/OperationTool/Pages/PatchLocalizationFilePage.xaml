@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="OperationTool.Pages.PatchLocalizationFilePage">
+
+    <ContentPage.Content>
+        <Grid Padding="12"
+              RowSpacing="12"
+              RowDefinitions="Auto,Auto,*,Auto">
+
+            <!-- Target -->
+            <Frame Grid.Row="0"
+                   Padding="12"
+                   HasShadow="False"
+                   BorderColor="{DynamicResource Gray300}"
+                   BackgroundColor="{DynamicResource White}"
+                   IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Target" FontAttributes="Bold" />
+
+                    <Grid ColumnDefinitions="120,*"
+                          RowDefinitions="Auto,Auto"
+                          ColumnSpacing="8"
+                          RowSpacing="8">
+                        <Label Grid.Row="0" Grid.Column="0"
+                               Text="ServerGroup"
+                               VerticalTextAlignment="Center" />
+
+                        <Picker Grid.Row="0" Grid.Column="1"
+                                ItemsSource="{Binding ServerGroupTypes}"
+                                SelectedItem="{Binding ServerGroupType}" />
+
+                        <Label Grid.Row="1" Grid.Column="0"
+                               Text="Store"
+                               VerticalTextAlignment="Center" />
+
+                        <Picker Grid.Row="1" Grid.Column="1"
+                                ItemsSource="{Binding StoreTypes}"
+                                SelectedItem="{Binding StoreType}" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Frame>
+
+            <Frame Grid.Row="1"
+                   Padding="12"
+                   HasShadow="False"
+                   BorderColor="{DynamicResource Gray300}"
+                   BackgroundColor="{DynamicResource White}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Current Active" FontAttributes="Bold" />
+
+                    <!-- null-safe 하려면 VM에서 텍스트 프록시 추천 -->
+                    <Grid ColumnDefinitions="120,*"
+                          RowDefinitions="Auto,Auto"
+                          ColumnSpacing="8"
+                          RowSpacing="8">
+                        <Label Grid.Row="0" Grid.Column="0"
+                               Text="FileId"
+                               VerticalTextAlignment="Center" />
+                        <Label Grid.Row="0" Grid.Column="1"
+                               Text="{Binding CurrentActiveFileIdText}" />
+
+                        <Label Grid.Row="1" Grid.Column="0"
+                               Text="Updated"
+                               VerticalTextAlignment="Center" />
+                        <Label Grid.Row="1" Grid.Column="1"
+                               Text="{Binding CurrentActiveUpdatedText}" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Frame>
+
+            <Frame Grid.Row="2"
+                   Padding="12"
+                   HasShadow="False"
+                   BorderColor="{DynamicResource Gray300}"
+                   BackgroundColor="{DynamicResource White}"
+                   IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}">
+                <Grid RowDefinitions="Auto,*"
+                      RowSpacing="10">
+
+                    <Label Grid.Row="0"
+                           Text="Files"
+                           FontAttributes="Bold" />
+
+                    <CollectionView Grid.Row="1"
+                                    ItemsSource="{Binding Files}"
+                                    SelectionMode="Single"
+                                    SelectedItem="{Binding SelectedFile}">
+                        <CollectionView.Header>
+                            <Grid ColumnDefinitions="80,350,160"
+                                  ColumnSpacing="8"
+                                  BackgroundColor="{DynamicResource Gray100}"
+                                  Padding="0,6">
+                                <Label Grid.Column="0" Text="FileId" FontAttributes="Bold" />
+                                <Label Grid.Column="1" Text="Comment" FontAttributes="Bold" />
+                                <Label Grid.Column="2" Text="Created" FontAttributes="Bold" />
+                            </Grid>
+                        </CollectionView.Header>
+
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate>
+                                <Grid ColumnDefinitions="80,350,160"
+                                      ColumnSpacing="8"
+                                      Padding="0,6">
+                                    <Label Grid.Column="0" Text="{Binding FileId}" />
+                                    <Label Grid.Column="1"
+                                           Text="{Binding Comment}"
+                                           LineBreakMode="TailTruncation" />
+                                    <Label Grid.Column="2" Text="{Binding CreatedUtcText}" />
+                                </Grid>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+
+                        <CollectionView.EmptyView>
+                            <Label Text="No files." Opacity="0.6" />
+                        </CollectionView.EmptyView>
+                    </CollectionView>
+
+                </Grid>
+            </Frame>
+
+            <!-- Apply + Busy -->
+            <Grid Grid.Row="3"
+                  ColumnDefinitions="*,Auto"
+                  ColumnSpacing="12">
+
+                <HorizontalStackLayout Grid.Column="0"
+                                       Spacing="8"
+                                       IsVisible="{Binding IsBusy}">
+                    <ActivityIndicator IsRunning="True" />
+                    <Label Text="Working..." VerticalOptions="Center" Opacity="0.7" />
+                </HorizontalStackLayout>
+
+                <Button Grid.Column="1"
+                        Text="Apply"
+                        Command="{Binding ApplyCommand}"
+                        IsEnabled="{Binding CanApply}" />
+            </Grid>
+
+        </Grid>
+    </ContentPage.Content>
+</ContentPage>

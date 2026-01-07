@@ -30,7 +30,7 @@
                         <!-- 환경 선택 -->
                         <Grid Grid.Row="0"
                               ColumnSpacing="8"
-                              ColumnDefinitions="Auto,100,70,*">
+                              ColumnDefinitions="Auto,100,*">
 
                             <Label Grid.Column="0"
                                    Text="Server Group Type:"
@@ -40,11 +40,7 @@
                                     ItemsSource="{Binding ServerGroupTypes}"
                                     SelectedItem="{Binding SelectedServerGroupType}" />
                             
-                            <Button Grid.Column="2"
-                                    Text="Refresh"
-                                    Command="{Binding RefreshCommand}"/>
-
-                            <Label Grid.Column="3"
+                            <Label Grid.Column="2"
                                    FontAttributes="Bold"
                                    VerticalTextAlignment="Center"
                                    HorizontalOptions="End"

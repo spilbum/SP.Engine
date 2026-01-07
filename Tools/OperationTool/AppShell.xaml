@@ -11,27 +11,21 @@
         <Tab>
             <ShellContent
                 Title="Version"
-                Route="VersionTab"
                 ContentTemplate="{DataTemplate pages:VersionTabPage}" />
             <ShellContent
                 Title="Maintenance"
-                Route="MaintenanceTab"
                 ContentTemplate="{DataTemplate pages:MaintenanceTabPage}" />
             <ShellContent
                 Title="Patch"
-                Route="PatchTab"
                 ContentTemplate="{DataTemplate pages:PatchTabPage}" />
             <ShellContent
-                Title="Diff"
-                Route="DiffTab"
-                ContentTemplate="{DataTemplate pages:RefsDiffTabPage}" />
+                Title="Localization"
+                ContentTemplate="{DataTemplate pages:LocalizationTabPage}" />
             <ShellContent
                 Title="Sql"
-                Route="SqlTab"
                 ContentTemplate="{DataTemplate pages:RefsSqlTabPage}" />
             <ShellContent
                 Title="Settings"
-                Route="SettingsTab"
                 ContentTemplate="{DataTemplate pages:SettingsTabPage}" />
         </Tab>
     </TabBar>

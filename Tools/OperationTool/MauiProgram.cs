@@ -21,25 +21,31 @@ public static class MauiProgram
         builder.Services.AddSingleton<AppShell>();
 
         // Page
-        builder.Services.AddTransient<PatchTabPage>();
-        builder.Services.AddTransient<RunPatchPage>();
-        builder.Services.AddTransient<GenerateFilePage>();
-        builder.Services.AddTransient<VersionTabPage>();
-        builder.Services.AddTransient<SettingsTabPage>();
-        builder.Services.AddTransient<RefsDiffTabPage>();
-        builder.Services.AddTransient<RefsSqlTabPage>();
         builder.Services.AddSingleton<LoadingPage>();
+        builder.Services.AddSingleton<PatchTabPage>();
+        builder.Services.AddTransient<PatchRefsFilePage>();
+        builder.Services.AddTransient<GenerateRefsFilePage>();
+        builder.Services.AddTransient<RefsDiffTabPage>();
+        builder.Services.AddSingleton<VersionTabPage>();
+        builder.Services.AddSingleton<SettingsTabPage>();
+        builder.Services.AddSingleton<RefsSqlTabPage>();
         builder.Services.AddSingleton<MaintenanceTabPage>();
+        builder.Services.AddTransient<GenerateLocalizationFilePage>();
+        builder.Services.AddTransient<PatchLocalizationFilePage>();
+        builder.Services.AddSingleton<LocalizationTabPage>();
         
         // ViewModel
-        builder.Services.AddTransient<PatchTabViewModel>();
-        builder.Services.AddTransient<RunPatchViewModel>();
-        builder.Services.AddTransient<GenerateFileViewModel>();
-        builder.Services.AddTransient<VersionTabViewModel>();
-        builder.Services.AddTransient<SettingsTabViewModel>();
+        builder.Services.AddSingleton<PatchTabViewModel>();
+        builder.Services.AddTransient<PatchRefsFileViewModel>();
+        builder.Services.AddTransient<GenerateRefsFileViewModel>();
         builder.Services.AddTransient<RefsDiffTabViewModel>();
-        builder.Services.AddTransient<RefsSqlTabViewModel>();
+        builder.Services.AddSingleton<VersionTabViewModel>();
+        builder.Services.AddSingleton<SettingsTabViewModel>();
+        builder.Services.AddSingleton<RefsSqlTabViewModel>();
         builder.Services.AddSingleton<MaintenanceTabViewModel>();
+        builder.Services.AddTransient<GenerateLocalizationFileViewModel>();
+        builder.Services.AddTransient<PatchLocalizationFileViewModel>();
+        builder.Services.AddSingleton<LocalizationTabViewModel>();
         
         // Service
         builder.Services.AddSingleton<IExcelService, ExcelService>();
@@ -53,7 +59,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<HttpClient>();
         builder.Services.AddSingleton<ResourceServerWebService>();
         builder.Services.AddSingleton<ToolWarmupService>();
-        builder.Services.AddSingleton<IDialogService, DialogService>();
+        builder.Services.AddSingleton<ILocalizationService, LocalizationService>();
 
 #if DEBUG
         builder.Logging.AddDebug();

@@ -1,17 +1,26 @@
 using System.Collections.ObjectModel;
 using OperationTool.DatabaseHandler;
-using OperationTool.Models;
 using OperationTool.Pages;
 using OperationTool.Services;
 using SP.Shared.Resource;
 
 namespace OperationTool.ViewModels;
 
+public sealed class RefsPatchVersion(ResourceDb.RefsPatchVersionEntity e)
+{
+    public string ServerGroupType { get; } = e.ServerGroupType;
+    public int PatchVersion { get; } = e.PatchVersion;
+    public int TargetMajor { get; } = e.TargetMajor;
+    public int FileId { get; } = e.FileId;
+    public string? Comment { get; } = e.Comment;
+    public string CreatedUtcText { get; } = e.CreatedUtc.ToString("yyyy-MM-dd HH:mm:ss");
+}
+
 public sealed class PatchTabViewModel : ViewModelBase
 {
-    private readonly IDialogService _dialog;
     private readonly IDbConnector _db;
     private ServerGroupType _selectedServerGroupType;
+    private CancellationTokenSource? _cts;
 
     public ServerGroupType SelectedServerGroupType
     {
@@ -19,20 +28,19 @@ public sealed class PatchTabViewModel : ViewModelBase
         set
         {
             if (SetProperty(ref _selectedServerGroupType, value))
-                _ = LoadResourcePatchVersionsAsync(value);
+                _ = LoadAsync();
         }
     }
     
-    public ObservableCollection<ResourcePatchVersionModel> ResourcePatchVersions { get; } = [];
+    public ObservableCollection<RefsPatchVersion> RefsPatchVersions { get; } = [];
     public ObservableCollection<ServerGroupType> ServerGroupTypes { get; } = [];
     
-    public AsyncRelayCommand GoToGenerateFileCommand { get; }
-    public AsyncRelayCommand GoToRunPathCommand { get; }
-    public AsyncRelayCommand ReloadCommand { get; }
+    public AsyncRelayCommand GoToGenerateRefsFileCommand { get; }
+    public AsyncRelayCommand GoToPatchRefsFileCommand { get; }
+    public AsyncRelayCommand GoToRefsDiffCommand { get; }
 
-    public PatchTabViewModel(IDialogService dialog, IDbConnector db)
+    public PatchTabViewModel(IDbConnector db)
     {
-        _dialog = dialog;
         _db = db;
 
         foreach (ServerGroupType serverGroupType in Enum.GetValues(typeof(ServerGroupType)))
@@ -43,40 +51,48 @@ public sealed class PatchTabViewModel : ViewModelBase
         
         SelectedServerGroupType = ServerGroupTypes.FirstOrDefault();
         
-        GoToGenerateFileCommand = new AsyncRelayCommand(GoToGenerateFileAsync);
-        GoToRunPathCommand = new AsyncRelayCommand(GoToRunPathAsync);
-        ReloadCommand = new AsyncRelayCommand(ReloadAsync);
+        GoToGenerateRefsFileCommand = new AsyncRelayCommand(GoToGenerateRefsFileAsync);
+        GoToPatchRefsFileCommand = new AsyncRelayCommand(GoToPatchRefsFileAsync);
+        GoToRefsDiffCommand = new AsyncRelayCommand(GoToRefsDiffAsync);
     }
     
-    private async Task GoToGenerateFileAsync()
-        => await Utils.GoToPageAsync(nameof(GenerateFilePage));
+    private static async Task GoToGenerateRefsFileAsync()
+        => await Utils.GoToPageAsync(nameof(GenerateRefsFilePage));
     
-    private async Task GoToRunPathAsync()
-        => await Utils.GoToPageAsync(nameof(RunPatchPage));
+    private static async Task GoToPatchRefsFileAsync()
+        => await Utils.GoToPageAsync(nameof(PatchRefsFilePage));
+    
+    private static async Task GoToRefsDiffAsync()
+        => await Utils.GoToPageAsync(nameof(RefsDiffTabPage));
 
-    private async Task ReloadAsync()   
-        => await LoadResourcePatchVersionsAsync(SelectedServerGroupType);
-    
-    private async Task LoadResourcePatchVersionsAsync(ServerGroupType serverGroupType)
+    public async Task LoadAsync()
     {
-        using var cts = new CancellationTokenSource();
-        var ct = cts.Token;
+        var ct = ResetCts(TimeSpan.FromMinutes(1));
 
         try
         {
             using var conn = await _db.OpenAsync(ct);
-            var entities = await ResourceDb.GetLatestResourcePatchVersions(
-                conn, serverGroupType, 100, ct);
+            var versions = await ResourceDb.GetRefsPatchVersions(
+                conn, 
+                SelectedServerGroupType, 
+                ct);
             
-            ResourcePatchVersions.Clear();
-            foreach (var entity in entities)
+            RefsPatchVersions.Clear();
+            foreach (var entity in versions.OrderByDescending(f => f.PatchVersion).Take(50))
             {
-                ResourcePatchVersions.Add(new ResourcePatchVersionModel(entity));
+                RefsPatchVersions.Add(new RefsPatchVersion(entity));
             }
         }
         catch (Exception e)
         {
-            await _dialog.AlertAsync("Error", $"Load failed: {e.Message}");
+            await Utils.AlertAsync(AlertLevel.Error, $"Load failed: {e.Message}");
         }
+    }
+
+    private CancellationToken ResetCts(TimeSpan timeout)
+    {
+        try { _cts?.Cancel(); } catch { /* ignore */ }
+        _cts = new CancellationTokenSource(timeout);
+        return _cts.Token;
     }
 }

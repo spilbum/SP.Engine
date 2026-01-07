@@ -43,11 +43,10 @@ public sealed class ResourceConfigStore(IDbConnector dbConnector) : IResourceCon
         try
         {
             using var conn = await dbConnector.OpenAsync(ct).ConfigureAwait(false);
-            var entities = await ResourceDb.GetResourceConfigs(conn, ct).ConfigureAwait(false);
+            var list = await ResourceDb.GetResourceConfigsAsync(conn, ct).ConfigureAwait(false);
             
             var dict = ImmutableDictionary.CreateBuilder<string, string>(StringComparer.Ordinal);
-
-            foreach (var e in entities
+            foreach (var e in list
                          .Where(e => !string.IsNullOrWhiteSpace(e.Key)))
             {
                 dict[e.Key.Trim()] = e.Value;

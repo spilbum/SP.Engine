@@ -8,7 +8,6 @@ namespace OperationTool.ViewModels;
 
 public sealed class RefsDiffTabViewModel : ViewModelBase
 {
-    private readonly IDialogService _dialog;
     private readonly IFilePicker _filePicker;
     private string _oldSchsPath = string.Empty;
     private string _oldRefsPath = string.Empty;
@@ -78,9 +77,8 @@ public sealed class RefsDiffTabViewModel : ViewModelBase
     public AsyncRelayCommand RunDiffCommand { get; }
 
 
-    public RefsDiffTabViewModel(IDialogService dialog, IFilePicker filePicker)
+    public RefsDiffTabViewModel(IFilePicker filePicker)
     {
-        _dialog = dialog;
         _filePicker = filePicker;
 
         BrowseOldSchsCommand = new AsyncRelayCommand(BrowseOldSchsAsync);
@@ -177,7 +175,7 @@ public sealed class RefsDiffTabViewModel : ViewModelBase
         }
         catch (Exception e)
         {
-            await _dialog.AlertAsync("Error", $"Refs diff failed: {e.Message}");
+            await Utils.AlertAsync(AlertLevel.Error, $"Refs diff failed: {e.Message}");
         }
         finally
         {

@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="OperationTool.Pages.GenerateLocalizationFilePage">
+
+    <ContentPage.Content>
+        <ScrollView>
+            <Grid Padding="12"
+                  HorizontalOptions="Center"
+                  MaximumWidthRequest="900">
+
+                <VerticalStackLayout Spacing="12"
+                                     IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}">
+
+                    <!-- Excel -->
+                    <Frame Padding="12"
+                           HasShadow="False"
+                           BorderColor="{DynamicResource Gray300}"
+                           BackgroundColor="{DynamicResource White}">
+                        <Grid ColumnDefinitions="*,110"
+                              RowDefinitions="Auto,Auto"
+                              ColumnSpacing="8"
+                              RowSpacing="6">
+                            <Label Grid.Row="0" Grid.ColumnSpan="2"
+                                   Text="Excel (.xlsx)"
+                                   FontAttributes="Bold" />
+
+                            <Entry Grid.Row="1" Grid.Column="0"
+                                   Text="{Binding ExcelFilePath}"
+                                   IsReadOnly="True"
+                                   Placeholder="Select localization excel file" />
+
+                            <Button Grid.Row="1" Grid.Column="1"
+                                    Text="Browse"
+                                    Command="{Binding BrowseExcelCommand}"
+                                    IsEnabled="{Binding CanBrowseExcel}" />
+                        </Grid>
+                    </Frame>
+
+                    <!-- Output -->
+                    <Frame Padding="12"
+                           HasShadow="False"
+                           BorderColor="{DynamicResource Gray300}"
+                           BackgroundColor="{DynamicResource White}">
+                        <Grid ColumnDefinitions="*,110"
+                              RowDefinitions="Auto,Auto"
+                              ColumnSpacing="8"
+                              RowSpacing="6">
+                            <Label Grid.Row="0" Grid.ColumnSpan="2"
+                                   Text="Output Folder"
+                                   FontAttributes="Bold" />
+
+                            <Entry Grid.Row="1" Grid.Column="0"
+                                   Text="{Binding OutputFolder}"
+                                   IsReadOnly="True"
+                                   Placeholder="Select output folder" />
+
+                            <Button Grid.Row="1" Grid.Column="1"
+                                    Text="Browse"
+                                    Command="{Binding BrowseOutputCommand}"
+                                    IsEnabled="{Binding CanBrowseOutput}" />
+                        </Grid>
+                    </Frame>
+
+                    <!-- Settings -->
+                    <Frame Padding="12"
+                           HasShadow="False"
+                           BorderColor="{DynamicResource Gray300}"
+                           BackgroundColor="{DynamicResource White}">
+                        <VerticalStackLayout Spacing="10">
+                            <Label Text="Settings" FontAttributes="Bold" />
+
+                            <Grid ColumnDefinitions="120,*"
+                                  RowDefinitions="Auto,Auto"
+                                  ColumnSpacing="8"
+                                  RowSpacing="8">
+
+                                <Label Grid.Row="0" Grid.Column="0"
+                                       Text="FileId"
+                                       VerticalTextAlignment="Center" />
+                                <Label Grid.Row="0" Grid.Column="1"
+                                       Text="{Binding FileId}"
+                                       VerticalTextAlignment="Center" />
+
+                                <Label Grid.Row="1" Grid.Column="0"
+                                       Text="Comment"
+                                       VerticalTextAlignment="Center" />
+                                <Entry Grid.Row="1" Grid.Column="1"
+                                       Text="{Binding Comment}"
+                                       Placeholder="Optional (release note / change reason)" />
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Frame>
+
+                    <!-- Summary -->
+                    <Frame Padding="12"
+                           HasShadow="False"
+                           BorderColor="{DynamicResource Gray300}"
+                           BackgroundColor="{DynamicResource White}">
+                        <VerticalStackLayout Spacing="10">
+                            <Label Text="Summary" FontAttributes="Bold" />
+
+                            <Grid ColumnDefinitions="120,*"
+                                  RowDefinitions="Auto,Auto"
+                                  ColumnSpacing="8"
+                                  RowSpacing="8">
+                                <Label Grid.Row="0" Grid.Column="0"
+                                       Text="Total Keys"
+                                       VerticalTextAlignment="Center" />
+                                <Label Grid.Row="0" Grid.Column="1"
+                                       Text="{Binding TotalKeys}"
+                                       VerticalTextAlignment="Center" />
+
+                                <Label Grid.Row="1" Grid.Column="0"
+                                       Text="Languages"
+                                       VerticalTextAlignment="Start" />
+
+                                <CollectionView Grid.Row="1" Grid.Column="1"
+                                                ItemsSource="{Binding Languages}"
+                                                ItemsLayout="HorizontalList"
+                                                HeightRequest="34">
+                                    <CollectionView.ItemTemplate>
+                                        <DataTemplate>
+                                            <Frame Padding="6,2"
+                                                   Margin="0,0,6,0"
+                                                   HasShadow="False"
+                                                   BorderColor="{DynamicResource Gray300}"
+                                                   BackgroundColor="{DynamicResource Gray100}">
+                                                <Label Text="{Binding .}" />
+                                            </Frame>
+                                        </DataTemplate>
+                                    </CollectionView.ItemTemplate>
+                                </CollectionView>
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Frame>
+
+                    <!-- Generate -->
+                    <Button Text="Generate"
+                            Command="{Binding GenerateCommand}"
+                            IsEnabled="{Binding CanGenerate}" />
+                </VerticalStackLayout>
+
+                <!-- Busy overlay -->
+                <VerticalStackLayout IsVisible="{Binding IsBusy}"
+                                     VerticalOptions="Center"
+                                     HorizontalOptions="Center"
+                                     Spacing="8">
+                    <ActivityIndicator IsRunning="True" />
+                </VerticalStackLayout>
+
+            </Grid>
+        </ScrollView>
+    </ContentPage.Content>
+</ContentPage>

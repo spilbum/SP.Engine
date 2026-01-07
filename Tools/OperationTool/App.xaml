@@ -11,6 +11,10 @@
             </ResourceDictionary.MergedDictionaries>
             <local:MaintenanceStatusToColorConverter
                 x:Key="MaintenanceStatusToColorConverter" />
+            <local:BoolToOpacityConverter x:Key="BoolToOpacityConverter"
+                                          TrueOpacity="1.0"
+                                          FalseOpacity="0.4" />
+            <local:InvertedBoolConverter x:Key="InvertedBoolConverter" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

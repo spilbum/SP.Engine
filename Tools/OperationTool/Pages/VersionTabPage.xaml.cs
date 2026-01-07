@@ -9,5 +9,12 @@ public partial class VersionTabPage : ContentPage
         InitializeComponent();
         BindingContext = vm;
     }
+
+    protected override async void OnAppearing()
+    {
+        base.OnAppearing();
+        if (BindingContext is VersionTabViewModel vm)
+            await vm.LoadAsync();
+    }
 }
 

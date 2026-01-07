@@ -67,7 +67,7 @@ public enum PatchTarget : byte
     None = 0,
     Client = 1 << 0,
     Server = 1 << 1,
-    Shared = Client | Server
+    Both = Client | Server
 }
 
 public enum PatchDeliveryTarget : byte

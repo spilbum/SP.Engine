@@ -15,9 +15,15 @@ using SP.Shared.Resource.Schs;
 
 namespace OperationTool.ViewModels;
 
-public sealed class GenerateFileViewModel : ViewModelBase
+public sealed class RefsFile(ResourceDb.RefsFileEntity entity)
 {
-    private readonly IDialogService _dialog;
+    public int FileId { get; } = entity.FileId;
+    public string? Comment { get; } = entity.Comment;
+    public bool IsDevelopment { get; } = entity.IsDevelopment;
+}
+
+public sealed class GenerateRefsFileViewModel : ViewModelBase
+{
     private readonly IExcelService _excel;
     private readonly IDbConnector _db;
     private readonly IFolderPicker _folderPicker;
@@ -25,47 +31,69 @@ public sealed class GenerateFileViewModel : ViewModelBase
 
     private string _outputFolder = string.Empty;
     private string _excelFolder = string.Empty;
-    private bool isExcelLoaded;
-    private int _totalTableCount;
-    private int _checkedTableCount;
+
+    private bool _isBusy;
+    private bool _isExcelLoaded;
     private bool _isAllChecked;
     private bool _isDevelopment;
-    private RefsFileModel? _selectedOriginRefsFile;
-    private int _fileId;
-    private string _comment = string.Empty;
     private bool _isAutoComment;
     private bool _isGenerateCode;
     private bool _isOriginEnabled;
     private bool _isOutputSelected;
+    
+    private int _totalTableCount;
+    private int _checkedTableCount;
+    
+    private RefsFile? _selectedOriginRefsFile;
+    private string? _selectedOriginRefsComment;
+    private int _fileId;
+    private string _comment = string.Empty;
+
+    public string? SelectedOriginRefsComment
+    {
+        get => _selectedOriginRefsComment;
+        private set => SetProperty(ref _selectedOriginRefsComment, value);
+    }
+
+    public bool IsBusy
+    {
+        get => _isBusy;
+        private set
+        {
+            if (SetProperty(ref _isBusy, value))
+                RefreshUI();
+        }
+    }
+
+    public bool CanBrowseExcel => !IsBusy;
+    public bool CanBrowseOutput => !IsBusy;
+    public bool CanGenerate => 
+        IsExcelLoaded && IsOutputSelected && CheckedTableCount > 0 && !IsBusy;
 
     public string OutputFolder
     {
         get => _outputFolder;
-        set
+        private set
         {
             if (SetProperty(ref _outputFolder, value))
-            {
-                OnPropertyChanged(nameof(OutputFolderColor));
-            }
+                RefreshUI();
         }
     }
 
     public string ExcelFolder
     {
         get => _excelFolder;
-        set
+        private set
         {
             if (SetProperty(ref _excelFolder, value))
-            {
-                OnPropertyChanged(nameof(ExcelFolderColor));
-            }
+                RefreshUI();
         }
     }
     
     public bool IsOriginEnabled
     {
         get => _isOriginEnabled;
-        set => SetProperty(ref _isOriginEnabled, value);
+        private set => SetProperty(ref _isOriginEnabled, value);
     }
 
     public bool IsGenerateCode
@@ -80,7 +108,7 @@ public sealed class GenerateFileViewModel : ViewModelBase
         set
         {
             if (!SetProperty(ref _isAutoComment, value)) return;
-            if (value) Comment = string.Join(",", ExcelTables.Select(x => x.Name));
+            if (value) Comment = BuildAutoComment();
         }
     }
 
@@ -96,10 +124,14 @@ public sealed class GenerateFileViewModel : ViewModelBase
         set => SetProperty(ref _comment, value);
     }
 
-    public RefsFileModel? SelectedOriginRefsFile
+    public RefsFile? SelectedOriginRefsFile
     {
         get => _selectedOriginRefsFile;
-        set => SetProperty(ref _selectedOriginRefsFile, value);
+        set
+        {
+            if (!SetProperty(ref _selectedOriginRefsFile, value)) return;
+            SelectedOriginRefsComment = value?.Comment;
+        }
     }
 
     public bool IsDevelopment
@@ -126,7 +158,7 @@ public sealed class GenerateFileViewModel : ViewModelBase
         private set
         {
             if (SetProperty(ref _checkedTableCount, value))
-                GenerateCommand.RaiseCanExecuteChanged();
+               RefreshUI();
         }
     }
 
@@ -138,14 +170,11 @@ public sealed class GenerateFileViewModel : ViewModelBase
 
     public bool IsExcelLoaded
     {
-        get => isExcelLoaded;
+        get => _isExcelLoaded;
         private set
         {
-            if (SetProperty(ref isExcelLoaded, value))
-            {
-                OnPropertyChanged(nameof(ExcelFolderColor));
-                GenerateCommand.RaiseCanExecuteChanged();
-            }
+            if (SetProperty(ref _isExcelLoaded, value))
+                RefreshUI();
         }
     }
 
@@ -155,43 +184,32 @@ public sealed class GenerateFileViewModel : ViewModelBase
         private set
         {
             if (SetProperty(ref _isOutputSelected, value))
-            {
-                OnPropertyChanged(nameof(OutputFolderColor));
-                GenerateCommand.RaiseCanExecuteChanged();
-            }
+                RefreshUI();
         }
     }
     
-    public Color OutputFolderColor => 
-        string.IsNullOrEmpty(OutputFolder) || !IsOutputSelected ? Colors.Red : Colors.Green;
-    
-    public Color ExcelFolderColor =>
-        string.IsNullOrEmpty(ExcelFolder) || !IsExcelLoaded ? Colors.Red : Colors.Green;
-
     public bool HasDirtyTargets => ExcelTables.Any(x => x.IsTargetDirty);
 
     public ObservableCollection<ExcelTableModel> ExcelTables { get; } = [];
-    public ObservableCollection<RefsFileModel> OriginRefsFiles { get; } = [];
-    public AsyncRelayCommand BrowseExcelFolderCommand { get; }
-    public AsyncRelayCommand BrowseOutputFolderCommand { get; }
+    public ObservableCollection<RefsFile> OriginRefsFiles { get; } = [];
+    public AsyncRelayCommand BrowseExcelCommand { get; }
+    public AsyncRelayCommand BrowseOutputCommand { get; }
     public AsyncRelayCommand GenerateCommand { get; }
 
-    public GenerateFileViewModel(
-        IDialogService dialog,
+    public GenerateRefsFileViewModel(
         IExcelService excel,
         IDbConnector db,
         IFolderPicker folderPicker,
         IFileUploader uploader)
     {
-        _dialog = dialog;
         _excel = excel;
         _db = db;
         _folderPicker = folderPicker;
         _uploader = uploader;
-        
-        BrowseExcelFolderCommand = new AsyncRelayCommand(BrowseExcelFolderAsync);
-        BrowseOutputFolderCommand = new AsyncRelayCommand(BrowseOutputFolderAsync);
-        GenerateCommand = new AsyncRelayCommand(GenerateAsync, CanGenerate);
+
+        BrowseExcelCommand = new AsyncRelayCommand(BrowseExcelFolderAsync, () => CanBrowseExcel);
+        BrowseOutputCommand = new AsyncRelayCommand(BrowseOutputFolderAsync, () => CanBrowseOutput);
+        GenerateCommand = new AsyncRelayCommand(GenerateAsync, () => CanGenerate);
     }
 
     private async Task EnsureTargetsSaveAsync(DbConn conn, CancellationToken ct)
@@ -201,12 +219,12 @@ public sealed class GenerateFileViewModel : ViewModelBase
 
         foreach (var t in dirty)
         {
-            await ResourceDb.UpsertResourceTableTargetAsync(
+            await ResourceDb.UpsertRefsTableTargetAsync(
                 conn,
-                new ResourceDb.ResourceTableTargetEntity
+                new ResourceDb.RefsTableTargetEntity
                 {
                     TableName = t.Name,
-                    Target = (byte)t.Target,
+                    TargetFlags = (byte)t.Target,
                     Comment = "auto saved by generate"
                 }, ct);
             
@@ -218,33 +236,37 @@ public sealed class GenerateFileViewModel : ViewModelBase
 
     private async Task GenerateAsync()
     {
+        if (!CanGenerate) return;
+        
         var ok = await Shell.Current.DisplayAlert(
-            "",
+            "Confirm",
             "Would you like to generate a file?",
             "Ok",
             "Cancel");
-        
         if (!ok)
             return;
         
         using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
         var ct = cts.Token;
-        
+
         try
         {
+            IsBusy = true;
+
             using var conn = await _db.OpenAsync(ct);
             await conn.BeginTransactionAsync(ct);
 
             await EnsureTargetsSaveAsync(conn, ct);
-            
-            var entity = new ResourceDb.ResourceRefsFileEntity
-            {
-                FileId = FileId,
-                Comment = Comment,
-                IsDevelopment = IsDevelopment
-            };
 
-            await ResourceDb.InsertResourceRefsFileAsync(conn, entity, ct);
+            await ResourceDb.InsertRefsFileAsync(
+                conn, 
+                new ResourceDb.RefsFileEntity
+                {
+                    FileId = FileId,
+                    Comment = Comment,
+                    IsDevelopment = IsDevelopment
+                },
+                ct);
 
             var versionDir = Path.Combine(OutputFolder, $"{FileId}");
             var selected = ExcelTables
@@ -253,34 +275,38 @@ public sealed class GenerateFileViewModel : ViewModelBase
 
             var clientTables = selected.Where(t => (t.Target & PatchTarget.Client) != 0).ToList();
             var serverTables = selected.Where(t => (t.Target & PatchTarget.Server) != 0).ToList();
-            
-            await BuildAndUploadAsync(FileId, PatchDeliveryTarget.Client, clientTables, versionDir, ct);
-            await BuildAndUploadAsync(FileId, PatchDeliveryTarget.Server, serverTables, versionDir, ct);
-         
-            // {table}.cs 파일 생성
-            var codeDir = IsDevelopment
-                ? Path.Combine(versionDir, "code", "dev")
-                : Path.Combine(versionDir, "code");
+
+            await BuildAndUploadAsync(FileId, PatchTarget.Client, clientTables, versionDir, ct);
+            await BuildAndUploadAsync(FileId, PatchTarget.Server, serverTables, versionDir, ct);
 
             if (IsGenerateCode)
             {
+                var codeDir = IsDevelopment
+                    ? Path.Combine(versionDir, "code", "dev")
+                    : Path.Combine(versionDir, "code");
+
                 var schemas = selected.Select(t => t.GetSchema()).ToList();
                 ReferenceCodeGenerator.Generate(schemas, codeDir, "SP.Shared.Resource");
             }
-            
+
             await conn.CommitAsync(ct);
+
             await Utils.OpenFolderAsync(versionDir);
             await Shell.Current.GoToAsync("..");
         }
         catch (Exception e)
         {
-            await _dialog.AlertAsync("Error", $"Generate failed: {e.Message}");
+            await Utils.AlertAsync(AlertLevel.Error, $"Generate failed: {e.Message}");
+        }
+        finally
+        {
+            IsBusy = false;
         }
     }
 
     private async Task BuildAndUploadAsync(
         int fileId,
-        PatchDeliveryTarget target,
+        PatchTarget target,
         List<ExcelTableModel> excelTables,
         string versionDir,
         CancellationToken ct)
@@ -288,51 +314,44 @@ public sealed class GenerateFileViewModel : ViewModelBase
         if (excelTables.Count == 0)
             return;
 
-        var suffix = target.ToSuffix();
-
-        const string schExt = "sch";
-        const string refExt = "ref";
-        
-        var schsExt = PatchFileKind.Schs.ToExt();
-        var refsExt = PatchFileKind.Refs.ToExt();
+        var suffix = target.ToString().ToLower();
         
         // .sch
-        var schsDir = Path.Combine(versionDir, $"{schsExt}.{suffix}");
+        var schsDir = Path.Combine(versionDir, $"schs.{suffix}");
         foreach (var table in excelTables)
         {
             await SchFileWriter.WriteAsync(
                 table.GetSchema(),
-                Path.Combine(schsDir, $"{table.Name}.{schExt}"),
+                Path.Combine(schsDir, $"{table.Name}.sch"),
                 ct);
         }
 
-        var schsFilePath = Path.Combine(versionDir, $"{fileId}.{suffix}.{schsExt}");
+        var schsFilePath = Path.Combine(versionDir, $"{fileId}.{suffix}.schs");
         await SchsPackWriter.WriteAsync(schsDir, schsFilePath, ct);
 
         // .ref
-        var refsDir = Path.Combine(versionDir, $"{refsExt}.{suffix}");
+        var refsDir = Path.Combine(versionDir, $"refs.{suffix}");
         foreach (var table in excelTables)
         {
             await RefFileWriter.WriteAsync(
                 table.GetSchema(),
                 table.GetData(),
-                Path.Combine(refsDir, $"{table.Name}.{refExt}"),
+                Path.Combine(refsDir, $"{table.Name}.ref"),
                 ct);
         }
 
-        var refsFilePath = Path.Combine(versionDir, $"{fileId}.{suffix}.{refsExt}");
+        var refsFilePath = Path.Combine(versionDir, $"{fileId}.{suffix}.refs");
         await RefsPackWriter.WriteAsync(refsDir, refsFilePath, ct);
         
         // 파일 업로드
-        await UploadIfExistsAsync($"patch/{fileId}.{suffix}.{schsExt}", schsFilePath, ct);
-        await UploadIfExistsAsync($"patch/{fileId}.{suffix}.{refsExt}", refsFilePath, ct);
+        await UploadIfExistsAsync($"patch/refs/{fileId}.{suffix}.schs", schsFilePath, ct);
+        await UploadIfExistsAsync($"patch/refs/{fileId}.{suffix}.refs", refsFilePath, ct);
     }
 
     private async Task UploadIfExistsAsync(string key, string filePath, CancellationToken ct)
     {
         var info = new FileInfo(filePath);
-        if (!info.Exists)
-            return;
+        if (!info.Exists) return;
         
         await using var stream = File.OpenRead(filePath);
         await _uploader.UploadAsync(key, stream, info.Length, ct);
@@ -345,45 +364,33 @@ public sealed class GenerateFileViewModel : ViewModelBase
         using var conn = await _db.OpenAsync(ct);
         await conn.BeginTransactionAsync(ct);
 
-        var targets = await ResourceDb.GetResourceTableTargetsAsync(conn, ct);
+        var targets = await ResourceDb.GetRefsTableTargetsAsync(conn, ct);
         
         var map = new Dictionary<string, PatchTarget>(StringComparer.OrdinalIgnoreCase);
         foreach (var t in targets)
-            map[t.TableName] = (PatchTarget)t.Target;
+            map[t.TableName] = (PatchTarget)t.TargetFlags;
 
         foreach (var name in excelTableNames)
         {
             if (map.ContainsKey(name))
                 continue;
 
-            await ResourceDb.UpsertResourceTableTargetAsync(
+            await ResourceDb.UpsertRefsTableTargetAsync(
                 conn,
-                new ResourceDb.ResourceTableTargetEntity
+                new ResourceDb.RefsTableTargetEntity
                 {
                     TableName = name,
-                    Target = (byte)PatchTarget.Shared,
+                    TargetFlags = (byte)PatchTarget.Both,
                     Comment = "auto created"
                 }, ct);
             
-            map[name] = PatchTarget.Shared;
+            map[name] = PatchTarget.Both;
         }
         
         await conn.CommitAsync(ct);
         return map;
     }
-
-    private void ApplyTargetsToModels(Dictionary<string, PatchTarget> map)
-    {
-        foreach (var t in ExcelTables)
-        {
-            var target = map.GetValueOrDefault(t.Name, PatchTarget.Shared);
-            t.SetTarget(target);
-        }
-    }
-
-    private bool CanGenerate()
-        => isExcelLoaded && IsOutputSelected && CheckedTableCount > 0;
-
+    
     private async Task LoadExcelAsync(CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(ExcelFolder))
@@ -391,6 +398,9 @@ public sealed class GenerateFileViewModel : ViewModelBase
             await Toast.Make("Please specify a valid Excel folder path.", ToastDuration.Long).Show(ct);
             return;
         }
+
+        foreach (var old in ExcelTables)
+            old.PropertyChanged -= OnTableItemPropertyChanged;
         
         ExcelTables.Clear();
 
@@ -403,15 +413,18 @@ public sealed class GenerateFileViewModel : ViewModelBase
 
         TotalTableCount = ExcelTables.Count;
         IsExcelLoaded = TotalTableCount > 0;
+        
+        UpdateCheckedCount();
+        OnPropertyChanged(nameof(HasDirtyTargets));
     }
 
     private async Task LoadOriginAsync(CancellationToken ct)
     {
         using var conn = await _db.OpenAsync(ct);
 
-        FileId = await ResourceDb.GetLatestResourceRefsFileIdAsync(conn, ct) + 1;
+        FileId = await ResourceDb.GetLatestRefsFileIdAsync(conn, ct) + 1;
             
-        var files = await ResourceDb.GetResourceRefsFilesAsync(conn, ct);
+        var files = await ResourceDb.GetRefsFilesAsync(conn, ct);
             
         OriginRefsFiles.Clear();
         foreach (var entity in files.OrderByDescending(entity => entity.FileId))
@@ -419,7 +432,7 @@ public sealed class GenerateFileViewModel : ViewModelBase
             if (entity.IsDevelopment)
                 continue;
                 
-            var file = new RefsFileModel(entity);
+            var file = new RefsFile(entity);
             OriginRefsFiles.Add(file);
         }
 
@@ -429,45 +442,64 @@ public sealed class GenerateFileViewModel : ViewModelBase
     
     private async Task BrowseExcelFolderAsync()
     {
+        if (!CanBrowseExcel) return;
         
-        using var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
         var ct = cts.Token;
 
         try
         {
+            IsBusy = true;
+
             var result = await _folderPicker.PickAsync(ct);
             if (!result.IsSuccessful || result.Folder is null)
                 return;
 
             ExcelFolder = result.Folder.Path;
-            
-            await LoadExcelAsync(ct);
-            
-            var names = ExcelTables.Select(x => x.Name).ToList();
-            var targetMap = await SyncAndLoadTargetAsync(names, ct);
-            ApplyTargetsToModels(targetMap);
-            
-            await LoadOriginAsync(ct);
 
+            await LoadExcelAsync(ct);
+
+            var names = ExcelTables.Select(x => x.Name).ToList();
+            var map = await SyncAndLoadTargetAsync(names, ct);
+            foreach (var t in ExcelTables)
+            {
+                var target = map.GetValueOrDefault(t.Name, PatchTarget.Both);
+                t.SetTarget(target);
+            }
+
+            await LoadOriginAsync(ct);
+            
+            IsAllChecked = true;
             IsAutoComment = true;
             IsGenerateCode = true;
-            
-            await Toast.Make(IsExcelLoaded ? $"Excel '{TotalTableCount}' files loaded." : "Excel files not loaded.", ToastDuration.Long).Show(ct);
+            if (IsAutoComment) Comment = BuildAutoComment();
+
+            await Toast.Make(IsExcelLoaded
+                ? $"Excel '{TotalTableCount}' files loaded."
+                : "Excel files not loaded.", ToastDuration.Long).Show(ct);
         }
         catch (Exception e)
         {
-            await _dialog.AlertAsync("Error", $"Failed to load excel file: {e.Message}");
+            await Utils.AlertAsync(AlertLevel.Error, $"Failed to load excel file: {e.Message}");
+        }
+        finally
+        {
+            IsBusy = false;
         }
     }
 
     private async Task BrowseOutputFolderAsync()
     {
+        if (!CanBrowseOutput) return;
+        
         var result = await _folderPicker.PickAsync();
         if (!result.IsSuccessful || result.Folder is null)
             return;
         
         OutputFolder = result.Folder.Path;
         IsOutputSelected = true;
+        
+        RefreshUI();
     }
     
     private void OnTableItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -495,5 +527,32 @@ public sealed class GenerateFileViewModel : ViewModelBase
         }
 
         GenerateCommand.RaiseCanExecuteChanged();
+    }
+    
+    private string BuildAutoComment()
+    {
+        var selected = ExcelTables
+            .Where(x => x.IsChecked)
+            .Select(x => x.Name)
+            .ToList();
+        
+        if (selected.Count == 0)
+            return string.Empty;
+
+        const int maxNames = 10;
+        return selected.Count <= maxNames 
+            ? string.Join(", ", selected) 
+            : $"{string.Join(", ", selected.Take(maxNames))} ... (+{selected.Count - maxNames}";
+    }
+
+    private void RefreshUI()
+    {
+        BrowseExcelCommand.RaiseCanExecuteChanged();
+        BrowseOutputCommand.RaiseCanExecuteChanged();
+        GenerateCommand.RaiseCanExecuteChanged();
+        
+        OnPropertyChanged(nameof(CanBrowseExcel));
+        OnPropertyChanged(nameof(CanBrowseOutput));
+        OnPropertyChanged(nameof(CanGenerate));
     }
 }

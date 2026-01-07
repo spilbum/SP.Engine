@@ -31,7 +31,7 @@ public sealed class ExcelTableModel : ViewModelBase
     }
 
     public IReadOnlyList<PatchTarget> TargetItems { get; } =
-        [PatchTarget.Shared, PatchTarget.Client, PatchTarget.Server];
+        [PatchTarget.Both, PatchTarget.Client, PatchTarget.Server];
 
     public bool IsTargetDirty => Target != OriginTarget;
     public PatchTarget OriginTarget { get; private set; }

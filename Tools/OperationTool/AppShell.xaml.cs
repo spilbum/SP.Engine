@@ -8,8 +8,12 @@ public partial class AppShell : Shell
     {
         InitializeComponent();
         
-        Routing.RegisterRoute(nameof(GenerateFilePage), typeof(GenerateFilePage));
-        Routing.RegisterRoute(nameof(RunPatchPage), typeof(RunPatchPage));
+        Routing.RegisterRoute(nameof(GenerateRefsFilePage), typeof(GenerateRefsFilePage));
+        Routing.RegisterRoute(nameof(PatchRefsFilePage), typeof(PatchRefsFilePage));
+        Routing.RegisterRoute(nameof(RefsDiffTabPage), typeof(RefsDiffTabPage));
+        
+        Routing.RegisterRoute(nameof(GenerateLocalizationFilePage), typeof(GenerateLocalizationFilePage));
+        Routing.RegisterRoute(nameof(PatchLocalizationFilePage), typeof(PatchLocalizationFilePage));
     }
 }
 

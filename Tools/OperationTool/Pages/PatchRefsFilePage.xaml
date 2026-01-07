@@ -1,0 +1,137 @@
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="OperationTool.Pages.PatchRefsFilePage">
+
+    <ContentPage.Content>
+        <ScrollView>
+            <Grid Padding="16"
+                  HorizontalOptions="Center">
+
+                <Frame HasShadow="False"
+                       BorderColor="{DynamicResource Gray300}"
+                       BackgroundColor="{DynamicResource White}"
+                       Padding="16"
+                       MaximumWidthRequest="900">
+
+                    <Grid RowSpacing="16"
+                          RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+
+                        <!-- Server Group -->
+                        <Grid Grid.Row="0"
+                              ColumnDefinitions="140,*"
+                              ColumnSpacing="8">
+                            <Label Text="Server Group Type:"
+                                   Grid.Column="0"
+                                   VerticalOptions="Center" />
+                            <Picker Grid.Column="1"
+                                    ItemsSource="{Binding ServerGroupTypes}"
+                                    SelectedItem="{Binding SelectedServerGroupType}"
+                                    WidthRequest="120"
+                                    VerticalOptions="Center"
+                                    IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}" />
+                        </Grid>
+
+                        <!-- Refs File -->
+                        <Grid Grid.Row="1"
+                              RowSpacing="8"
+                              RowDefinitions="Auto,Auto,Auto,Auto">
+
+                            <Label Grid.Row="0"
+                                   Text="Refs File"
+                                   FontAttributes="Bold" />
+
+                            <Grid Grid.Row="1"
+                                  ColumnDefinitions="140,*"
+                                  ColumnSpacing="8">
+                                <Label Text="File ID:"
+                                       Grid.Column="0"
+                                       VerticalOptions="Center" />
+                                <Picker Grid.Column="1"
+                                        ItemsSource="{Binding RefsFiles}"
+                                        SelectedItem="{Binding SelectedRefsFile}"
+                                        ItemDisplayBinding="{Binding FileId}"
+                                        WidthRequest="160"
+                                        HorizontalOptions="Start"
+                                        IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}" />
+                            </Grid>
+
+                            <!-- 선택 없을 때도 안전하게 -->
+                            <HorizontalStackLayout Grid.Row="2"
+                                                   Spacing="4"
+                                                   IsEnabled="{Binding HasSelectedRefsFile}">
+                                <CheckBox IsChecked="{Binding SelectedRefsFileIsDevelopment}"
+                                          IsEnabled="False" />
+                                <Label Text="Is Development"
+                                       VerticalOptions="Center" />
+                            </HorizontalStackLayout>
+
+                            <VerticalStackLayout Grid.Row="3"
+                                                 Spacing="4"
+                                                 IsEnabled="{Binding HasSelectedRefsFile}">
+                                <Label Text="Comment:" />
+                                <Editor Text="{Binding SelectedRefsFileComment}"
+                                        IsReadOnly="True"
+                                        AutoSize="TextChanges"
+                                        HeightRequest="80" />
+                            </VerticalStackLayout>
+                        </Grid>
+
+                        <!-- Version -->
+                        <Grid Grid.Row="2"
+                              RowSpacing="8"
+                              RowDefinitions="Auto,Auto,Auto">
+
+                            <Label Grid.Row="0"
+                                   Text="Version"
+                                   FontAttributes="Bold" />
+
+                            <Grid Grid.Row="1"
+                                  ColumnDefinitions="140,*"
+                                  ColumnSpacing="8">
+                                <Label Text="Resource Version:"
+                                       Grid.Column="0"
+                                       VerticalOptions="Center" />
+                                <Entry Grid.Column="1"
+                                       Text="{Binding PatchVersion}"
+                                       WidthRequest="120"
+                                       IsReadOnly="True" />
+                            </Grid>
+
+                            <Grid Grid.Row="2"
+                                  ColumnDefinitions="140,*"
+                                  ColumnSpacing="8">
+                                <Label Text="Target Major:"
+                                       Grid.Column="0"
+                                       VerticalOptions="Center" />
+                                <Picker Grid.Column="1"
+                                        ItemsSource="{Binding TargetMajors}"
+                                        SelectedItem="{Binding SelectedTargetMajor}"
+                                        WidthRequest="120"
+                                        IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}" />
+                            </Grid>
+                        </Grid>
+
+                        <!-- Busy indicator (권장) -->
+                        <HorizontalStackLayout Grid.Row="3"
+                                               Spacing="8"
+                                               HorizontalOptions="End"
+                                               IsVisible="{Binding IsBusy}">
+                            <ActivityIndicator IsRunning="True" />
+                            <Label Text="Working..."
+                                   VerticalOptions="Center" />
+                        </HorizontalStackLayout>
+
+                        <!-- Execute -->
+                        <HorizontalStackLayout Grid.Row="4"
+                                               HorizontalOptions="End">
+                            <Button Text="Execute"
+                                    Command="{Binding ExecuteCommand}"
+                                    IsEnabled="{Binding CanExecute}" />
+                        </HorizontalStackLayout>
+
+                    </Grid>
+                </Frame>
+            </Grid>
+        </ScrollView>
+    </ContentPage.Content>
+</ContentPage>

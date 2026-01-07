@@ -5,22 +5,22 @@ using SP.Shared.Resource;
 namespace ResourceServer.Services;
 
 
-public sealed class ResourcePatchPolicy
+public sealed class ResourcePatchVersion
 {
     public ServerGroupType ServerGroupType { get; }
     public int TargetMajor { get; }
-    public int ResourceVersion { get; }
+    public int PatchVersion { get; }
     public int FileId { get; }
     public DateTime CreatedUtc { get; }
 
-    public ResourcePatchPolicy(ResourceDb.ResourcePatchVersionEntity entity)
+    public ResourcePatchVersion(ResourceDb.RefsPatchVersionEntity entity)
     {
         if (!Enum.TryParse(entity.ServerGroupType, out ServerGroupType serverGroupType))
             throw new ArgumentException("Invalid server group type");
         
         ServerGroupType = serverGroupType;
         TargetMajor = entity.TargetMajor;
-        ResourceVersion = entity.ResourceVersion;
+        PatchVersion = entity.PatchVersion;
         FileId = entity.FileId;
         CreatedUtc = entity.CreatedUtc;
     }
@@ -34,28 +34,28 @@ public sealed class ResourcePatchSet
     public ServerGroupType Group { get; }
     public int TargetMajor { get; }
     
-    public ImmutableArray<ResourcePatchPolicy> Patches { get; }
+    public ImmutableArray<ResourcePatchVersion> Patches { get; }
     
-    public ResourcePatchPolicy? Latest => 
+    public ResourcePatchVersion? Latest => 
         Patches.IsDefaultOrEmpty ? null : Patches[^1];
 
     public ResourcePatchSet(
         ServerGroupType group,
         int major,
-        IEnumerable<ResourcePatchPolicy> patches)
+        IEnumerable<ResourcePatchVersion> patches)
     {
         Group = group;
         TargetMajor = major;
-        Patches = [..patches.OrderBy(p => p.ResourceVersion)];
+        Patches = [..patches.OrderBy(p => p.PatchVersion)];
     }
 
-    public ResourcePatchPolicy? GetLatestFor(BuildVersion buildVersion)
+    public ResourcePatchVersion? GetLatestFor(BuildVersion buildVersion)
         => buildVersion.Major != TargetMajor ? null : Latest;
 }
 
 public interface IResourcePatchStore
 {
-    ResourcePatchPolicy? GetLatest(ServerGroupType groupType, int clientMajor);
+    ResourcePatchVersion? GetLatest(ServerGroupType groupType, int clientMajor);
     Task ReloadAsync(CancellationToken ct = default);
 }
 
@@ -66,7 +66,7 @@ public sealed class ResourcePatchStore(IDbConnector dbConnector) : IResourcePatc
 
     private readonly SemaphoreSlim _reloadLock = new(1, 1);
 
-    public ResourcePatchPolicy? GetLatest(ServerGroupType serverGroupType, int clientMajor)
+    public ResourcePatchVersion? GetLatest(ServerGroupType serverGroupType, int clientMajor)
     {
         var snapshot = Volatile.Read(ref _patchSets);
         return snapshot.TryGetValue((serverGroupType, clientMajor), out var set)
@@ -80,23 +80,16 @@ public sealed class ResourcePatchStore(IDbConnector dbConnector) : IResourcePatc
         try
         {
             using var conn = await dbConnector.OpenAsync(ct).ConfigureAwait(false);
-            var entities = await ResourceDb.GetResourcePatchVersions(conn, ct)
+            var list = await ResourceDb.GetRefsPatchVersions(conn, ct)
                 .ConfigureAwait(false);
 
-            var policies = new List<ResourcePatchPolicy>(entities.Count);
-            foreach (var e in entities)
-            {
-                try
-                {
-                    policies.Add(new ResourcePatchPolicy(e));
-                }
-                catch { /* ignore */ }
-            }
-            
+            var versions = new List<ResourcePatchVersion>(list.Count);
+            versions.AddRange(list.Select(e => new ResourcePatchVersion(e)));
+
             ImmutableDictionary<(ServerGroupType Group, int Major), ResourcePatchSet>.Builder dictBuilder =
                 ImmutableDictionary.CreateBuilder<(ServerGroupType, int), ResourcePatchSet>();
             
-            foreach (var group in policies.GroupBy(p => (p.ServerGroupType, p.TargetMajor)))
+            foreach (var group in versions.GroupBy(p => (p.ServerGroupType, p.TargetMajor)))
             {
                 var set = new ResourcePatchSet(
                     group.Key.ServerGroupType,

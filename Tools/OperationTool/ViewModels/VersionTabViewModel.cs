@@ -10,7 +10,6 @@ namespace OperationTool.ViewModels;
 
 public sealed class VersionTabViewModel : ViewModelBase
 {
-    private readonly IDialogService _dialog;
     private readonly IDbConnector _db;
     private readonly ResourceServerWebService _web;
     private StoreType _selectedStoreType;
@@ -21,7 +20,7 @@ public sealed class VersionTabViewModel : ViewModelBase
         set
         {
             if (SetProperty(ref _selectedStoreType, value))
-                _ = LoadAsync(value);
+                _ = LoadAsync();
         }
     }
     
@@ -30,9 +29,8 @@ public sealed class VersionTabViewModel : ViewModelBase
     public AsyncRelayCommand InitDefaultsCommand { get; }
     public AsyncRelayCommand<ClientBuildVersionModel> PrimaryActionCommand { get; }
 
-    public VersionTabViewModel(IDialogService dialog, IDbConnector db, ResourceServerWebService web)
+    public VersionTabViewModel(IDbConnector db, ResourceServerWebService web)
     {
-        _dialog = dialog;
         _db = db;
         _web = web;
 
@@ -121,12 +119,12 @@ public sealed class VersionTabViewModel : ViewModelBase
 
             await _web.RefreshAsync(ct);
 
-            await LoadAsync(SelectedStoreType);
+            await LoadAsync();
             await Toast.Make("Initialized").Show(ct);
         }
         catch (Exception e)
         {
-            await _dialog.AlertAsync("Error", $"Failed to initialize build version: {e.Message}");
+            await Utils.AlertAsync(AlertLevel.Error, $"Failed to initialize build version: {e.Message}");
         }
 
         return;
@@ -172,9 +170,7 @@ public sealed class VersionTabViewModel : ViewModelBase
         }
         catch (Exception e)
         {
-            await _dialog.AlertAsync(
-                "Error", 
-                $"Failed to update build version: {e.Message}");
+            await Utils.AlertAsync(AlertLevel.Error,$"Failed to update build version: {e.Message}");
         }
     }
 
@@ -332,7 +328,7 @@ public sealed class VersionTabViewModel : ViewModelBase
         }
         catch (Exception e)
         {
-            await _dialog.AlertAsync("Error", $"Failed to promote build version: {e.Message}");
+            await Utils.AlertAsync(AlertLevel.Error, $"Failed to promote build version: {e.Message}");
         }
     }
 
@@ -364,7 +360,7 @@ public sealed class VersionTabViewModel : ViewModelBase
         model.EndBuildVersion = str;
     }
     
-    private async Task LoadAsync(StoreType storeType)
+    public async Task LoadAsync()
     {
         using var cts = new CancellationTokenSource();
         var ct = cts.Token;
@@ -377,7 +373,7 @@ public sealed class VersionTabViewModel : ViewModelBase
             ClientBuildVersions.Clear();
             foreach (var m in 
                      from entity in entities 
-                     where entity.StoreType == storeType.ToString() 
+                     where entity.StoreType == SelectedStoreType.ToString() 
                      select new ClientBuildVersionModel(entity))
             {
                 AttachModel(m);
@@ -389,7 +385,7 @@ public sealed class VersionTabViewModel : ViewModelBase
         }
         catch (Exception e)
         {
-            await _dialog.AlertAsync("Error", $"Failed to load build version: {e.Message}");
+            await Utils.AlertAsync(AlertLevel.Error, $"Failed to load build version: {e.Message}");
         }
     }
 }

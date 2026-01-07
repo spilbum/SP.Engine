@@ -7,9 +7,9 @@ using OperationTool.ViewModels;
 
 namespace OperationTool.Pages;
 
-public partial class MaintenanceTabPage : ContentPage
+public partial class LocalizationTabPage : ContentPage
 {
-    public MaintenanceTabPage(MaintenanceTabViewModel vm)
+    public LocalizationTabPage(LocalizationTabViewModel vm)
     {
         InitializeComponent();
         BindingContext = vm;
@@ -18,7 +18,7 @@ public partial class MaintenanceTabPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        if (BindingContext is MaintenanceTabViewModel vm)
+        if (BindingContext is LocalizationTabViewModel vm)
             await vm.LoadAsync();
     }
 }

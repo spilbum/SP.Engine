@@ -22,6 +22,7 @@ public sealed class CheckClientRes
     public string? DownloadSchsFileUrl { get; set; }
     public string? DownloadRefsFileUrl { get; set; }
     public string? StoreUrl { get; set; }
+    public string? DownloadLocsFileUrl { get; set; }
     public ServerConnectInfo? Server { get; set; }
     
     public bool IsMaintenance { get; set; }

@@ -7,9 +7,9 @@ using OperationTool.ViewModels;
 
 namespace OperationTool.Pages;
 
-public partial class GenerateFilePage : ContentPage
+public partial class GenerateRefsFilePage : ContentPage
 {
-    public GenerateFilePage(GenerateFileViewModel vm)
+    public GenerateRefsFilePage(GenerateRefsFileViewModel vm)
     {
         InitializeComponent();
         BindingContext = vm;

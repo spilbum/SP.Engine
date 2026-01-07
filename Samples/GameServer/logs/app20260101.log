@@ -1,0 +1,3 @@
+[10:08:42.083 INF] [T:65] [Game] [Rank] State changed: "Open" -> "Closing"
+[10:08:42.091 INF] [T:65] [Game] [Rank] State changed: "Closing" -> "Closed"
+[10:08:42.091 INF] [T:65] [Game] [Rank] Disconnected

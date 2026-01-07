@@ -7,18 +7,18 @@ using OperationTool.ViewModels;
 
 namespace OperationTool.Pages;
 
-public partial class MaintenanceTabPage : ContentPage
+public partial class GenerateLocalizationFilePage : ContentPage
 {
-    public MaintenanceTabPage(MaintenanceTabViewModel vm)
+    public GenerateLocalizationFilePage(GenerateLocalizationFileViewModel vm)
     {
         InitializeComponent();
         BindingContext = vm;
     }
-    
+
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        if (BindingContext is MaintenanceTabViewModel vm)
+        if (BindingContext is GenerateLocalizationFileViewModel vm)
             await vm.LoadAsync();
     }
 }

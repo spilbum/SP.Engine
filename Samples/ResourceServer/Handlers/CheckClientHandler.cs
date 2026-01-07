@@ -8,11 +8,12 @@ namespace ResourceServer.Handlers;
 
 public sealed class CheckClientHandler(
     IHttpContextAccessor http,
-    IBuildPolicyStore buildPolicy,
-    IResourcePatchStore patchStore,
+    IBuildPolicyStore build,
+    IResourcePatchStore resource,
     IServerStore serverStore,
     IResourceConfigStore config,
-    IMaintenanceStore maintenanceStore,
+    IMaintenanceStore maintenance,
+    ILocalizationStore localization,
     ILogger<CheckClientHandler> logger) 
     : JsonHandlerBase<CheckClientReq, CheckClientRes>(http)
 {
@@ -26,7 +27,7 @@ public sealed class CheckClientHandler(
         if (!BuildVersion.TryParse(req.BuildVersion, out var buildVersion))
             throw new ErrorCodeException(ErrorCode.InvalidFormat, $"Invalid build version: {req.BuildVersion}");
         
-        var policy = buildPolicy.Get(req.StoreType, buildVersion, req.ForceServerGroupType);
+        var policy = build.Get(req.StoreType, buildVersion, req.ForceServerGroupType);
         if (policy == null)
         {
             var storeUrl = req.StoreType switch
@@ -43,7 +44,7 @@ public sealed class CheckClientHandler(
         }
 
         // 점검 체크
-        var env = maintenanceStore.GetEnv(policy.ServerGroupType);
+        var env = maintenance.GetEnv(policy.ServerGroupType);
         if (env is { IsEnabled: true })
         {
             var nowUtc = DateTime.UtcNow;
@@ -52,7 +53,7 @@ public sealed class CheckClientHandler(
                 var clientIp = ClientIp;
                 var deviceId = req.DeviceId;
 
-                var bypasses = maintenanceStore.GetBypasses(policy.ServerGroupType);
+                var bypasses = maintenance.GetBypasses(policy.ServerGroupType);
                 if (!IsBypassed(bypasses, clientIp, deviceId))
                 {
                     logger.LogWarning(
@@ -81,10 +82,10 @@ public sealed class CheckClientHandler(
         res.IsSoftUpdate = policy.IsSoftUpdate(buildVersion);
         res.LatestBuildVersion = policy.LatestBuildVersion.ToString();
 
-        var patch = patchStore.GetLatest(policy.ServerGroupType, buildVersion.Major);
-        if (patch != null)
+        var table = resource.GetLatest(policy.ServerGroupType, buildVersion.Major);
+        if (table != null)
         {
-            var latest = patch.ResourceVersion;
+            var latest = table.PatchVersion;
             var cur = req.ResourceVersion ?? 0;
 
             res.LatestResourceVersion = latest;
@@ -95,11 +96,22 @@ public sealed class CheckClientHandler(
                 if (!string.IsNullOrWhiteSpace(baseUrl))
                 {
                     res.DownloadSchsFileUrl =
-                        PatchUtils.BuildPatchUrl(baseUrl, patch.FileId, PatchDeliveryTarget.Client, PatchFileKind.Schs);
+                        PatchUrl.BuildRefsPatchUrl(baseUrl, table.FileId, "client", "schs");
                 
                     res.DownloadRefsFileUrl =
-                        PatchUtils.BuildPatchUrl(baseUrl, patch.FileId, PatchDeliveryTarget.Client, PatchFileKind.Refs);
+                        PatchUrl.BuildRefsPatchUrl(baseUrl, table.FileId, "server", "refs");
                 }
+            }
+        }
+
+        var loc = localization.GetActive(policy.ServerGroupType, policy.StoreType);
+        if (loc != null)
+        {
+            var baseUrl = config.Get("patch_base_url");
+            if (!string.IsNullOrWhiteSpace(baseUrl))
+            {
+                res.DownloadLocsFileUrl =
+                    PatchUrl.BuildLocalizationPatchUrl(baseUrl, loc.FileId, "locs");
             }
         }
 

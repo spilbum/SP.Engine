@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="OperationTool.Pages.LocalizationTabPage">
+
+    <ContentPage.Content>
+        <ScrollView>
+            <Grid RowDefinitions="Auto,Auto"
+                  Padding="12"
+                  RowSpacing="12"
+                  HorizontalOptions="Center"
+                  MaximumWidthRequest="900">
+
+                <!-- Active status -->
+                <Frame Grid.Row="0"
+                       Padding="12"
+                       HasShadow="False"
+                       BorderColor="{DynamicResource Gray300}"
+                       BackgroundColor="{DynamicResource White}">
+
+                    <Grid RowDefinitions="Auto,200,Auto"
+                          RowSpacing="10">
+
+                        <Grid Grid.Row="0"
+                              ColumnDefinitions="*,Auto"
+                              ColumnSpacing="8">
+                            <Label Grid.Column="0"
+                                   Text="Localization Status"
+                                   FontAttributes="Bold" />
+
+                            <HorizontalStackLayout Grid.Column="1"
+                                                   Spacing="6"
+                                                   IsVisible="{Binding IsBusy}">
+                                <ActivityIndicator IsRunning="True" />
+                                <Label Text="Loading..." VerticalOptions="Center" />
+                            </HorizontalStackLayout>
+                        </Grid>
+
+                        <CollectionView Grid.Row="1"
+                                        ItemsSource="{Binding Actives}"
+                                        SelectionMode="None">
+                            <CollectionView.Header>
+                                <Grid ColumnDefinitions="140,140,90,160"
+                                      ColumnSpacing="8"
+                                      BackgroundColor="{DynamicResource Gray100}"
+                                      Padding="0,6">
+                                    <Label Grid.Column="0" Text="ServerGroup" FontAttributes="Bold" />
+                                    <Label Grid.Column="1" Text="Store" FontAttributes="Bold" />
+                                    <Label Grid.Column="2" Text="FileId" FontAttributes="Bold" />
+                                    <Label Grid.Column="3" Text="Updated" FontAttributes="Bold" />
+                                </Grid>
+                            </CollectionView.Header>
+
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid ColumnDefinitions="140,140,90,160"
+                                          ColumnSpacing="8"
+                                          Padding="0,6">
+                                        <Label Grid.Column="0" Text="{Binding ServerGroupType}" />
+                                        <Label Grid.Column="1" Text="{Binding StoreType}" />
+                                        <Label Grid.Column="2" Text="{Binding FileId}" />
+                                        <Label Grid.Column="3" Text="{Binding UpdatedUtcText}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+
+                            <CollectionView.EmptyView>
+                                <Label Text="No data." Opacity="0.6" />
+                            </CollectionView.EmptyView>
+                        </CollectionView>
+
+                        <HorizontalStackLayout Grid.Row="2"
+                                               HorizontalOptions="End"
+                                               Spacing="8">
+                            <Button Text="Patch"
+                                    Command="{Binding PatchCommand}"
+                                    IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}" />
+                        </HorizontalStackLayout>
+
+                    </Grid>
+                </Frame>
+
+                <!-- Latest history -->
+                <Frame Grid.Row="1"
+                       Padding="12"
+                       HasShadow="False"
+                       BorderColor="{DynamicResource Gray300}"
+                       BackgroundColor="{DynamicResource White}">
+
+                    <Grid RowDefinitions="Auto,200,Auto"
+                          RowSpacing="10">
+
+                        <Label Grid.Row="0"
+                               Text="Latest Localization Files History"
+                               FontAttributes="Bold" />
+
+                        <CollectionView Grid.Row="1"
+                                        ItemsSource="{Binding LatestFiles}"
+                                        SelectionMode="None">
+                            <CollectionView.Header>
+                                <Grid ColumnDefinitions="90,260,160"
+                                      ColumnSpacing="8"
+                                      BackgroundColor="{DynamicResource Gray100}"
+                                      Padding="0,6">
+                                    <Label Grid.Column="0" Text="FileId" FontAttributes="Bold" />
+                                    <Label Grid.Column="1" Text="Comment" FontAttributes="Bold" />
+                                    <Label Grid.Column="2" Text="Created" FontAttributes="Bold" />
+                                </Grid>
+                            </CollectionView.Header>
+
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid ColumnDefinitions="90,260,160"
+                                          ColumnSpacing="8"
+                                          Padding="0,6">
+                                        <Label Grid.Column="0" Text="{Binding FileId}" />
+                                        <Label Grid.Column="1"
+                                               Text="{Binding Comment}"
+                                               LineBreakMode="TailTruncation"
+                                               MaxLines="2" />
+                                        <Label Grid.Column="2" Text="{Binding CreatedUtcText}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+
+                            <CollectionView.EmptyView>
+                                <Label Text="No data." Opacity="0.6" />
+                            </CollectionView.EmptyView>
+                        </CollectionView>
+
+                        <HorizontalStackLayout Grid.Row="2"
+                                               HorizontalOptions="End">
+                            <Button Text="Generate .locs file"
+                                    Command="{Binding GenerateCommand}"
+                                    IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}" />
+                        </HorizontalStackLayout>
+
+                    </Grid>
+                </Frame>
+
+            </Grid>
+        </ScrollView>
+    </ContentPage.Content>
+</ContentPage>

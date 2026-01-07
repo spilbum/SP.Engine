@@ -1,8 +1,14 @@
 using System.Globalization;
-using OperationTool.ViewModels;
 using SP.Shared.Resource;
 
 namespace OperationTool;
+
+public enum AlertLevel
+{
+    Info,
+    Warning,
+    Error
+}
 
 public static class Utils
 {
@@ -31,6 +37,10 @@ public static class Utils
         ServerGroupType.Live => 40,
         _ => 255
     };
+    
+    public static Task AlertAsync(AlertLevel level, string message)
+        => MainThread.InvokeOnMainThreadAsync(
+            () => Shell.Current.DisplayAlert(level.ToString().ToUpper(), message, "Ok"));
 }
 
 public sealed class NullToFalseConverter : IValueConverter
@@ -79,3 +89,36 @@ public sealed class MaintenanceStatusToColorConverter : IValueConverter
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         => throw new NotSupportedException();
 }
+
+
+public sealed class BoolToOpacityConverter : IValueConverter
+{
+    public double TrueOpacity { get; set; } = 1.0;
+    public double FalseOpacity { get; set; } = 0.4;
+
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        if (value is bool b)
+            return b ? TrueOpacity : FalseOpacity;
+
+        return TrueOpacity;
+    }
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+public sealed class InvertedBoolConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        if (value is bool b)
+            return !b;
+
+        return true; // null / 잘못된 타입일 때 기본적으로 활성화
+    }
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+

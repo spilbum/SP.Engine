@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using ClosedXML.Excel;
 using SP.Shared.Resource;
+using UIKit;
 
 namespace OperationTool.Excel;
 
@@ -11,47 +12,51 @@ public static partial class ExcelTableParser
     {
         using var wb = new XLWorkbook(path);
         
-        return wb.Worksheets
-            .Select(ParseSheet)
-            .OfType<ExcelTable>()
-            .ToList();
+       var result = new List<ExcelTable>();
+       foreach (var ws in wb.Worksheets)
+       {
+           SheetGrid grid;
+           try
+           {
+               grid = XlsxGridReader.ReadSheet(ws);
+           }
+           catch
+           {
+               continue;
+           }
+
+           var table = ParseGrid(ws.Name, grid);
+           if (table != null)
+               result.Add(table);
+       }
+       
+       return result;
     }
 
-    private static ExcelTable? ParseSheet(IXLWorksheet ws)
+    private static ExcelTable? ParseGrid(string sheetName, SheetGrid grid)
     {
-        var used = ws.RangeUsed();
-        if (used == null)
+        if (grid.RowCount < 4)
             return null;
 
-        var firstRow = used.FirstRowUsed().RowNumber();
-        var lastRow = used.LastRowUsed().RowNumber();
-        var firstCol = used.FirstColumnUsed().ColumnNumber();
-        var lastCol = used.LastColumnUsed().ColumnNumber();
-        
-        if (lastRow - firstRow + 1 < 4)
-            return null;
+        const int headerRow = 0;
+        const int typeRow = 1;
+        const int pkRow = 2;
+        const int dataStartRow = 3;
 
-        var sheetName = ws.Name;
         var table = new ExcelTable(sheetName);
-
-        var headerRow = ws.Row(firstRow);
-        var typeRow = ws.Row(firstRow + 1);
-        var pkRow = ws.Row(firstRow + 2);
-
-        var columns = new List<ExcelColumn>();
         
-        for (var col = firstCol; col <= lastCol; col++)
+        var columns = new List<ExcelColumn>();
+        for (var col = 0; col < grid.ColumnCount; col++)
         {
-            var nameCell = headerRow.Cell(col);
-            var name = nameCell.GetString().Trim();
+            var name = grid.Get(headerRow, col).Trim();
             if (!ValidateColumnName(name))
-                throw new InvalidDataException($"Invalid column name: {name}");
+                throw new InvalidDataException($"Invalid column name: {name} ({grid.Address(headerRow, col)})");
 
-            var typeStr = typeRow.Cell(col).GetString().Trim();
+            var typeStr = grid.Get(typeRow, col).Trim();
             if (string.IsNullOrEmpty(typeStr))
-                throw new InvalidDataException("Column type is empty");
+                throw new InvalidDataException($"Column type is empty ({grid.Address(headerRow, col)})");
 
-            var pkMark = pkRow.Cell(col).GetString().Trim();
+            var pkMark = grid.Get(pkRow, col).Trim();
             var isPk = !string.IsNullOrEmpty(pkMark) && pkMark.Equals("key", StringComparison.OrdinalIgnoreCase);
 
             var (colType, colLength) = ParseColumnType(typeStr);
@@ -65,9 +70,7 @@ public static partial class ExcelTableParser
         foreach (var c in columns)
             table.Columns.Add(c);
         
-        table.Rows.AddRange(
-            ReadDataRows(ws, columns, firstRow + 3, lastRow, firstCol, lastCol)
-        );
+        table.Rows.AddRange(ReadDataRows(grid, columns, dataStartRow));
         
         return table;
     }
@@ -86,27 +89,23 @@ public static partial class ExcelTableParser
     }
     
     private static List<ExcelRow> ReadDataRows(
-        IXLWorksheet ws,
+        SheetGrid grid,
         List<ExcelColumn> columns,
-        int firstRow,
-        int lastRow,
-        int firstCol,
-        int lastCol)
+        int startRow)
     {
         var result = new List<ExcelRow>();
 
-        for (var rowNum = firstRow; rowNum <= lastRow; rowNum++)
+        for (var r = startRow; r < grid.RowCount; r++)
         {
-            var excelRowRaw = ws.Row(rowNum);
-            if (IsRowEmpty(excelRowRaw, firstCol, lastCol))
+            if (grid.IsRowEmpty(r))
                 continue;
-
+            
             var row = new ExcelRow();
-            foreach (var column in columns)
+            for (var c = 0; c < grid.ColumnCount; c++)
             {
-                // column.Index 는 실제 엑셀 컬럼 인덱스(1-based)
-                var cell = excelRowRaw.Cell(column.Index);
-                var value = ConvertCellValue(cell, column.Type);
+                var column = columns[c];
+                var raw = grid.Get(r, c);
+                var value = ConvertCellValue(raw, column.Type, grid.Address(r, c));
                 row.Cells.Add(new ExcelCell(column, value));
             }
 
@@ -114,16 +113,6 @@ public static partial class ExcelTableParser
         }
 
         return result;
-    }
-
-    private static bool IsRowEmpty(IXLRow row, int firstCol, int lastCol)
-    {
-        for (var col = firstCol; col <= lastCol; col++)
-        {
-            if (!row.Cell(col).IsEmpty())
-                return false;
-        }
-        return true;
     }
 
     private static (ColumnType type, int? length) ParseColumnType(string input)
@@ -158,12 +147,12 @@ public static partial class ExcelTableParser
         return (type, length);
     }
    
-    private static object? ConvertCellValue(IXLCell cell, ColumnType type)
+    private static object? ConvertCellValue(string raw, ColumnType type, string addr)
     {
-        if (cell.IsEmpty())
+        if (string.IsNullOrWhiteSpace(raw))
             return null;
 
-        var s = cell.GetValue<string>()?.Trim();
+        var s = raw.Trim();
         if (string.IsNullOrEmpty(s))
             return null;
 
@@ -174,27 +163,27 @@ public static partial class ExcelTableParser
             
             case ColumnType.Byte:
                 if(!byte.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var bt))
-                    throw new FormatException($"Invalid type format: {s}");
+                    throw new FormatException($"Invalid {type} value '{s}' at {addr}");
                 return bt;
 
             case ColumnType.Int32:
                 if (!int.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var i))
-                    throw new FormatException($"Invalid {type} value '{s}' at {cell.Address}");
+                    throw new FormatException($"Invalid {type} value '{s}' at {addr}");
                 return i;
 
             case ColumnType.Int64:
                 if (!long.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var l))
-                    throw new FormatException($"Invalid {type} value '{s}' at {cell.Address}");
+                    throw new FormatException($"Invalid {type} value '{s}' at {addr}");
                 return l;
 
             case ColumnType.Float:
                 if (!float.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var f))
-                    throw new FormatException($"Invalid {type} value '{s}' at {cell.Address}");
+                    throw new FormatException($"Invalid {type} value '{s}' at {addr}");
                 return f;
 
             case ColumnType.Double:
                 if (!double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var d))
-                    throw new FormatException($"Invalid {type} value '{s}' at {cell.Address}");
+                    throw new FormatException($"Invalid {type} value '{s}' at {addr}");
                 return d;
 
             case ColumnType.Boolean:
@@ -202,18 +191,16 @@ public static partial class ExcelTableParser
                     return b;
                 if (int.TryParse(s, out var bi))
                     return bi != 0;
-                throw new FormatException($"Invalid {type} value '{s}' at {cell.Address}");
+                throw new FormatException($"Invalid {type} value '{s}' at {addr}");
 
             case ColumnType.DateTime:
-                if (cell.DataType == XLDataType.DateTime)
-                    return cell.GetDateTime();
                 if (DateTime.TryParse(
                         s,
                         CultureInfo.InvariantCulture,
                         DateTimeStyles.AssumeUniversal,
                         out var dt))
                     return dt;
-                throw new FormatException($"Invalid {type} value '{s}' at {cell.Address}");
+                throw new FormatException($"Invalid {type} value '{s}' at {addr}");
 
             default:
                 return s;
@@ -224,7 +211,59 @@ public static partial class ExcelTableParser
     private static partial Regex ColumnTypeRegex();
 }
 
+public sealed class SheetGrid(string[,] cells, int firstRow, int firstCol)
+{
+    public int FirstRow { get; } = firstRow;
+    public int FirstCol { get; } = firstCol;
+    public int RowCount { get; } = cells.GetLength(0);
+    public int ColumnCount { get; } = cells.GetLength(1);
 
-    
+    public string Get(int r, int c)
+    {
+        if ((uint)r >= (uint)RowCount || (uint)c >= (uint)ColumnCount)
+            return string.Empty;
+        return cells[r, c];
+    }
+
+    public bool IsRowEmpty(int r)
+    {
+        for (var c = 0; c < ColumnCount; c++)
+        {
+            if (!string.IsNullOrWhiteSpace(Get(r, c)))
+                return false;
+        }
+        return true;
+    }
+
+    public string Address(int r, int c)
+        => $"R{FirstRow + r}C{FirstCol + c}";
+}
+
+public static class XlsxGridReader
+{
+    public static SheetGrid ReadSheet(IXLWorksheet ws)
+    {
+        var used = ws.RangeUsed() ?? throw new InvalidDataException($"Sheet '{ws.Name}' is empty.");
+        
+        var firstRow = used.FirstRowUsed().RowNumber();
+        var lastRow = used.LastRowUsed().RowNumber();
+        var firstCol = used.FirstColumnUsed().ColumnNumber();
+        var lastCol = used.LastColumnUsed().ColumnNumber();
+
+        var rowCount = lastRow - firstRow + 1;
+        var columnCount = lastCol - firstCol + 1;
+
+        var cells = new string[rowCount, columnCount];
+        
+        for (var r = 0; r < rowCount; r++)
+        for (var c = 0; c < columnCount; c++)
+        {
+            var cell = ws.Row(firstRow + r).Cell(firstCol + c);
+            cells[r, c] = cell.GetString()?.Trim() ?? string.Empty;
+        }
+        
+        return new SheetGrid(cells, firstRow, firstCol);
+    }
+}
 
 

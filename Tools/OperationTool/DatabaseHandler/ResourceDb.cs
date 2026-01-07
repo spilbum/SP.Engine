@@ -1,5 +1,4 @@
 using System.Data;
-using DocumentFormat.OpenXml.Office2010.ExcelAc;
 using SP.Core.Accessor;
 using SP.Shared.Database;
 using SP.Shared.Resource;
@@ -8,21 +7,29 @@ namespace OperationTool.DatabaseHandler;
 
 public static class ResourceDb
 {
-    public class ResourceRefsFileEntity : BaseDbEntity
+    public class RefsFileEntity : BaseDbEntity
     {
         [Member("file_id")] public int FileId;
         [Member("comment")] public string? Comment;
         [Member("is_development")] public bool IsDevelopment;
     }
 
-    public class ResourcePatchVersionEntity : BaseDbEntity
+    public class RefsPatchVersionEntity : BaseDbEntity
     {
         [Member("server_group_type")] public string ServerGroupType = "";
-        [Member("resource_version")] public int ResourceVersion;
+        [Member("patch_version")] public int PatchVersion;
         [Member("target_major")] public int TargetMajor;
         [Member("file_id")] public int FileId;
         [Member("comment")] public string? Comment;
         [Member("created_utc")] public DateTime CreatedUtc;
+    }
+    
+    public class RefsTableTargetEntity : BaseDbEntity
+    {
+        [Member("table_name")] public string TableName = "";
+        [Member("target_flags")] public byte TargetFlags;
+        [Member("comment")] public string? Comment;
+        [Member("updated_utc")] public DateTime UpdatedUtc;
     }
 
     public class ClientBuildVersionEntity : BaseDbEntity
@@ -40,14 +47,6 @@ public static class ResourceDb
         [Member("config_value")] public string Value = string.Empty;
     }
 
-    public class ResourceTableTargetEntity : BaseDbEntity
-    {
-        [Member("table_name")] public string TableName = "";
-        [Member("target")] public byte Target;
-        [Member("comment")] public string? Comment;
-        [Member("updated_utc")] public DateTime UpdatedUtc;
-    }
-
     public class MaintenanceEnvEntity : BaseDbEntity
     {
         [Member("server_group_type")] public string ServerGroupType = "";
@@ -61,11 +60,58 @@ public static class ResourceDb
 
     public class MaintenanceBypassEntity : BaseDbEntity
     {
-        [Member("id", IgnoreSet = true)] public int Id;
+        [Member("id", IgnoreGet = true)] public int Id;
         [Member("server_group_type")] public string ServerGroupType = "";
         [Member("kind")] public string Kind = "";
         [Member("value")] public string Value = "";
         [Member("comment")] public string? Comment;
+    }
+
+    public class LocalizationFileEntity : BaseDbEntity
+    {
+        [Member("file_id")] public int FileId;
+        [Member("comment")] public string? Comment;
+        [Member("created_utc", IgnoreGet = true)] public DateTime CreatedUtc;
+    }
+
+    public class LocalizationActiveEntity : BaseDbEntity
+    {
+        [Member("server_group_type")] public string ServerGroupType = "";
+        [Member("store_type")] public string StoreType = "";
+        [Member("file_id")] public int FileId;
+        [Member("updated_utc")] public DateTime UpdatedUtc;
+    }
+    
+    public static async Task UpsertLocalizationActiveAsync(DbConn conn, LocalizationActiveEntity entity, CancellationToken ct)
+    {
+        using var cmd = conn.CreateCommand(CommandType.StoredProcedure, "proc_upsert_localization_active");
+        cmd.AddWithEntity(entity);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+    
+    public static async Task<List<LocalizationActiveEntity>> GetLocalizationActivesAsync(DbConn conn, CancellationToken ct)
+    {
+        using var cmd = conn.CreateCommand(CommandType.StoredProcedure, "proc_get_localization_actives");
+        return await cmd.ExecuteReaderListAsync<LocalizationActiveEntity>(ct);
+    }
+
+    public static async Task InsertLocalizationFileAsync(DbConn conn, LocalizationFileEntity entity, CancellationToken ct)
+    {
+        using var cmd = conn.CreateCommand(CommandType.StoredProcedure, "proc_insert_localization_file");
+        cmd.AddWithEntity(entity);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+    
+    public static async Task<int> GetLatestLocalizationFileIdAsync(DbConn conn, CancellationToken ct)
+    {
+        using var cmd = conn.CreateCommand(CommandType.StoredProcedure, "proc_get_latest_localization_file_id");
+        return await cmd.ExecuteScalarAsync<int>(ct);
+    }
+    
+    public static async Task<List<LocalizationFileEntity>> GetLocalizationFilesAsync(DbConn conn, CancellationToken ct)
+    {
+        using var cmd = conn.CreateCommand(CommandType.StoredProcedure, "proc_get_localization_files");
+        return await cmd.ExecuteReaderListAsync<LocalizationFileEntity>(ct);
     }
 
     public static async Task<MaintenanceEnvEntity?> GetMaintenanceEnvAsync(
@@ -109,16 +155,16 @@ public static class ResourceDb
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
-    public static async Task<List<ResourceTableTargetEntity>> GetResourceTableTargetsAsync(DbConn conn, CancellationToken ct)
+    public static async Task<List<RefsTableTargetEntity>> GetRefsTableTargetsAsync(DbConn conn, CancellationToken ct)
     {
-        using var cmd = conn.CreateCommand(CommandType.StoredProcedure, "proc_get_resource_table_targets");
-        return await cmd.ExecuteReaderListAsync<ResourceTableTargetEntity>(ct);
+        using var cmd = conn.CreateCommand(CommandType.StoredProcedure, "proc_get_refs_table_targets");
+        return await cmd.ExecuteReaderListAsync<RefsTableTargetEntity>(ct);
     }
 
-    public static async Task UpsertResourceTableTargetAsync(
-        DbConn conn, ResourceTableTargetEntity entity, CancellationToken ct)
+    public static async Task UpsertRefsTableTargetAsync(
+        DbConn conn, RefsTableTargetEntity entity, CancellationToken ct)
     {
-        var cmd = conn.CreateCommand(CommandType.StoredProcedure, "proc_upsert_resource_table_target");
+        var cmd = conn.CreateCommand(CommandType.StoredProcedure, "proc_upsert_refs_table_target");
         cmd.AddWithEntity(entity);
         await cmd.ExecuteNonQueryAsync(ct);
     }
@@ -135,28 +181,30 @@ public static class ResourceDb
         return await cmd.ExecuteReaderListAsync<ClientBuildVersionEntity>(ct);
     }
 
-    public static async Task<List<ResourcePatchVersionEntity>> GetLatestResourcePatchVersions(DbConn conn, ServerGroupType serverGroupType, int count, CancellationToken ct)
+    public static async Task<List<RefsPatchVersionEntity>> GetRefsPatchVersions(
+        DbConn conn,
+        ServerGroupType serverGroupType, 
+        CancellationToken ct)
     {
-        using var cmd = conn.CreateCommand(CommandType.StoredProcedure, "proc_get_latest_resource_patch_versions");
+        using var cmd = conn.CreateCommand(CommandType.StoredProcedure, "proc_get_refs_patch_versions");
         cmd.Add("server_group_type", DbType.String, serverGroupType.ToString());
-        cmd.Add("count", DbType.Int32, count);
-        return await cmd.ExecuteReaderListAsync<ResourcePatchVersionEntity>(ct);
+        return await cmd.ExecuteReaderListAsync<RefsPatchVersionEntity>(ct);
     }
-    public static async Task<List<ResourceRefsFileEntity>> GetResourceRefsFilesAsync(DbConn conn, CancellationToken ct)
+    public static async Task<List<RefsFileEntity>> GetRefsFilesAsync(DbConn conn, CancellationToken ct)
     {
-        using var cmd = conn.CreateCommand(CommandType.StoredProcedure, "proc_get_resource_refs_files");
-        return await cmd.ExecuteReaderListAsync<ResourceRefsFileEntity>(ct);
+        using var cmd = conn.CreateCommand(CommandType.StoredProcedure, "proc_get_refs_files");
+        return await cmd.ExecuteReaderListAsync<RefsFileEntity>(ct);
     }
 
-    public static async Task<int> GetLatestResourceRefsFileIdAsync(DbConn conn, CancellationToken ct)
+    public static async Task<int> GetLatestRefsFileIdAsync(DbConn conn, CancellationToken ct)
     {
-        using var cmd = conn.CreateCommand(CommandType.StoredProcedure, "proc_get_latest_resource_refs_file_id");
+        using var cmd = conn.CreateCommand(CommandType.StoredProcedure, "proc_get_latest_refs_file_id");
         return await cmd.ExecuteScalarAsync<int>(ct);
     }
 
-    public static async Task<int> GetLatestResourceVersionAsync(DbConn conn, ServerGroupType serverGroupType, CancellationToken ct)
+    public static async Task<int> GetLatestPatchVersionAsync(DbConn conn, ServerGroupType serverGroupType, CancellationToken ct)
     {
-        using var cmd = conn.CreateCommand(CommandType.StoredProcedure, "proc_get_latest_resource_version");
+        using var cmd = conn.CreateCommand(CommandType.StoredProcedure, "proc_get_latest_patch_version");
         cmd.Add("server_group_type", DbType.String, serverGroupType.ToString());
         var latest = await cmd.ExecuteScalarAsync<int>(ct);
         return latest;
@@ -172,22 +220,22 @@ public static class ResourceDb
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
-    public static async Task InsertResourcePatchVersionAsync(
+    public static async Task InsertRefsPatchVersionAsync(
         DbConn conn,
-        ResourcePatchVersionEntity entity,
+        RefsPatchVersionEntity entity,
         CancellationToken ct)
     {
-        using var cmd = conn.CreateCommand(CommandType.StoredProcedure, "proc_insert_resource_patch_version");
+        using var cmd = conn.CreateCommand(CommandType.StoredProcedure, "proc_insert_refs_patch_version");
         cmd.AddWithEntity(entity);
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
-    public static async Task InsertResourceRefsFileAsync(
+    public static async Task InsertRefsFileAsync(
         DbConn conn,
-        ResourceRefsFileEntity entity,
+        RefsFileEntity entity,
         CancellationToken ct)
     {
-        using var cmd = conn.CreateCommand(CommandType.StoredProcedure, "proc_insert_resource_refs_file");
+        using var cmd = conn.CreateCommand(CommandType.StoredProcedure, "proc_insert_refs_file");
         cmd.AddWithEntity(entity);
         await cmd.ExecuteNonQueryAsync(ct);
     }

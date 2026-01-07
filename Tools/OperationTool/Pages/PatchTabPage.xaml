@@ -12,116 +12,115 @@
     </ContentPage.Behaviors>
     
     <ContentPage.Content>
-        <ScrollView>
-            <Grid Padding="16"
-                  HorizontalOptions="Center">
-                <Frame Padding="12"
-                       BorderColor="{DynamicResource Gray300}"
-                       BackgroundColor="{DynamicResource White}"
-                       HasShadow="False"
-                       HorizontalOptions="Center"
-                       MaximumHeightRequest="900">
-                    
-                    <Grid RowSpacing="12">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-                        
-                        <!-- 타이틀 -->
-                        <Label Grid.Row="0"
-                               Text="Latest Patch Version History"
+         <Grid Padding="16" RowDefinitions="*">
+
+            <Frame Padding="16"
+                   BorderColor="{DynamicResource Gray300}"
+                   BackgroundColor="{DynamicResource White}"
+                   HasShadow="False"
+                   HorizontalOptions="Fill"
+                   VerticalOptions="Fill"
+                   MaximumWidthRequest="980">
+
+                <Grid RowSpacing="12"
+                      RowDefinitions="Auto,Auto,*,Auto">
+
+                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                        <Label Text="Latest Patch Version History"
                                FontAttributes="Bold"
                                FontSize="18"
-                               Margin="0,0,0,4" />
-                        
-                        <!-- 필터 영역 -->
-                        <Grid Grid.Row="1"
-                              ColumnSpacing="8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="200" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            
-                            <Label Grid.Column="0"
-                                   Text="Server Group Type:"
-                                   VerticalTextAlignment="Center" />
-                            
-                            <Picker Grid.Column="1"
-                                    ItemsSource="{Binding ServerGroupTypes}"
-                                    SelectedItem="{Binding SelectedServerGroupType}"></Picker>
-                        </Grid>
-                        
-                        <Grid Grid.Row="2">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="*" />
-                            </Grid.RowDefinitions>
-                            
-                            <!-- 컬럼 헤더 -->
-                            <Grid Grid.Row="0"
-                                  Padding="0,8,0,4"
-                                  ColumnSpacing="8"
-                                  ColumnDefinitions="150,150,100,250,150"
-                                  BackgroundColor="{DynamicResource Gray100}">
-                                <Label Grid.Column="0" Text="Resource Version" FontAttributes="Bold" />
-                                <Label Grid.Column="1" Text="Target Major" FontAttributes="Bold" />
-                                <Label Grid.Column="2" Text="File ID" FontAttributes="Bold" />
-                                <Label Grid.Column="3" Text="Comment" FontAttributes="Bold" />
-                                <Label Grid.Column="4" Text="Created" FontAttributes="Bold" />
-                            </Grid>
-                            
-                            <!-- 데이터 행 -->
-                            <CollectionView Grid.Row="1"
-                                            Margin="0,2,0,0"
-                                            ItemsSource="{Binding ResourcePatchVersions}"
-                                            SelectionMode="Single">
-                                                                <CollectionView.ItemTemplate>
-                                    <DataTemplate>
-                                        <Grid Padding="0,2"
-                                              ColumnSpacing="8"
-                                              ColumnDefinitions="150,150,100,250,150">
-                                            <Label Grid.Column="0"
-                                                   Text="{Binding ResourceVersion}"
-                                                   LineBreakMode="TailTruncation" />
-                                            <Label Grid.Column="1"
-                                                   Text="{Binding TargetMajor}"
-                                                   LineBreakMode="TailTruncation" />
-                                            <Label Grid.Column="2"
-                                                   Text="{Binding FileId}"
-                                                   LineBreakMode="TailTruncation" />
-                                            <Label Grid.Column="3"
-                                                   Text="{Binding Comment}"
-                                                   LineBreakMode="TailTruncation" />
-                                            <Label Grid.Column="4">
-                                                <Label.Text>
-                                                    <x:Binding Path="CreatedUtc"
-                                                               StringFormat="{}{0:yyyy-MM-dd HH:mm:ss}" />
-                                                </Label.Text>
-                                            </Label>
-                                        </Grid>
-                                    </DataTemplate>
-                                </CollectionView.ItemTemplate>
-                            </CollectionView>
-                        </Grid>
-                        
-                        <HorizontalStackLayout Grid.Row="3"
-                                               Spacing="8"
-                                               HorizontalOptions="End">
-                            <Button Text="Generate Refs"
-                                    WidthRequest="150"
-                                    Command="{Binding GoToGenerateFileCommand}" />
+                               VerticalTextAlignment="Center" />
 
-                            <Button Text="Run Patch"
-                                    WidthRequest="150"
-                                    Command="{Binding GoToRunPathCommand}" />
-                        </HorizontalStackLayout>
+                        <ActivityIndicator Grid.Column="1"
+                                           IsRunning="{Binding IsBusy}"
+                                           IsVisible="{Binding IsBusy}"
+                                           VerticalOptions="Center" />
                     </Grid>
-                </Frame>
-            </Grid>
-        </ScrollView>
+
+                    <Grid Grid.Row="1"
+                          ColumnSpacing="12"
+                          ColumnDefinitions="Auto,200">
+                        <Label Grid.Column="0"
+                               Text="Server Group Type:"
+                               VerticalTextAlignment="Center" />
+
+                        <Picker Grid.Column="1"
+                                ItemsSource="{Binding ServerGroupTypes}"
+                                SelectedItem="{Binding SelectedServerGroupType}" />
+                    </Grid>
+
+                    <Grid Grid.Row="2" RowDefinitions="Auto,*">
+                        <Grid Grid.Row="0"
+                              Padding="8,10"
+                              ColumnSpacing="10"
+                              ColumnDefinitions="160,110,90,*,160"
+                              BackgroundColor="{DynamicResource Gray100}">
+                            <Label Grid.Column="0" Text="Patch Version" FontAttributes="Bold" />
+                            <Label Grid.Column="1" Text="Target Major" FontAttributes="Bold" />
+                            <Label Grid.Column="2" Text="File ID" FontAttributes="Bold" />
+                            <Label Grid.Column="3" Text="Comment" FontAttributes="Bold" />
+                            <Label Grid.Column="4" Text="Created" FontAttributes="Bold" HorizontalTextAlignment="End" />
+                        </Grid>
+
+                        <CollectionView Grid.Row="1"
+                                        Margin="0,6,0,0"
+                                        ItemsSource="{Binding RefsPatchVersions}">
+                            <CollectionView.EmptyView>
+                                <VerticalStackLayout Padding="0,20" Spacing="8" HorizontalOptions="Center">
+                                    <Label Text="No data."
+                                           FontAttributes="Bold"
+                                           HorizontalTextAlignment="Center" />
+                                </VerticalStackLayout>
+                            </CollectionView.EmptyView>
+
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Padding="8,6"
+                                          ColumnSpacing="10"
+                                          ColumnDefinitions="160,110,90,*,160">
+
+                                        <VisualStateManager.VisualStateGroups>
+                                            <VisualStateGroup Name="CommonStates">
+                                                <VisualState Name="Normal" />
+                                                <VisualState Name="Selected">
+                                                    <VisualState.Setters>
+                                                        <Setter Property="BackgroundColor" Value="{DynamicResource Gray200}" />
+                                                    </VisualState.Setters>
+                                                </VisualState>
+                                            </VisualStateGroup>
+                                        </VisualStateManager.VisualStateGroups>
+
+                                        <Label Grid.Column="0" Text="{Binding PatchVersion}" />
+                                        <Label Grid.Column="1" Text="{Binding TargetMajor}" />
+                                        <Label Grid.Column="2" Text="{Binding FileId}" />
+                                        <Label Grid.Column="3" Text="{Binding Comment}" LineBreakMode="TailTruncation" />
+                                        <Label Grid.Column="4"
+                                               Text="{Binding CreatedUtcText}"
+                                               HorizontalTextAlignment="End"
+                                               LineBreakMode="NoWrap"
+                                               Opacity="0.9" />
+                                    </Grid>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                        </CollectionView>
+                    </Grid>
+
+                    <HorizontalStackLayout Grid.Row="3"
+                                           Spacing="10"
+                                           HorizontalOptions="End">
+
+                        <Button Text="Generate .refs file"
+                                Command="{Binding GoToGenerateRefsFileCommand}" />
+
+                        <Button Text="Diff"
+                                Command="{Binding GoToRefsDiffCommand}"/>
+
+                        <Button Text="Patch"
+                                Command="{Binding GoToPatchRefsFileCommand}"/>
+                    </HorizontalStackLayout>
+
+                </Grid>
+            </Frame>
+        </Grid>
     </ContentPage.Content>
 </ContentPage>

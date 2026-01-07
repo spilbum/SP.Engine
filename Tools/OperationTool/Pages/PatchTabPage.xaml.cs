@@ -9,5 +9,12 @@ public partial class PatchTabPage : ContentPage
         InitializeComponent();
         BindingContext = vm;
     }
+    
+    protected override async void OnAppearing()
+    {
+        base.OnAppearing();
+        if (BindingContext is PatchTabViewModel vm)
+            await vm.LoadAsync();
+    }
 }
 

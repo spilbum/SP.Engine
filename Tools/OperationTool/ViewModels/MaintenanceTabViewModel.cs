@@ -43,7 +43,6 @@ public class MaintenanceBypassModel : ViewModelBase
 
 public class MaintenanceTabViewModel : ViewModelBase
 {
-    private readonly IDialogService _dialog;
     private readonly IDbConnector _db;
     private readonly ResourceServerWebService _web;
     
@@ -128,14 +127,10 @@ public class MaintenanceTabViewModel : ViewModelBase
     public AsyncRelayCommand ApplyEnvCommand { get; }
     public AsyncRelayCommand AddBypassCommand { get; }
     public AsyncRelayCommand<MaintenanceBypassModel> RemoveBypassCommand { get; }
-    public AsyncRelayCommand RefreshCommand { get; }
-
     public MaintenanceTabViewModel(
-        IDialogService dialog,
         IDbConnector db,
         ResourceServerWebService web)
     {
-        _dialog = dialog;
         _db = db;
         _web = web;
         
@@ -157,7 +152,6 @@ public class MaintenanceTabViewModel : ViewModelBase
         ApplyEnvCommand = new AsyncRelayCommand(ApplyEnv);
         AddBypassCommand = new AsyncRelayCommand(AddBypassAsync);
         RemoveBypassCommand = new AsyncRelayCommand<MaintenanceBypassModel>(RemoveAsync);
-        RefreshCommand = new AsyncRelayCommand(LoadAsync);
     }
     
     private static (MaintenanceStatusKind kind, string text) BuildStatus(ResourceDb.MaintenanceEnvEntity? env)
@@ -219,7 +213,7 @@ public class MaintenanceTabViewModel : ViewModelBase
         }
         catch (Exception e)
         {
-            await _dialog.AlertAsync("Error", $"Failed to add bypass: {e.Message}");
+            await Utils.AlertAsync(AlertLevel.Error, $"Failed to add bypass: {e.Message}");
         }
     }
 
@@ -241,7 +235,7 @@ public class MaintenanceTabViewModel : ViewModelBase
         }
         catch (Exception e)
         {
-            await _dialog.AlertAsync("Error", $"Failed to remove bypass: {e.Message}");
+            await Utils.AlertAsync(AlertLevel.Error, $"Failed to remove bypass: {e.Message}");
         }
     }
 
@@ -284,11 +278,11 @@ public class MaintenanceTabViewModel : ViewModelBase
         }
         catch (Exception e)
         {
-            await _dialog.AlertAsync("Error", $"Failed to apply maintenance env: {e.Message}");
+            await Utils.AlertAsync(AlertLevel.Error, $"Failed to apply maintenance env: {e.Message}");
         }
     }
 
-    private async Task LoadAsync()
+    public async Task LoadAsync()
     {
         using var cts = new CancellationTokenSource();
         var ct = cts.Token;
@@ -327,7 +321,7 @@ public class MaintenanceTabViewModel : ViewModelBase
         }
         catch (Exception e)
         {
-            await _dialog.AlertAsync("Error", $"Failed to load maintenance: {e.Message}");
+            await Utils.AlertAsync(AlertLevel.Error, $"Load failed: {e.Message}");
         }
     }
 }
