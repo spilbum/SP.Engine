@@ -18,7 +18,7 @@ public sealed class CheckClientRes
     public bool IsForceUpdate { get; set; }
     public bool IsSoftUpdate { get; set; }
     public string LatestBuildVersion { get; set; } = string.Empty;
-    public int LatestResourceVersion { get; set; }
+    public int LatestPatchVersion { get; set; }
     public string? DownloadSchsFileUrl { get; set; }
     public string? DownloadRefsFileUrl { get; set; }
     public string? StoreUrl { get; set; }

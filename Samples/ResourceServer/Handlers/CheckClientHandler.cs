@@ -9,7 +9,7 @@ namespace ResourceServer.Handlers;
 public sealed class CheckClientHandler(
     IHttpContextAccessor http,
     IBuildPolicyStore build,
-    IResourcePatchStore resource,
+    IRefsPatchStore refs,
     IServerStore serverStore,
     IResourceConfigStore config,
     IMaintenanceStore maintenance,
@@ -81,43 +81,43 @@ public sealed class CheckClientHandler(
         res.IsForceUpdate = false;
         res.IsSoftUpdate = policy.IsSoftUpdate(buildVersion);
         res.LatestBuildVersion = policy.LatestBuildVersion.ToString();
-
-        var table = resource.GetLatest(policy.ServerGroupType, buildVersion.Major);
-        if (table != null)
+        
+        var patchBaseUrl = config.Get("patch_base_url");
+        if (string.IsNullOrWhiteSpace(patchBaseUrl))
         {
-            var latest = table.PatchVersion;
+            throw new ErrorCodeException(ErrorCode.InternalError, "Not found config: patch_base_url");
+        }
+
+        var latestRefs = refs.GetLatest(policy.ServerGroupType, buildVersion.Major);
+        if (latestRefs != null)
+        {
+            var latest = latestRefs.PatchVersion;
             var cur = req.ResourceVersion ?? 0;
 
-            res.LatestResourceVersion = latest;
+            res.LatestPatchVersion = latest;
 
             if (cur < latest)
             {
-                var baseUrl = config.Get("patch_base_url");
-                if (!string.IsNullOrWhiteSpace(baseUrl))
-                {
-                    res.DownloadSchsFileUrl =
-                        PatchUrl.BuildRefsPatchUrl(baseUrl, table.FileId, "client", "schs");
+                res.DownloadSchsFileUrl =
+                    PatchUtil.BuildRefsDownloadUrl(patchBaseUrl, "client", latestRefs.FileId, PatchConst.SchsFile);
                 
-                    res.DownloadRefsFileUrl =
-                        PatchUrl.BuildRefsPatchUrl(baseUrl, table.FileId, "server", "refs");
-                }
+                res.DownloadRefsFileUrl =
+                    PatchUtil.BuildRefsDownloadUrl(patchBaseUrl, "server", latestRefs.FileId, PatchConst.RefsFile);
             }
         }
 
         var loc = localization.GetActive(policy.ServerGroupType, policy.StoreType);
         if (loc != null)
         {
-            var baseUrl = config.Get("patch_base_url");
-            if (!string.IsNullOrWhiteSpace(baseUrl))
-            {
-                res.DownloadLocsFileUrl =
-                    PatchUrl.BuildLocalizationPatchUrl(baseUrl, loc.FileId, "locs");
-            }
+            res.DownloadLocsFileUrl =
+                PatchUtil.BuildLocalizationDownloadUrl(patchBaseUrl, loc.FileId, PatchConst.LocsFile);
         }
 
         var server = FindAvailableServer(policy.ServerGroupType, buildVersion);
         if (server == null)
+        {
             throw new ErrorCodeException(ErrorCode.NoServerAvailable, "No server available");
+        }
 
         res.Server = server;
         return ValueTask.FromResult(res);

@@ -5,6 +5,7 @@ using CommunityToolkit.Maui.Storage;
 using OperationTool.DatabaseHandler;
 using OperationTool.Localization;
 using OperationTool.Services;
+using SP.Shared.Resource;
 
 namespace OperationTool.ViewModels;
 
@@ -24,6 +25,8 @@ public sealed class GenerateLocalizationFileViewModel : ViewModelBase
     private int _totalKeys;
     private string? _comment;
     private LocalizationParseResult? _parsed;
+
+    private CancellationTokenSource? _cts;
 
     public int FileId
     {
@@ -128,10 +131,12 @@ public sealed class GenerateLocalizationFileViewModel : ViewModelBase
         GenerateCommand = new AsyncRelayCommand(GenerateAsync, () => CanGenerate);
     }
 
-    public async Task LoadAsync(CancellationToken ct = default)
+    public async Task LoadAsync()
     {
         if (IsBusy) return;
 
+        var ct = ResetCts(TimeSpan.FromSeconds(30));
+        
         try
         {
             IsBusy = true;
@@ -149,9 +154,8 @@ public sealed class GenerateLocalizationFileViewModel : ViewModelBase
     private async Task BrowseExcelAsync()
     {
         if (!CanBrowseExcel) return;
-        
-        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
-        var ct = cts.Token;
+
+        var ct = ResetCts(TimeSpan.FromSeconds(30));
 
         try
         {
@@ -160,7 +164,7 @@ public sealed class GenerateLocalizationFileViewModel : ViewModelBase
             var result = await _filePicker.PickAsync();
             if (string.IsNullOrEmpty(result?.FileName))
                 return;
-        
+
             if (!Utils.ValidateExtension(result, "xlsx"))
             {
                 await Toast.Make("Only XLSX files can be selected.").Show(ct);
@@ -171,7 +175,7 @@ public sealed class GenerateLocalizationFileViewModel : ViewModelBase
 
             _parsed = await _localization.ParseAsync(ExcelFilePath, ct);
             ApplyParsed(_parsed);
-            
+
             await Toast.Make("Localization excel loaded.", ToastDuration.Long).Show(ct);
         }
         catch (Exception e)
@@ -212,8 +216,7 @@ public sealed class GenerateLocalizationFileViewModel : ViewModelBase
 
     private async Task BrowseOutputAsync()
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
-        var ct = cts.Token;
+        var ct = ResetCts(TimeSpan.FromSeconds(30));
 
         try
         {
@@ -252,14 +255,13 @@ public sealed class GenerateLocalizationFileViewModel : ViewModelBase
         if (!ok)
             return;
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
-        var ct = cts.Token;
+        var ct = ResetCts(TimeSpan.FromMinutes(1));
 
         try
         {
             IsBusy = true;
             
-            var locsPath = await _localization.GenerateAsync(_parsed, FileId, OutputFolder, ct);
+            var filePath = await _localization.GenerateLocsFileAsync(_parsed, FileId, OutputFolder, ct);
             
             using var conn = await _db.OpenAsync(ct);
             await conn.BeginTransactionAsync(ct);
@@ -272,11 +274,11 @@ public sealed class GenerateLocalizationFileViewModel : ViewModelBase
                     Comment = Comment
                 }, ct);
 
-            await UploadIfExistsAsync($"patch/localization/{FileId}.locs", locsPath, ct);
+            await UploadIfExistsAsync(PatchUtil.BuildLocalizationUploadKey(FileId, PatchConst.LocsFile), filePath, ct);
             
             await conn.CommitAsync(ct);
             
-            await Utils.AlertAsync(AlertLevel.Info, $"Generate .locs file: {locsPath}");
+            await Utils.AlertAsync(AlertLevel.Info, $"Generated: {filePath}");
             await Shell.Current.GoToAsync("..");
         }
         catch (Exception e)
@@ -296,5 +298,12 @@ public sealed class GenerateLocalizationFileViewModel : ViewModelBase
         
         await using var stream = File.OpenRead(filePath);
         await _fileUploader.UploadAsync(key, stream, info.Length, ct);
+    }
+
+    private CancellationToken ResetCts(TimeSpan timeout)
+    {
+        try { _cts?.Cancel(); } catch { /* ignore */ }
+        _cts = new CancellationTokenSource(timeout);
+        return _cts.Token;
     }
 }

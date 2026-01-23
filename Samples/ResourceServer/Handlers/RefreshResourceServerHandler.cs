@@ -7,7 +7,7 @@ public sealed class RefreshResourceServerHandler(
     IHttpContextAccessor http,
     IBuildPolicyStore build,
     IResourceConfigStore config,
-    IResourcePatchStore resource,
+    IRefsPatchStore refs,
     IMaintenanceStore maintenance,
     ILocalizationStore localization
     ) : JsonHandlerBase<RefreshResourceServerReq, RefreshResourceServerRes>(http)
@@ -19,7 +19,7 @@ public sealed class RefreshResourceServerHandler(
     {
         await build.ReloadAsync(ct);
         await config.ReloadAsync(ct);
-        await resource.ReloadAsync(ct);
+        await refs.ReloadAsync(ct);
         await maintenance.ReloadAsync(ct);
         await localization.ReloadAsync(ct);
         

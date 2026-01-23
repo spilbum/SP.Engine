@@ -1,0 +1,8 @@
+[19:38:19.459 INF] [T:92] [Game] [Rank] State changed: "Open" -> "Closing"
+[19:38:19.494 INF] [T:92] [Game] [Rank] State changed: "Closing" -> "Closed"
+[19:38:19.495 INF] [T:92] [Game] [Rank] Disconnected
+[19:38:19.498 INF] [T:7] [Game] [Rank] State changed: "Closed" -> "Connecting"
+[19:38:19.504 INF] [T:92] [Game] [Rank] State changed: "Connecting" -> "Handshake"
+[19:38:19.559 INF] [T:114] [Game] [Rank] State changed: "Handshake" -> "Open"
+[19:38:19.559 DBG] [T:114] [Game] [Rank] Connected
+[19:38:19.561 INF] [T:7] [Game] Register succeeded: Rank

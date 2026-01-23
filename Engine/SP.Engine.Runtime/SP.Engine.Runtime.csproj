@@ -13,7 +13,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\Shared\SP.Core\SP.Core.csproj"/>
+        <ProjectReference Include="..\..\Core\SP.Core\SP.Core.csproj"/>
     </ItemGroup>
 
     <ItemGroup>

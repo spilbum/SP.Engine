@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using AVFoundation;
 using CommunityToolkit.Maui.Alerts;
 using CommunityToolkit.Maui.Core;
 using CommunityToolkit.Maui.Storage;
@@ -268,7 +269,7 @@ public sealed class GenerateRefsFileViewModel : ViewModelBase
                 },
                 ct);
 
-            var versionDir = Path.Combine(OutputFolder, $"{FileId}");
+            var baseDir = Path.Combine(OutputFolder, $"{FileId:D6}");
             var selected = ExcelTables
                 .Where(table => table.IsChecked)
                 .ToList();
@@ -276,14 +277,14 @@ public sealed class GenerateRefsFileViewModel : ViewModelBase
             var clientTables = selected.Where(t => (t.Target & PatchTarget.Client) != 0).ToList();
             var serverTables = selected.Where(t => (t.Target & PatchTarget.Server) != 0).ToList();
 
-            await BuildAndUploadAsync(FileId, PatchTarget.Client, clientTables, versionDir, ct);
-            await BuildAndUploadAsync(FileId, PatchTarget.Server, serverTables, versionDir, ct);
+            await BuildAndUploadAsync(FileId, PatchTarget.Client, clientTables, baseDir, ct);
+            await BuildAndUploadAsync(FileId, PatchTarget.Server, serverTables, baseDir, ct);
 
             if (IsGenerateCode)
             {
                 var codeDir = IsDevelopment
-                    ? Path.Combine(versionDir, "code", "dev")
-                    : Path.Combine(versionDir, "code");
+                    ? Path.Combine(baseDir, "code", "dev")
+                    : Path.Combine(baseDir, "code");
 
                 var schemas = selected.Select(t => t.GetSchema()).ToList();
                 ReferenceCodeGenerator.Generate(schemas, codeDir, "SP.Shared.Resource");
@@ -291,7 +292,7 @@ public sealed class GenerateRefsFileViewModel : ViewModelBase
 
             await conn.CommitAsync(ct);
 
-            await Utils.OpenFolderAsync(versionDir);
+            await Utils.OpenFolderAsync(baseDir);
             await Shell.Current.GoToAsync("..");
         }
         catch (Exception e)
@@ -313,39 +314,40 @@ public sealed class GenerateRefsFileViewModel : ViewModelBase
     {
         if (excelTables.Count == 0)
             return;
-
-        var suffix = target.ToString().ToLower();
+        
+        var targetStr = target.ToString().ToLower();
+        var targetDir = Path.Combine(versionDir, targetStr);
         
         // .sch
-        var schsDir = Path.Combine(versionDir, $"schs.{suffix}");
+        var schsDir = Path.Combine(targetDir, $"{PatchConst.SchsFile}");
         foreach (var table in excelTables)
         {
             await SchFileWriter.WriteAsync(
                 table.GetSchema(),
-                Path.Combine(schsDir, $"{table.Name}.sch"),
+                Path.Combine(schsDir, $"{table.Name}.{PatchConst.SchFile}"),
                 ct);
         }
 
-        var schsFilePath = Path.Combine(versionDir, $"{fileId}.{suffix}.schs");
+        var schsFilePath = Path.Combine(targetDir, $"{fileId}.{PatchConst.SchsFile}");
         await SchsPackWriter.WriteAsync(schsDir, schsFilePath, ct);
 
         // .ref
-        var refsDir = Path.Combine(versionDir, $"refs.{suffix}");
+        var refsDir = Path.Combine(targetDir, $"{PatchConst.RefsFile}");
         foreach (var table in excelTables)
         {
             await RefFileWriter.WriteAsync(
                 table.GetSchema(),
                 table.GetData(),
-                Path.Combine(refsDir, $"{table.Name}.ref"),
+                Path.Combine(refsDir, $"{table.Name}.{PatchConst.RefFile}"),
                 ct);
         }
 
-        var refsFilePath = Path.Combine(versionDir, $"{fileId}.{suffix}.refs");
+        var refsFilePath = Path.Combine(targetDir, $"{fileId}.{PatchConst.RefsFile}");
         await RefsPackWriter.WriteAsync(refsDir, refsFilePath, ct);
         
         // 파일 업로드
-        await UploadIfExistsAsync($"patch/refs/{fileId}.{suffix}.schs", schsFilePath, ct);
-        await UploadIfExistsAsync($"patch/refs/{fileId}.{suffix}.refs", refsFilePath, ct);
+        await UploadIfExistsAsync(PatchUtil.BuildRefsUploadKey(fileId, targetStr, PatchConst.SchsFile), schsFilePath, ct);
+        await UploadIfExistsAsync(PatchUtil.BuildRefsUploadKey(fileId, targetStr, PatchConst.RefsFile), refsFilePath, ct);
     }
 
     private async Task UploadIfExistsAsync(string key, string filePath, CancellationToken ct)

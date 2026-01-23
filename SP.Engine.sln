@@ -4,7 +4,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SP.Engine.Client", "Engine\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SP.Engine.Server", "Engine\SP.Engine.Server\SP.Engine.Server.csproj", "{54C11566-C6BB-4037-AC9B-DFF92D0B0D46}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SP.Core", "Shared\SP.Core\SP.Core.csproj", "{31B27FEA-3F24-4759-AB25-F873BFB43F4E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SP.Core", "Core\SP.Core\SP.Core.csproj", "{31B27FEA-3F24-4759-AB25-F873BFB43F4E}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SP.Engine.Runtime", "Engine\SP.Engine.Runtime\SP.Engine.Runtime.csproj", "{45091294-5BB3-4443-802D-FA9B9BB0A220}"
 EndProject

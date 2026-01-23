@@ -9,7 +9,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\SP.Core\SP.Core.csproj"/>
+        <ProjectReference Include="..\..\Core\SP.Core\SP.Core.csproj"/>
         <ProjectReference Include="..\SP.Shared.Database\SP.Shared.Database.csproj"/>
     </ItemGroup>
 

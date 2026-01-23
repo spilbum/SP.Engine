@@ -18,10 +18,11 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddResourceServices(this IServiceCollection s)
     {
         s.AddSingleton<IBuildPolicyStore, BuildPolicyStore>();
-        s.AddSingleton<IResourcePatchStore, ResourcePatchStore>();
+        s.AddSingleton<IRefsPatchStore, RefsPatchStore>();
         s.AddSingleton<IResourceConfigStore, ResourceConfigStore>();
         s.AddSingleton<IServerStore, InMemoryServerStore>();
         s.AddSingleton<IMaintenanceStore, MaintenanceStore>();
+        s.AddSingleton<ILocalizationStore, LocalizationStore>();
         s.AddHostedService<StartupLoader>();
         return s;
     }

@@ -38,7 +38,7 @@ internal static class Program
             return;
         }
 
-        _resourceVersion = response.LatestResourceVersion;
+        _resourceVersion = response.LatestPatchVersion;
 
         if (!string.IsNullOrEmpty(response.DownloadSchsFileUrl) && !string.IsNullOrEmpty(response.DownloadRefsFileUrl))
         {

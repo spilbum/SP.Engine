@@ -1,4 +1,5 @@
 using OperationTool.Localization;
+using SP.Shared.Resource;
 using SP.Shared.Resource.Localization;
 
 namespace OperationTool.Services;
@@ -6,7 +7,7 @@ namespace OperationTool.Services;
 public interface ILocalizationService
 {
     Task<LocalizationParseResult> ParseAsync(string xlsxFilePath, CancellationToken ct);
-    Task<string> GenerateAsync(LocalizationParseResult result, int fileId, string outputDir, CancellationToken ct);
+    Task<string> GenerateLocsFileAsync(LocalizationParseResult result, int fileId, string outputDir, CancellationToken ct);
 }
 
 public class LocalizationService(IFileUploader fileUploader) : ILocalizationService
@@ -14,17 +15,17 @@ public class LocalizationService(IFileUploader fileUploader) : ILocalizationServ
     public async Task<LocalizationParseResult> ParseAsync(string xlsxFilePath, CancellationToken ct)
         => await Task.Run(() => LocalizationParser.ParseFile(xlsxFilePath), ct);
     
-    public async Task<string> GenerateAsync(
+    public async Task<string> GenerateLocsFileAsync(
         LocalizationParseResult result,
         int fileId,
         string outputDir,
         CancellationToken ct)
     {
-        var versionDir = Path.Combine(outputDir, $"{fileId}");
-        Directory.CreateDirectory(versionDir);
+        var baseDir = Path.Combine(outputDir, $"{fileId:D6}");
+        Directory.CreateDirectory(baseDir);
         
-        var locsDir = Path.Combine(versionDir, "locs");
-        Directory.CreateDirectory(locsDir);
+        var fileDir = Path.Combine(baseDir, $"{PatchConst.LocsFile}");
+        Directory.CreateDirectory(fileDir);
         
         foreach (var lang in result.Languages)
         {
@@ -35,15 +36,14 @@ public class LocalizationService(IFileUploader fileUploader) : ILocalizationServ
             await LocFileWriter.WriteAsync(
                 lang,
                 map,
-                Path.Combine(locsDir, $"{lang}.loc"),
+                Path.Combine(fileDir, $"{lang}.{PatchConst.LocFile}"),
                 ct);
         }
 
-        var locsFilePath = Path.Combine(versionDir, $"{fileId}.locs");
-        await LocPackWriter.WriteAsync(locsDir, locsFilePath, ct);
-
-        await UploadIfExistsAsync($"localization/{fileId}.locs", locsFilePath, ct);
-        return locsFilePath;
+        var filePath = Path.Combine(baseDir, $"{fileId}.{PatchConst.LocsFile}");
+        await LocPackWriter.WriteAsync(fileDir, filePath, ct);
+        
+        return filePath;
     }
     
     private async Task UploadIfExistsAsync(string key, string filePath, CancellationToken ct)

@@ -12,8 +12,7 @@ public sealed class PatchRefsFileViewModel : ViewModelBase
     private readonly IDbConnector _db;
     private readonly ResourceServerWebService _web;
 
-    private CancellationTokenSource? _loadCts;
-    private CancellationTokenSource? _execCts;
+    private CancellationTokenSource? _cts;
 
     private bool _isBusy;
     
@@ -122,10 +121,8 @@ public sealed class PatchRefsFileViewModel : ViewModelBase
         
         if (!confirm)
             return;
-        
-        CancelExecute();
-        _execCts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
-        var ct = _execCts.Token;
+
+        var ct = ResetCts(TimeSpan.FromSeconds(30));
 
         try
         {
@@ -176,9 +173,7 @@ public sealed class PatchRefsFileViewModel : ViewModelBase
 
     public async Task LoadAsync()
     {
-        CancelLoad();
-        _loadCts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
-        var ct = _loadCts.Token;
+        var ct = ResetCts(TimeSpan.FromSeconds(30));
 
         try
         {
@@ -241,37 +236,11 @@ public sealed class PatchRefsFileViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanExecute));
     }
 
-    private void CancelLoad()
+    private CancellationToken ResetCts(TimeSpan timeout)
     {
-        try
-        {
-            _loadCts?.Cancel();
-        }
-        catch
-        {
-            /* ignore */
-        }
-        finally
-        {
-            _loadCts?.Dispose();
-            _loadCts = null;
-        }
-    }
+        try { _cts?.Cancel(); }catch { /* ignore */ }
 
-    private void CancelExecute()
-    {
-        try
-        {
-            _execCts?.Cancel();
-        }
-        catch
-        {
-            /* ignore */
-        }
-        finally
-        {
-            _execCts?.Dispose();
-            _execCts = null;
-        }
+        _cts = new CancellationTokenSource(timeout);
+        return _cts.Token;
     }
 }

@@ -3,7 +3,7 @@ namespace ResourceServer.Services;
 public class StartupLoader(
     IBuildPolicyStore buildStore,
     IResourceConfigStore configStore,
-    IResourcePatchStore patchStore,
+    IRefsPatchStore patchStore,
     IMaintenanceStore maintenanceStore,
     ILogger<StartupLoader> logger) : IHostedService
 {
