@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
@@ -92,25 +93,6 @@ public abstract class BaseSession : IBaseSession
         }
     }
 
-    void IBaseSession.ProcessBuffer(byte[] buffer, int offset, int length)
-    {
-        _receiveBuffer.TryWrite(buffer, offset, length);
-
-        try
-        {
-            foreach (var message in Filter())
-                OnReceivedMessage(message);
-        }
-        catch (Exception e)
-        {
-            Logger.Error(e);
-        }
-        finally
-        {
-            _receiveBuffer.ResetIfConsumed();
-        }
-    }
-
     public virtual void Close(CloseReason reason)
     {
         _channelRouter.Unbind(ChannelKind.Reliable);
@@ -197,42 +179,72 @@ public abstract class BaseSession : IBaseSession
             }
         }
     }
-
-    private IEnumerable<TcpMessage> Filter()
+    
+    void IBaseSession.ProcessBuffer(byte[] buffer, int offset, int length)
     {
-        const int maxFramePerTick = 128;
-        const int headerSize = TcpHeader.ByteSize;
-        var frames = 0;
+        _receiveBuffer.Write(buffer, offset, length);
 
-        while (frames < maxFramePerTick)
+        try
         {
-            if (_receiveBuffer.ReadableBytes < headerSize)
-                yield break;
+            const int maxFramePerTick = 128;
+            const int headerSize = TcpHeader.ByteSize;
+            var frames = 0;
 
-            var headerSpan = _receiveBuffer.ReadableSpan[..headerSize];
-            if (!TcpHeader.TryRead(headerSpan, out var header, out var consumed))
-                yield break;
-
-            var bodyLen = header.PayloadLength;
-            if (bodyLen <= 0 || bodyLen > Config.Network.MaxFrameBytes)
+            while (frames < maxFramePerTick)
             {
-                Logger.Warn("Invalid payload length. id={0}, max={1}, len={2}",
-                    header.MsdId, Config.Network.MaxFrameBytes, bodyLen);
-                Close(CloseReason.ProtocolError);
-                yield break;
+                // 헤더 확인
+                if (_receiveBuffer.ReadableBytes < headerSize)
+                    break;
+
+                var headerSpan = _receiveBuffer.Peek(headerSize);
+                if (!TcpHeader.TryRead(headerSpan, out var header, out var consumed))
+                    break;
+
+                // 페이로드 검증
+                var bodyLen = header.PayloadLength;
+                if (bodyLen <= 0 || bodyLen > Config.Network.MaxFrameBytes)
+                {
+                    Logger.Warn("Invalid payload length. id={0}, max={1}, len={2}",
+                        header.MsdId, Config.Network.MaxFrameBytes, bodyLen);
+                    Close(CloseReason.ProtocolError);
+                    break;
+                }
+
+                // 전체 패킷이 도착했는지 확인
+                var total = consumed + bodyLen;
+                if (_receiveBuffer.ReadableBytes < total)
+                    break;
+
+                // 헤더 소비
+                _receiveBuffer.Consume(consumed);
+
+                IMemoryOwner<byte> owner = null;
+                try
+                {
+                    // 바디 읽기 
+                    if (!_receiveBuffer.TryRead(bodyLen, out var bodyMem, out owner))
+                        break;
+
+                    // 메시지 처리
+                    var message = new TcpMessage(header, bodyMem);
+                    OnReceivedMessage(message);
+                }
+                catch (Exception e)
+                {
+                    Logger.Error(e);
+                }
+                finally
+                {
+                    owner?.Dispose();
+                }
+            
+                _receiveBuffer.Consume(bodyLen);
+                frames++;
             }
-
-            var total = consumed + bodyLen;
-            if (_receiveBuffer.ReadableBytes < total)
-                yield break;
-
-            _receiveBuffer.Consume(consumed);
-
-            if (!_receiveBuffer.TryReadMemory(bodyLen, out var bodyMem))
-                yield break;
-
-            yield return new TcpMessage(header, bodyMem);
-            frames++;
+        }
+        catch (Exception e)
+        {
+            Logger.Error(e);
         }
     }
 

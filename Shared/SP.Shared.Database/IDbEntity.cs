@@ -5,5 +5,5 @@ namespace SP.Shared.Database;
 public interface IDbEntity
 {
     void ReadData(DbDataReader reader);
-    void WriteData(DbCmd command);
+    void WriteData(DbCmd cmd);
 }

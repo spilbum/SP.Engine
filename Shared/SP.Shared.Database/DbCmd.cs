@@ -31,25 +31,6 @@ public class DbCmd(DbCommand command, IDbProvider provider) : IDisposable
         return param;
     }
 
-    // public DbParameter AddWithValue(string name, object? value, DbType? dbType = null, int? size = null)
-    // {
-    //     if (string.IsNullOrEmpty(name))
-    //         throw new ArgumentException("Parameter name cannot be null or empty.", nameof(name));
-    //
-    //     var param = _command.CreateParameter();
-    //     param.ParameterName = provider.FormatParameterName(name);
-    //     param.Value = value ?? DBNull.Value;
-    //
-    //     if (dbType.HasValue)
-    //         param.DbType = dbType.Value;
-    //
-    //     if (size.HasValue)
-    //         param.Size = size.Value;
-    //
-    //     _command.Parameters.Add(param);
-    //     return param;
-    // }
-
     public void AddWithEntity<TDbEntity>(TDbEntity entity)
         where TDbEntity : IDbEntity
     {
@@ -175,31 +156,6 @@ public class DbCmd(DbCommand command, IDbProvider provider) : IDisposable
         }
 
         return list;
-    }
-
-    public List<object> ExecuteReaderList(Type instanceType)
-    {
-        using var reader = _command.ExecuteReader();
-        var instances = new List<object>();
-        var accessor = RuntimeTypeAccessor.GetOrCreate(instanceType);
-
-        while (reader.Read())
-        {
-            var instance = Activator.CreateInstance(instanceType);
-            if (null == instance) continue;
-
-            foreach (var member in accessor.Members)
-            {
-                if (!reader.HasColumn(member.Name)) continue;
-
-                var value = reader[member.Name];
-                member.SetValue(instance, value == DBNull.Value ? null : value);
-            }
-
-            instances.Add(instance);
-        }
-
-        return instances;
     }
 
     public TValue ExecuteScalar<TValue>()

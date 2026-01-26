@@ -178,6 +178,7 @@ namespace SP.Core.Serialization
             return value;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public string ReadString()
         {
             var byteLen = (int)ReadVarUInt();
@@ -186,6 +187,7 @@ namespace SP.Core.Serialization
             return Encoding.UTF8.GetString(bytes);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ReadOnlySpan<byte> ReadBytes()
         {
             var len = (int)ReadVarUInt();
@@ -193,20 +195,10 @@ namespace SP.Core.Serialization
             return ReadSpan(len);
         }
 
-        // 고정 길이 바이트 덩어리
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ReadOnlySpan<byte> ReadBytes(int length)
         {
             return ReadSpan(length);
-        }
-
-        public byte[] ReadBytesExactArray(int length)
-        {
-            if (length < 0) throw new InvalidDataException("Negative length");
-
-            var s = ReadSpan(length);
-            var arr = new byte[length];
-            s.CopyTo(arr);
-            return arr;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -220,11 +212,114 @@ namespace SP.Core.Serialization
             Advance(pad);
         }
 
-        // 서브-슬라이스를 독립 리더로 만들기
-        public NetReader ReadSubReaderByLength(int length)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public T Read<T>() where T : unmanaged
         {
-            var sub = ReadSpan(length);
-            return new NetReader(sub);
+            if (typeof(T) == typeof(bool))
+            {
+                var val = ReadBool();
+                return Unsafe.As<bool, T>(ref val);
+            }
+
+            if (typeof(T) == typeof(byte))
+            {
+                var value = ReadByte();
+                return Unsafe.As<byte, T>(ref value);
+            }
+
+            if (typeof(T) == typeof(sbyte))
+            {
+                var value = ReadSByte();
+                return Unsafe.As<sbyte, T>(ref value);
+            }
+
+            if (typeof(T) == typeof(short))
+            {
+                var value = ReadInt16();
+                return Unsafe.As<short, T>(ref value);
+            }
+
+            if (typeof(T) == typeof(ushort))
+            {
+                var value = ReadUInt16();
+                return Unsafe.As<ushort, T>(ref value);
+            }
+
+            if (typeof(T) == typeof(int))
+            {
+                var value = ReadInt32();
+                return Unsafe.As<int, T>(ref value);
+            }
+
+            if (typeof(T) == typeof(uint))
+            {
+                var value = ReadUInt32();
+                return Unsafe.As<uint, T>(ref value);
+            }
+
+            if (typeof(T) == typeof(long))
+            {
+                var value = ReadInt64();
+                return Unsafe.As<long, T>(ref value);
+            }
+
+            if (typeof(T) == typeof(ulong))
+            {
+                var value = ReadUInt64();
+                return Unsafe.As<ulong, T>(ref value);
+            }
+
+            if (typeof(T) == typeof(float))
+            {
+                var value = ReadSingle();
+                return Unsafe.As<float, T>(ref value);
+            }
+
+            if (typeof(T) == typeof(double))
+            {
+                var value = ReadDouble();
+                return Unsafe.As<double, T>(ref value);
+            }
+
+            if (typeof(T) == typeof(DateTime))
+            {
+                var ticks = ReadInt64();
+                var dt = new DateTime(ticks);
+                return Unsafe.As<DateTime, T>(ref dt);
+            }
+
+            if (Unsafe.SizeOf<T>() == 4)
+            {
+                var v = ReadInt32();
+                return Unsafe.As<int, T>(ref v);
+            }
+
+            if (Unsafe.SizeOf<T>() == 1)
+            {
+                var v = ReadByte();
+                return Unsafe.As<byte, T>(ref v);
+            }
+
+            if (Unsafe.SizeOf<T>() == 2)
+            {
+                var v = ReadInt16();
+                return Unsafe.As<short, T>(ref v);
+            }
+
+            if (Unsafe.SizeOf<T>() == 8)
+            {
+                var v = ReadInt64();
+                return Unsafe.As<long, T>(ref v);
+            }
+
+            ThrowNotSupportedType(typeof(T));
+            return default;
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void ThrowNotSupportedType(Type t)
+        {
+            throw new NotSupportedException($"Type '{t.Name}' is not supported by NetReader<T>. Only primitives are allowed.");
         }
     }
 }

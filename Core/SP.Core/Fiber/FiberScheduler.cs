@@ -27,24 +27,22 @@ namespace SP.Core.Fiber
         }
 
         public bool TryEnqueue(IAsyncJob job)
-        {
-            return !_disposed && _fiber.TryEnqueue(job);
-        }
+            => !_disposed && _fiber.TryEnqueue(job);
 
         public bool TryEnqueue(Action action)
-        {
-            return !_disposed && _fiber.TryEnqueue(action);
-        }
+            => !_disposed && _fiber.TryEnqueue(action);
 
         public bool TryEnqueue<T>(Action<T> action, T state)
-        {
-            return !_disposed && _fiber.TryEnqueue(action, state);
-        }
+            => !_disposed && _fiber.TryEnqueue(action, state);
 
         public bool TryEnqueue<T1, T2>(Action<T1, T2> action, T1 state1, T2 state2)
-        {
-            return !_disposed && _fiber.TryEnqueue(action, state1, state2);
-        }
+            => !_disposed && _fiber.TryEnqueue(action, state1, state2);
+        
+        public bool TryEnqueue<T1, T2, T3>(Action<T1, T2, T3> action, T1 state1, T2 state2, T3 state3)
+            => !_disposed && _fiber.TryEnqueue(action, state1, state2, state3);
+        
+        public bool TryEnqueue<T1, T2, T3, T4>(Action<T1, T2, T3, T4> action, T1 state1, T2 state2, T3 state3, T4 state4)
+            => !_disposed && _fiber.TryEnqueue(action, state1, state2, state3, state4);
 
         public IDisposable Schedule(Action action, TimeSpan dueTime, TimeSpan period)
         {

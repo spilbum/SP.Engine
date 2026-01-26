@@ -1,0 +1,410 @@
+[15:31:09.600 INF] [T:1] [Rank] Logger setup was successful: Rank
+[15:31:09.736 DBG] [T:1] [Rank] Discover commands: [3003, 3002, 3001, 3000, 1000]
+[15:31:09.738 INF] [T:1] [Rank] The server Rank is initialized.
+[15:31:10.073 DBG] [T:1] [Rank] [Daily] Reward loaded. season="Daily"/1, uid=1, rank=2, score=30, isRewarded=false, item=[0:0:70]
+[15:31:10.073 DBG] [T:1] [Rank] [Daily] Reward loaded. season="Daily"/1, uid=2, rank=1, score=40, isRewarded=false, item=[0:0:100]
+[15:31:10.073 DBG] [T:1] [Rank] [Daily] Reward loaded. season="Daily"/1, uid=1000001, rank=3, score=10, isRewarded=false, item=[0:0:50]
+[15:31:10.073 DBG] [T:1] [Rank] [Daily] Reward loaded. season="Daily"/12, uid=1000001, rank=1, score=30, isRewarded=false, item=[0:0:100]
+[15:31:10.086 INF] [T:1] [Rank] [Daily] Season loaded. kind="Daily", num=65, state="Break", start="2026-01-14T00:00:00.0000000+09:00", end="2026-01-15T00:00:00.0000000+09:00"
+[15:31:10.088 INF] [T:1] [Rank] Listener (0.0.0.0:20000:"Tcp") was started.
+[15:31:10.091 INF] [T:1] [Rank] The server instance Rank was been started!
+[15:31:10.096 INF] [T:12] [Rank] [Daily] Next season scheduled. kind="Daily", num=66, start="2026-01-26T00:00:00.0000000+00:00", end="2026-01-27T00:00:00.0000000+00:00"
+[15:31:35.677 DBG] [T:11] [Rank] A new session connected. sessionId=a9d208e8-349f-4ef2-985c-e33aa1f33844, remoteEndPoint=127.0.0.1:55236
+[15:31:39.744 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:31:38.739Z CPU=0.0% WS=61.97MB Managed=192.72MB Threads=35
+[15:31:40.683 DBG] [T:28] [Rank] A new session connected. sessionId=53198ecf-8598-4505-9784-6f7664ed3670, remoteEndPoint=127.0.0.1:55243
+[15:31:40.686 DBG] [T:26] [Rank] The session a9d208e8-349f-4ef2-985c-e33aa1f33844 has been closed. reason="ClientClosing"
+[15:32:09.740 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:32:08.739Z CPU=0.0% WS=63.22MB Managed=193.15MB Threads=34
+[15:32:39.738 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:32:38.739Z CPU=0.2% WS=62.02MB Managed=193.53MB Threads=33
+[15:33:09.739 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:33:08.739Z CPU=0.2% WS=59.14MB Managed=193.88MB Threads=34
+[15:33:39.740 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:33:38.740Z CPU=0.2% WS=64.44MB Managed=194.31MB Threads=34
+[15:33:40.686 ERR] [T:11] [Rank] The type initializer for 'SP.Core.Serialization.NetSerializerBuilder' threw an exception.
+System.TypeInitializationException: The type initializer for 'SP.Core.Serialization.NetSerializerBuilder' threw an exception.
+ ---> System.Reflection.AmbiguousMatchException: Ambiguous match found for 'SP.Core.Serialization.NetSerializer Void Serialize[T](SP.Core.Serialization.NetWriter ByRef, T)'.
+   at System.RuntimeType.GetMethodImplCommon(String name, Int32 genericParameterCount, BindingFlags bindingAttr, Binder binder, CallingConventions callConv, Type[] types, ParameterModifier[] modifiers)
+   at SP.Core.Serialization.NetSerializerBuilder..cctor() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializerBuilder.cs:line 20
+   --- End of inner exception stack trace ---
+   at SP.Core.Serialization.NetSerializerBuilder.BuildWriter(Type type) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializerBuilder.cs:line 43
+   at SP.Core.Serialization.NetSerializer.BuildDataClass(Type t) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 245
+   at SP.Core.Serialization.NetSerializer.Build(Type t) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 35
+   at System.Collections.Concurrent.ConcurrentDictionary`2.GetOrAdd(TKey key, Func`2 valueFactory)
+   at SP.Core.Serialization.NetSerializer.GetOrBuild(Type type) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 26
+   at SP.Core.Serialization.NetSerializer.Serialize(NetWriter& w, Type type, Object value) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 17
+   at SP.Engine.Runtime.Networking.BaseMessage`1.Serialize(IProtocolData protocol, IPolicy policy, IEncryptor encryptor, ICompressor compressor) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Networking/BaseMessage.cs:line 90
+   at SP.Engine.Server.Session.InternalSend(IProtocolData data) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Server/Session.cs:line 235
+   at SP.Engine.Server.Session.SendCloseHandshake() in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Server/Session.cs:line 270
+   at SP.Engine.Server.Session.Close(CloseReason reason) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Server/Session.cs:line 36
+   at SP.Engine.Server.BaseEngine.CheckHandshakePendingCallback(Object state) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Server/BaseEngine.cs:line 470
+[15:34:09.739 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:34:08.739Z CPU=0.0% WS=63.28MB Managed=194.81MB Threads=32
+[15:34:39.740 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:34:38.739Z CPU=0.0% WS=59.50MB Managed=195.15MB Threads=32
+[15:35:09.740 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:35:08.740Z CPU=0.2% WS=67.44MB Managed=192.11MB Threads=36
+[15:35:39.740 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:35:38.740Z CPU=0.2% WS=55.55MB Managed=192.54MB Threads=35
+[15:35:40.683 DBG] [T:38] [Rank] Client terminated due to timeout. sessionId=53198ecf-8598-4505-9784-6f7664ed3670
+[15:35:40.684 DBG] [T:33] [Rank] The session 53198ecf-8598-4505-9784-6f7664ed3670 has been closed. reason="ServerClosing"
+[15:35:54.156 DBG] [T:39] [Rank] A new session connected. sessionId=403d89e8-e33c-4f64-ac0e-1beb89355d56, remoteEndPoint=127.0.0.1:55282
+[15:35:59.164 DBG] [T:29] [Rank] The session 403d89e8-e33c-4f64-ac0e-1beb89355d56 has been closed. reason="ClientClosing"
+[15:35:59.168 DBG] [T:38] [Rank] A new session connected. sessionId=5ef744bc-d20a-49b3-afb3-07875234280b, remoteEndPoint=127.0.0.1:55283
+[15:36:01.612 DBG] [T:29] [Rank] The session 5ef744bc-d20a-49b3-afb3-07875234280b has been closed. reason="ClientClosing"
+[15:36:09.740 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:36:08.740Z CPU=0.0% WS=65.45MB Managed=193.04MB Threads=33
+[15:36:39.741 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:36:38.741Z CPU=0.0% WS=74.38MB Managed=193.41MB Threads=33
+[15:37:09.741 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:37:08.741Z CPU=0.0% WS=68.59MB Managed=193.76MB Threads=33
+[15:37:39.741 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:37:38.740Z CPU=0.0% WS=52.25MB Managed=194.13MB Threads=35
+[15:38:05.708 DBG] [T:33] [Rank] A new session connected. sessionId=a8776479-0b47-4f9e-8321-8f8ed8dd5baf, remoteEndPoint=127.0.0.1:55317
+[15:38:09.740 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:38:08.741Z CPU=0.0% WS=59.66MB Managed=194.54MB Threads=34
+[15:38:10.716 DBG] [T:34] [Rank] The session a8776479-0b47-4f9e-8321-8f8ed8dd5baf has been closed. reason="ClientClosing"
+[15:38:10.718 DBG] [T:34] [Rank] A new session connected. sessionId=ddc3ab1b-a178-4f0d-9367-16563602adb3, remoteEndPoint=127.0.0.1:55318
+[15:38:20.214 ERR] [T:31] [Rank] The type initializer for 'SP.Core.Serialization.NetSerializerBuilder' threw an exception.
+System.TypeInitializationException: The type initializer for 'SP.Core.Serialization.NetSerializerBuilder' threw an exception.
+ ---> System.Reflection.AmbiguousMatchException: Ambiguous match found for 'SP.Core.Serialization.NetSerializer Void Serialize[T](SP.Core.Serialization.NetWriter ByRef, T)'.
+   at System.RuntimeType.GetMethodImplCommon(String name, Int32 genericParameterCount, BindingFlags bindingAttr, Binder binder, CallingConventions callConv, Type[] types, ParameterModifier[] modifiers)
+   at SP.Core.Serialization.NetSerializerBuilder..cctor() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializerBuilder.cs:line 20
+   --- End of inner exception stack trace ---
+   at SP.Core.Serialization.NetSerializerBuilder.BuildWriter(Type type) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializerBuilder.cs:line 43
+   at SP.Core.Serialization.NetSerializer.BuildDataClass(Type t) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 245
+   at SP.Core.Serialization.NetSerializer.Build(Type t) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 35
+   at System.Collections.Concurrent.ConcurrentDictionary`2.GetOrAdd(TKey key, Func`2 valueFactory)
+   at SP.Core.Serialization.NetSerializer.GetOrBuild(Type type) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 26
+   at SP.Core.Serialization.NetSerializer.Deserialize(NetReader& r, Type type) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 23
+   at SP.Engine.Runtime.Networking.BaseMessage`1.Deserialize[TProtocol](IEncryptor encryptor, ICompressor compressor) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Networking/BaseMessage.cs:line 43
+   at SP.Engine.Server.Session.SP.Engine.Runtime.Command.ICommandContext.Deserialize[TProtocol](IMessage message) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Server/Session.cs:line 45
+   at SP.Engine.Runtime.Command.BaseCommand`2.Execute(ICommandContext context, IMessage message) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Command/BaseCommand.cs:line 20
+[15:38:20.220 DBG] [T:33] [Rank] The session ddc3ab1b-a178-4f0d-9367-16563602adb3 has been closed. reason="ClientClosing"
+[15:38:39.741 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:38:38.741Z CPU=0.0% WS=67.36MB Managed=195.00MB Threads=32
+[15:39:09.742 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:39:08.742Z CPU=0.0% WS=68.28MB Managed=195.34MB Threads=32
+[15:39:39.741 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:39:38.742Z CPU=0.0% WS=68.39MB Managed=195.68MB Threads=33
+[15:40:09.742 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:40:08.742Z CPU=0.0% WS=68.89MB Managed=196.02MB Threads=32
+[15:40:39.742 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:40:38.742Z CPU=0.0% WS=69.52MB Managed=196.39MB Threads=33
+[15:41:09.742 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:41:08.741Z CPU=0.0% WS=70.95MB Managed=196.72MB Threads=33
+[15:41:39.742 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:41:38.742Z CPU=0.0% WS=73.55MB Managed=197.16MB Threads=33
+[15:42:09.742 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:42:08.743Z CPU=0.0% WS=74.52MB Managed=197.54MB Threads=34
+[15:42:39.743 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:42:39.743Z CPU=0.0% WS=74.86MB Managed=197.89MB Threads=33
+[15:43:09.742 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:43:08.742Z CPU=0.0% WS=75.14MB Managed=198.22MB Threads=32
+[15:43:39.744 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:43:39.744Z CPU=0.0% WS=72.12MB Managed=198.57MB Threads=32
+[15:44:09.743 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:44:09.743Z CPU=0.0% WS=73.06MB Managed=198.90MB Threads=33
+[15:44:39.741 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:44:38.744Z CPU=0.0% WS=64.53MB Managed=199.24MB Threads=33
+[15:45:09.741 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:45:08.743Z CPU=0.0% WS=65.28MB Managed=199.59MB Threads=34
+[15:45:39.742 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:45:38.741Z CPU=0.0% WS=65.66MB Managed=199.93MB Threads=32
+[15:46:09.741 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:46:08.744Z CPU=0.0% WS=73.36MB Managed=192.79MB Threads=33
+[15:46:39.743 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:46:38.744Z CPU=0.0% WS=75.08MB Managed=193.15MB Threads=32
+[15:47:09.743 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:47:08.744Z CPU=0.0% WS=76.48MB Managed=193.48MB Threads=32
+[15:47:39.743 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:47:38.744Z CPU=0.0% WS=76.69MB Managed=193.84MB Threads=33
+[15:48:09.743 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:48:09.743Z CPU=0.0% WS=76.72MB Managed=194.22MB Threads=34
+[15:48:39.743 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:48:38.744Z CPU=0.0% WS=76.70MB Managed=194.56MB Threads=33
+[15:49:09.743 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:49:08.745Z CPU=0.0% WS=75.50MB Managed=194.91MB Threads=32
+[15:49:39.745 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:49:38.745Z CPU=0.0% WS=75.70MB Managed=195.25MB Threads=33
+[15:50:09.744 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:50:08.745Z CPU=0.0% WS=76.83MB Managed=195.60MB Threads=33
+[15:50:39.745 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:50:38.745Z CPU=0.0% WS=76.86MB Managed=195.94MB Threads=33
+[15:51:09.744 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:51:08.745Z CPU=0.0% WS=76.36MB Managed=196.27MB Threads=32
+[15:51:39.745 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:51:38.746Z CPU=0.0% WS=76.36MB Managed=196.58MB Threads=32
+[15:52:09.744 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:52:08.744Z CPU=0.0% WS=76.47MB Managed=196.95MB Threads=32
+[15:52:39.745 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:52:38.744Z CPU=0.0% WS=76.52MB Managed=197.28MB Threads=33
+[15:53:09.744 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:53:08.746Z CPU=0.0% WS=76.53MB Managed=197.63MB Threads=34
+[15:53:39.745 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:53:38.746Z CPU=0.0% WS=76.50MB Managed=197.96MB Threads=32
+[15:54:09.745 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:54:08.746Z CPU=0.0% WS=76.52MB Managed=198.30MB Threads=33
+[15:54:39.745 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:54:38.753Z CPU=0.0% WS=76.50MB Managed=198.64MB Threads=32
+[15:55:09.745 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:55:08.746Z CPU=0.0% WS=76.52MB Managed=198.99MB Threads=33
+[15:55:39.746 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:55:38.747Z CPU=0.0% WS=76.53MB Managed=199.34MB Threads=33
+[15:56:09.746 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:56:08.747Z CPU=0.0% WS=76.64MB Managed=199.67MB Threads=32
+[15:56:39.746 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:56:38.747Z CPU=0.0% WS=76.66MB Managed=200.00MB Threads=33
+[15:57:09.747 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:57:08.746Z CPU=0.0% WS=76.86MB Managed=200.35MB Threads=33
+[15:57:39.747 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:57:38.746Z CPU=0.0% WS=77.11MB Managed=192.93MB Threads=33
+[15:58:09.747 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:58:08.747Z CPU=0.0% WS=77.11MB Managed=193.28MB Threads=33
+[15:58:39.746 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:58:38.746Z CPU=0.0% WS=77.14MB Managed=193.64MB Threads=33
+[15:59:09.747 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:59:08.748Z CPU=0.0% WS=77.14MB Managed=193.98MB Threads=33
+[15:59:39.747 INF] [T:7] [PerfMonitor] Time:2026-01-26 06:59:38.748Z CPU=0.0% WS=77.19MB Managed=194.30MB Threads=33
+[16:00:09.747 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:00:08.748Z CPU=0.0% WS=77.16MB Managed=194.65MB Threads=33
+[16:00:39.748 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:00:38.748Z CPU=0.0% WS=77.05MB Managed=194.99MB Threads=32
+[16:01:09.748 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:01:08.747Z CPU=0.0% WS=77.08MB Managed=195.34MB Threads=33
+[16:01:39.748 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:01:38.747Z CPU=0.0% WS=77.16MB Managed=195.71MB Threads=35
+[16:02:09.748 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:02:08.749Z CPU=0.0% WS=77.27MB Managed=196.04MB Threads=32
+[16:02:39.748 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:02:38.747Z CPU=0.0% WS=77.33MB Managed=196.40MB Threads=33
+[16:03:09.748 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:03:08.749Z CPU=0.0% WS=77.38MB Managed=196.73MB Threads=32
+[16:03:39.748 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:03:38.748Z CPU=0.0% WS=77.39MB Managed=197.05MB Threads=32
+[16:04:09.749 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:04:08.748Z CPU=0.0% WS=77.41MB Managed=197.38MB Threads=33
+[16:04:39.750 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:04:38.750Z CPU=0.0% WS=77.41MB Managed=197.72MB Threads=33
+[16:05:09.748 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:05:08.749Z CPU=0.0% WS=77.41MB Managed=198.05MB Threads=32
+[16:05:39.750 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:05:38.750Z CPU=0.0% WS=77.44MB Managed=198.42MB Threads=33
+[16:06:09.749 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:06:08.749Z CPU=0.0% WS=77.42MB Managed=198.74MB Threads=32
+[16:06:39.749 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:06:38.749Z CPU=0.0% WS=77.42MB Managed=199.06MB Threads=32
+[16:07:09.750 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:07:08.750Z CPU=0.0% WS=77.44MB Managed=199.41MB Threads=32
+[16:07:39.749 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:07:38.750Z CPU=0.0% WS=77.47MB Managed=199.75MB Threads=32
+[16:08:09.750 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:08:08.750Z CPU=0.0% WS=77.48MB Managed=200.09MB Threads=33
+[16:08:39.750 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:08:38.750Z CPU=0.0% WS=77.47MB Managed=200.40MB Threads=32
+[16:09:09.750 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:09:08.749Z CPU=0.0% WS=77.50MB Managed=192.90MB Threads=32
+[16:09:39.749 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:09:38.749Z CPU=0.0% WS=77.50MB Managed=193.25MB Threads=32
+[16:10:09.751 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:10:08.750Z CPU=0.0% WS=77.52MB Managed=193.59MB Threads=33
+[16:10:39.751 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:10:38.751Z CPU=0.0% WS=77.52MB Managed=193.94MB Threads=33
+[16:11:09.751 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:11:08.752Z CPU=0.0% WS=77.50MB Managed=194.27MB Threads=32
+[16:11:39.750 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:11:38.751Z CPU=0.0% WS=77.55MB Managed=194.62MB Threads=34
+[16:12:09.752 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:12:08.751Z CPU=0.0% WS=77.41MB Managed=194.95MB Threads=32
+[16:12:39.751 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:12:38.751Z CPU=0.0% WS=77.42MB Managed=195.30MB Threads=33
+[16:13:09.751 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:13:08.751Z CPU=0.0% WS=77.44MB Managed=195.64MB Threads=33
+[16:13:39.752 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:13:38.753Z CPU=0.0% WS=77.42MB Managed=195.97MB Threads=32
+[16:14:09.751 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:14:08.752Z CPU=0.0% WS=77.42MB Managed=196.30MB Threads=32
+[16:14:39.753 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:14:38.752Z CPU=0.0% WS=77.44MB Managed=196.63MB Threads=33
+[16:15:09.753 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:15:08.753Z CPU=0.0% WS=77.42MB Managed=196.96MB Threads=32
+[16:15:39.752 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:15:38.751Z CPU=0.0% WS=77.42MB Managed=197.28MB Threads=32
+[16:16:09.753 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:16:08.753Z CPU=0.0% WS=77.45MB Managed=197.62MB Threads=34
+[16:16:39.751 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:16:39.751Z CPU=0.0% WS=77.45MB Managed=197.97MB Threads=32
+[16:17:09.754 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:17:08.754Z CPU=0.0% WS=77.45MB Managed=198.29MB Threads=32
+[16:17:39.753 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:17:38.753Z CPU=0.0% WS=77.47MB Managed=198.63MB Threads=33
+[16:18:09.753 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:18:08.754Z CPU=0.0% WS=77.47MB Managed=198.96MB Threads=32
+[16:18:39.753 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:18:38.754Z CPU=0.0% WS=77.47MB Managed=199.27MB Threads=32
+[16:19:09.754 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:19:08.754Z CPU=0.0% WS=77.47MB Managed=199.59MB Threads=32
+[16:19:39.753 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:19:38.753Z CPU=0.0% WS=77.48MB Managed=199.92MB Threads=32
+[16:20:09.753 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:20:08.754Z CPU=0.0% WS=77.50MB Managed=200.27MB Threads=33
+[16:20:39.753 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:20:38.754Z CPU=0.0% WS=77.52MB Managed=192.75MB Threads=32
+[16:21:09.754 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:21:08.754Z CPU=0.0% WS=77.00MB Managed=193.14MB Threads=35
+[16:21:39.753 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:21:38.755Z CPU=0.0% WS=76.97MB Managed=193.48MB Threads=32
+[16:22:09.754 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:22:08.754Z CPU=0.0% WS=76.97MB Managed=193.80MB Threads=32
+[16:22:39.758 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:22:38.755Z CPU=0.0% WS=77.02MB Managed=194.13MB Threads=33
+[16:23:09.756 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:23:08.755Z CPU=0.0% WS=77.39MB Managed=194.50MB Threads=33
+[16:23:39.755 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:23:38.756Z CPU=0.0% WS=77.41MB Managed=194.84MB Threads=34
+[16:24:09.755 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:24:08.756Z CPU=0.0% WS=77.41MB Managed=195.19MB Threads=34
+[16:24:39.756 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:24:38.756Z CPU=0.0% WS=77.38MB Managed=195.52MB Threads=32
+[16:25:09.755 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:25:08.756Z CPU=0.0% WS=77.44MB Managed=195.88MB Threads=35
+[16:25:39.755 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:25:38.756Z CPU=0.0% WS=77.41MB Managed=196.23MB Threads=33
+[16:26:09.756 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:26:08.755Z CPU=0.0% WS=77.39MB Managed=196.55MB Threads=32
+[16:26:39.755 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:26:38.755Z CPU=0.0% WS=77.39MB Managed=196.91MB Threads=32
+[16:27:09.756 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:27:08.756Z CPU=0.0% WS=77.41MB Managed=197.23MB Threads=32
+[16:27:39.756 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:27:38.757Z CPU=0.0% WS=77.41MB Managed=197.55MB Threads=32
+[16:28:09.757 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:28:08.757Z CPU=0.0% WS=77.41MB Managed=197.87MB Threads=32
+[16:28:39.757 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:28:38.757Z CPU=0.0% WS=77.42MB Managed=198.22MB Threads=33
+[16:29:09.757 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:29:08.757Z CPU=0.0% WS=77.44MB Managed=198.57MB Threads=33
+[16:29:39.757 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:29:38.757Z CPU=0.0% WS=77.42MB Managed=198.89MB Threads=32
+[16:30:09.757 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:30:08.758Z CPU=0.0% WS=77.42MB Managed=199.23MB Threads=32
+[16:30:39.758 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:30:38.758Z CPU=0.0% WS=77.50MB Managed=199.60MB Threads=36
+[16:31:09.757 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:31:08.758Z CPU=0.0% WS=77.44MB Managed=199.93MB Threads=32
+[16:31:39.758 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:31:38.758Z CPU=0.0% WS=73.81MB Managed=200.27MB Threads=33
+[16:32:09.757 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:32:08.758Z CPU=0.0% WS=73.00MB Managed=192.82MB Threads=34
+[16:32:39.758 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:32:38.757Z CPU=0.0% WS=73.41MB Managed=193.18MB Threads=32
+[16:33:09.758 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:33:08.759Z CPU=0.0% WS=73.42MB Managed=193.51MB Threads=33
+[16:33:39.758 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:33:38.759Z CPU=0.0% WS=73.91MB Managed=193.86MB Threads=33
+[16:34:09.758 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:34:08.757Z CPU=0.0% WS=73.92MB Managed=194.23MB Threads=34
+[16:34:39.759 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:34:38.758Z CPU=0.0% WS=73.89MB Managed=194.57MB Threads=32
+[16:35:09.759 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:35:08.759Z CPU=0.0% WS=73.95MB Managed=194.91MB Threads=33
+[16:35:39.758 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:35:38.759Z CPU=0.0% WS=73.98MB Managed=195.24MB Threads=32
+[16:36:09.759 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:36:08.760Z CPU=0.0% WS=74.00MB Managed=195.57MB Threads=33
+[16:36:39.758 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:36:38.760Z CPU=0.0% WS=74.00MB Managed=195.91MB Threads=33
+[16:37:09.760 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:37:08.759Z CPU=0.0% WS=74.00MB Managed=196.25MB Threads=33
+[16:37:39.760 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:37:39.760Z CPU=0.0% WS=74.12MB Managed=196.60MB Threads=32
+[16:38:09.759 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:38:08.760Z CPU=0.0% WS=72.02MB Managed=196.93MB Threads=32
+[16:38:39.760 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:38:38.760Z CPU=0.0% WS=72.12MB Managed=197.29MB Threads=33
+[16:39:09.759 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:39:08.760Z CPU=0.0% WS=72.12MB Managed=197.62MB Threads=32
+[16:39:39.760 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:39:38.760Z CPU=0.0% WS=72.19MB Managed=197.94MB Threads=32
+[16:40:09.760 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:40:08.761Z CPU=0.0% WS=72.20MB Managed=198.30MB Threads=33
+[16:40:39.761 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:40:38.761Z CPU=0.0% WS=72.30MB Managed=198.64MB Threads=33
+[16:41:09.761 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:41:08.761Z CPU=0.0% WS=72.28MB Managed=198.98MB Threads=32
+[16:41:39.760 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:41:38.760Z CPU=0.0% WS=72.30MB Managed=199.32MB Threads=33
+[16:42:09.760 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:42:08.760Z CPU=0.0% WS=72.30MB Managed=199.66MB Threads=33
+[16:42:39.760 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:42:38.761Z CPU=0.0% WS=72.30MB Managed=200.00MB Threads=33
+[16:43:09.761 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:43:08.761Z CPU=0.0% WS=72.28MB Managed=200.32MB Threads=32
+[16:43:39.762 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:43:38.762Z CPU=0.0% WS=72.55MB Managed=200.65MB Threads=33
+[16:44:09.760 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:44:08.762Z CPU=0.0% WS=73.19MB Managed=193.22MB Threads=33
+[16:44:39.760 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:44:38.762Z CPU=0.0% WS=73.19MB Managed=193.58MB Threads=33
+[16:45:09.762 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:45:08.763Z CPU=0.0% WS=73.19MB Managed=193.92MB Threads=33
+[16:45:39.762 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:45:38.763Z CPU=0.0% WS=73.50MB Managed=194.27MB Threads=33
+[16:46:09.762 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:46:08.763Z CPU=0.0% WS=73.47MB Managed=194.60MB Threads=32
+[16:46:39.761 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:46:38.761Z CPU=0.0% WS=73.47MB Managed=194.92MB Threads=32
+[16:47:09.762 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:47:08.763Z CPU=0.0% WS=73.48MB Managed=195.26MB Threads=33
+[16:47:39.763 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:47:38.764Z CPU=0.0% WS=73.50MB Managed=195.61MB Threads=34
+[16:48:09.761 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:48:08.763Z CPU=0.0% WS=73.45MB Managed=195.95MB Threads=32
+[16:48:39.762 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:48:38.763Z CPU=0.0% WS=73.45MB Managed=196.28MB Threads=32
+[16:49:09.763 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:49:08.764Z CPU=0.0% WS=74.52MB Managed=196.63MB Threads=32
+[16:49:39.763 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:49:38.764Z CPU=0.0% WS=74.52MB Managed=196.97MB Threads=32
+[16:50:09.764 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:50:08.764Z CPU=0.0% WS=74.52MB Managed=197.29MB Threads=32
+[16:50:39.763 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:50:38.764Z CPU=0.0% WS=74.52MB Managed=197.63MB Threads=32
+[16:51:09.763 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:51:08.764Z CPU=0.0% WS=74.53MB Managed=197.98MB Threads=33
+[16:51:39.763 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:51:39.763Z CPU=0.0% WS=74.58MB Managed=198.33MB Threads=34
+[16:52:09.764 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:52:08.765Z CPU=0.0% WS=74.55MB Managed=198.65MB Threads=32
+[16:52:39.764 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:52:38.765Z CPU=0.0% WS=74.58MB Managed=199.00MB Threads=34
+[16:53:09.764 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:53:08.765Z CPU=0.0% WS=74.55MB Managed=199.34MB Threads=32
+[16:53:39.764 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:53:38.765Z CPU=0.0% WS=74.56MB Managed=199.68MB Threads=32
+[16:54:09.764 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:54:08.764Z CPU=0.0% WS=74.64MB Managed=200.03MB Threads=33
+[16:54:39.765 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:54:38.765Z CPU=0.0% WS=74.66MB Managed=200.37MB Threads=33
+[16:55:09.765 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:55:08.766Z CPU=0.0% WS=74.66MB Managed=200.72MB Threads=32
+[16:55:39.765 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:55:38.765Z CPU=0.0% WS=74.75MB Managed=193.27MB Threads=33
+[16:56:09.766 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:56:08.765Z CPU=0.0% WS=74.73MB Managed=193.62MB Threads=33
+[16:56:39.765 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:56:38.765Z CPU=0.0% WS=74.72MB Managed=193.95MB Threads=32
+[16:57:09.765 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:57:08.765Z CPU=0.0% WS=74.72MB Managed=194.27MB Threads=32
+[16:57:39.765 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:57:38.766Z CPU=0.0% WS=74.75MB Managed=194.62MB Threads=34
+[16:58:09.765 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:58:08.766Z CPU=0.0% WS=74.73MB Managed=194.97MB Threads=33
+[16:58:39.763 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:58:38.764Z CPU=0.0% WS=74.72MB Managed=195.30MB Threads=32
+[16:59:09.763 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:59:08.762Z CPU=0.0% WS=74.72MB Managed=195.63MB Threads=32
+[16:59:39.763 INF] [T:7] [PerfMonitor] Time:2026-01-26 07:59:38.763Z CPU=0.0% WS=74.81MB Managed=195.95MB Threads=32
+[17:00:09.763 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:00:08.762Z CPU=0.0% WS=74.41MB Managed=196.29MB Threads=33
+[17:00:39.764 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:00:38.764Z CPU=0.0% WS=73.80MB Managed=196.63MB Threads=33
+[17:01:09.763 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:01:08.764Z CPU=0.0% WS=73.78MB Managed=196.96MB Threads=32
+[17:01:39.763 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:01:38.762Z CPU=0.0% WS=73.88MB Managed=197.29MB Threads=33
+[17:02:09.764 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:02:08.765Z CPU=0.0% WS=73.88MB Managed=197.64MB Threads=33
+[17:02:39.764 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:02:38.764Z CPU=0.0% WS=73.89MB Managed=198.00MB Threads=34
+[17:03:09.764 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:03:08.763Z CPU=0.0% WS=42.52MB Managed=198.34MB Threads=33
+[17:03:39.763 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:03:38.764Z CPU=0.0% WS=44.47MB Managed=198.66MB Threads=32
+[17:04:09.764 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:04:08.763Z CPU=0.0% WS=44.92MB Managed=199.01MB Threads=34
+[17:04:39.764 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:04:38.763Z CPU=0.0% WS=53.17MB Managed=199.37MB Threads=33
+[17:05:09.764 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:05:08.764Z CPU=0.0% WS=53.58MB Managed=199.70MB Threads=33
+[17:05:39.764 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:05:38.763Z CPU=0.0% WS=53.98MB Managed=200.05MB Threads=32
+[17:06:09.764 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:06:08.764Z CPU=0.0% WS=54.36MB Managed=200.40MB Threads=33
+[17:06:39.764 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:06:38.764Z CPU=0.0% WS=54.75MB Managed=200.76MB Threads=34
+[17:07:09.763 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:07:08.764Z CPU=0.0% WS=61.27MB Managed=193.29MB Threads=32
+[17:07:39.764 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:07:38.764Z CPU=0.0% WS=61.30MB Managed=193.64MB Threads=33
+[17:08:09.765 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:08:08.765Z CPU=0.0% WS=61.33MB Managed=194.00MB Threads=34
+[17:08:39.765 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:08:38.765Z CPU=0.0% WS=61.33MB Managed=194.36MB Threads=34
+[17:09:09.765 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:09:08.765Z CPU=0.0% WS=61.31MB Managed=194.69MB Threads=33
+[17:09:39.765 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:09:39.765Z CPU=0.0% WS=61.81MB Managed=195.10MB Threads=35
+[17:10:09.764 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:10:08.765Z CPU=0.0% WS=61.81MB Managed=195.41MB Threads=32
+[17:10:39.765 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:10:38.765Z CPU=0.0% WS=61.81MB Managed=195.75MB Threads=32
+[17:11:09.765 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:11:08.766Z CPU=0.0% WS=61.84MB Managed=196.11MB Threads=34
+[17:11:39.765 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:11:38.765Z CPU=0.0% WS=61.83MB Managed=196.46MB Threads=33
+[17:12:09.765 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:12:08.766Z CPU=0.0% WS=61.83MB Managed=196.80MB Threads=33
+[17:12:39.765 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:12:38.766Z CPU=0.0% WS=61.84MB Managed=197.15MB Threads=34
+[17:13:09.766 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:13:08.766Z CPU=0.0% WS=61.83MB Managed=197.49MB Threads=32
+[17:13:39.766 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:13:38.766Z CPU=0.0% WS=62.53MB Managed=197.85MB Threads=34
+[17:14:09.766 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:14:08.766Z CPU=0.0% WS=62.52MB Managed=198.18MB Threads=33
+[17:14:39.766 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:14:38.766Z CPU=0.0% WS=62.50MB Managed=198.52MB Threads=33
+[17:15:09.767 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:15:08.766Z CPU=0.0% WS=65.92MB Managed=198.90MB Threads=34
+[17:15:39.766 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:15:38.767Z CPU=0.0% WS=65.89MB Managed=199.25MB Threads=32
+[17:16:09.767 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:16:08.767Z CPU=0.0% WS=65.92MB Managed=199.59MB Threads=33
+[17:16:39.767 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:16:38.767Z CPU=0.0% WS=65.91MB Managed=199.90MB Threads=32
+[17:17:09.767 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:17:08.767Z CPU=0.0% WS=65.92MB Managed=200.24MB Threads=33
+[17:17:39.767 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:17:38.767Z CPU=0.0% WS=65.92MB Managed=200.58MB Threads=33
+[17:18:09.767 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:18:08.767Z CPU=0.0% WS=62.69MB Managed=193.12MB Threads=34
+[17:18:39.767 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:18:38.767Z CPU=0.0% WS=62.81MB Managed=193.47MB Threads=33
+[17:19:09.768 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:19:08.767Z CPU=0.0% WS=62.83MB Managed=193.83MB Threads=34
+[17:19:39.767 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:19:38.767Z CPU=0.0% WS=62.81MB Managed=194.20MB Threads=33
+[17:20:09.767 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:20:08.769Z CPU=0.0% WS=62.95MB Managed=194.55MB Threads=34
+[17:20:39.768 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:20:38.768Z CPU=0.0% WS=62.94MB Managed=194.89MB Threads=33
+[17:21:09.768 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:21:08.769Z CPU=0.0% WS=62.94MB Managed=195.24MB Threads=33
+[17:21:39.768 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:21:38.769Z CPU=0.0% WS=62.94MB Managed=195.60MB Threads=32
+[17:22:09.768 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:22:08.769Z CPU=0.0% WS=62.97MB Managed=195.96MB Threads=34
+[17:22:39.767 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:22:38.768Z CPU=0.0% WS=62.20MB Managed=196.30MB Threads=32
+[17:23:09.768 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:23:08.768Z CPU=0.0% WS=59.98MB Managed=196.65MB Threads=33
+[17:23:39.767 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:23:38.768Z CPU=0.0% WS=60.11MB Managed=197.00MB Threads=33
+[17:24:09.768 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:24:08.768Z CPU=0.0% WS=60.03MB Managed=197.34MB Threads=32
+[17:24:39.767 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:24:38.769Z CPU=0.0% WS=44.78MB Managed=197.66MB Threads=33
+[17:25:09.768 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:25:08.769Z CPU=0.0% WS=52.66MB Managed=198.03MB Threads=33
+[17:25:39.768 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:25:39.768Z CPU=0.0% WS=53.03MB Managed=198.35MB Threads=32
+[17:26:09.765 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:26:08.765Z CPU=0.0% WS=53.34MB Managed=198.67MB Threads=32
+[17:26:39.764 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:26:38.765Z CPU=0.0% WS=53.86MB Managed=199.01MB Threads=33
+[17:27:09.765 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:27:08.765Z CPU=0.0% WS=54.16MB Managed=199.33MB Threads=32
+[17:27:39.764 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:27:38.765Z CPU=0.0% WS=54.53MB Managed=199.66MB Threads=33
+[17:28:09.765 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:28:08.766Z CPU=0.0% WS=54.86MB Managed=199.99MB Threads=32
+[17:28:39.765 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:28:38.766Z CPU=0.0% WS=55.20MB Managed=200.31MB Threads=32
+[17:29:09.765 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:29:08.766Z CPU=0.0% WS=55.58MB Managed=200.65MB Threads=33
+[17:29:39.765 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:29:38.765Z CPU=0.0% WS=61.19MB Managed=193.10MB Threads=32
+[17:30:09.765 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:30:08.765Z CPU=0.0% WS=61.20MB Managed=193.45MB Threads=32
+[17:30:39.765 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:30:38.766Z CPU=0.0% WS=61.78MB Managed=193.78MB Threads=32
+[17:31:09.765 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:31:08.766Z CPU=0.0% WS=61.78MB Managed=194.09MB Threads=32
+[17:31:39.765 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:31:38.766Z CPU=0.0% WS=55.50MB Managed=194.41MB Threads=32
+[17:32:09.766 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:32:08.767Z CPU=0.0% WS=55.02MB Managed=194.74MB Threads=32
+[17:32:39.766 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:32:38.766Z CPU=0.0% WS=55.09MB Managed=195.08MB Threads=33
+[17:33:09.766 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:33:08.766Z CPU=0.0% WS=55.41MB Managed=195.43MB Threads=33
+[17:33:39.766 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:33:38.766Z CPU=0.0% WS=60.19MB Managed=195.75MB Threads=32
+[17:34:09.766 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:34:08.767Z CPU=0.0% WS=60.23MB Managed=196.09MB Threads=33
+[17:34:39.766 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:34:38.767Z CPU=0.0% WS=60.22MB Managed=196.41MB Threads=32
+[17:35:09.766 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:35:08.766Z CPU=0.0% WS=60.22MB Managed=196.72MB Threads=32
+[17:35:39.766 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:35:38.767Z CPU=0.0% WS=64.69MB Managed=197.06MB Threads=32
+[17:36:09.766 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:36:08.766Z CPU=0.0% WS=64.69MB Managed=197.39MB Threads=32
+[17:36:39.766 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:36:38.766Z CPU=0.0% WS=64.72MB Managed=197.70MB Threads=32
+[17:37:09.766 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:37:08.767Z CPU=0.0% WS=64.92MB Managed=198.04MB Threads=33
+[17:37:39.766 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:37:38.767Z CPU=0.0% WS=65.89MB Managed=198.36MB Threads=32
+[17:38:09.767 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:38:08.768Z CPU=0.0% WS=65.91MB Managed=198.69MB Threads=33
+[17:38:39.767 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:38:38.768Z CPU=0.0% WS=65.89MB Managed=199.03MB Threads=32
+[17:39:09.767 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:39:08.768Z CPU=0.0% WS=65.89MB Managed=199.35MB Threads=32
+[17:39:39.766 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:39:38.768Z CPU=0.0% WS=65.91MB Managed=199.68MB Threads=33
+[17:40:09.767 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:40:08.768Z CPU=0.0% WS=65.89MB Managed=200.00MB Threads=32
+[17:40:39.767 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:40:38.769Z CPU=0.0% WS=66.05MB Managed=200.35MB Threads=33
+[17:41:09.767 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:41:08.768Z CPU=0.0% WS=66.05MB Managed=200.69MB Threads=33
+[17:41:39.767 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:41:38.768Z CPU=0.0% WS=66.09MB Managed=193.16MB Threads=33
+[17:42:09.768 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:42:08.768Z CPU=0.0% WS=66.08MB Managed=193.50MB Threads=32
+[17:42:39.767 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:42:38.767Z CPU=0.0% WS=66.08MB Managed=193.83MB Threads=32
+[17:43:09.767 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:43:08.768Z CPU=0.0% WS=65.73MB Managed=194.15MB Threads=32
+[17:43:39.768 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:43:38.768Z CPU=0.0% WS=64.92MB Managed=194.49MB Threads=32
+[17:44:09.767 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:44:08.768Z CPU=0.0% WS=64.95MB Managed=194.83MB Threads=33
+[17:44:39.767 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:44:38.768Z CPU=0.0% WS=64.94MB Managed=195.16MB Threads=32
+[17:45:09.767 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:45:08.769Z CPU=0.0% WS=59.69MB Managed=195.49MB Threads=33
+[17:45:39.767 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:45:38.768Z CPU=0.0% WS=60.00MB Managed=195.84MB Threads=34
+[17:46:09.768 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:46:08.768Z CPU=0.0% WS=54.73MB Managed=196.18MB Threads=32
+[17:46:39.768 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:46:38.769Z CPU=0.0% WS=55.14MB Managed=196.48MB Threads=32
+[17:47:09.768 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:47:08.768Z CPU=0.0% WS=51.33MB Managed=196.83MB Threads=33
+[17:47:39.768 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:47:38.768Z CPU=0.0% WS=51.69MB Managed=197.17MB Threads=33
+[17:48:09.768 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:48:08.768Z CPU=0.0% WS=52.05MB Managed=197.51MB Threads=33
+[17:48:39.768 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:48:38.768Z CPU=0.0% WS=51.89MB Managed=197.84MB Threads=32
+[17:49:09.767 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:49:08.769Z CPU=0.0% WS=52.27MB Managed=198.19MB Threads=32
+[17:49:39.768 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:49:38.768Z CPU=0.0% WS=51.83MB Managed=198.53MB Threads=33
+[17:50:09.768 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:50:08.768Z CPU=0.0% WS=52.25MB Managed=198.87MB Threads=33
+[17:50:39.768 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:50:38.768Z CPU=0.0% WS=52.58MB Managed=199.20MB Threads=32
+[17:51:09.768 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:51:08.768Z CPU=0.0% WS=53.47MB Managed=199.54MB Threads=33
+[17:51:39.767 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:51:38.767Z CPU=0.0% WS=45.77MB Managed=199.88MB Threads=33
+[17:51:54.016 DBG] [T:82] [Rank] A new session connected. sessionId=52f50944-a7a8-4ac1-874f-29538251e554, remoteEndPoint=127.0.0.1:56415
+[17:51:54.035 ERR] [T:79] [Rank] The type initializer for 'SP.Core.Serialization.NetSerializerBuilder' threw an exception.
+System.TypeInitializationException: The type initializer for 'SP.Core.Serialization.NetSerializerBuilder' threw an exception.
+ ---> System.Reflection.AmbiguousMatchException: Ambiguous match found for 'SP.Core.Serialization.NetSerializer Void Serialize[T](SP.Core.Serialization.NetWriter ByRef, T)'.
+   at System.RuntimeType.GetMethodImplCommon(String name, Int32 genericParameterCount, BindingFlags bindingAttr, Binder binder, CallingConventions callConv, Type[] types, ParameterModifier[] modifiers)
+   at SP.Core.Serialization.NetSerializerBuilder..cctor() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializerBuilder.cs:line 20
+   --- End of inner exception stack trace ---
+   at SP.Core.Serialization.NetSerializerBuilder.BuildWriter(Type type) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializerBuilder.cs:line 43
+   at SP.Core.Serialization.NetSerializer.BuildDataClass(Type t) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 245
+   at SP.Core.Serialization.NetSerializer.Build(Type t) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 35
+   at System.Collections.Concurrent.ConcurrentDictionary`2.GetOrAdd(TKey key, Func`2 valueFactory)
+   at SP.Core.Serialization.NetSerializer.GetOrBuild(Type type) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 26
+   at SP.Core.Serialization.NetSerializer.Deserialize(NetReader& r, Type type) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 23
+   at SP.Engine.Runtime.Networking.BaseMessage`1.Deserialize[TProtocol](IEncryptor encryptor, ICompressor compressor) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Networking/BaseMessage.cs:line 43
+   at SP.Engine.Server.Session.SP.Engine.Runtime.Command.ICommandContext.Deserialize[TProtocol](IMessage message) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Server/Session.cs:line 45
+   at SP.Engine.Runtime.Command.BaseCommand`2.Execute(ICommandContext context, IMessage message) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Command/BaseCommand.cs:line 20
+[17:51:59.023 DBG] [T:55] [Rank] The session 52f50944-a7a8-4ac1-874f-29538251e554 has been closed. reason="ClientClosing"
+[17:51:59.028 DBG] [T:79] [Rank] A new session connected. sessionId=bbcf11bb-6888-4245-9181-901ccebc0806, remoteEndPoint=127.0.0.1:56416
+[17:51:59.029 ERR] [T:55] [Rank] The type initializer for 'SP.Core.Serialization.NetSerializerBuilder' threw an exception.
+System.TypeInitializationException: The type initializer for 'SP.Core.Serialization.NetSerializerBuilder' threw an exception.
+ ---> System.Reflection.AmbiguousMatchException: Ambiguous match found for 'SP.Core.Serialization.NetSerializer Void Serialize[T](SP.Core.Serialization.NetWriter ByRef, T)'.
+   at System.RuntimeType.GetMethodImplCommon(String name, Int32 genericParameterCount, BindingFlags bindingAttr, Binder binder, CallingConventions callConv, Type[] types, ParameterModifier[] modifiers)
+   at SP.Core.Serialization.NetSerializerBuilder..cctor() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializerBuilder.cs:line 20
+   --- End of inner exception stack trace ---
+   at SP.Core.Serialization.NetSerializerBuilder.BuildWriter(Type type) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializerBuilder.cs:line 43
+   at SP.Core.Serialization.NetSerializer.BuildDataClass(Type t) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 245
+   at SP.Core.Serialization.NetSerializer.Build(Type t) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 35
+   at System.Collections.Concurrent.ConcurrentDictionary`2.GetOrAdd(TKey key, Func`2 valueFactory)
+   at SP.Core.Serialization.NetSerializer.GetOrBuild(Type type) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 26
+   at SP.Core.Serialization.NetSerializer.Deserialize(NetReader& r, Type type) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 23
+   at SP.Engine.Runtime.Networking.BaseMessage`1.Deserialize[TProtocol](IEncryptor encryptor, ICompressor compressor) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Networking/BaseMessage.cs:line 43
+   at SP.Engine.Server.Session.SP.Engine.Runtime.Command.ICommandContext.Deserialize[TProtocol](IMessage message) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Server/Session.cs:line 45
+   at SP.Engine.Runtime.Command.BaseCommand`2.Execute(ICommandContext context, IMessage message) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Command/BaseCommand.cs:line 20
+[17:51:59.606 ERR] [T:55] [Rank] The type initializer for 'SP.Core.Serialization.NetSerializerBuilder' threw an exception.
+System.TypeInitializationException: The type initializer for 'SP.Core.Serialization.NetSerializerBuilder' threw an exception.
+ ---> System.Reflection.AmbiguousMatchException: Ambiguous match found for 'SP.Core.Serialization.NetSerializer Void Serialize[T](SP.Core.Serialization.NetWriter ByRef, T)'.
+   at System.RuntimeType.GetMethodImplCommon(String name, Int32 genericParameterCount, BindingFlags bindingAttr, Binder binder, CallingConventions callConv, Type[] types, ParameterModifier[] modifiers)
+   at SP.Core.Serialization.NetSerializerBuilder..cctor() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializerBuilder.cs:line 20
+   --- End of inner exception stack trace ---
+   at SP.Core.Serialization.NetSerializerBuilder.BuildWriter(Type type) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializerBuilder.cs:line 43
+   at SP.Core.Serialization.NetSerializer.BuildDataClass(Type t) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 245
+   at SP.Core.Serialization.NetSerializer.Build(Type t) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 35
+   at System.Collections.Concurrent.ConcurrentDictionary`2.GetOrAdd(TKey key, Func`2 valueFactory)
+   at SP.Core.Serialization.NetSerializer.GetOrBuild(Type type) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 26
+   at SP.Core.Serialization.NetSerializer.Deserialize(NetReader& r, Type type) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 23
+   at SP.Engine.Runtime.Networking.BaseMessage`1.Deserialize[TProtocol](IEncryptor encryptor, ICompressor compressor) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Networking/BaseMessage.cs:line 43
+   at SP.Engine.Server.Session.SP.Engine.Runtime.Command.ICommandContext.Deserialize[TProtocol](IMessage message) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Server/Session.cs:line 45
+   at SP.Engine.Runtime.Command.BaseCommand`2.Execute(ICommandContext context, IMessage message) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Command/BaseCommand.cs:line 20
+[17:51:59.615 DBG] [T:79] [Rank] The session bbcf11bb-6888-4245-9181-901ccebc0806 has been closed. reason="ClientClosing"
+[17:52:07.592 INF] [T:1] [Rank] Logger setup was successful: Rank
+[17:52:07.728 DBG] [T:1] [Rank] Discover commands: [3003, 3002, 3001, 3000, 1000]
+[17:52:07.729 INF] [T:1] [Rank] The server Rank is initialized.
+[17:52:08.053 DBG] [T:1] [Rank] [Daily] Reward loaded. season="Daily"/1, uid=1, rank=2, score=30, isRewarded=false, item=[0:0:70]
+[17:52:08.053 DBG] [T:1] [Rank] [Daily] Reward loaded. season="Daily"/1, uid=2, rank=1, score=40, isRewarded=false, item=[0:0:100]
+[17:52:08.053 DBG] [T:1] [Rank] [Daily] Reward loaded. season="Daily"/1, uid=1000001, rank=3, score=10, isRewarded=false, item=[0:0:50]
+[17:52:08.053 DBG] [T:1] [Rank] [Daily] Reward loaded. season="Daily"/12, uid=1000001, rank=1, score=30, isRewarded=false, item=[0:0:100]
+[17:52:08.064 INF] [T:1] [Rank] [Daily] Season loaded. kind="Daily", num=66, state="Running", start="2026-01-26T00:00:00.0000000+09:00", end="2026-01-27T00:00:00.0000000+09:00"
+[17:52:08.066 INF] [T:1] [Rank] Listener (0.0.0.0:20000:"Tcp") was started.
+[17:52:08.068 INF] [T:1] [Rank] The server instance Rank was been started!
+[17:52:18.131 DBG] [T:10] [Rank] A new session connected. sessionId=8771f28a-7a14-4dcd-9eed-e2088ac9e56d, remoteEndPoint=127.0.0.1:56427
+[17:52:18.180 DBG] [T:10] [Rank] Session authentication succeeded. sessionId=8771f28a-7a14-4dcd-9eed-e2088ac9e56d, peerId=1
+[17:52:18.219 INF] [T:10] [Rank] Server Game registered.
+[17:52:37.739 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:52:36.731Z CPU=0.0% WS=78.70MB Managed=190.21MB Threads=33
+[17:53:07.731 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:53:06.731Z CPU=0.0% WS=79.97MB Managed=190.67MB Threads=33
+[17:53:37.731 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:53:36.731Z CPU=0.0% WS=80.64MB Managed=191.11MB Threads=33
+[17:54:07.730 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:54:06.730Z CPU=0.0% WS=81.19MB Managed=191.58MB Threads=35
+[17:54:37.732 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:54:36.731Z CPU=0.0% WS=83.78MB Managed=192.52MB Threads=31
+[17:55:07.732 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:55:06.732Z CPU=0.0% WS=87.38MB Managed=192.96MB Threads=32
+[17:55:37.731 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:55:36.730Z CPU=0.0% WS=87.94MB Managed=193.40MB Threads=31
+[17:56:07.732 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:56:06.731Z CPU=0.0% WS=81.55MB Managed=193.83MB Threads=32
+[17:56:37.732 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:56:36.731Z CPU=0.0% WS=61.73MB Managed=194.27MB Threads=32
+[17:57:07.731 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:57:06.731Z CPU=0.0% WS=64.91MB Managed=194.70MB Threads=34
+[17:57:37.732 INF] [T:7] [PerfMonitor] Time:2026-01-26 08:57:36.732Z CPU=0.0% WS=73.47MB Managed=195.17MB Threads=33

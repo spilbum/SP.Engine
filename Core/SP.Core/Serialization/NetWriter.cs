@@ -177,6 +177,7 @@ namespace SP.Core.Serialization
             WriteVarULong(zigzag);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteString(string value)
         {
             if (value == null)
@@ -193,12 +194,120 @@ namespace SP.Core.Serialization
             Advance(written);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteBytes(ReadOnlySpan<byte> data)
         {
             WriteVarUInt((uint)data.Length);
             var span = GetSpan(data.Length);
             data.CopyTo(span);
             Advance(data.Length);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Write<T>(T value) where T : unmanaged
+        {
+            if (typeof(T) == typeof(bool))
+            {
+                WriteBool(Unsafe.As<T, bool>(ref value));
+                return;
+            }
+
+            if (typeof(T) == typeof(byte))
+            {
+                WriteByte(Unsafe.As<T, byte>(ref value));
+                return;
+            }
+
+            if (typeof(T) == typeof(sbyte))
+            {
+                WriteSByte(Unsafe.As<T, sbyte>(ref value));
+                return;
+            }
+
+            if (typeof(T) == typeof(short))
+            {
+                WriteInt16(Unsafe.As<T, short>(ref value));
+                return;
+            }
+
+            if (typeof(T) == typeof(ushort))
+            {
+                WriteUInt16(Unsafe.As<T, ushort>(ref value));
+                return;
+            }
+
+            if (typeof(T) == typeof(int))
+            {
+                WriteInt32(Unsafe.As<T, int>(ref value));
+                return;
+            }
+
+            if (typeof(T) == typeof(uint))
+            {
+                WriteUInt32(Unsafe.As<T, uint>(ref value));
+                return;
+            }
+
+            if (typeof(T) == typeof(long))
+            {
+                WriteInt64(Unsafe.As<T, long>(ref value));
+                return;
+            }
+
+            if (typeof(T) == typeof(ulong))
+            {
+                WriteUInt64(Unsafe.As<T, ulong>(ref value));
+                return;
+            }
+
+            if (typeof(T) == typeof(float))
+            {
+                WriteSingle(Unsafe.As<T, float>(ref value));
+                return;
+            }
+
+            if (typeof(T) == typeof(double))
+            {
+                WriteDouble(Unsafe.As<T, double>(ref value));
+                return;
+            }
+
+            if (typeof(T) == typeof(DateTime))
+            {
+                WriteInt64(Unsafe.As<T, DateTime>(ref value).Ticks);
+            }
+
+            if (Unsafe.SizeOf<T>() == 4) // enum: int, uint
+            {
+                WriteInt32(Unsafe.As<T, int>(ref value));
+                return;
+            }
+
+            if (Unsafe.SizeOf<T>() == 1) // enum: byte, sbyte
+            {
+                WriteByte(Unsafe.As<T, byte>(ref value));
+                return;
+            }
+
+            if (Unsafe.SizeOf<T>() == 2) // enum: short, ushort
+            {
+                WriteInt16(Unsafe.As<T, short>(ref value));
+                return;
+            }
+
+            if (Unsafe.SizeOf<T>() == 8) // enum: long, ulong
+            {
+                WriteInt64(Unsafe.As<T, long>(ref value));
+                return;
+            }
+
+            ThrowNotSupportedType(typeof(T));
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void ThrowNotSupportedType(Type t)
+        {
+            throw new NotSupportedException($"Type '{t.Name}' is not supported by NetWriter.Write<T>. Only primitives are allowed.");
         }
     }
 }

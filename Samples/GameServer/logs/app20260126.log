@@ -1,0 +1,240 @@
+[15:31:34.739 INF] [T:1] [Game] Logger setup was successful: Game
+[15:31:34.878 DBG] [T:1] [Game] Discover commands: [10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[15:31:34.892 DBG] [T:1] [Game] Discover commands: [4003, 4002, 4001, 4000, 2000]
+[15:31:34.894 INF] [T:1] [Game] The server Game is initialized.
+[15:31:35.634 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[15:31:35.638 INF] [T:1] [Game] The server instance Game was been started!
+[15:31:35.640 INF] [T:1] [Game] [Rank] State changed: "None" -> "Connecting"
+[15:31:35.641 INF] [T:1] [Game] Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.109, DnsName=
+[15:31:35.673 INF] [T:8] [Game] [Rank] State changed: "Connecting" -> "Handshake"
+[15:31:35.681 ERR] [T:8] [Game] The type initializer for 'SP.Core.Serialization.NetSerializerBuilder' threw an exception.
+System.TypeInitializationException: The type initializer for 'SP.Core.Serialization.NetSerializerBuilder' threw an exception.
+ ---> System.Reflection.AmbiguousMatchException: Ambiguous match found for 'SP.Core.Serialization.NetSerializer Void Serialize[T](SP.Core.Serialization.NetWriter ByRef, T)'.
+   at System.RuntimeType.GetMethodImplCommon(String name, Int32 genericParameterCount, BindingFlags bindingAttr, Binder binder, CallingConventions callConv, Type[] types, ParameterModifier[] modifiers)
+   at SP.Core.Serialization.NetSerializerBuilder..cctor() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializerBuilder.cs:line 20
+   --- End of inner exception stack trace ---
+   at SP.Core.Serialization.NetSerializerBuilder.BuildWriter(Type type) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializerBuilder.cs:line 43
+   at SP.Core.Serialization.NetSerializer.BuildDataClass(Type t) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 245
+   at SP.Core.Serialization.NetSerializer.Build(Type t) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 35
+   at System.Collections.Concurrent.ConcurrentDictionary`2.GetOrAdd(TKey key, Func`2 valueFactory)
+   at SP.Core.Serialization.NetSerializer.GetOrBuild(Type type) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 26
+   at SP.Core.Serialization.NetSerializer.Serialize(NetWriter& w, Type type, Object value) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 17
+   at SP.Engine.Runtime.Networking.BaseMessage`1.Serialize(IProtocolData protocol, IPolicy policy, IEncryptor encryptor, ICompressor compressor) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Networking/BaseMessage.cs:line 90
+   at SP.Engine.Client.BaseNetPeer.TrySend(Int64 sequenceNumber, IProtocolData data, IPolicy policy, IEncryptor encryptor, ICompressor compressor) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 266
+[15:31:35.685 ERR] [T:8] [Game] [Rank] An error occurred: Failed to send auth handshake
+   at SP.Engine.Client.BaseNetPeer.SendAuthHandshake() in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 453
+[15:31:40.681 INF] [T:7] [Game] [Rank] State changed: "Handshake" -> "Closed"
+[15:31:40.681 INF] [T:7] [Game] [Rank] Disconnected
+[15:31:40.682 ERR] [T:7] [Game] ThreadFiber batch failed
+System.InvalidOperationException: Already opened
+   at SP.Engine.Client.BaseNetPeer.Connect(String ip, Int32 port) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 193
+   at SP.Core.Fiber.AsyncJob.StateJob`2.Invoke() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/AsyncJob.cs:line 135
+   at SP.Core.Fiber.ThreadFiber.Run() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/ThreadFiber.cs:line 101
+[15:31:40.682 INF] [T:56] [Game] [Rank] State changed: "Closed" -> "Handshake"
+[15:31:40.683 ERR] [T:56] [Game] The type initializer for 'SP.Core.Serialization.NetSerializerBuilder' threw an exception.
+System.TypeInitializationException: The type initializer for 'SP.Core.Serialization.NetSerializerBuilder' threw an exception.
+ ---> System.Reflection.AmbiguousMatchException: Ambiguous match found for 'SP.Core.Serialization.NetSerializer Void Serialize[T](SP.Core.Serialization.NetWriter ByRef, T)'.
+   at System.RuntimeType.GetMethodImplCommon(String name, Int32 genericParameterCount, BindingFlags bindingAttr, Binder binder, CallingConventions callConv, Type[] types, ParameterModifier[] modifiers)
+   at SP.Core.Serialization.NetSerializerBuilder..cctor() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializerBuilder.cs:line 20
+   --- End of inner exception stack trace ---
+   at SP.Core.Serialization.NetSerializerBuilder.BuildWriter(Type type) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializerBuilder.cs:line 43
+   at SP.Core.Serialization.NetSerializer.BuildDataClass(Type t) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 245
+   at SP.Core.Serialization.NetSerializer.Build(Type t) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 35
+   at System.Collections.Concurrent.ConcurrentDictionary`2.GetOrAdd(TKey key, Func`2 valueFactory)
+   at SP.Core.Serialization.NetSerializer.GetOrBuild(Type type) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 26
+   at SP.Core.Serialization.NetSerializer.Serialize(NetWriter& w, Type type, Object value) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 17
+   at SP.Engine.Runtime.Networking.BaseMessage`1.Serialize(IProtocolData protocol, IPolicy policy, IEncryptor encryptor, ICompressor compressor) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Networking/BaseMessage.cs:line 90
+   at SP.Engine.Client.BaseNetPeer.TrySend(Int64 sequenceNumber, IProtocolData data, IPolicy policy, IEncryptor encryptor, ICompressor compressor) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 266
+[15:31:40.683 ERR] [T:56] [Game] [Rank] An error occurred: Failed to send auth handshake
+   at SP.Engine.Client.BaseNetPeer.SendAuthHandshake() in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 453
+[15:31:55.683 ERR] [T:7] [Game] ThreadFiber batch failed
+System.InvalidOperationException: Already opened
+   at SP.Engine.Client.BaseNetPeer.Connect(String ip, Int32 port) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 193
+   at SP.Core.Fiber.AsyncJob.StateJob`2.Invoke() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/AsyncJob.cs:line 135
+   at SP.Core.Fiber.ThreadFiber.Run() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/ThreadFiber.cs:line 101
+[15:32:10.682 ERR] [T:7] [Game] ThreadFiber batch failed
+System.InvalidOperationException: Already opened
+   at SP.Engine.Client.BaseNetPeer.Connect(String ip, Int32 port) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 193
+   at SP.Core.Fiber.AsyncJob.StateJob`2.Invoke() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/AsyncJob.cs:line 135
+   at SP.Core.Fiber.ThreadFiber.Run() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/ThreadFiber.cs:line 101
+[15:32:25.682 ERR] [T:7] [Game] ThreadFiber batch failed
+System.InvalidOperationException: Already opened
+   at SP.Engine.Client.BaseNetPeer.Connect(String ip, Int32 port) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 193
+   at SP.Core.Fiber.AsyncJob.StateJob`2.Invoke() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/AsyncJob.cs:line 135
+   at SP.Core.Fiber.ThreadFiber.Run() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/ThreadFiber.cs:line 101
+[15:32:40.682 ERR] [T:7] [Game] ThreadFiber batch failed
+System.InvalidOperationException: Already opened
+   at SP.Engine.Client.BaseNetPeer.Connect(String ip, Int32 port) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 193
+   at SP.Core.Fiber.AsyncJob.StateJob`2.Invoke() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/AsyncJob.cs:line 135
+   at SP.Core.Fiber.ThreadFiber.Run() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/ThreadFiber.cs:line 101
+[15:32:55.683 ERR] [T:7] [Game] ThreadFiber batch failed
+System.InvalidOperationException: Already opened
+   at SP.Engine.Client.BaseNetPeer.Connect(String ip, Int32 port) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 193
+   at SP.Core.Fiber.AsyncJob.StateJob`2.Invoke() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/AsyncJob.cs:line 135
+   at SP.Core.Fiber.ThreadFiber.Run() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/ThreadFiber.cs:line 101
+[15:33:10.683 ERR] [T:7] [Game] ThreadFiber batch failed
+System.InvalidOperationException: Already opened
+   at SP.Engine.Client.BaseNetPeer.Connect(String ip, Int32 port) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 193
+   at SP.Core.Fiber.AsyncJob.StateJob`2.Invoke() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/AsyncJob.cs:line 135
+   at SP.Core.Fiber.ThreadFiber.Run() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/ThreadFiber.cs:line 101
+[15:33:25.683 ERR] [T:7] [Game] ThreadFiber batch failed
+System.InvalidOperationException: Already opened
+   at SP.Engine.Client.BaseNetPeer.Connect(String ip, Int32 port) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 193
+   at SP.Core.Fiber.AsyncJob.StateJob`2.Invoke() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/AsyncJob.cs:line 135
+   at SP.Core.Fiber.ThreadFiber.Run() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/ThreadFiber.cs:line 101
+[15:33:40.682 ERR] [T:7] [Game] ThreadFiber batch failed
+System.InvalidOperationException: Already opened
+   at SP.Engine.Client.BaseNetPeer.Connect(String ip, Int32 port) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 193
+   at SP.Core.Fiber.AsyncJob.StateJob`2.Invoke() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/AsyncJob.cs:line 135
+   at SP.Core.Fiber.ThreadFiber.Run() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/ThreadFiber.cs:line 101
+[15:33:55.683 ERR] [T:7] [Game] ThreadFiber batch failed
+System.InvalidOperationException: Already opened
+   at SP.Engine.Client.BaseNetPeer.Connect(String ip, Int32 port) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 193
+   at SP.Core.Fiber.AsyncJob.StateJob`2.Invoke() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/AsyncJob.cs:line 135
+   at SP.Core.Fiber.ThreadFiber.Run() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/ThreadFiber.cs:line 101
+[15:34:10.683 ERR] [T:7] [Game] ThreadFiber batch failed
+System.InvalidOperationException: Already opened
+   at SP.Engine.Client.BaseNetPeer.Connect(String ip, Int32 port) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 193
+   at SP.Core.Fiber.AsyncJob.StateJob`2.Invoke() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/AsyncJob.cs:line 135
+   at SP.Core.Fiber.ThreadFiber.Run() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/ThreadFiber.cs:line 101
+[15:34:25.683 ERR] [T:7] [Game] ThreadFiber batch failed
+System.InvalidOperationException: Already opened
+   at SP.Engine.Client.BaseNetPeer.Connect(String ip, Int32 port) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 193
+   at SP.Core.Fiber.AsyncJob.StateJob`2.Invoke() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/AsyncJob.cs:line 135
+   at SP.Core.Fiber.ThreadFiber.Run() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/ThreadFiber.cs:line 101
+[15:34:40.683 ERR] [T:7] [Game] ThreadFiber batch failed
+System.InvalidOperationException: Already opened
+   at SP.Engine.Client.BaseNetPeer.Connect(String ip, Int32 port) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 193
+   at SP.Core.Fiber.AsyncJob.StateJob`2.Invoke() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/AsyncJob.cs:line 135
+   at SP.Core.Fiber.ThreadFiber.Run() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/ThreadFiber.cs:line 101
+[15:34:55.684 ERR] [T:7] [Game] ThreadFiber batch failed
+System.InvalidOperationException: Already opened
+   at SP.Engine.Client.BaseNetPeer.Connect(String ip, Int32 port) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 193
+   at SP.Core.Fiber.AsyncJob.StateJob`2.Invoke() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/AsyncJob.cs:line 135
+   at SP.Core.Fiber.ThreadFiber.Run() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/ThreadFiber.cs:line 101
+[15:35:10.683 ERR] [T:7] [Game] ThreadFiber batch failed
+System.InvalidOperationException: Already opened
+   at SP.Engine.Client.BaseNetPeer.Connect(String ip, Int32 port) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 193
+   at SP.Core.Fiber.AsyncJob.StateJob`2.Invoke() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/AsyncJob.cs:line 135
+   at SP.Core.Fiber.ThreadFiber.Run() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/ThreadFiber.cs:line 101
+[15:35:25.683 ERR] [T:7] [Game] ThreadFiber batch failed
+System.InvalidOperationException: Already opened
+   at SP.Engine.Client.BaseNetPeer.Connect(String ip, Int32 port) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 193
+   at SP.Core.Fiber.AsyncJob.StateJob`2.Invoke() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/AsyncJob.cs:line 135
+   at SP.Core.Fiber.ThreadFiber.Run() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/ThreadFiber.cs:line 101
+[15:35:40.683 ERR] [T:7] [Game] ThreadFiber batch failed
+System.InvalidOperationException: Already opened
+   at SP.Engine.Client.BaseNetPeer.Connect(String ip, Int32 port) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 193
+   at SP.Core.Fiber.AsyncJob.StateJob`2.Invoke() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/AsyncJob.cs:line 135
+   at SP.Core.Fiber.ThreadFiber.Run() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/ThreadFiber.cs:line 101
+[15:35:40.684 INF] [T:62] [Game] [Rank] State changed: "Handshake" -> "Closed"
+[15:35:40.685 INF] [T:62] [Game] [Rank] Disconnected
+[15:35:48.245 INF] [T:1] [Game] Logger setup was successful: Game
+[15:35:48.395 DBG] [T:1] [Game] Discover commands: [10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[15:35:48.411 DBG] [T:1] [Game] Discover commands: [4003, 4002, 4001, 4000, 2000]
+[15:35:48.412 INF] [T:1] [Game] The server Game is initialized.
+[15:35:54.119 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[15:35:54.122 INF] [T:1] [Game] The server instance Game was been started!
+[15:35:54.123 INF] [T:1] [Game] [Rank] State changed: "None" -> "Connecting"
+[15:35:54.123 INF] [T:1] [Game] Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.109, DnsName=
+[15:35:54.157 INF] [T:43] [Game] [Rank] State changed: "Connecting" -> "Handshake"
+[15:35:54.163 ERR] [T:43] [Game] The type initializer for 'SP.Core.Serialization.NetSerializerBuilder' threw an exception.
+System.TypeInitializationException: The type initializer for 'SP.Core.Serialization.NetSerializerBuilder' threw an exception.
+ ---> System.InvalidOperationException: Sequence contains no matching element
+   at System.Linq.ThrowHelper.ThrowNoMatchException()
+   at System.Linq.Enumerable.First[TSource](IEnumerable`1 source, Func`2 predicate)
+   at SP.Core.Serialization.NetSerializerBuilder..cctor() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializerBuilder.cs:line 23
+   --- End of inner exception stack trace ---
+   at SP.Core.Serialization.NetSerializerBuilder.BuildWriter(Type type) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializerBuilder.cs:line 47
+   at SP.Core.Serialization.NetSerializer.BuildDataClass(Type t) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 245
+   at SP.Core.Serialization.NetSerializer.Build(Type t) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 35
+   at System.Collections.Concurrent.ConcurrentDictionary`2.GetOrAdd(TKey key, Func`2 valueFactory)
+   at SP.Core.Serialization.NetSerializer.GetOrBuild(Type type) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 26
+   at SP.Core.Serialization.NetSerializer.Serialize(NetWriter& w, Type type, Object value) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 17
+   at SP.Engine.Runtime.Networking.BaseMessage`1.Serialize(IProtocolData protocol, IPolicy policy, IEncryptor encryptor, ICompressor compressor) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Networking/BaseMessage.cs:line 90
+   at SP.Engine.Client.BaseNetPeer.TrySend(Int64 sequenceNumber, IProtocolData data, IPolicy policy, IEncryptor encryptor, ICompressor compressor) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 266
+[15:35:54.168 ERR] [T:43] [Game] [Rank] An error occurred: Failed to send auth handshake
+   at SP.Engine.Client.BaseNetPeer.SendAuthHandshake() in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 453
+[15:35:59.167 INF] [T:7] [Game] [Rank] State changed: "Handshake" -> "Closed"
+[15:35:59.167 INF] [T:7] [Game] [Rank] Disconnected
+[15:35:59.168 ERR] [T:7] [Game] ThreadFiber batch failed
+System.InvalidOperationException: Already opened
+   at SP.Engine.Client.BaseNetPeer.Connect(String ip, Int32 port) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 193
+   at SP.Core.Fiber.AsyncJob.StateJob`2.Invoke() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/AsyncJob.cs:line 135
+   at SP.Core.Fiber.ThreadFiber.Run() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/ThreadFiber.cs:line 101
+[15:35:59.168 INF] [T:8] [Game] [Rank] State changed: "Closed" -> "Handshake"
+[15:35:59.169 ERR] [T:8] [Game] The type initializer for 'SP.Core.Serialization.NetSerializerBuilder' threw an exception.
+System.TypeInitializationException: The type initializer for 'SP.Core.Serialization.NetSerializerBuilder' threw an exception.
+ ---> System.InvalidOperationException: Sequence contains no matching element
+   at System.Linq.ThrowHelper.ThrowNoMatchException()
+   at System.Linq.Enumerable.First[TSource](IEnumerable`1 source, Func`2 predicate)
+   at SP.Core.Serialization.NetSerializerBuilder..cctor() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializerBuilder.cs:line 23
+   --- End of inner exception stack trace ---
+   at SP.Core.Serialization.NetSerializerBuilder.BuildWriter(Type type) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializerBuilder.cs:line 47
+   at SP.Core.Serialization.NetSerializer.BuildDataClass(Type t) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 245
+   at SP.Core.Serialization.NetSerializer.Build(Type t) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 35
+   at System.Collections.Concurrent.ConcurrentDictionary`2.GetOrAdd(TKey key, Func`2 valueFactory)
+   at SP.Core.Serialization.NetSerializer.GetOrBuild(Type type) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 26
+   at SP.Core.Serialization.NetSerializer.Serialize(NetWriter& w, Type type, Object value) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 17
+   at SP.Engine.Runtime.Networking.BaseMessage`1.Serialize(IProtocolData protocol, IPolicy policy, IEncryptor encryptor, ICompressor compressor) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Networking/BaseMessage.cs:line 90
+   at SP.Engine.Client.BaseNetPeer.TrySend(Int64 sequenceNumber, IProtocolData data, IPolicy policy, IEncryptor encryptor, ICompressor compressor) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 266
+[15:35:59.169 ERR] [T:8] [Game] [Rank] An error occurred: Failed to send auth handshake
+   at SP.Engine.Client.BaseNetPeer.SendAuthHandshake() in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 453
+[15:37:59.805 INF] [T:1] [Game] Logger setup was successful: Game
+[15:37:59.947 DBG] [T:1] [Game] Discover commands: [10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[15:37:59.963 DBG] [T:1] [Game] Discover commands: [4003, 4002, 4001, 4000, 2000]
+[15:37:59.964 INF] [T:1] [Game] The server Game is initialized.
+[15:38:05.671 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[15:38:05.674 INF] [T:1] [Game] The server instance Game was been started!
+[15:38:05.676 INF] [T:1] [Game] [Rank] State changed: "None" -> "Connecting"
+[15:38:05.676 INF] [T:1] [Game] Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.109, DnsName=
+[15:38:05.709 INF] [T:10] [Game] [Rank] State changed: "Connecting" -> "Handshake"
+[15:38:05.724 ERR] [T:10] [Game] Type 'DhKeySize' is not supported by NetWriter.Write<T>. Only primitives are allowed.
+System.NotSupportedException: Type 'DhKeySize' is not supported by NetWriter.Write<T>. Only primitives are allowed.
+   at SP.Core.Serialization.NetWriter.ThrowNotSupportedType(Type t) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetWriter.cs:line 281
+   at lambda_method11(Closure, NetWriter&, Object)
+   at SP.Core.Serialization.NetSerializer.Serialize(NetWriter& w, Type type, Object value) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 17
+   at SP.Engine.Runtime.Networking.BaseMessage`1.Serialize(IProtocolData protocol, IPolicy policy, IEncryptor encryptor, ICompressor compressor) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Networking/BaseMessage.cs:line 90
+   at SP.Engine.Client.BaseNetPeer.TrySend(Int64 sequenceNumber, IProtocolData data, IPolicy policy, IEncryptor encryptor, ICompressor compressor) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 266
+[15:38:05.729 ERR] [T:10] [Game] [Rank] An error occurred: Failed to send auth handshake
+   at SP.Engine.Client.BaseNetPeer.SendAuthHandshake() in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 453
+[15:38:10.717 INF] [T:7] [Game] [Rank] State changed: "Handshake" -> "Closed"
+[15:38:10.717 INF] [T:7] [Game] [Rank] Disconnected
+[15:38:10.718 ERR] [T:7] [Game] ThreadFiber batch failed
+System.InvalidOperationException: Already opened
+   at SP.Engine.Client.BaseNetPeer.Connect(String ip, Int32 port) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 193
+   at SP.Core.Fiber.AsyncJob.StateJob`2.Invoke() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/AsyncJob.cs:line 135
+   at SP.Core.Fiber.ThreadFiber.Run() in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Fiber/ThreadFiber.cs:line 101
+[15:38:10.718 INF] [T:55] [Game] [Rank] State changed: "Closed" -> "Handshake"
+[15:38:10.718 ERR] [T:55] [Game] Type 'DhKeySize' is not supported by NetWriter.Write<T>. Only primitives are allowed.
+System.NotSupportedException: Type 'DhKeySize' is not supported by NetWriter.Write<T>. Only primitives are allowed.
+   at SP.Core.Serialization.NetWriter.ThrowNotSupportedType(Type t) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetWriter.cs:line 281
+   at lambda_method11(Closure, NetWriter&, Object)
+   at SP.Core.Serialization.NetSerializer.Serialize(NetWriter& w, Type type, Object value) in /Users/sangpil/GitHub/SP.Engine/Core/SP.Core/Serialization/NetSerializer.cs:line 17
+   at SP.Engine.Runtime.Networking.BaseMessage`1.Serialize(IProtocolData protocol, IPolicy policy, IEncryptor encryptor, ICompressor compressor) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Networking/BaseMessage.cs:line 90
+   at SP.Engine.Client.BaseNetPeer.TrySend(Int64 sequenceNumber, IProtocolData data, IPolicy policy, IEncryptor encryptor, ICompressor compressor) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 266
+[15:38:10.718 ERR] [T:55] [Game] [Rank] An error occurred: Failed to send auth handshake
+   at SP.Engine.Client.BaseNetPeer.SendAuthHandshake() in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Client/BaseNetPeer.cs:line 453
+[17:51:48.037 INF] [T:1] [Game] Logger setup was successful: Game
+[17:51:48.174 DBG] [T:1] [Game] Discover commands: [10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[17:51:48.188 DBG] [T:1] [Game] Discover commands: [4003, 4002, 4001, 4000, 2000]
+[17:51:48.189 INF] [T:1] [Game] The server Game is initialized.
+[17:51:53.977 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[17:51:53.980 INF] [T:1] [Game] The server instance Game was been started!
+[17:51:53.982 INF] [T:1] [Game] [Rank] State changed: "None" -> "Connecting"
+[17:51:53.982 INF] [T:1] [Game] Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.109, DnsName=
+[17:51:54.016 INF] [T:43] [Game] [Rank] State changed: "Connecting" -> "Handshake"
+[17:52:12.204 INF] [T:1] [Game] Logger setup was successful: Game
+[17:52:12.362 DBG] [T:1] [Game] Discover commands: [10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[17:52:12.384 DBG] [T:1] [Game] Discover commands: [4003, 4002, 4001, 4000, 2000]
+[17:52:12.387 INF] [T:1] [Game] The server Game is initialized.
+[17:52:18.093 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[17:52:18.096 INF] [T:1] [Game] The server instance Game was been started!
+[17:52:18.097 INF] [T:1] [Game] [Rank] State changed: "None" -> "Connecting"
+[17:52:18.097 INF] [T:1] [Game] Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.109, DnsName=
+[17:52:18.130 INF] [T:43] [Game] [Rank] State changed: "Connecting" -> "Handshake"
+[17:52:18.212 INF] [T:44] [Game] [Rank] State changed: "Handshake" -> "Open"
+[17:52:18.212 DBG] [T:44] [Game] [Rank] Connected
+[17:52:18.250 INF] [T:7] [Game] Register succeeded: Rank
+[17:56:16.725 DBG] [T:57] [Game] A new session connected. sessionId=36f0cd9c-bf42-40db-9210-9c1d4ac1e33c, remoteEndPoint=192.168.0.109:56455
+[17:56:16.813 DBG] [T:57] [Game] Session authentication succeeded. sessionId=36f0cd9c-bf42-40db-9210-9c1d4ac1e33c, peerId=1

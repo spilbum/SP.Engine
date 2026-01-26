@@ -41,6 +41,17 @@ namespace SP.Core.Fiber
         {
             return new StateJob<T1, T2>(action, state1, state2);
         }
+        
+        public static IAsyncJob From<T1, T2, T3>(Action<T1, T2, T3> action, T1 state1, T2 state2, T3 state3)
+        {
+            return new StateJob<T1, T2, T3>(action, state1, state2, state3);
+        }
+
+        public static IAsyncJob From<T1, T2, T3, T4>(Action<T1, T2, T3, T4> action, T1 state1, T2 state2, T3 state3,
+            T4 state4)
+        {
+            return new StateJob<T1, T2, T3, T4>(action, state1, state2, state3, state4);
+        }
 
         public static IAsyncJob From(object target, MethodInfo method, params object[] args)
         {
@@ -123,6 +134,35 @@ namespace SP.Core.Fiber
             {
                 _run(_state1, _state2);
             }
+        }
+        
+        private class StateJob<T1, T2, T3> : IAsyncJob
+        {
+            private readonly Action<T1, T2, T3> _run;
+            private readonly T1 _s1; 
+            private readonly T2 _s2; 
+            private readonly T3 _s3;
+        
+            public StateJob(Action<T1, T2, T3> run, T1 s1, T2 s2, T3 s3)
+            {
+                _run = run; _s1 = s1; _s2 = s2; _s3 = s3;
+            }
+            public void Invoke() => _run(_s1, _s2, _s3);
+        }
+
+        private class StateJob<T1, T2, T3, T4> : IAsyncJob
+        {
+            private readonly Action<T1, T2, T3, T4> _run;
+            private readonly T1 _s1; 
+            private readonly T2 _s2; 
+            private readonly T3 _s3; 
+            private readonly T4 _s4;
+
+            public StateJob(Action<T1, T2, T3, T4> run, T1 s1, T2 s2, T3 s3, T4 s4)
+            {
+                _run = run; _s1 = s1; _s2 = s2; _s3 = s3; _s4 = s4;
+            }
+            public void Invoke() => _run(_s1, _s2, _s3, _s4);
         }
     }
 }

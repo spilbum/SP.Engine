@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -546,67 +547,74 @@ namespace SP.Engine.Client
 
         private void OnSessionDataReceived(object sender, DataEventArgs e)
         {
-            _receiveBuffer.TryWrite(e.Data, e.Offset, e.Length);
+            _receiveBuffer.Write(e.Data, e.Offset, e.Length);
 
             try
             {
-                foreach (var message in Filter())
-                    if (_internalCommands.TryGetValue(message.Id, out var command))
+                const int maxFramePerTick = 128;
+                const int headerSize = TcpHeader.ByteSize;
+                var frames = 0;
+
+                while (frames < maxFramePerTick)
+                {
+                    if (_receiveBuffer.ReadableBytes < headerSize)
+                        break;
+
+                    var headerSpan = _receiveBuffer.Peek(headerSize);
+                    if (!TcpHeader.TryRead(headerSpan, out var header, out var consumed))
+                        break;
+
+                    var bodyLen = header.PayloadLength;
+                    if (bodyLen <= 0 || bodyLen > MaxFrameBytes)
                     {
-                        command.Execute(this, message);
+                        Logger.Warn("Invalid payload length. id={0}, max={1}, len={2}",
+                            header.MsdId, MaxFrameBytes, bodyLen);
+                        Close();
+                        break;
                     }
-                    else
+
+                    var total = consumed + bodyLen;
+                    if (_receiveBuffer.ReadableBytes < total)
+                        break;
+
+                    _receiveBuffer.Consume(consumed);
+
+                    IMemoryOwner<byte> owner = null;
+                    try
                     {
-                        SendMessageAck(message.SequenceNumber);
-                        EnqueueReceivedMessage(message);
+                        if (!_receiveBuffer.TryRead(bodyLen, out var bodyMem, out owner))
+                            break;
+      
+                        if (_internalCommands.TryGetValue(header.MsdId, out var command))
+                        {
+                            var message = new TcpMessage(header, bodyMem);
+                            command.Execute(this, message);
+                        }
+                        else
+                        {
+                            var data = bodyMem.ToArray();
+                            var message = new TcpMessage(header, data);
+                            
+                            SendMessageAck(message.SequenceNumber);
+                            EnqueueReceivedMessage(message);
+                        }
                     }
+                    catch (Exception ex)
+                    {
+                        OnError(ex);
+                    }
+                    finally
+                    {
+                        owner?.Dispose();
+                    }
+                
+                    _receiveBuffer.Consume(bodyLen);
+                    frames++;
+                }
             }
             catch (Exception ex)
             {
                 OnError(ex);
-            }
-            finally
-            {
-                _receiveBuffer.ResetIfConsumed();
-            }
-        }
-
-        private IEnumerable<TcpMessage> Filter()
-        {
-            const int maxFramePerTick = 128;
-            const int headerSize = TcpHeader.ByteSize;
-            var frames = 0;
-
-            while (frames < maxFramePerTick)
-            {
-                if (_receiveBuffer.ReadableBytes < headerSize)
-                    yield break;
-
-                var headerSpan = _receiveBuffer.ReadableSpan.Slice(0, headerSize);
-                if (!TcpHeader.TryRead(headerSpan, out var header, out var consumed))
-                    yield break;
-
-                var bodyLen = header.PayloadLength;
-                if (bodyLen <= 0 || bodyLen > MaxFrameBytes)
-                {
-                    Logger.Warn("Invalid payload length. id={0}, max={1}, len={2}",
-                        header.MsdId, MaxFrameBytes, bodyLen);
-                    Close();
-                    yield break;
-                }
-
-                var total = consumed + bodyLen;
-                if (_receiveBuffer.ReadableBytes < total)
-                    yield break;
-
-                _receiveBuffer.Consume(consumed);
-
-                if (!_receiveBuffer.TryReadBytes(bodyLen, out var bodyBytes))
-                    yield break;
-
-                var msg = new TcpMessage(header, bodyBytes);
-                yield return msg;
-                frames++;
             }
         }
 

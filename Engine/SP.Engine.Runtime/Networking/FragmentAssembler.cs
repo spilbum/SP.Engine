@@ -46,12 +46,26 @@ namespace SP.Engine.Runtime.Networking
             if (fragHeader.Index >= fragHeader.TotalCount) return false;
 
             var key = fragHeader.FragId;
-            var state = _map.GetOrAdd(key, _ => new ReassemblyState(fragHeader.TotalCount));
-
-            if (state.TotalCount != fragHeader.TotalCount) return false;
+            
+            if (!_map.TryGetValue(key, out var state))
+            {
+                state = new ReassemblyState(fragHeader.TotalCount);
+                if (!_map.TryAdd(key, state))
+                {
+                    if (!_map.TryGetValue(key, out state))
+                        return false;
+                }
+            }
 
             lock (state)
             {
+                const int MaxReassemblySize = 64 * 1024;
+                if (state.TotalLength + fragPayload.Count > MaxReassemblySize)
+                {
+                    _map.TryRemove(key, out _);
+                    return false;
+                }
+                
                 var slot = state.Parts[fragHeader.Index];
                 if (slot.Array == null)
                 {

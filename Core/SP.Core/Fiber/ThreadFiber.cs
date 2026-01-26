@@ -45,19 +45,19 @@ namespace SP.Core.Fiber
         }
 
         public bool TryEnqueue(Action action)
-        {
-            return TryEnqueue(AsyncJob.From(action));
-        }
+            => TryEnqueue(AsyncJob.From(action));
 
         public bool TryEnqueue<T>(Action<T> action, T state)
-        {
-            return TryEnqueue(AsyncJob.From(action, state));
-        }
+            => TryEnqueue(AsyncJob.From(action, state));
 
         public bool TryEnqueue<T1, T2>(Action<T1, T2> action, T1 state1, T2 state2)
-        {
-            return TryEnqueue(AsyncJob.From(action, state1, state2));
-        }
+            => TryEnqueue(AsyncJob.From(action, state1, state2));
+        
+        public bool TryEnqueue<T1, T2, T3>(Action<T1, T2, T3> action, T1 state1, T2 state2, T3 state3)
+            => TryEnqueue(AsyncJob.From(action, state1, state2, state3));
+        
+        public bool TryEnqueue<T1, T2, T3, T4>(Action<T1, T2, T3, T4> action, T1 state1, T2 state2, T3 state3, T4 state4)
+            => TryEnqueue(AsyncJob.From(action, state1, state2, state3, state4));
 
         public bool TryEnqueue(IAsyncJob job)
         {

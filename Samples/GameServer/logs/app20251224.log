@@ -1,3 +1,0 @@
-[10:32:14.302 DBG] [T:70] [Game] Received a termination request from the client. isClosing=false
-[10:32:14.305 DBG] [T:70] [Game] The session 435e0ebc-1be6-4bf1-87ba-1e8f61b54a01 has been closed. reason="ClientClosing"
-[10:32:14.305 DBG] [T:70] [Game] Peer leaved. uid=0, reason="ClientClosing"

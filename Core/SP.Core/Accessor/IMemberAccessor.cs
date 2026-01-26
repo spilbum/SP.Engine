@@ -1,5 +1,5 @@
 using System;
-using System.Data;
+using System.Reflection;
 
 namespace SP.Core.Accessor
 {
@@ -12,6 +12,7 @@ namespace SP.Core.Accessor
         bool CanSet { get; }
         bool IgnoreGet { get; }
         bool IgnoreSet { get; }
+        MemberInfo Info { get; }
 
         object GetValue(object instance);
         void SetValue(object instance, object value);

@@ -17,5 +17,5 @@ public sealed record NetworkConfig
     public ushort CompressionThreshold { get; init; } = 2048;
     public int MaxRetryCount { get; init; } = 5;
     public int MinMtu { get; init; } = 576;
-    public int MaxMtu { get; init; } = 1400;
+    public int MaxMtu { get; init; } = 1500;
 }
