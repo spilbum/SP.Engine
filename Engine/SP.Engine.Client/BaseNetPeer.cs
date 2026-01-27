@@ -954,7 +954,6 @@ namespace SP.Engine.Client
                 _channelRouter.Unbind(ChannelKind.Reliable);
                 _channelRouter.Unbind(ChannelKind.Unreliable);
                 _diffieHellman.Dispose();
-                _encryptor?.Dispose();
 
                 _sessionId = null;
                 PeerId = 0;

@@ -8,10 +8,10 @@ namespace SP.Core.Serialization
 {
     public sealed class NetWriter : IDisposable
     {
-        private ArrayBufferWriter<byte> _buffer;
+        private readonly ArrayBufferWriter<byte> _buffer;
         private bool _disposed;
 
-        public NetWriter(int initialCapacity = 128)
+        public NetWriter(int initialCapacity = 1024)
         {
             _buffer = new ArrayBufferWriter<byte>(initialCapacity);
         }
@@ -20,29 +20,17 @@ namespace SP.Core.Serialization
         {
             if (_disposed) return;
             _disposed = true;
+            _buffer.Clear();
         }
 
-        public byte[] ToArray()
-        {
-            return _buffer.WrittenSpan.ToArray();
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private Span<byte> GetSpan(int sizeHint)
-        {
-            return _buffer.GetSpan(sizeHint);
-        }
+        public byte[] ToArray() => _buffer.WrittenSpan.ToArray();
+        public ReadOnlySpan<byte> WrittenSpan => _buffer.WrittenSpan;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void Advance(int count)
-        {
-            _buffer.Advance(count);
-        }
+        private Span<byte> GetSpan(int sizeHint) => _buffer.GetSpan(sizeHint);
 
-        public void Clear()
-        {
-            _buffer = new ArrayBufferWriter<byte>(_buffer.WrittenCount);
-        }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void Advance(int count) => _buffer.Advance(count);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteByte(byte value)

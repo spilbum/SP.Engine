@@ -172,7 +172,6 @@ public abstract class BasePeer : IPeer, IDisposable
             PeerId = 0;
             _diffieHellman?.Dispose();
             _diffieHellman = null;
-            _encryptor?.Dispose();
             _encryptor = null;
             _reliableMessageProcessor.Reset();
         }

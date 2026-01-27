@@ -10,10 +10,10 @@ namespace SP.Core.Serialization
         private static readonly ConcurrentDictionary<Type, SerializerPair> Cache =
             new ConcurrentDictionary<Type, SerializerPair>();
 
-        public static void Serialize<T>(ref NetWriter w, T value)
-            => Serialize(ref w, typeof(T), value);
+        public static void Serialize<T>(NetWriter w, T value)
+            => Serialize(w, typeof(T), value);
 
-        public static void Serialize(ref NetWriter w, Type type, object value)
+        public static void Serialize(NetWriter w, Type type, object value)
             => GetOrBuild(type).Writer(ref w, value);
         
         public static T Deserialize<T>(ref NetReader r)

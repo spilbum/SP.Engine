@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Security.Cryptography;
 
 namespace SP.Engine.Runtime.Security
@@ -6,105 +7,112 @@ namespace SP.Engine.Runtime.Security
     public class AesCbcEncryptor : IEncryptor
     {
         private const int IvSize = 16;
-        private const int AesKeySize = 32;
         private const int BlockSize = 16;
         private readonly byte[] _key;
-        private bool _disposed;
 
         public AesCbcEncryptor(byte[] key)
         {
-            if (key is null) throw new ArgumentNullException(nameof(key));
-            if (key.Length != AesKeySize) throw new ArgumentException("Session key must be 32 bytes", nameof(key));
+            if (key == null) throw new ArgumentNullException(nameof(key));
             _key = (byte[])key.Clone();
         }
 
-        public byte[] Encrypt(byte[] plain)
+        public int GetCiphertextLength(int plainLength)
         {
-            return Encrypt((ReadOnlySpan<byte>)plain);
+            // PKCS7 Padding: 블록 크기 배수로 올림
+            var padded = (plainLength / BlockSize + 1) * BlockSize;
+            return IvSize + padded;
         }
 
-        public byte[] Decrypt(byte[] cipher)
+        public int GetPlaintextLength(int cipherLength)
         {
-            return Decrypt((ReadOnlySpan<byte>)cipher);
+            return cipherLength - IvSize; // 패딩 제거 전 최대 길이
         }
 
-        public byte[] Encrypt(ReadOnlySpan<byte> plain)
+        public int Encrypt(ReadOnlySpan<byte> source, Span<byte> destination)
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(AesCbcEncryptor));
+            using var aes = Aes.Create();
+            aes.Key = _key;
+            aes.Mode = CipherMode.CBC;
+            aes.Padding = PaddingMode.None;
 
-            var iv = new byte[IvSize];
-            RandomNumberGenerator.Fill(iv);
+            // IV 생성
+            var iv = destination[..IvSize];
+            RandomNumberGenerator.Fill(iv); 
 
+            // IV를 AES에 설정
+            var ivArray = iv.ToArray();
+            aes.IV = ivArray;
+
+            // 입력 데이터 준비 (패딩 추가)
+            var plainLen = source.Length;
+            var padLen = BlockSize - plainLen % BlockSize;
+            var totalLen = plainLen + padLen;
+
+            // 입력을 블록 크기에 맞추기 위해 임시 버퍼 대여
+            var rentBuffer = ArrayPool<byte>.Shared.Rent(totalLen);
             try
             {
-                using var aes = Aes.Create();
-                aes.Key = _key;
-                aes.IV = iv;
-                aes.Mode = CipherMode.CBC;
-                aes.Padding = PaddingMode.PKCS7;
+                // 원본 복사
+                source.CopyTo(rentBuffer);
 
-                using var enc = aes.CreateEncryptor();
+                // PKCS7 패딩 수동 적용
+                for (var i = 0; i < padLen; i++)
+                {
+                    rentBuffer[plainLen + i] = (byte)padLen;
+                }
 
-                var p = plain.Length == 0 ? Array.Empty<byte>() : plain.ToArray();
-                var ct = enc.TransformFinalBlock(p, 0, p.Length);
-
-                var result = new byte[IvSize + ct.Length];
-                Buffer.BlockCopy(iv, 0, result, 0, IvSize);
-                Buffer.BlockCopy(ct, 0, result, IvSize, ct.Length);
-
-                CryptographicOperations.ZeroMemory(ct);
-                return result;
+                // 암호화
+                using var encryptor = aes.CreateEncryptor();
+                var encryptedBytes = encryptor.TransformFinalBlock(rentBuffer, 0, totalLen);
+                new ReadOnlySpan<byte>(encryptedBytes).CopyTo(destination[IvSize..]);
+                return IvSize + encryptedBytes.Length;
             }
             finally
             {
-                CryptographicOperations.ZeroMemory(iv);
+                ArrayPool<byte>.Shared.Return(rentBuffer);
             }
         }
 
-        public byte[] Decrypt(ReadOnlySpan<byte> cipher)
+        public int Decrypt(ReadOnlySpan<byte> source, Span<byte> destination)
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(AesCbcEncryptor));
-            if (cipher.Length < IvSize + BlockSize)
-                throw new ArgumentException("Cipher too short (IV + >= 1 block required).", nameof(cipher));
+            var ivSpan = source[..IvSize];
+            var cipherSpan = source[IvSize..];
 
-            var c = cipher.ToArray();
+            using var aes = Aes.Create();
+            aes.Key = _key;
+            aes.IV = ivSpan.ToArray(); 
+            aes.Mode = CipherMode.CBC;
+            aes.Padding = PaddingMode.None;
 
-            // IV 분리
-            var iv = new byte[IvSize];
-            Buffer.BlockCopy(c, 0, iv, 0, iv.Length);
+            using var decryptor = aes.CreateDecryptor();
 
-            var ctLen = c.Length - IvSize;
-            if (ctLen % BlockSize != 0)
-                throw new ArgumentException("Ciphertext length is not a multiple of block size.", nameof(cipher));
-
+            // 입력(Cipher)를 배열로 변환 (Rent)
+            var rentInput = ArrayPool<byte>.Shared.Rent(cipherSpan.Length);
             try
             {
-                using var aes = Aes.Create();
-                aes.Key = _key;
-                aes.IV = iv;
-                aes.Mode = CipherMode.CBC;
-                aes.Padding = PaddingMode.PKCS7;
+                cipherSpan.CopyTo(rentInput);
+                
+                var decryptedBytes = decryptor.TransformFinalBlock(rentInput, 0, cipherSpan.Length);
+                if (decryptedBytes.Length == 0) throw new CryptographicException("Empty decrypted data");
+                
+                var lastByte = decryptedBytes[^1];
+                if (lastByte > BlockSize || lastByte == 0)
+                    throw new CryptographicException($"Invalid Padding value: {lastByte}");
 
-                using var dec = aes.CreateDecryptor();
-                return dec.TransformFinalBlock(c, IvSize, ctLen);
-            }
-            catch (CryptographicException ex)
-            {
-                throw new CryptographicException("Decryption failed.", ex);
+                for (var i = 0; i < lastByte; i++)
+                {
+                    if (decryptedBytes[decryptedBytes.Length - 1 - i] != lastByte)
+                        throw new CryptographicException("Broken Padding bytes");
+                }
+
+                var realLen = decryptedBytes.Length - lastByte;
+                new ReadOnlySpan<byte>(decryptedBytes, 0, realLen).CopyTo(destination);
+                return realLen;
             }
             finally
             {
-                CryptographicOperations.ZeroMemory(iv);
-                CryptographicOperations.ZeroMemory(c);
+                ArrayPool<byte>.Shared.Return(rentInput);
             }
-        }
-
-        public void Dispose()
-        {
-            if (_disposed) return;
-            _disposed = true;
-            CryptographicOperations.ZeroMemory(_key);
-            GC.SuppressFinalize(this);
         }
     }
 }

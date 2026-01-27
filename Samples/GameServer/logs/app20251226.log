@@ -1,5 +1,0 @@
-[17:52:55.397 INF] [T:108] [Game] [Rank] Offline...
-[17:52:55.398 INF] [T:108] [Game] [Rank] State changed: "Open" -> "Reconnecting"
-[17:52:55.412 DBG] [T:7] [Game] Reconnecting... 1
-[17:52:55.416 ERR] [T:108] [Game] [Rank] An error occurred: Connection refused
-null

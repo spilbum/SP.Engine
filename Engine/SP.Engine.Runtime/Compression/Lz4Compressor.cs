@@ -8,91 +8,58 @@ namespace SP.Engine.Runtime.Compression
 {
     public class Lz4Compressor : ICompressor
     {
-        private const int HeaderSize = 4;
+        private const int HeaderSize = 4; // 원본 길이 저장용
         private readonly LZ4Level _level;
         private readonly int _maxDecompressedSize;
 
-        public Lz4Compressor(int maxDecompressedBytes, LZ4Level level = LZ4Level.L00_FAST)
+        public Lz4Compressor(int maxDecompressedSize, LZ4Level level = LZ4Level.L00_FAST)
         {
-            if (maxDecompressedBytes <= 0) throw new ArgumentOutOfRangeException(nameof(maxDecompressedBytes));
-            _maxDecompressedSize = maxDecompressedBytes;
+            if (maxDecompressedSize <= 0)
+                throw new ArgumentOutOfRangeException(nameof(maxDecompressedSize));
+            
             _level = level;
+            _maxDecompressedSize = maxDecompressedSize;
         }
 
-        public byte[] Compress(byte[] data)
+        public int GetMaxCompressedLength(int inputSize) 
+            => HeaderSize + LZ4Codec.MaximumOutputSize(inputSize);
+
+        public int GetDecompressedLength(ReadOnlySpan<byte> source)
         {
-            return Compress((ReadOnlySpan<byte>)data);
-        }
+            if (source.Length < HeaderSize) return 0;
+            var originalLen = (int)BinaryPrimitives.ReadUInt32BigEndian(source[..HeaderSize]);
 
-        public byte[] Decompress(byte[] data)
-        {
-            return Decompress((ReadOnlySpan<byte>)data);
-        }
-
-        public byte[] Compress(ReadOnlySpan<byte> data)
-        {
-            var originalLen = (uint)data.Length;
-            var maxCompressed = data.Length == 0 ? 0 : CompressBound(data.Length);
-
-            var rented = ArrayPool<byte>.Shared.Rent(HeaderSize + maxCompressed);
-
-            try
+            if (originalLen > _maxDecompressedSize)
             {
-                var target = rented.AsSpan();
-                // 원본 길이 저장
-                BinaryPrimitives.WriteUInt32BigEndian(target, originalLen);
-
-                var compressedSize = 0;
-                if (data.Length > 0)
-                {
-                    compressedSize = LZ4Codec.Encode(data, target.Slice(HeaderSize, maxCompressed), _level);
-                    if (compressedSize <= 0)
-                        throw new InvalidDataException("Lz4 encode failed (destination too small or other error).");
-                }
-
-                var total = HeaderSize + compressedSize;
-                var result = new byte[total];
-                target[..total].CopyTo(result.AsSpan());
-                return result;
-            }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(rented);
-            }
-        }
-
-        public byte[] Decompress(ReadOnlySpan<byte> data)
-        {
-            if (data.Length < HeaderSize)
-                throw new ArgumentException("Lz4 data too short (missing header).", nameof(data));
-
-            var originalLen = BinaryPrimitives.ReadUInt32BigEndian(data[..HeaderSize]);
-            if (originalLen > (uint)_maxDecompressedSize)
                 throw new InvalidDataException(
-                    $"Lz4 original length too large: {originalLen:n0} > max {_maxDecompressedSize:n0}.");
-            var payload = data[HeaderSize..];
-
-            if (originalLen == 0)
-            {
-                if (payload.Length != 0)
-                    throw new InvalidDataException("Invalid Lz4 frame for zero-length payload.");
-                return Array.Empty<byte>();
+                    $"Lz4 decompressed size exceeded limit: {originalLen} > {_maxDecompressedSize}");
             }
+            
+            return originalLen;
+        }
 
-            var result = new byte[originalLen];
-            var decoded = LZ4Codec.Decode(payload, result.AsSpan());
+        public int Compress(ReadOnlySpan<byte> source, Span<byte> destination)
+        {
+            // 1. 원본 길이 기록 (헤더)
+            BinaryPrimitives.WriteUInt32BigEndian(destination, (uint)source.Length);
+        
+            // 2. 데이터 압축 (Zero Allocation)
+            var compressedBytes = LZ4Codec.Encode(source, destination[HeaderSize..], _level);
+        
+            return HeaderSize + compressedBytes;
+        }
+
+        public int Decompress(ReadOnlySpan<byte> source, Span<byte> destination)
+        {
+            var originalLen = (int)BinaryPrimitives.ReadUInt32BigEndian(source[..HeaderSize]);
+            if (destination.Length < originalLen)
+                throw new ArgumentException($"Destination buffer too small. Required: {originalLen}, Actual: {destination.Length}");
+
+            var decoded = LZ4Codec.Decode(source[HeaderSize..], destination);
             if (decoded != originalLen)
-                throw new InvalidDataException(
-                    $"Decompressed size mismatch. decoded={decoded}, expected={originalLen}.");
-            return result;
-        }
-
-        private static int CompressBound(int n)
-        {
-            if (n < 0) throw new ArgumentOutOfRangeException(nameof(n));
-            var bound = (long)n + n / 255 + 16;
-            if (bound > int.MaxValue) throw new OutOfMemoryException("Lz4 compress bound overflow");
-            return (int)bound;
+                throw new InvalidDataException("Decompressed size mismatch");
+            
+            return decoded;
         }
     }
 }

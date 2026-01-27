@@ -1,0 +1,85 @@
+[19:45:56.546 INF] [T:1] [Game] Logger setup was successful: Game
+[19:45:56.684 DBG] [T:1] [Game] Discover commands: [10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[19:45:56.700 DBG] [T:1] [Game] Discover commands: [4003, 4002, 4001, 4000, 2000]
+[19:45:56.701 INF] [T:1] [Game] The server Game is initialized.
+[19:46:02.441 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[19:46:02.444 INF] [T:1] [Game] The server instance Game was been started!
+[19:46:02.446 INF] [T:1] [Game] [Rank] State changed: "None" -> "Connecting"
+[19:46:02.446 INF] [T:1] [Game] Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.109, DnsName=
+[19:46:02.479 INF] [T:8] [Game] [Rank] State changed: "Connecting" -> "Handshake"
+[19:46:02.573 INF] [T:55] [Game] [Rank] State changed: "Handshake" -> "Open"
+[19:46:02.573 DBG] [T:55] [Game] [Rank] Connected
+[19:46:02.578 ERR] [T:55] [Game] Invalid Padding
+System.Security.Cryptography.CryptographicException: Invalid Padding
+   at SP.Engine.Runtime.Security.AesCbcEncryptor.Decrypt(ReadOnlySpan`1 source, Span`1 destination) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Security/AesCbcEncryptor.cs:line 114
+   at SP.Engine.Runtime.Networking.BaseMessage`1.Deserialize[TProtocol](IEncryptor encryptor, ICompressor compressor) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Networking/BaseMessage.cs:line 112
+   at SP.Engine.Server.Connector.BaseConnector.SP.Engine.Runtime.Command.ICommandContext.Deserialize[TProtocol](IMessage message) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Server/Connector/BaseConnector.cs:line 34
+   at SP.Engine.Runtime.Command.BaseCommand`2.Execute(ICommandContext context, IMessage message) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Command/BaseCommand.cs:line 20
+[19:46:07.577 DBG] [T:7] [Game] Retrying message: seq=1, retry=1/5, rtoMs=200
+[19:46:07.606 ERR] [T:44] [Game] Invalid Padding
+System.Security.Cryptography.CryptographicException: Invalid Padding
+   at SP.Engine.Runtime.Security.AesCbcEncryptor.Decrypt(ReadOnlySpan`1 source, Span`1 destination) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Security/AesCbcEncryptor.cs:line 114
+   at SP.Engine.Runtime.Networking.BaseMessage`1.Deserialize[TProtocol](IEncryptor encryptor, ICompressor compressor) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Networking/BaseMessage.cs:line 112
+   at SP.Engine.Server.Connector.BaseConnector.SP.Engine.Runtime.Command.ICommandContext.Deserialize[TProtocol](IMessage message) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Server/Connector/BaseConnector.cs:line 34
+   at SP.Engine.Runtime.Command.BaseCommand`2.Execute(ICommandContext context, IMessage message) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Command/BaseCommand.cs:line 20
+[19:46:07.786 DBG] [T:7] [Game] Retrying message: seq=1, retry=2/5, rtoMs=200
+[19:46:07.816 ERR] [T:55] [Game] Invalid Padding
+System.Security.Cryptography.CryptographicException: Invalid Padding
+   at SP.Engine.Runtime.Security.AesCbcEncryptor.Decrypt(ReadOnlySpan`1 source, Span`1 destination) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Security/AesCbcEncryptor.cs:line 114
+   at SP.Engine.Runtime.Networking.BaseMessage`1.Deserialize[TProtocol](IEncryptor encryptor, ICompressor compressor) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Networking/BaseMessage.cs:line 112
+   at SP.Engine.Server.Connector.BaseConnector.SP.Engine.Runtime.Command.ICommandContext.Deserialize[TProtocol](IMessage message) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Server/Connector/BaseConnector.cs:line 34
+   at SP.Engine.Runtime.Command.BaseCommand`2.Execute(ICommandContext context, IMessage message) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Command/BaseCommand.cs:line 20
+[19:46:07.995 DBG] [T:7] [Game] Retrying message: seq=1, retry=3/5, rtoMs=200
+[19:46:08.026 ERR] [T:44] [Game] Invalid Padding
+System.Security.Cryptography.CryptographicException: Invalid Padding
+   at SP.Engine.Runtime.Security.AesCbcEncryptor.Decrypt(ReadOnlySpan`1 source, Span`1 destination) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Security/AesCbcEncryptor.cs:line 114
+   at SP.Engine.Runtime.Networking.BaseMessage`1.Deserialize[TProtocol](IEncryptor encryptor, ICompressor compressor) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Networking/BaseMessage.cs:line 112
+   at SP.Engine.Server.Connector.BaseConnector.SP.Engine.Runtime.Command.ICommandContext.Deserialize[TProtocol](IMessage message) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Server/Connector/BaseConnector.cs:line 34
+   at SP.Engine.Runtime.Command.BaseCommand`2.Execute(ICommandContext context, IMessage message) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Command/BaseCommand.cs:line 20
+[19:46:08.205 DBG] [T:7] [Game] Retrying message: seq=1, retry=4/5, rtoMs=200
+[19:46:08.235 ERR] [T:8] [Game] Invalid Padding
+System.Security.Cryptography.CryptographicException: Invalid Padding
+   at SP.Engine.Runtime.Security.AesCbcEncryptor.Decrypt(ReadOnlySpan`1 source, Span`1 destination) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Security/AesCbcEncryptor.cs:line 114
+   at SP.Engine.Runtime.Networking.BaseMessage`1.Deserialize[TProtocol](IEncryptor encryptor, ICompressor compressor) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Networking/BaseMessage.cs:line 112
+   at SP.Engine.Server.Connector.BaseConnector.SP.Engine.Runtime.Command.ICommandContext.Deserialize[TProtocol](IMessage message) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Server/Connector/BaseConnector.cs:line 34
+   at SP.Engine.Runtime.Command.BaseCommand`2.Execute(ICommandContext context, IMessage message) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Command/BaseCommand.cs:line 20
+[19:46:08.415 DBG] [T:7] [Game] Retrying message: seq=1, retry=5/5, rtoMs=200
+[19:46:08.446 ERR] [T:44] [Game] Invalid Padding
+System.Security.Cryptography.CryptographicException: Invalid Padding
+   at SP.Engine.Runtime.Security.AesCbcEncryptor.Decrypt(ReadOnlySpan`1 source, Span`1 destination) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Security/AesCbcEncryptor.cs:line 114
+   at SP.Engine.Runtime.Networking.BaseMessage`1.Deserialize[TProtocol](IEncryptor encryptor, ICompressor compressor) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Networking/BaseMessage.cs:line 112
+   at SP.Engine.Server.Connector.BaseConnector.SP.Engine.Runtime.Command.ICommandContext.Deserialize[TProtocol](IMessage message) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Server/Connector/BaseConnector.cs:line 34
+   at SP.Engine.Runtime.Command.BaseCommand`2.Execute(ICommandContext context, IMessage message) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Command/BaseCommand.cs:line 20
+[19:46:08.625 ERR] [T:7] [Game] Retry message expired. seq=1, id=1000, retry=1000/5
+[19:46:08.626 INF] [T:7] [Game] [Rank] State changed: "Open" -> "Closing"
+[20:17:01.534 INF] [T:1] [Game] Logger setup was successful: Game
+[20:17:01.669 DBG] [T:1] [Game] Discover commands: [10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[20:17:01.683 DBG] [T:1] [Game] Discover commands: [4003, 4002, 4001, 4000, 2000]
+[20:17:01.684 INF] [T:1] [Game] The server Game is initialized.
+[20:17:07.627 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[20:17:07.631 INF] [T:1] [Game] The server instance Game was been started!
+[20:17:07.632 INF] [T:1] [Game] [Rank] State changed: "None" -> "Connecting"
+[20:17:07.632 INF] [T:1] [Game] Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.109, DnsName=
+[20:17:07.665 INF] [T:43] [Game] [Rank] State changed: "Connecting" -> "Handshake"
+[20:17:07.760 INF] [T:44] [Game] [Rank] State changed: "Handshake" -> "Open"
+[20:17:07.761 DBG] [T:44] [Game] [Rank] Connected
+[20:17:07.765 ERR] [T:44] [Game] Broken Padding bytes
+System.Security.Cryptography.CryptographicException: Broken Padding bytes
+   at SP.Engine.Runtime.Security.AesCbcEncryptor.Decrypt(ReadOnlySpan`1 source, Span`1 destination) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Security/AesCbcEncryptor.cs:line 101
+   at SP.Engine.Runtime.Networking.BaseMessage`1.Deserialize[TProtocol](IEncryptor encryptor, ICompressor compressor) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Networking/BaseMessage.cs:line 112
+   at SP.Engine.Server.Connector.BaseConnector.SP.Engine.Runtime.Command.ICommandContext.Deserialize[TProtocol](IMessage message) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Server/Connector/BaseConnector.cs:line 34
+   at SP.Engine.Runtime.Command.BaseCommand`2.Execute(ICommandContext context, IMessage message) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/Command/BaseCommand.cs:line 20
+[20:17:12.708 INF] [T:10] [Game] [Rank] Offline...
+[20:17:12.708 INF] [T:10] [Game] [Rank] State changed: "Open" -> "Reconnecting"
+[20:17:12.732 DBG] [T:7] [Game] Reconnecting... 1
+[20:17:12.733 ERR] [T:10] [Game] [Rank] An error occurred: Connection refused
+null
+[20:25:04.743 INF] [T:1] [Game] Logger setup was successful: Game
+[20:25:04.884 DBG] [T:1] [Game] Discover commands: [10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[20:25:04.900 DBG] [T:1] [Game] Discover commands: [4003, 4002, 4001, 4000, 2000]
+[20:25:04.901 INF] [T:1] [Game] The server Game is initialized.
+[20:25:10.697 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[20:25:10.700 INF] [T:1] [Game] The server instance Game was been started!
+[20:25:10.702 INF] [T:1] [Game] [Rank] State changed: "None" -> "Connecting"
+[20:25:10.702 INF] [T:1] [Game] Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.109, DnsName=
+[20:25:10.735 INF] [T:10] [Game] [Rank] State changed: "Connecting" -> "Handshake"

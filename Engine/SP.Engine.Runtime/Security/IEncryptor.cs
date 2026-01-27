@@ -2,12 +2,12 @@ using System;
 
 namespace SP.Engine.Runtime.Security
 {
-    public interface IEncryptor : IDisposable
+    public interface IEncryptor
     {
-        byte[] Encrypt(ReadOnlySpan<byte> plain);
-        byte[] Decrypt(ReadOnlySpan<byte> cipher);
+        int GetCiphertextLength(int plainLength);
+        int GetPlaintextLength(int cipherLength);
 
-        byte[] Encrypt(byte[] plain);
-        byte[] Decrypt(byte[] cipher);
+        int Encrypt(ReadOnlySpan<byte> source, Span<byte> destination);
+        int Decrypt(ReadOnlySpan<byte> source, Span<byte> destination);
     }
 }
