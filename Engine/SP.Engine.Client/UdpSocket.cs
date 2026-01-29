@@ -23,7 +23,7 @@ namespace SP.Engine.Client
         private readonly byte[] _receiveBuffer;
         private readonly SocketAsyncEventArgs _receiveEventArgs = new SocketAsyncEventArgs();
         private readonly int _sendBufferSize;
-        private readonly ConcurrentBatchQueue<ArraySegment<byte>> _sendQueue;
+        private readonly SwapBuffer<ArraySegment<byte>> _sendQueue;
         private TickTimer _cleanupTimer;
         private int _fragSeq;
         private int _isSending;
@@ -37,7 +37,7 @@ namespace SP.Engine.Client
 
         public UdpSocket(EngineConfig config)
         {
-            _sendQueue = new ConcurrentBatchQueue<ArraySegment<byte>>(config.SendQueueSize);
+            _sendQueue = new SwapBuffer<ArraySegment<byte>>(config.SendQueueSize);
             _sendBufferSize = config.SendBufferSize;
             _receiveBuffer = new byte[config.ReceiveBufferSize];
         }
@@ -63,7 +63,7 @@ namespace SP.Engine.Client
                 items.AddRange(message.Split(fragId, maxFragBodyLen));
             }
 
-            if (!_sendQueue.Enqueue(items))
+            if (!_sendQueue.TryWriteBatch(items))
                 return false;
 
             if (Interlocked.CompareExchange(ref _isSending, 1, 0) != 0)
@@ -180,7 +180,7 @@ namespace SP.Engine.Client
 
         private void DequeueSend()
         {
-            _sendQueue.DequeueAll(_itemsToSend);
+            _sendQueue.Flush(_itemsToSend);
 
             if (_itemsToSend.Count == 0)
             {
@@ -243,14 +243,14 @@ namespace SP.Engine.Client
         {
             _itemsToSend.Clear();
             _itemsToSend.Position = 0;
-            _sendQueue.DequeueAll(_itemsToSend);
+            _sendQueue.Flush(_itemsToSend);
 
             if (_itemsToSend.Count == 0)
             {
                 Interlocked.Exchange(ref _isSending, 0);
 
                 // 더블 체크
-                _sendQueue.DequeueAll(_itemsToSend);
+                _sendQueue.Flush(_itemsToSend);
                 if (_itemsToSend.Count == 0 || Interlocked.CompareExchange(ref _isSending, 1, 0) != 0)
                     return;
             }

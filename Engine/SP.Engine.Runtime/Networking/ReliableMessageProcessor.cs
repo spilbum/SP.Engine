@@ -236,24 +236,24 @@ namespace SP.Engine.Runtime.Networking
 
     public class ReliableMessageProcessor
     {
-        private const int PendingQueueWindow = 128;
+        private const int PendingBufferWindow = 128;
         private readonly List<IMessage> _dequeued = new List<IMessage>();
+        private readonly SwapBuffer<IMessage> _pendingBuffer;
         private readonly IOrderingBuffer _ordering;
-        private readonly IBatchQueue<IMessage> _pendingQueue;
         private readonly IRtoEstimator _rto;
         private readonly IMessageTracker _tracker;
         private long _nextReliableSeq;
 
         public ReliableMessageProcessor(ILogger logger)
-            : this(new ConcurrentBatchQueue<IMessage>(PendingQueueWindow), new MessageTracker(logger),
+            : this(new SwapBuffer<IMessage>(PendingBufferWindow), new MessageTracker(logger),
                 new OrderingBuffer(), new RtoEstimator())
         {
         }
 
         public ReliableMessageProcessor(
-            IBatchQueue<IMessage> pendingQueue, IMessageTracker tracker, IOrderingBuffer ordering, IRtoEstimator rto)
+            SwapBuffer<IMessage> pendingBuffer, IMessageTracker tracker, IOrderingBuffer ordering, IRtoEstimator rto)
         {
-            _pendingQueue = pendingQueue;
+            _pendingBuffer = pendingBuffer;
             _tracker = tracker;
             _ordering = ordering;
             _rto = rto;
@@ -279,15 +279,13 @@ namespace SP.Engine.Runtime.Networking
 
         public bool EnqueuePendingMessage(IMessage message)
         {
-            if (_pendingQueue.Enqueue(message)) return true;
-            _pendingQueue.Resize(_pendingQueue.Capacity * 2);
-            return _pendingQueue.Enqueue(message);
+            return _pendingBuffer.TryWrite(message);
         }
 
         public IEnumerable<IMessage> DequeuePendingMessages()
         {
             _dequeued.Clear();
-            _pendingQueue.DequeueAll(_dequeued);
+            _pendingBuffer.Flush(_dequeued);
             foreach (var msg in _dequeued)
                 yield return msg;
         }

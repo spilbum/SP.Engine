@@ -63,7 +63,13 @@ namespace SP.Core.Fiber
         {
             if (job == null) throw new ArgumentNullException(nameof(job));
             if (!_running || _disposed) return false;
-            return _queue.TryEnqueue(job);
+            if (_queue.TryEnqueue(job, spinBudge: 1000))
+            {
+                return true;
+            }
+            
+            _logger.Error("ThreadFiber queue full! Job dropped.");
+            return false;
         }
 
         private void Run()

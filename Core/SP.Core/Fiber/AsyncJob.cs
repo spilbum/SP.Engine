@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Threading.Tasks;
 
 namespace SP.Core.Fiber
 {
@@ -12,7 +13,6 @@ namespace SP.Core.Fiber
 
         private readonly object[] _args;
         private readonly Action<object, object[]> _invoker;
-
         private readonly object _target;
 
         private AsyncJob(object target, Action<object, object[]> invoker, object[] args)
@@ -22,36 +22,26 @@ namespace SP.Core.Fiber
             _args = args;
         }
 
-        public void Invoke()
-        {
-            _invoker(_target, _args);
-        }
+        public void Invoke() => _invoker(_target, _args);
 
         public static IAsyncJob From(Action action)
-        {
-            return new DelegateJob(action);
-        }
+            => new DelegateJob(action);
+
+        public static IAsyncJob From(Func<Task> action)
+            => new AsyncTaskJob(action);
 
         public static IAsyncJob From<T>(Action<T> action, T state)
-        {
-            return new StateJob<T>(action, state);
-        }
+            => new StateJob<T>(action, state);
 
         public static IAsyncJob From<T1, T2>(Action<T1, T2> action, T1 state1, T2 state2)
-        {
-            return new StateJob<T1, T2>(action, state1, state2);
-        }
+            => new StateJob<T1, T2>(action, state1, state2);
         
         public static IAsyncJob From<T1, T2, T3>(Action<T1, T2, T3> action, T1 state1, T2 state2, T3 state3)
-        {
-            return new StateJob<T1, T2, T3>(action, state1, state2, state3);
-        }
+            => new StateJob<T1, T2, T3>(action, state1, state2, state3);
 
         public static IAsyncJob From<T1, T2, T3, T4>(Action<T1, T2, T3, T4> action, T1 state1, T2 state2, T3 state3,
             T4 state4)
-        {
-            return new StateJob<T1, T2, T3, T4>(action, state1, state2, state3, state4);
-        }
+            => new StateJob<T1, T2, T3, T4>(action, state1, state2, state3, state4);
 
         public static IAsyncJob From(object target, MethodInfo method, params object[] args)
         {
@@ -59,47 +49,20 @@ namespace SP.Core.Fiber
             return new DelegateJob(() => invoker(target, args));
         }
 
-        private static Action<object, object[]> BuildInvoker(MethodInfo method)
-        {
-            var targetParam = Expression.Parameter(typeof(object), "target");
-            var argsParam = Expression.Parameter(typeof(object[]), "args");
-
-            var callTarget = method.IsStatic
-                ? null
-                : Expression.Convert(targetParam, method.DeclaringType!);
-
-            var parameters = method.GetParameters();
-            var argsExpr = new Expression[parameters.Length];
-            for (var i = 0; i < parameters.Length; i++)
-            {
-                var index = Expression.Constant(i);
-                var access = Expression.ArrayIndex(argsParam, index);
-                argsExpr[i] = Expression.Convert(access, parameters[i].ParameterType);
-            }
-
-            Expression body = method.IsStatic
-                ? Expression.Call(method, argsExpr)
-                : Expression.Call(callTarget, method, argsExpr);
-
-            var lambda = Expression.Lambda<Action<object, object[]>>(body, targetParam, argsParam);
-            return lambda.Compile();
-        }
-
         private class DelegateJob : IAsyncJob
         {
             private readonly Action _action;
-
-            public DelegateJob(Action action)
-            {
-                _action = action;
-            }
-
-            public void Invoke()
-            {
-                _action();
-            }
+            public DelegateJob(Action action) => _action = action;
+            public void Invoke() => _action();
         }
 
+        private class AsyncTaskJob : IAsyncJob
+        {
+            private readonly Func<Task> _action;
+            public AsyncTaskJob(Func<Task> action) => _action = action;
+            public void Invoke() => _action().GetAwaiter().GetResult();
+        }
+        
         private class StateJob<T> : IAsyncJob
         {
             private readonly Action<T> _run;
@@ -163,6 +126,32 @@ namespace SP.Core.Fiber
                 _run = run; _s1 = s1; _s2 = s2; _s3 = s3; _s4 = s4;
             }
             public void Invoke() => _run(_s1, _s2, _s3, _s4);
+        }
+        
+        private static Action<object, object[]> BuildInvoker(MethodInfo method)
+        {
+            var targetParam = Expression.Parameter(typeof(object), "target");
+            var argsParam = Expression.Parameter(typeof(object[]), "args");
+
+            var callTarget = method.IsStatic
+                ? null
+                : Expression.Convert(targetParam, method.DeclaringType!);
+
+            var parameters = method.GetParameters();
+            var argsExpr = new Expression[parameters.Length];
+            for (var i = 0; i < parameters.Length; i++)
+            {
+                var index = Expression.Constant(i);
+                var access = Expression.ArrayIndex(argsParam, index);
+                argsExpr[i] = Expression.Convert(access, parameters[i].ParameterType);
+            }
+
+            Expression body = method.IsStatic
+                ? Expression.Call(method, argsExpr)
+                : Expression.Call(callTarget, method, argsExpr);
+
+            var lambda = Expression.Lambda<Action<object, object[]>>(body, targetParam, argsParam);
+            return lambda.Compile();
         }
     }
 }

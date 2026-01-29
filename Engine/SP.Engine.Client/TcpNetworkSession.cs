@@ -14,14 +14,14 @@ namespace SP.Engine.Client
     public class TcpNetworkSession : IReliableSender
     {
         private readonly List<ArraySegment<byte>> _itemsToSend = new List<ArraySegment<byte>>();
-        private readonly int _recvBufferSize;
+        private readonly int _receiveBufferSize;
         private readonly List<ArraySegment<byte>> _sendBufferList = new List<ArraySegment<byte>>();
         private readonly int _sendBufferSize;
-        private readonly ConcurrentBatchQueue<ArraySegment<byte>> _sendQueue;
+        private readonly SwapBuffer<ArraySegment<byte>> _sendBuffer;
         private bool _isConnecting;
         private int _isSending;
-        private byte[] _recvBuffer;
-        private SocketAsyncEventArgs _recvEventArgs;
+        private byte[] _receiveBuffer;
+        private SocketAsyncEventArgs _receiveEventArgs;
         private SocketAsyncEventArgs _sendEventArgs;
         private Socket _socket;
         private long _totalReceivedBytes;
@@ -30,8 +30,8 @@ namespace SP.Engine.Client
         public TcpNetworkSession(EngineConfig config)
         {
             _sendBufferSize = config.SendBufferSize;
-            _recvBufferSize = config.ReceiveBufferSize;
-            _sendQueue = new ConcurrentBatchQueue<ArraySegment<byte>>(config.SendQueueSize);
+            _receiveBufferSize = config.ReceiveBufferSize;
+            _sendBuffer = new SwapBuffer<ArraySegment<byte>>(config.SendQueueSize);
         }
 
         public bool IsConnected { get; private set; }
@@ -42,7 +42,7 @@ namespace SP.Engine.Client
                 return false;
 
             var seg = message.ToArraySegment();
-            if (!_sendQueue.Enqueue(seg))
+            if (!_sendBuffer.TryWrite(seg))
                 return false;
 
             if (Interlocked.CompareExchange(ref _isSending, 1, 0) == 0)
@@ -190,11 +190,11 @@ namespace SP.Engine.Client
 
         private void GetSocket(SocketAsyncEventArgs e)
         {
-            if (null == _recvBuffer)
-                _recvBuffer = ArrayPool<byte>.Shared.Rent(_recvBufferSize);
+            if (null == _receiveBuffer)
+                _receiveBuffer = ArrayPool<byte>.Shared.Rent(_receiveBufferSize);
 
-            e.SetBuffer(_recvBuffer, 0, _recvBuffer.Length);
-            _recvEventArgs = e;
+            e.SetBuffer(_receiveBuffer, 0, _receiveBuffer.Length);
+            _receiveEventArgs = e;
 
             OnConnected();
             StartReceive(e);
@@ -309,7 +309,7 @@ namespace SP.Engine.Client
 
         private void DequeueSend()
         {
-            _sendQueue.DequeueAll(_itemsToSend);
+            _sendBuffer.Flush(_itemsToSend);
 
             if (_itemsToSend.Count == 0)
             {
@@ -390,13 +390,13 @@ namespace SP.Engine.Client
         private void OnSendCompleted()
         {
             _itemsToSend.Clear();
-            _sendQueue.DequeueAll(_itemsToSend);
+            _sendBuffer.Flush(_itemsToSend);
 
             if (_itemsToSend.Count == 0)
             {
                 Interlocked.Exchange(ref _isSending, 0);
 
-                _sendQueue.DequeueAll(_itemsToSend);
+                _sendBuffer.Flush(_itemsToSend);
                 if (_itemsToSend.Count == 0 || Interlocked.CompareExchange(ref _isSending, 1, 0) != 0)
                     return;
             }
@@ -440,14 +440,14 @@ namespace SP.Engine.Client
 
         private void OnClosed()
         {
-            if (_recvBuffer != null)
+            if (_receiveBuffer != null)
             {
-                ArrayPool<byte>.Shared.Return(_recvBuffer);
-                _recvBuffer = null;
+                ArrayPool<byte>.Shared.Return(_receiveBuffer);
+                _receiveBuffer = null;
             }
 
-            _recvEventArgs?.Dispose();
-            _recvEventArgs = null;
+            _receiveEventArgs?.Dispose();
+            _receiveEventArgs = null;
             _sendEventArgs?.Dispose();
             _sendEventArgs = null;
 

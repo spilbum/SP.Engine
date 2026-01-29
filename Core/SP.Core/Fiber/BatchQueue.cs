@@ -1,63 +1,86 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Threading;
 
 namespace SP.Core.Fiber
 {
-    public sealed class BatchQueue<T>
+    public sealed class BatchQueue<T> : IDisposable where T : class
     {
+        private readonly T[] _array;
         private readonly int _capacity;
-        private readonly ConcurrentQueue<T> _queue = new ConcurrentQueue<T>();
         private readonly SemaphoreSlim _signal = new SemaphoreSlim(0);
+        private long _head;
+        private long _tail;
         private volatile bool _closed;
-        private int _count;
 
-        public BatchQueue(int capacity = -1)
+        public BatchQueue(int capacity = 1000)
         {
+            if (capacity <= 0) capacity = 1000;
             _capacity = capacity;
+            _array = new T[capacity];
         }
 
-        public int Count => _capacity >= 0 ? Volatile.Read(ref _count) : _queue.Count;
+        public int Count => (int)(Volatile.Read(ref _head) - Volatile.Read(ref _tail));
 
-        public bool TryEnqueue(T item)
+        public bool TryEnqueue(T item, int spinBudge)
+        {
+            var spin = new SpinWait();
+
+            for (var i = 0; i < spinBudge; i++)
+            {
+                if (TryEnqueue(item)) return true;
+                spin.SpinOnce();
+            }
+            
+            return false;
+        }
+        
+        private bool TryEnqueue(T item)
         {
             if (_closed) return false;
-            if (_capacity >= 0)
-            {
-                var after = Interlocked.Increment(ref _count);
-                if (after > _capacity)
-                {
-                    Interlocked.Decrement(ref _count);
-                    return false;
-                }
-            }
+            
+            var head = Volatile.Read(ref _head);
+            var tail = Volatile.Read(ref _tail);
 
-            _queue.Enqueue(item);
-            _signal.Release();
+            if (head - tail >= _capacity) return false;
+            
+            if (Interlocked.CompareExchange(ref _head, head + 1, head) != head)
+                return false;
+
+            _array[head % _capacity] = item;
+
+            if (_signal.CurrentCount != 0) return true;
+            
+            try { _signal.Release(); } catch { /* ignore */ }
             return true;
         }
 
         public int DequeueBatch(Span<T> buffer)
         {
-            var n = 0;
-            while (n < buffer.Length && _queue.TryDequeue(out var item))
+            var tail = _tail;
+            var head = Volatile.Read(ref _head);
+
+            var count = 0;
+            while (tail < head && count < buffer.Length)
             {
-                buffer[n++] = item;
-                if (_capacity >= 0) Interlocked.Decrement(ref _count);
+                var index = tail % _capacity;
+                var item = _array[index];
+                if (item == null) break;
+                buffer[count++] = item;
+                _array[index] = null;
+                tail++;
             }
 
-            return n;
+            if (count > 0) Volatile.Write(ref _tail, tail);
+            return count;
         }
 
-        public void WaitForItem(CancellationToken ct)
-        {
-            _signal.Wait(ct);
-        }
-
+        public void WaitForItem(CancellationToken ct) => _signal.Wait(ct);
         public void Close()
         {
             _closed = true;
             _signal.Dispose();
         }
+        
+        public void Dispose() => Close();
     }
 }
