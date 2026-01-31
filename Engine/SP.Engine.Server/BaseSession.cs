@@ -100,7 +100,6 @@ public abstract class BaseSession : IBaseSession
         _channelRouter.Unbind(ChannelKind.Unreliable);
         
         _receiveBuffer?.Dispose();
-        _receiveBuffer = null;
         
         NetworkSession.Close(reason);
         UdpSocket?.Close(reason);

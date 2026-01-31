@@ -520,3 +520,9 @@
 [14:28:17.349 DBG] [T:26] [Rank] Session authentication succeeded. sessionId=2bc2b8fb-8018-459c-af39-36d4f68ca79c, peerId=1
 [14:28:17.389 INF] [T:26] [Rank] Server Game registered.
 [14:28:39.364 INF] [T:7] [PerfMonitor] Time:2026-01-31 05:28:38.358Z CPU=0.0% WS=81.88MB Managed=193.58MB Threads=33
+[14:29:09.358 INF] [T:7] [PerfMonitor] Time:2026-01-31 05:29:08.358Z CPU=0.0% WS=81.48MB Managed=194.05MB Threads=33
+[14:29:36.795 DBG] [T:11] [Rank] Received a termination request from the client. isClosing=false
+[14:29:36.800 DBG] [T:11] [Rank] The session 2bc2b8fb-8018-459c-af39-36d4f68ca79c has been closed. reason="ClientClosing"
+[14:29:36.802 ERR] [T:11] [Rank] Object reference not set to an instance of an object.
+System.NullReferenceException: Object reference not set to an instance of an object.
+   at SP.Engine.Server.BaseSession.SP.Engine.Server.IBaseSession.ProcessBuffer(Byte[] buffer, Int32 offset, Int32 length) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Server/BaseSession.cs:line 200

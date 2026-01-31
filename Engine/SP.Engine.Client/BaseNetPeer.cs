@@ -674,6 +674,7 @@ namespace SP.Engine.Client
                     CancelTimer();
 
                     StopUdpKeepAliveTimer();
+                    _receiveBuffer?.Dispose();
                     _udpSocket?.Close();
                     _udpSocket = null;
 
