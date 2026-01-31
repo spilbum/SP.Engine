@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using SP.Core;
 using SP.Engine.Runtime;
 using SP.Engine.Server.Configuration;
 
@@ -181,10 +182,8 @@ internal sealed class SocketServer(IBaseEngine engine, ListenerInfo[] listenerIn
 
     private void ProcessUdpClient(Socket socket, object state)
     {
-        if (state is not (byte[] datagram, IPEndPoint remoteEndPoint))
-            return;
-
-        Engine.ProcessUdpClient(datagram, socket, remoteEndPoint);
+        if (state is not (PooledBuffer buffer, IPEndPoint remote)) return;
+        Engine.ProcessUdpClient(buffer, socket, remote);
     }
 
     private void ProcessTcpClient(Socket client)

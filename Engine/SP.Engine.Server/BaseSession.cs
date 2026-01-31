@@ -3,6 +3,7 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
+using SP.Core;
 using SP.Core.Fiber;
 using SP.Core.Logging;
 using SP.Engine.Runtime;
@@ -20,7 +21,7 @@ public interface IBaseSession : ILogContext
     IEngineConfig Config { get; }
     DateTime LastActiveTime { get; }
     void ProcessBuffer(byte[] buffer, int offset, int length);
-    void ProcessDatagram(byte[] datagram, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint);
+    void ProcessBuffer(PooledBuffer buffer, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint);
     void Close(CloseReason reason);
 }
 
@@ -29,7 +30,7 @@ public abstract class BaseSession : IBaseSession
     private readonly MessageChannelRouter _channelRouter = new();
     private IDisposable _assemblerCleanupScheduler;
     private BaseEngine _engine;
-    private BinaryReceiveBuffer _receiveBuffer;
+    private PooledReceiveBuffer _receiveBuffer;
     private IFiberScheduler _scheduler;
 
     protected BaseSession()
@@ -55,41 +56,41 @@ public abstract class BaseSession : IBaseSession
     public string Id { get; private set; }
     public INetworkSession NetworkSession { get; private set; }
 
-    void IBaseSession.ProcessDatagram(byte[] datagram, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint)
+    void IBaseSession.ProcessBuffer(PooledBuffer buffer, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint)
     {
         EnsureUdpSocket(socket, remoteEndPoint);
 
         var bodyOffset = header.Size;
-        var bodyLen = header.PayloadLength;
-
+        
         if (header.Fragmented == 0x01)
         {
-            var bodySpan = new ReadOnlySpan<byte>(datagram, bodyOffset, bodyLen);
+            var bodySpan = buffer.Span.Slice(bodyOffset, header.PayloadLength);
             if (!FragmentHeader.TryParse(bodySpan, out var fragHeader, out var consumed))
                 return;
 
-            if (bodyLen < consumed + fragHeader.FragLength)
+            var fragBuffer = new PooledBuffer(fragHeader.FragLength);
+            buffer.Span.Slice(bodyOffset + consumed, fragHeader.FragLength).CopyTo(fragBuffer.Span);
+
+            if (!UdpSocket.Assembler.TryAssemble(header, fragHeader, fragBuffer, out var assembled))
                 return;
 
-            var fragPayload = new ArraySegment<byte>(
-                datagram, bodyOffset + consumed, fragHeader.FragLength);
+            using (assembled)
+            {
+                var normalizedHeader = new UdpHeaderBuilder()
+                    .From(header)
+                    .WithPayloadLength(assembled.Count)
+                    .Build();
 
-            if (!UdpSocket.Assembler.TryAssemble(header, fragHeader, fragPayload, out var assembled))
-                return;
-
-            var normalizedHeader = new UdpHeaderBuilder()
-                .From(header)
-                .WithPayloadLength(assembled.Count)
-                .Build();
-
-            var msg = new UdpMessage(normalizedHeader, assembled);
-            OnReceivedMessage(msg);
+                var payload = new ReadOnlyMemory<byte>(assembled.Array, 0, assembled.Count);
+                var message = new UdpMessage(normalizedHeader, payload);
+                OnReceivedMessage(message);
+            }
         }
         else
         {
-            var payload = new ArraySegment<byte>(datagram, bodyOffset, bodyLen);
-            var msg = new UdpMessage(header, payload);
-            OnReceivedMessage(msg);
+            var payload = new ReadOnlyMemory<byte>(buffer.Array, bodyOffset, header.PayloadLength);
+            var message = new UdpMessage(header, payload);
+            OnReceivedMessage(message);
         }
     }
 
@@ -97,6 +98,10 @@ public abstract class BaseSession : IBaseSession
     {
         _channelRouter.Unbind(ChannelKind.Reliable);
         _channelRouter.Unbind(ChannelKind.Unreliable);
+        
+        _receiveBuffer?.Dispose();
+        _receiveBuffer = null;
+        
         NetworkSession.Close(reason);
         UdpSocket?.Close(reason);
         StopFragmentAssemblerCleanupScheduler();
@@ -109,7 +114,7 @@ public abstract class BaseSession : IBaseSession
         _scheduler = engine.Scheduler;
         NetworkSession = networkSession;
         Id = networkSession.SessionId;
-        _receiveBuffer = new BinaryReceiveBuffer(engine.Config.Network.ReceiveBufferSize);
+        _receiveBuffer = new PooledReceiveBuffer(engine.Config.Network.ReceiveBufferSize);
         networkSession.Attach(this);
         _channelRouter.Bind(new ReliableChannel(networkSession));
         IsConnected = true;
@@ -182,27 +187,30 @@ public abstract class BaseSession : IBaseSession
     
     void IBaseSession.ProcessBuffer(byte[] buffer, int offset, int length)
     {
-        _receiveBuffer.Write(buffer, offset, length);
+        _receiveBuffer.Write(new ReadOnlySpan<byte>(buffer, offset, length));
 
         try
         {
-            const int maxFramePerTick = 128;
             const int headerSize = TcpHeader.ByteSize;
-            var frames = 0;
+            const int maxProcessPerTick = 150;
+            var processedCount = 0;
+            
+            Span<byte> headerSpan = stackalloc byte[headerSize];
 
-            while (frames < maxFramePerTick)
+            while (_receiveBuffer.ReadableBytes >= headerSize)
             {
-                // 헤더 확인
-                if (_receiveBuffer.ReadableBytes < headerSize)
+                if (processedCount++ >= maxProcessPerTick)
                     break;
-
-                var headerSpan = _receiveBuffer.Peek(headerSize);
+                
+                _receiveBuffer.Peek(headerSpan);
+                
                 if (!TcpHeader.TryRead(headerSpan, out var header, out var consumed))
                     break;
 
                 // 페이로드 검증
                 var bodyLen = header.PayloadLength;
-                if (bodyLen <= 0 || bodyLen > Config.Network.MaxFrameBytes)
+                
+                if (bodyLen < 0 || bodyLen > Config.Network.MaxFrameBytes)
                 {
                     Logger.Warn("Invalid payload length. id={0}, max={1}, len={2}",
                         header.MsdId, Config.Network.MaxFrameBytes, bodyLen);
@@ -210,41 +218,34 @@ public abstract class BaseSession : IBaseSession
                     break;
                 }
 
-                // 전체 패킷이 도착했는지 확인
-                var total = consumed + bodyLen;
-                if (_receiveBuffer.ReadableBytes < total)
+                var totalLen = consumed + bodyLen;
+                if (_receiveBuffer.ReadableBytes < totalLen)
                     break;
 
                 // 헤더 소비
                 _receiveBuffer.Consume(consumed);
 
-                IMemoryOwner<byte> owner = null;
-                try
+                if (bodyLen > 0)
                 {
-                    // 바디 읽기 
-                    if (!_receiveBuffer.TryRead(bodyLen, out var bodyMem, out owner))
-                        break;
-
-                    // 메시지 처리
-                    var message = new TcpMessage(header, bodyMem);
+                    using var pb = new PooledBuffer(bodyLen);
+                    _receiveBuffer.Peek(pb.Span);
+                    _receiveBuffer.Consume(bodyLen);
+                    
+                    var payload = new ReadOnlyMemory<byte>(pb.Array, 0, bodyLen);
+                    var message = new TcpMessage(header, payload);
                     OnReceivedMessage(message);
                 }
-                catch (Exception e)
+                else
                 {
-                    Logger.Error(e);
+                    var message = new TcpMessage(header, ReadOnlyMemory<byte>.Empty);
+                    OnReceivedMessage(message);
                 }
-                finally
-                {
-                    owner?.Dispose();
-                }
-            
-                _receiveBuffer.Consume(bodyLen);
-                frames++;
             }
         }
         catch (Exception e)
         {
             Logger.Error(e);
+            Close(CloseReason.ProtocolError);
         }
     }
 

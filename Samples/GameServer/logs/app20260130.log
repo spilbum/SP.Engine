@@ -1,0 +1,22 @@
+[18:07:47.033 INF] [T:1] [Game] Logger setup was successful: Game
+[18:07:47.171 DBG] [T:1] [Game] Discover commands: [10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[18:07:47.186 DBG] [T:1] [Game] Discover commands: [4003, 4002, 4001, 4000, 2000]
+[18:07:47.187 INF] [T:1] [Game] The server Game is initialized.
+[18:07:52.907 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[18:07:52.909 INF] [T:1] [Game] The server instance Game was been started!
+[18:07:52.910 INF] [T:1] [Game] [Rank] State changed: "None" -> "Connecting"
+[18:07:52.911 INF] [T:1] [Game] Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.109, DnsName=
+[18:07:52.944 INF] [T:10] [Game] [Rank] State changed: "Connecting" -> "Handshake"
+[18:07:53.032 INF] [T:43] [Game] [Rank] State changed: "Handshake" -> "Open"
+[18:07:53.032 DBG] [T:43] [Game] [Rank] Connected
+[18:07:53.065 INF] [T:7] [Game] Register succeeded: Rank
+[18:08:21.894 DBG] [T:56] [Game] A new session connected. sessionId=10489821-7605-4b50-b1ab-3962c5108873, remoteEndPoint=192.168.0.109:57058
+[18:08:21.967 DBG] [T:57] [Game] Session authentication succeeded. sessionId=10489821-7605-4b50-b1ab-3962c5108873, peerId=1
+[20:17:34.502 INF] [T:66] [Game] [Rank] State changed: "Open" -> "Closing"
+[20:17:34.508 INF] [T:66] [Game] [Rank] State changed: "Closing" -> "Closed"
+[20:17:34.508 INF] [T:66] [Game] [Rank] Disconnected
+[20:17:34.509 INF] [T:7] [Game] [Rank] State changed: "Closed" -> "Connecting"
+[20:17:34.518 INF] [T:58] [Game] [Rank] State changed: "Connecting" -> "Handshake"
+[20:17:34.578 INF] [T:58] [Game] [Rank] State changed: "Handshake" -> "Open"
+[20:17:34.579 DBG] [T:58] [Game] [Rank] Connected
+[20:17:34.608 INF] [T:7] [Game] Register succeeded: Rank

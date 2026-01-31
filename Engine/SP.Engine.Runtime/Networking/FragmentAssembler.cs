@@ -1,12 +1,15 @@
 using System;
 using System.Collections.Concurrent;
+using System.IO.Enumeration;
+using System.Linq;
+using SP.Core;
 
 namespace SP.Engine.Runtime.Networking
 {
-    internal sealed class ReassemblyState
+    internal sealed class ReassemblyState : IDisposable
     {
+        public readonly PooledBuffer[] Parts;
         public readonly DateTime CreatedAtUtc = DateTime.UtcNow;
-        public readonly ArraySegment<byte>[] Parts;
         public readonly byte TotalCount;
         public int ReceivedCount;
         public int TotalLength;
@@ -14,7 +17,15 @@ namespace SP.Engine.Runtime.Networking
         public ReassemblyState(byte totalCount)
         {
             TotalCount = totalCount;
-            Parts = new ArraySegment<byte>[totalCount];
+            Parts = new PooledBuffer[totalCount];
+        }
+
+        public void Dispose()
+        {
+            for (var i = 0; i < Parts.Length; i++)
+            {
+                Parts[i].Dispose();
+            }
         }
     }
 
@@ -23,8 +34,8 @@ namespace SP.Engine.Runtime.Networking
         bool TryAssemble(
             UdpHeader header,
             FragmentHeader fragHeader,
-            ArraySegment<byte> fragPayload,
-            out ArraySegment<byte> assembled);
+            PooledBuffer fragPayload,
+            out PooledBuffer assembled);
 
         void Cleanup(TimeSpan timeout);
     }
@@ -37,13 +48,16 @@ namespace SP.Engine.Runtime.Networking
         public bool TryAssemble(
             UdpHeader header,
             FragmentHeader fragHeader,
-            ArraySegment<byte> fragPayload,
-            out ArraySegment<byte> assembled)
+            PooledBuffer fragPayload,
+            out PooledBuffer assembled)
         {
             assembled = default;
 
-            if (fragPayload.Array == null || fragPayload.Count < 0) return false;
-            if (fragHeader.Index >= fragHeader.TotalCount) return false;
+            if (fragHeader.Index >= fragHeader.TotalCount)
+            {
+                fragPayload.Dispose();
+                return false;
+            }
 
             var key = fragHeader.FragId;
             
@@ -53,49 +67,59 @@ namespace SP.Engine.Runtime.Networking
                 if (!_map.TryAdd(key, state))
                 {
                     if (!_map.TryGetValue(key, out state))
+                    {
+                        fragPayload.Dispose();
                         return false;
+                    }
                 }
             }
 
             lock (state)
             {
-                const int MaxReassemblySize = 64 * 1024;
+                const int MaxReassemblySize = 1024 * 1024;
                 if (state.TotalLength + fragPayload.Count > MaxReassemblySize)
                 {
+                    fragPayload.Dispose();
                     _map.TryRemove(key, out _);
+                    state.Dispose();
+                    return false;
+                }
+                 
+                if (state.Parts[fragHeader.Index].Array != null)
+                {
+                    fragPayload.Dispose();
                     return false;
                 }
                 
-                var slot = state.Parts[fragHeader.Index];
-                if (slot.Array == null)
-                {
-                    state.Parts[fragHeader.Index] = fragPayload;
-                    state.TotalLength += fragPayload.Count;
-                    state.ReceivedCount++;
-                }
+                state.Parts[fragHeader.Index] = fragPayload;
+                state.ReceivedCount++;
+                state.TotalLength += fragPayload.Count;
 
                 if (state.ReceivedCount != state.TotalCount)
                     return false;
 
-                // 조립
-                var dst = new byte[state.TotalLength];
+                var result = new PooledBuffer(state.TotalLength);
                 var offset = 0;
-                for (var i = 0; i < state.TotalCount; i++)
-                {
-                    var seg = state.Parts[i];
-                    if (seg.Array == null)
-                    {
-                        _map.TryRemove(key, out _);
-                        return false;
-                    }
 
-                    Buffer.BlockCopy(seg.Array!, seg.Offset, dst, offset, seg.Count);
-                    offset += seg.Count;
-                    state.Parts[i] = default;
+                try
+                {
+                    for (var i = 0; i < state.TotalCount; i++)
+                    {
+                        var part = state.Parts[i];
+                        part.Span.CopyTo(result.Span[offset..]);
+                        offset += part.Count;
+                    }
+                }
+                catch
+                {
+                    result.Dispose();
+                    throw;
                 }
 
                 _map.TryRemove(key, out _);
-                assembled = new ArraySegment<byte>(dst);
+                state.Dispose();
+                
+                assembled = result;
                 return true;
             }
         }
@@ -107,12 +131,11 @@ namespace SP.Engine.Runtime.Networking
             foreach (var (key, state) in _map.ToArray())
             {
                 if (now - state.CreatedAtUtc < timeout) continue;
-                if (!_map.TryRemove(key, out var s)) continue;
+                if (!_map.TryRemove(key, out var removedState)) continue;
 
-                lock (s)
+                lock (removedState)
                 {
-                    for (var i = 0; i < s.Parts.Length; i++)
-                        s.Parts[i] = default;
+                    removedState.Dispose();
                 }
             }
         }

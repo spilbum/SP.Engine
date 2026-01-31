@@ -7,6 +7,9 @@ namespace SP.Engine.Runtime.Networking
     public interface IMessage
     {
         ushort Id { get; }
-        TProtocol Deserialize<TProtocol>(IEncryptor encryptor, ICompressor compressor) where TProtocol : IProtocolData;
+        TProtocol Deserialize<TProtocol>(IEncryptor encryptor, ICompressor compressor)
+            where TProtocol : IProtocolData;
+
+        IMessage Clone();
     }
 }

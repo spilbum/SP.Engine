@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Buffers;
 using System.Net;
 using System.Net.Sockets;
+using SP.Core;
 using SP.Engine.Runtime;
 
 namespace SP.Engine.Server;
@@ -62,21 +64,21 @@ internal class UdpNetworkListener(ListenerInfo listenerInfo) : BaseNetworkListen
         if (e.LastOperation != SocketAsyncOperation.ReceiveFrom || e.BytesTransferred == 0)
             return;
 
+        var buffer = new PooledBuffer(e.BytesTransferred);
+        
         try
         {
             if (null == e.RemoteEndPoint)
                 throw new Exception("RemoteEndPoint is null");
 
-            var datagram = new byte[e.BytesTransferred];
-            Buffer.BlockCopy(e.Buffer!, e.Offset, datagram, 0, e.BytesTransferred);
+            Buffer.BlockCopy(e.Buffer!, e.Offset, buffer.Array, 0, e.BytesTransferred);
 
             var remote = (IPEndPoint)e.RemoteEndPoint;
-            remote = new IPEndPoint(remote.Address, remote.Port);
-
-            OnNewClientAccepted(_listenSocket, (datagram, remote));
+            OnNewClientAccepted(_listenSocket, (buffer, remote));
         }
         catch (Exception ex)
         {
+            buffer.Dispose();
             OnError(new Exception($"[UDP] Error receiving data from {e.RemoteEndPoint}: {ex.Message}", ex));
         }
 

@@ -49,5 +49,11 @@ namespace SP.Engine.Runtime.Networking
                 .WithPayloadLength(payloadLength)
                 .Build();
         }
+
+        public override IMessage Clone()
+        {
+            var newBody = Body.ToArray();
+            return new TcpMessage(Header, newBody);
+        }
     }
 }

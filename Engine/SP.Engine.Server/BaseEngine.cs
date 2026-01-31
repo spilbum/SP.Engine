@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using SP.Core;
 using SP.Core.Fiber;
 using SP.Core.Logging;
 using SP.Engine.Runtime;
@@ -21,7 +22,7 @@ public interface IBaseEngine : ILogContext
     IFiberScheduler Scheduler { get; }
     IBaseSession CreateSession(TcpNetworkSession networkSession);
     bool RegisterSession(IBaseSession session);
-    void ProcessUdpClient(byte[] datagram, Socket socket, IPEndPoint remoteEndPoint);
+    void ProcessUdpClient(PooledBuffer buffer, Socket socket, IPEndPoint remoteEndPoint);
 }
 
 public interface ISocketServerAccessor
@@ -109,29 +110,21 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
         return true;
     }
 
-    void IBaseEngine.ProcessUdpClient(byte[] datagram, Socket socket, IPEndPoint remoteEndPoint)
+    void IBaseEngine.ProcessUdpClient(PooledBuffer buffer, Socket socket, IPEndPoint remoteEndPoint)
     {
-        var span = datagram.AsSpan();
-        if (!UdpHeader.TryRead(span, out var header, out var consumed))
-            return;
-
-        if (datagram.Length < consumed + header.PayloadLength)
-            return;
-
-        var peer = GetBasePeer(header.PeerId);
-        if (peer == null)
+        using (buffer)
         {
-            Logger.Warn("Not found peer: {0}", header.PeerId);
-            return;
-        }
+            if (!UdpHeader.TryRead(buffer.Span, out var header, out var consumed))
+                return;
 
-        if (peer.Session is not IBaseSession session)
-        {
-            Logger.Warn("Not found session. peerId={0}", header.PeerId);
-            return;
-        }
+            if (buffer.Count < consumed + header.PayloadLength)
+                return;
 
-        session.ProcessDatagram(datagram, header, socket, remoteEndPoint);
+            var peer = GetBasePeer(header.PeerId);
+            if (peer?.Session is not IBaseSession session) return;
+
+            session.ProcessBuffer(buffer, header, socket, remoteEndPoint);
+        }
     }
 
     public void Dispose()

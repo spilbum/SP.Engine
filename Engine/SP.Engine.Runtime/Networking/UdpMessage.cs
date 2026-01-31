@@ -9,8 +9,12 @@ namespace SP.Engine.Runtime.Networking
         {
         }
 
-        public UdpMessage(UdpHeader header, ReadOnlyMemory<byte> payload)
-            : base(header, payload)
+        public UdpMessage(UdpHeader header, byte[] body) : base(header, body)
+        {
+            
+        }
+
+        public UdpMessage(UdpHeader header, ReadOnlyMemory<byte> payload) : base(header, payload)
         {
         }
 
@@ -100,6 +104,12 @@ namespace SP.Engine.Runtime.Networking
                 .WithPayloadLength(payloadLength)
                 .AddFlag(flags)
                 .Build();
+        }
+
+        public override IMessage Clone()
+        {
+            var newBody = Body.ToArray();
+            return new UdpMessage(Header, newBody);
         }
     }
 }

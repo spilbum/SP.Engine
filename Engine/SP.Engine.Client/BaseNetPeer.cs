@@ -6,6 +6,7 @@ using System.IO;
 using System.Net;
 using System.Reflection;
 using System.Threading;
+using SP.Core;
 using SP.Core.Logging;
 using SP.Engine.Client.Command;
 using SP.Engine.Client.Configuration;
@@ -73,7 +74,7 @@ namespace SP.Engine.Client
         private readonly Dictionary<ushort, ICommand> _commands = new Dictionary<ushort, ICommand>();
         private readonly DiffieHellman _diffieHellman = new DiffieHellman(DhKeySize.Bit2048);
         private readonly Dictionary<ushort, ICommand> _internalCommands = new Dictionary<ushort, ICommand>();
-        private readonly BinaryReceiveBuffer _receiveBuffer = new BinaryReceiveBuffer(1024);
+        private readonly PooledReceiveBuffer _receiveBuffer = new PooledReceiveBuffer(1024);
         private readonly ConcurrentQueue<IMessage> _receiveQueue = new ConcurrentQueue<IMessage>();
         private Lz4Compressor _compressor;
         private bool _disposed;
@@ -547,25 +548,29 @@ namespace SP.Engine.Client
 
         private void OnSessionDataReceived(object sender, DataEventArgs e)
         {
-            _receiveBuffer.Write(e.Data, e.Offset, e.Length);
+            _receiveBuffer.Write(new ReadOnlySpan<byte>(e.Data, e.Offset, e.Length));
 
             try
             {
-                const int maxFramePerTick = 128;
                 const int headerSize = TcpHeader.ByteSize;
-                var frames = 0;
+                const int maxProcessPerTick = 150;
+                var processedCount = 0;
 
-                while (frames < maxFramePerTick)
+                Span<byte> headerSpan = stackalloc byte[headerSize];
+                
+                while (_receiveBuffer.ReadableBytes >= headerSize)
                 {
-                    if (_receiveBuffer.ReadableBytes < headerSize)
+                    if (processedCount++ >= maxProcessPerTick)
                         break;
 
-                    var headerSpan = _receiveBuffer.Peek(headerSize);
+                    _receiveBuffer.Peek(headerSpan);
+                    
                     if (!TcpHeader.TryRead(headerSpan, out var header, out var consumed))
                         break;
 
                     var bodyLen = header.PayloadLength;
-                    if (bodyLen <= 0 || bodyLen > MaxFrameBytes)
+                    
+                    if (bodyLen < 0 || bodyLen > MaxFrameBytes)
                     {
                         Logger.Warn("Invalid payload length. id={0}, max={1}, len={2}",
                             header.MsdId, MaxFrameBytes, bodyLen);
@@ -579,42 +584,42 @@ namespace SP.Engine.Client
 
                     _receiveBuffer.Consume(consumed);
 
-                    IMemoryOwner<byte> owner = null;
-                    try
+                    if (bodyLen > 0)
                     {
-                        if (!_receiveBuffer.TryRead(bodyLen, out var bodyMem, out owner))
-                            break;
-      
-                        if (_internalCommands.TryGetValue(header.MsdId, out var command))
+                        using (var pb = new PooledBuffer(bodyLen))
                         {
-                            var message = new TcpMessage(header, bodyMem);
-                            command.Execute(this, message);
-                        }
-                        else
-                        {
-                            var data = bodyMem.ToArray();
-                            var message = new TcpMessage(header, data);
-                            
-                            SendMessageAck(message.SequenceNumber);
-                            EnqueueReceivedMessage(message);
-                        }
+                            _receiveBuffer.Peek(pb.Span);
+                            _receiveBuffer.Consume(bodyLen);
+
+                            var payload = new ReadOnlyMemory<byte>(pb.Array, 0, bodyLen);
+                            var message = new TcpMessage(header, payload);
+                            OnReceivedMessage(message);
+                        }    
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        OnError(ex);
+                        var message = new TcpMessage(header, ReadOnlyMemory<byte>.Empty);
+                        OnReceivedMessage(message);
                     }
-                    finally
-                    {
-                        owner?.Dispose();
-                    }
-                
-                    _receiveBuffer.Consume(bodyLen);
-                    frames++;
                 }
             }
             catch (Exception ex)
             {
                 OnError(ex);
+                Close();
+            }
+        }
+
+        private void OnReceivedMessage(TcpMessage message)
+        {
+            if (_internalCommands.TryGetValue(message.Id, out var command))
+            {
+                command.Execute(this, message);
+            }
+            else
+            {               
+                SendMessageAck(message.SequenceNumber);
+                EnqueueReceivedMessage(message.Clone());
             }
         }
 
@@ -731,10 +736,10 @@ namespace SP.Engine.Client
         {
             if (_udpSocket == null) return;
 
-            var datagram = new byte[e.Length];
-            Buffer.BlockCopy(e.Data, e.Offset, datagram, 0, datagram.Length);
+            var buffer = new PooledBuffer(e.Length);
+            Buffer.BlockCopy(e.Data, e.Offset, buffer.Array, 0, e.Length);
 
-            var headerSpan = datagram.AsSpan(0, UdpHeader.ByteSize);
+            var headerSpan = buffer.Span.Slice(0, UdpHeader.ByteSize);
             if (!UdpHeader.TryRead(headerSpan, out var header, out var consumed))
                 return;
 
@@ -742,47 +747,48 @@ namespace SP.Engine.Client
                 return;
 
             var bodyOffset = consumed;
-            var bodyLen = header.PayloadLength;
 
             IMessage message;
             if (header.Fragmented == 0x01)
             {
-                var bodySpan = datagram.AsSpan(bodyOffset, bodyLen);
+                var bodySpan = buffer.Span.Slice(bodyOffset, header.PayloadLength);
                 if (!FragmentHeader.TryParse(bodySpan, out var fragHeader, out consumed))
                     return;
 
-                if (bodySpan.Length < consumed + fragHeader.FragLength)
-                    return;
-
-                var fragPayload = new ArraySegment<byte>(datagram, bodyOffset + consumed, fragHeader.FragLength);
+                var fragPayload = new PooledBuffer(fragHeader.FragLength);
+                buffer.Span.Slice(bodyOffset + consumed, fragHeader.FragLength).CopyTo(fragPayload.Span);
 
                 if (!_udpSocket.Assembler.TryAssemble(header, fragHeader, fragPayload, out var assembled))
                     return;
 
-                var normalizedHeader = new UdpHeaderBuilder()
-                    .From(header)
-                    .WithPayloadLength(assembled.Count)
-                    .Build();
+                using (assembled)
+                {
+                    var normalizedHeader = new UdpHeaderBuilder()
+                        .From(header)
+                        .WithPayloadLength(assembled.Count)
+                        .Build();
 
-                message = new UdpMessage(normalizedHeader, assembled);
+                    var payload = new ReadOnlyMemory<byte>(assembled.Array, 0, assembled.Count);
+                    message = new UdpMessage(normalizedHeader, payload);
+                }
             }
             else
             {
-                var payload = new ArraySegment<byte>(datagram, bodyOffset, bodyLen);
-                var normalizedHeader = new UdpHeaderBuilder()
-                    .From(header)
-                    .WithPayloadLength(payload.Count)
-                    .Build();
-
-                message = new UdpMessage(normalizedHeader, payload);
+                var payload = new ReadOnlyMemory<byte>(buffer.Array, bodyOffset, header.PayloadLength);
+                message = new UdpMessage(header, payload);
             }
 
             try
             {
                 if (_internalCommands.TryGetValue(message.Id, out var command))
+                {
                     command.Execute(this, message);
+                }
                 else
-                    EnqueueReceivedMessage(message);
+                {
+                    var clone = message.Clone();
+                    EnqueueReceivedMessage(clone);   
+                }
             }
             catch (Exception ex)
             {
