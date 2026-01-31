@@ -40,7 +40,7 @@ namespace SP.Engine.Runtime
             {
                 data[..rightSpace].CopyTo(_buffer.AsSpan(_writeHead));
                 data[rightSpace..].CopyTo(_buffer.AsSpan(0));
-                _writeHead += data.Length - rightSpace;
+                _writeHead = data.Length - rightSpace;
             }
             
             if (_writeHead == _buffer.Length) _writeHead = 0;
@@ -49,8 +49,10 @@ namespace SP.Engine.Runtime
 
         public void Peek(Span<byte> destination)
         {
+            ThrowIfDisposed();
+            
             if (ReadableBytes < destination.Length)
-                throw new Exception("Not enough data to peek");
+                throw new ArgumentOutOfRangeException(nameof(destination), "Not enough data to peek");
 
             var rightSpace = _buffer.Length - _readHead;
             if (rightSpace >= destination.Length)
@@ -69,7 +71,10 @@ namespace SP.Engine.Runtime
         
         public void Consume(int length)
         {
-            if (length > _count) throw new Exception("Cannot consume more than available");
+            ThrowIfDisposed();
+            
+            if (length > _count)
+                throw new ArgumentOutOfRangeException(nameof(length), "Cannot consume more than available");
             
             _readHead = (_readHead + length) % _buffer.Length;
             _count -= length;
@@ -83,13 +88,13 @@ namespace SP.Engine.Runtime
             {
                 if (_readHead < _writeHead)
                 {
-                    Array.Copy(_buffer, _readHead, newBuffer, 0, _count);
+                    _buffer.AsSpan(_readHead, _count).CopyTo(newBuffer);
                 }
                 else
                 {
                     var rightSpace = _buffer.Length - _readHead;
-                    Array.Copy(_buffer, _readHead, newBuffer, 0, rightSpace);
-                    Array.Copy(_buffer, 0, newBuffer, rightSpace, _count - rightSpace);
+                    _buffer.AsSpan(_readHead, rightSpace).CopyTo(newBuffer);
+                    _buffer.AsSpan(0, _count - rightSpace).CopyTo(newBuffer.AsSpan(rightSpace));
                 }
             }
             
@@ -111,6 +116,11 @@ namespace SP.Engine.Runtime
             }
             
             _disposed = true;
+        }
+
+        private void ThrowIfDisposed()
+        {
+            if (_disposed) throw new ObjectDisposedException(nameof(PooledReceiveBuffer));
         }
     }
 }

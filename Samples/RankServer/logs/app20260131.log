@@ -450,3 +450,73 @@
 [14:07:20.433 INF] [T:7] [PerfMonitor] Time:2026-01-31 05:07:19.791Z CPU=0.0% WS=36.70MB Managed=200.22MB Threads=34
 [14:07:50.433 INF] [T:7] [PerfMonitor] Time:2026-01-31 05:07:49.792Z CPU=0.0% WS=29.66MB Managed=200.65MB Threads=32
 [14:08:20.433 INF] [T:7] [PerfMonitor] Time:2026-01-31 05:08:19.791Z CPU=0.0% WS=31.03MB Managed=201.10MB Threads=33
+[14:08:50.433 INF] [T:7] [PerfMonitor] Time:2026-01-31 05:08:49.792Z CPU=0.0% WS=40.39MB Managed=193.88MB Threads=32
+[14:09:20.948 INF] [T:1] [Rank] Logger setup was successful: Rank
+[14:09:21.085 DBG] [T:1] [Rank] Discover commands: [3003, 3002, 3001, 3000, 1000]
+[14:09:21.087 INF] [T:1] [Rank] The server Rank is initialized.
+[14:09:21.445 DBG] [T:1] [Rank] [Daily] Reward loaded. season="Daily"/1, uid=1, rank=2, score=30, isRewarded=false, item=[0:0:70]
+[14:09:21.445 DBG] [T:1] [Rank] [Daily] Reward loaded. season="Daily"/1, uid=2, rank=1, score=40, isRewarded=false, item=[0:0:100]
+[14:09:21.445 DBG] [T:1] [Rank] [Daily] Reward loaded. season="Daily"/1, uid=1000001, rank=3, score=10, isRewarded=false, item=[0:0:50]
+[14:09:21.445 DBG] [T:1] [Rank] [Daily] Reward loaded. season="Daily"/12, uid=1000001, rank=1, score=30, isRewarded=false, item=[0:0:100]
+[14:09:21.456 INF] [T:1] [Rank] [Daily] Season loaded. kind="Daily", num=71, state="Running", start="2026-01-31T00:00:00.0000000+09:00", end="2026-02-01T00:00:00.0000000+09:00"
+[14:09:21.459 INF] [T:1] [Rank] Listener (0.0.0.0:20000:"Tcp") was started.
+[14:09:21.461 INF] [T:1] [Rank] The server instance Rank was been started!
+[14:09:29.836 DBG] [T:26] [Rank] A new session connected. sessionId=f5461efe-5192-4f46-990f-85978d60bed3, remoteEndPoint=127.0.0.1:60954
+[14:09:29.892 DBG] [T:26] [Rank] Session authentication succeeded. sessionId=f5461efe-5192-4f46-990f-85978d60bed3, peerId=1
+[14:09:29.932 INF] [T:26] [Rank] Server Game registered.
+[14:09:51.098 INF] [T:7] [PerfMonitor] Time:2026-01-31 05:09:50.088Z CPU=0.0% WS=78.97MB Managed=193.56MB Threads=34
+[14:09:52.093 DBG] [T:11] [Rank] A new session connected. sessionId=5cf187b9-f65c-4622-ab7f-b74031730015, remoteEndPoint=127.0.0.1:60962
+[14:09:52.095 DBG] [T:11] [Rank] Session authentication succeeded. sessionId=5cf187b9-f65c-4622-ab7f-b74031730015, peerId=1
+[14:09:52.097 DBG] [T:27] [Rank] The session f5461efe-5192-4f46-990f-85978d60bed3 has been closed. reason="ClientClosing"
+[14:09:52.097 DBG] [T:27] [Rank] Peer waiting reconnect registered. peerId=1
+[14:09:52.122 DBG] [T:27] [Rank] A new session connected. sessionId=a6d46811-f887-46b9-a417-f016590b3138, remoteEndPoint=127.0.0.1:60963
+[14:09:52.169 DBG] [T:25] [Rank] Session authentication succeeded. sessionId=a6d46811-f887-46b9-a417-f016590b3138, peerId=2
+[14:10:07.122 DBG] [T:25] [Rank] A new session connected. sessionId=dd9a39f9-58f0-46f7-9d8f-260600f58fd9, remoteEndPoint=127.0.0.1:60964
+[14:10:07.169 DBG] [T:25] [Rank] Session authentication succeeded. sessionId=dd9a39f9-58f0-46f7-9d8f-260600f58fd9, peerId=3
+[14:10:21.089 INF] [T:7] [PerfMonitor] Time:2026-01-31 05:10:20.087Z CPU=0.0% WS=66.36MB Managed=194.31MB Threads=33
+[14:10:22.123 DBG] [T:11] [Rank] A new session connected. sessionId=2b4b3333-0574-4e63-8677-4203a31f2620, remoteEndPoint=127.0.0.1:60971
+[14:10:22.172 DBG] [T:10] [Rank] Session authentication succeeded. sessionId=2b4b3333-0574-4e63-8677-4203a31f2620, peerId=4
+[14:10:37.122 DBG] [T:27] [Rank] A new session connected. sessionId=db7ce315-b3ba-4ea0-9fb7-acbd7f02190a, remoteEndPoint=127.0.0.1:60990
+[14:10:37.149 DBG] [T:11] [Rank] Session authentication succeeded. sessionId=db7ce315-b3ba-4ea0-9fb7-acbd7f02190a, peerId=5
+[14:10:51.089 INF] [T:7] [PerfMonitor] Time:2026-01-31 05:10:50.087Z CPU=0.0% WS=71.70MB Managed=195.06MB Threads=34
+[14:10:52.122 DBG] [T:11] [Rank] A new session connected. sessionId=d69b7277-df54-4162-94d1-d9537cf792dd, remoteEndPoint=127.0.0.1:60992
+[14:10:52.156 DBG] [T:25] [Rank] Session authentication succeeded. sessionId=d69b7277-df54-4162-94d1-d9537cf792dd, peerId=6
+[14:11:07.123 DBG] [T:11] [Rank] A new session connected. sessionId=0e578aec-761d-4b8d-b7f5-f66f888f2816, remoteEndPoint=127.0.0.1:60994
+[14:11:07.168 DBG] [T:11] [Rank] Session authentication succeeded. sessionId=0e578aec-761d-4b8d-b7f5-f66f888f2816, peerId=7
+[14:11:21.089 INF] [T:7] [PerfMonitor] Time:2026-01-31 05:11:20.088Z CPU=0.0% WS=79.56MB Managed=193.94MB Threads=33
+[14:11:22.122 DBG] [T:32] [Rank] A new session connected. sessionId=6001efae-aaab-419b-bc7c-2dec6b64ca8a, remoteEndPoint=127.0.0.1:60995
+[14:11:22.175 DBG] [T:25] [Rank] Session authentication succeeded. sessionId=6001efae-aaab-419b-bc7c-2dec6b64ca8a, peerId=8
+[14:11:37.123 DBG] [T:31] [Rank] A new session connected. sessionId=1b45d891-a565-4f50-adf8-5795d4351379, remoteEndPoint=127.0.0.1:60997
+[14:11:37.154 DBG] [T:31] [Rank] Session authentication succeeded. sessionId=1b45d891-a565-4f50-adf8-5795d4351379, peerId=9
+[14:11:40.385 DBG] [T:31] [Rank] The session 0e578aec-761d-4b8d-b7f5-f66f888f2816 has been closed. reason="ClientClosing"
+[14:11:40.385 DBG] [T:32] [Rank] The session d69b7277-df54-4162-94d1-d9537cf792dd has been closed. reason="ClientClosing"
+[14:11:40.385 DBG] [T:8] [Rank] The session 6001efae-aaab-419b-bc7c-2dec6b64ca8a has been closed. reason="ClientClosing"
+[14:11:40.385 DBG] [T:29] [Rank] The session 1b45d891-a565-4f50-adf8-5795d4351379 has been closed. reason="ClientClosing"
+[14:11:40.385 DBG] [T:31] [Rank] Peer waiting reconnect registered. peerId=7
+[14:11:40.385 DBG] [T:32] [Rank] Peer waiting reconnect registered. peerId=6
+[14:11:40.385 DBG] [T:29] [Rank] Peer waiting reconnect registered. peerId=9
+[14:11:40.385 DBG] [T:27] [Rank] The session db7ce315-b3ba-4ea0-9fb7-acbd7f02190a has been closed. reason="ClientClosing"
+[14:11:40.385 DBG] [T:27] [Rank] Peer waiting reconnect registered. peerId=5
+[14:11:40.385 DBG] [T:25] [Rank] The session a6d46811-f887-46b9-a417-f016590b3138 has been closed. reason="ClientClosing"
+[14:11:40.385 DBG] [T:26] [Rank] The session 5cf187b9-f65c-4622-ab7f-b74031730015 has been closed. reason="ClientClosing"
+[14:11:40.385 DBG] [T:10] [Rank] The session dd9a39f9-58f0-46f7-9d8f-260600f58fd9 has been closed. reason="ClientClosing"
+[14:11:40.385 DBG] [T:25] [Rank] Peer waiting reconnect registered. peerId=2
+[14:11:40.385 DBG] [T:10] [Rank] Peer waiting reconnect registered. peerId=3
+[14:11:40.385 DBG] [T:3] [Rank] The session 2b4b3333-0574-4e63-8677-4203a31f2620 has been closed. reason="ClientClosing"
+[14:11:40.385 DBG] [T:3] [Rank] Peer waiting reconnect registered. peerId=4
+[14:11:40.385 DBG] [T:8] [Rank] Peer waiting reconnect registered. peerId=8
+[14:11:40.385 ERR] [T:26] [Rank] Failed to remove peer: sessionId=5cf187b9-f65c-4622-ab7f-b74031730015, peerId=1, peerType=Server, remoteEndPoint=127.0.0.1:60962
+[14:28:09.201 INF] [T:1] [Rank] Logger setup was successful: Rank
+[14:28:09.355 DBG] [T:1] [Rank] Discover commands: [3003, 3002, 3001, 3000, 1000]
+[14:28:09.356 INF] [T:1] [Rank] The server Rank is initialized.
+[14:28:09.645 DBG] [T:1] [Rank] [Daily] Reward loaded. season="Daily"/1, uid=1, rank=2, score=30, isRewarded=false, item=[0:0:70]
+[14:28:09.645 DBG] [T:1] [Rank] [Daily] Reward loaded. season="Daily"/1, uid=2, rank=1, score=40, isRewarded=false, item=[0:0:100]
+[14:28:09.645 DBG] [T:1] [Rank] [Daily] Reward loaded. season="Daily"/1, uid=1000001, rank=3, score=10, isRewarded=false, item=[0:0:50]
+[14:28:09.645 DBG] [T:1] [Rank] [Daily] Reward loaded. season="Daily"/12, uid=1000001, rank=1, score=30, isRewarded=false, item=[0:0:100]
+[14:28:09.653 INF] [T:1] [Rank] [Daily] Season loaded. kind="Daily", num=71, state="Running", start="2026-01-30T15:00:00.0000000+09:00", end="2026-01-31T15:00:00.0000000+09:00"
+[14:28:09.656 INF] [T:1] [Rank] Listener (0.0.0.0:20000:"Tcp") was started.
+[14:28:09.658 INF] [T:1] [Rank] The server instance Rank was been started!
+[14:28:17.292 DBG] [T:15] [Rank] A new session connected. sessionId=2bc2b8fb-8018-459c-af39-36d4f68ca79c, remoteEndPoint=127.0.0.1:61198
+[14:28:17.349 DBG] [T:26] [Rank] Session authentication succeeded. sessionId=2bc2b8fb-8018-459c-af39-36d4f68ca79c, peerId=1
+[14:28:17.389 INF] [T:26] [Rank] Server Game registered.
+[14:28:39.364 INF] [T:7] [PerfMonitor] Time:2026-01-31 05:28:38.358Z CPU=0.0% WS=81.88MB Managed=193.58MB Threads=33
