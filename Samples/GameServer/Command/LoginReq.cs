@@ -8,7 +8,7 @@ namespace GameServer.Command;
 [ProtocolCommand(C2GProtocol.LoginReq)]
 public class LoginReq : BaseCommand<GamePeer, C2GProtocolData.LoginReq>
 {
-    protected override void ExecuteProtocol(GamePeer context, C2GProtocolData.LoginReq protocol)
+    protected override Task ExecuteCommand(GamePeer context, C2GProtocolData.LoginReq protocol)
     {
         var ack = new G2CProtocolData.LoginAck { Result = ErrorCode.Unknown };
 
@@ -53,5 +53,7 @@ public class LoginReq : BaseCommand<GamePeer, C2GProtocolData.LoginReq>
         {
             context.Send(ack);
         }
+
+        return Task.CompletedTask;
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
 
@@ -10,22 +11,15 @@ namespace SP.Engine.Runtime.Command
     {
         public Type ContextType => typeof(TContext);
 
-        public void Execute(ICommandContext context, IMessage message)
+        public Task Execute(ICommandContext context, IMessage message)
         {
-            try
-            {
-                if (!(context is TContext typed))
-                    throw new InvalidCastException($"Context must be {typeof(TContext).Name}");
+            if (!(context is TContext ctx))
+                return Task.CompletedTask;
 
-                var protocol = context.Deserialize<TProtocol>(message);
-                ExecuteProtocol(typed, protocol);
-            }
-            catch (Exception e)
-            {
-                context.Logger.Error(e);
-            }
+            var protocol = context.Deserialize<TProtocol>(message);
+            return ExecuteCommand(ctx, protocol);
         }
 
-        protected abstract void ExecuteProtocol(TContext context, TProtocol protocol);
+        protected abstract Task ExecuteCommand(TContext context, TProtocol protocol);
     }
 }

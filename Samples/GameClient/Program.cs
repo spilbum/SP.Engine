@@ -10,7 +10,7 @@ namespace GameClient;
 
 internal static class Program
 {
-    private static NetworkClient? _client;
+    private static Client? _client;
     private static ResourceManager? _resourceManager;
     private static int _resourceVersion = -1;
     
@@ -120,7 +120,7 @@ internal static class Program
             .Build();
 
         var logger = new ConsoleLogger("GameClient");
-        _client = new NetworkClient(config, logger);
+        _client = new Client(config, logger);
         _client.Connect(server.Host, server.Port);
     }
     

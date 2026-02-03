@@ -195,14 +195,14 @@ internal sealed class SocketServer(IBaseEngine engine, ListenerInfo[] listenerIn
             return;
         }
 
-        var networkSession = new TcpNetworkSession(client, context);
-        networkSession.Closed += OnSessionClosed;
+        var ns = new TcpNetworkSession(client, context);
+        ns.Closed += OnSessionClosed;
 
-        var session = CreateSession(client, networkSession);
+        var session = CreateSession(client, ns);
         if (RegisterSession(session))
-            Engine.AsyncRun(networkSession.Start);
+            Engine.AsyncRun(ns.Start);
         else
-            networkSession.Close(CloseReason.ApplicationError);
+            ns.Close(CloseReason.ApplicationError);
     }
 
     private void OnSessionClosed(INetworkSession session, CloseReason reason)

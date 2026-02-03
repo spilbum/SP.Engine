@@ -8,7 +8,7 @@ namespace RankServer.Command;
 [ProtocolCommand(G2RProtocol.RankUpdateReq)]
 public class RankUpdateReq : BaseCommand<GameServerPeer, G2RProtocolData.RankUpdateReq>
 {
-    protected override void ExecuteProtocol(GameServerPeer context, G2RProtocolData.RankUpdateReq protocol)
+    protected override Task ExecuteCommand(GameServerPeer context, G2RProtocolData.RankUpdateReq protocol)
     {
         var ack = new R2GProtocolData.RankUpdateAck
             { Result = ErrorCode.Unknown, SeasonKind = protocol.SeasonKind, Uid = protocol.Uid };
@@ -18,7 +18,7 @@ public class RankUpdateReq : BaseCommand<GameServerPeer, G2RProtocolData.RankUpd
             if (!RankServer.Instance.TryGetSeason(protocol.SeasonKind, out var season))
             {
                 ack.Result = ErrorCode.RankNotFound;
-                return;
+                return Task.CompletedTask;
             }
 
             if (!season!.UpdateRecord(
@@ -29,7 +29,7 @@ public class RankUpdateReq : BaseCommand<GameServerPeer, G2RProtocolData.RankUpd
                     protocol.Profile?.CountryCode))
             {
                 ack.Result = ErrorCode.InternalError;
-                return;
+                return Task.CompletedTask;
             }
 
             ack.Result = ErrorCode.Ok;
@@ -43,5 +43,7 @@ public class RankUpdateReq : BaseCommand<GameServerPeer, G2RProtocolData.RankUpd
         {
             context.Send(ack);
         }
+        
+        return Task.CompletedTask;
     }
 }

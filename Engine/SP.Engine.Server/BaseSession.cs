@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Buffers;
-using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using SP.Core;
@@ -20,9 +18,10 @@ public interface IBaseSession : ILogContext
     INetworkSession NetworkSession { get; }
     IEngineConfig Config { get; }
     DateTime LastActiveTime { get; }
-    void ProcessBuffer(byte[] buffer, int offset, int length);
-    void ProcessBuffer(PooledBuffer buffer, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint);
+    void ProcessTcpBuffer(byte[] buffer, int offset, int length);
+    void ProcessUdpBuffer(PooledBuffer buffer, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint);
     void Close(CloseReason reason);
+    IFiber Fiber { get; }
 }
 
 public abstract class BaseSession : IBaseSession
@@ -32,6 +31,8 @@ public abstract class BaseSession : IBaseSession
     private BaseEngine _engine;
     private PooledReceiveBuffer _receiveBuffer;
     private IFiberScheduler _scheduler;
+    
+    public IFiber Fiber { get; internal set; }
 
     protected BaseSession()
     {
@@ -56,7 +57,7 @@ public abstract class BaseSession : IBaseSession
     public string Id { get; private set; }
     public INetworkSession NetworkSession { get; private set; }
 
-    void IBaseSession.ProcessBuffer(PooledBuffer buffer, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint)
+    void IBaseSession.ProcessUdpBuffer(PooledBuffer buffer, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint)
     {
         EnsureUdpSocket(socket, remoteEndPoint);
 
@@ -184,7 +185,7 @@ public abstract class BaseSession : IBaseSession
         }
     }
     
-    void IBaseSession.ProcessBuffer(byte[] buffer, int offset, int length)
+    void IBaseSession.ProcessTcpBuffer(byte[] buffer, int offset, int length)
     {
         _receiveBuffer.Write(new ReadOnlySpan<byte>(buffer, offset, length));
 

@@ -104,7 +104,11 @@ public sealed class Session : BaseSession, ISession
                             $"No waiting reconnection peer found for sessionId={data.SessionId}");
                 }
 
-                engine.OnlinePeer(peer, this);
+                if (!engine.OnlinePeer(peer, this))
+                {
+                    throw new SessionAuthException(SessionHandshakeResult.SessionNotFound,
+                        "Reconnection filed. The session has timed out.");
+                }
             }
 
             if (peer == null)

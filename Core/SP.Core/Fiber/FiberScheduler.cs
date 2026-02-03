@@ -1,5 +1,4 @@
 using System;
-using System.Threading;
 using SP.Core.Logging;
 
 namespace SP.Core.Fiber
@@ -26,41 +25,78 @@ namespace SP.Core.Fiber
             _running = true;
         }
 
-        public bool TryEnqueue(IAsyncJob job)
-            => !_disposed && _fiber.TryEnqueue(job);
+        public bool Enqueue(IAsyncJob job)
+        {
+            ThrowIfDisposed();
+            return _fiber.Enqueue(job);
+        }
 
-        public bool TryEnqueue(Action action)
-            => !_disposed && _fiber.TryEnqueue(action);
+        public bool Enqueue(Action action)
+        {
+            ThrowIfDisposed();
+            return _fiber.Enqueue(action);
+        }
 
-        public bool TryEnqueue<T>(Action<T> action, T state)
-            => !_disposed && _fiber.TryEnqueue(action, state);
+        public bool Enqueue<T>(Action<T> action, T state)
+        {
+            ThrowIfDisposed();
+            return _fiber.Enqueue(action, state);
+        }
 
-        public bool TryEnqueue<T1, T2>(Action<T1, T2> action, T1 state1, T2 state2)
-            => !_disposed && _fiber.TryEnqueue(action, state1, state2);
-        
-        public bool TryEnqueue<T1, T2, T3>(Action<T1, T2, T3> action, T1 state1, T2 state2, T3 state3)
-            => !_disposed && _fiber.TryEnqueue(action, state1, state2, state3);
-        
-        public bool TryEnqueue<T1, T2, T3, T4>(Action<T1, T2, T3, T4> action, T1 state1, T2 state2, T3 state3, T4 state4)
-            => !_disposed && _fiber.TryEnqueue(action, state1, state2, state3, state4);
+        public bool Enqueue<T1, T2>(Action<T1, T2> action, T1 s1, T2 s2)
+        {
+            ThrowIfDisposed();
+            return _fiber.Enqueue(action, s1, s2);
+        }
+
+        public bool Enqueue<T1, T2, T3>(Action<T1, T2, T3> action, T1 s1, T2 s2, T3 s3)
+        {
+            ThrowIfDisposed();
+            return _fiber.Enqueue(action, s1, s2, s3);
+        }
+
+        public bool Enqueue<T1, T2, T3, T4>(Action<T1, T2, T3, T4> action, T1 s1, T2 s2, T3 s3, T4 s4)
+        {
+            ThrowIfDisposed();
+            return _fiber.Enqueue(action, s1, s2, s3, s4);
+        }
 
         public IDisposable Schedule(Action action, TimeSpan dueTime, TimeSpan period)
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(IFiberScheduler));
+            ThrowIfDisposed();
             return _scheduler.Schedule(_fiber, action, dueTime, period);
         }
 
         public IDisposable Schedule<T>(Action<T> action, T state, TimeSpan dueTime, TimeSpan period)
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(IFiberScheduler));
+            ThrowIfDisposed();
             return _scheduler.Schedule(_fiber, action, state, dueTime, period);
         }
 
-        public IDisposable Schedule<T1, T2>(Action<T1, T2> action, T1 state1, T2 state2, TimeSpan dueTime,
+        public IDisposable Schedule<T1, T2>(Action<T1, T2> action, T1 s1, T2 s2, TimeSpan dueTime,
             TimeSpan period)
         {
+            ThrowIfDisposed();
+            return _scheduler.Schedule(_fiber, action, s1, s2, dueTime, period);
+        }
+
+        public IDisposable Schedule<T1, T2, T3>(Action<T1, T2, T3> action, T1 s1, T2 s2, T3 s3,
+            TimeSpan dueTime, TimeSpan period)
+        {
+            ThrowIfDisposed();
+            return _scheduler.Schedule(_fiber, action, s1, s2, s3, dueTime, period);
+        }
+
+        public IDisposable Schedule<T1, T2, T3, T4>(Action<T1, T2, T3, T4> action, T1 s1, T2 s2, T3 s3, T4 s4,
+            TimeSpan dueTime, TimeSpan period)
+        {
+            ThrowIfDisposed();
+            return _scheduler.Schedule(_fiber, action, s1, s2, s3, s4, dueTime, period);
+        }
+
+        private void ThrowIfDisposed()
+        {
             if (_disposed) throw new ObjectDisposedException(nameof(IFiberScheduler));
-            return _scheduler.Schedule(_fiber, action, state1, state2, dueTime, period);
         }
 
         public void Dispose()

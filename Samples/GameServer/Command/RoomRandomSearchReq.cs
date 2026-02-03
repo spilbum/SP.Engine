@@ -8,8 +8,9 @@ namespace GameServer.Command;
 [ProtocolCommand(C2GProtocol.RoomRandomSearchReq)]
 public class RoomRandomSearchReq : BaseCommand<GamePeer, C2GProtocolData.RoomRandomSearchReq>
 {
-    protected override void ExecuteProtocol(GamePeer context, C2GProtocolData.RoomRandomSearchReq protocol)
+    protected override Task ExecuteCommand(GamePeer context, C2GProtocolData.RoomRandomSearchReq protocol)
     {
         context.ExecuteProtocol(protocol);
+        return Task.CompletedTask;
     }
 }

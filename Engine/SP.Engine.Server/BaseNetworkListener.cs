@@ -61,17 +61,7 @@ internal abstract class BaseNetworkListener(ListenerInfo info) : ISocketListener
     protected void OnNewClientAccepted(Socket socket, object state)
     {
         var handler = NewClientAccepted;
-        if (handler == null) return;
-
-        switch (Mode)
-        {
-            case SocketMode.Tcp:
-                handler.Invoke(this, socket, state);
-                break;
-            case SocketMode.Udp:
-                Task.Run(() => handler.Invoke(this, socket, state));
-                break;
-        }
+        handler?.Invoke(this, socket, state);
     }
 
 

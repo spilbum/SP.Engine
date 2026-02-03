@@ -70,8 +70,8 @@ internal class UdpNetworkListener(ListenerInfo listenerInfo) : BaseNetworkListen
         {
             if (null == e.RemoteEndPoint)
                 throw new Exception("RemoteEndPoint is null");
-
-            Buffer.BlockCopy(e.Buffer!, e.Offset, buffer.Array, 0, e.BytesTransferred);
+            
+            e.Buffer.AsSpan(e.Offset, e.BytesTransferred).CopyTo(buffer.Span);
 
             var remote = (IPEndPoint)e.RemoteEndPoint;
             OnNewClientAccepted(_listenSocket, (buffer, remote));

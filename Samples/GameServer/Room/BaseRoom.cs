@@ -45,7 +45,7 @@ public abstract class BaseRoom : IDisposable
 
     public void NotifyActive()
     {
-        Scheduler.TryEnqueue(CancelIdleTimer);
+        Scheduler.Enqueue(CancelIdleTimer);
     }
 
     public bool OnIdle()
@@ -79,7 +79,7 @@ public abstract class BaseRoom : IDisposable
 
     public void Close()
     {
-        Scheduler.TryEnqueue(() =>
+        Scheduler.Enqueue(() =>
         {
             if (IsDisposed) return;
             try
@@ -103,7 +103,7 @@ public abstract class BaseRoom : IDisposable
 
     public void EnqueueProtocol(GamePeer peer, IProtocolData protocol)
     {
-        Scheduler.TryEnqueue(ExecuteProtocol, peer, protocol);
+        Scheduler.Enqueue(ExecuteProtocol, peer, protocol);
     }
 
     protected abstract void ExecuteProtocol(GamePeer peer, IProtocolData protocol);

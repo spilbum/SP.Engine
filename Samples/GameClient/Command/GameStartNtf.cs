@@ -5,10 +5,11 @@ using SP.Engine.Runtime.Protocol;
 namespace GameClient.Command;
 
 [ProtocolCommand(G2CProtocol.GameStartNtf)]
-public class GameStartNtf : BaseCommand<NetworkClient, G2CProtocolData.GameStartNtf>
+public class GameStartNtf : BaseCommand<Client, G2CProtocolData.GameStartNtf>
 {
-    protected override void ExecuteProtocol(NetworkClient context, G2CProtocolData.GameStartNtf protocol)
+    protected override Task ExecuteCommand(Client context, G2CProtocolData.GameStartNtf protocol)
     {
         context.OnGameStart();
+        return Task.CompletedTask;
     }
 }

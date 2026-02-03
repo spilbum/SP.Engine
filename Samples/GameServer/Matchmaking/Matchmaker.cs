@@ -45,7 +45,7 @@ public class Matchmaker : IDisposable
 
     public void Enqueue(GamePeer peer, RoomOptionsInfo options, Action<ErrorCode, long?> callback)
     {
-        _scheduler.TryEnqueue(() =>
+        _scheduler.Enqueue(() =>
         {
             if (_disposed != 0) return;
             if (_pending.TryGetValue(peer, out var ticket))
@@ -63,7 +63,7 @@ public class Matchmaker : IDisposable
 
     public void Cancel(GamePeer peer)
     {
-        _scheduler.TryEnqueue(() =>
+        _scheduler.Enqueue(() =>
         {
             if (_disposed != 0) return;
             if (!_pending.TryGetValue(peer, out var t)) return;

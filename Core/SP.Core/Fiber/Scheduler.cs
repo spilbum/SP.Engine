@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Security.Cryptography;
 
 namespace SP.Core.Fiber
 {
@@ -26,27 +27,39 @@ namespace SP.Core.Fiber
 
         public IDisposable Schedule(IFiber fiber, Action action, TimeSpan dueTime, TimeSpan period)
         {
-            return Schedule(fiber, AsyncJob.From(action), dueTime, period);
+            return InternalSchedule(fiber, () => fiber.Enqueue(action), dueTime, period);
         }
 
         public IDisposable Schedule<T>(IFiber fiber, Action<T> action, T state, TimeSpan dueTime, TimeSpan period)
         {
-            return Schedule(fiber, AsyncJob.From(action, state), dueTime, period);
+            return InternalSchedule(fiber, () => fiber.Enqueue(action, state), dueTime, period);
         }
 
-        public IDisposable Schedule<T1, T2>(IFiber fiber, Action<T1, T2> action, T1 state1, T2 state2, TimeSpan dueTime,
-            TimeSpan period)
+        public IDisposable Schedule<T1, T2>(IFiber fiber, Action<T1, T2> action, T1 s1, T2 s2,
+            TimeSpan dueTime, TimeSpan period)
         {
-            return Schedule(fiber, AsyncJob.From(action, state1, state2), dueTime, period);
+            return InternalSchedule(fiber, () => fiber.Enqueue(action, s1, s2), dueTime, period);
         }
 
-        public IDisposable Schedule(IFiber fiber, IAsyncJob job, TimeSpan dueTime, TimeSpan period)
+        public IDisposable Schedule<T1, T2, T3>(IFiber fiber, Action<T1, T2, T3> action, T1 s1, T2 s2, T3 s3,
+            TimeSpan dueTime, TimeSpan period)
+        {
+            return InternalSchedule(fiber, () => fiber.Enqueue(action, s1, s2, s3), dueTime, period);
+        }
+
+        public IDisposable Schedule<T1, T2, T3, T4>(IFiber fiber, Action<T1, T2, T3, T4> action, T1 s1, T2 s2, T3 s3,
+            T4 s4, TimeSpan dueTime, TimeSpan period)
+        {
+            return InternalSchedule(fiber, () => fiber.Enqueue(action, s1, s2, s3, s4), dueTime, period);
+        }
+
+        private IDisposable InternalSchedule(IFiber fiber, Action tickEnqueue, TimeSpan dueTime, TimeSpan period)
         {
             if (_disposed) throw new ObjectDisposedException(nameof(Scheduler));
             if (fiber == null) throw new ArgumentNullException(nameof(fiber));
-            if (job == null) throw new ArgumentNullException(nameof(job));
+            if (tickEnqueue == null) throw new ArgumentNullException(nameof(tickEnqueue));
 
-            var ta = new TimerAction(EnqueueOnce, dueTime, period);
+            var ta = new TimerAction(tickEnqueue, dueTime, period);
             lock (_timers)
             {
                 if (_disposed)
@@ -59,11 +72,6 @@ namespace SP.Core.Fiber
             }
 
             return ta;
-
-            void EnqueueOnce()
-            {
-                fiber.TryEnqueue(job);
-            }
         }
     }
 }

@@ -8,7 +8,7 @@ namespace RankServer.Command;
 [ProtocolCommand(G2RProtocol.RankRangeReq)]
 public class RankRangeReq : BaseCommand<GameServerPeer, G2RProtocolData.RankRangeReq>
 {
-    protected override void ExecuteProtocol(GameServerPeer context, G2RProtocolData.RankRangeReq protocol)
+    protected override Task ExecuteCommand(GameServerPeer context, G2RProtocolData.RankRangeReq protocol)
     {
         var ack = new R2GProtocolData.RankRangeAck
             { Result = ErrorCode.Unknown, SeasonKind = protocol.SeasonKind, Uid = protocol.Uid };
@@ -19,7 +19,7 @@ public class RankRangeReq : BaseCommand<GameServerPeer, G2RProtocolData.RankRang
                 !season!.TryGetRangeInfos(protocol.StartRank, protocol.Count, out var infos))
             {
                 ack.Result = ErrorCode.RankNotFound;
-                return;
+                return Task.CompletedTask;
             }
 
             ack.Result = ErrorCode.Ok;
@@ -35,5 +35,7 @@ public class RankRangeReq : BaseCommand<GameServerPeer, G2RProtocolData.RankRang
             if (!context.Send(ack))
                 context.Logger.Warn("Failed to send RankRangeAck");
         }
+        
+        return Task.CompletedTask;
     }
 }

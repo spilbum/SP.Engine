@@ -5,10 +5,11 @@ using SP.Engine.Runtime.Protocol;
 namespace GameClient.Command;
 
 [ProtocolCommand(G2CProtocol.GameActionAck)]
-public class GameActionAck : BaseCommand<NetworkClient, G2CProtocolData.GameActionAck>
+public class GameActionAck : BaseCommand<Client, G2CProtocolData.GameActionAck>
 {
-    protected override void ExecuteProtocol(NetworkClient context, G2CProtocolData.GameActionAck protocol)
+    protected override Task ExecuteCommand(Client context, G2CProtocolData.GameActionAck protocol)
     {
         context.OnGameAction(protocol.Result, protocol.SeqNo);
+        return Task.CompletedTask;
     }
 }

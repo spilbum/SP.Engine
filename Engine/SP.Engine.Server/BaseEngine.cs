@@ -101,11 +101,12 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
             Logger.Error("The session is refused because the it's ID already exists. sessionId={0}", s.Id);
             return false;
         }
-
+        
         session.NetworkSession.Closed += OnNetworkSessionClosed;
 
         // 인증 해드쉐이크 대기 등록
         EnqueueAuthHandshakePending(s);
+        OnNewSessionConnected(session as Session);
         Logger.Debug("A new session connected. sessionId={0}, remoteEndPoint={1}", s.Id, s.RemoteEndPoint);
         return true;
     }
@@ -123,7 +124,7 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
             var peer = GetBasePeer(header.PeerId);
             if (peer?.Session is not IBaseSession session) return;
 
-            session.ProcessBuffer(buffer, header, socket, remoteEndPoint);
+            session.ProcessUdpBuffer(buffer, header, socket, remoteEndPoint);
         }
     }
 
@@ -313,9 +314,9 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
         return "IPv6Any".Equals(ip, StringComparison.OrdinalIgnoreCase) ? IPAddress.IPv6Any : IPAddress.Parse(ip);
     }
 
-    private void OnNetworkSessionClosed(INetworkSession networkSession, CloseReason reason)
+    private void OnNetworkSessionClosed(INetworkSession ns, CloseReason reason)
     {
-        if (networkSession.Session is not Session session)
+        if (ns.Session is not Session session)
             return;
 
         session.IsConnected = false;
@@ -323,7 +324,12 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
         OnSessionClosed(session, reason);
     }
 
-    internal virtual void OnSessionClosed(Session session, CloseReason reason)
+    protected virtual void OnNewSessionConnected(Session session)
+    {
+        
+    }
+
+    protected virtual void OnSessionClosed(Session session, CloseReason reason)
     {
         if (!_sessions.TryRemove(session.Id, out var removed))
         {

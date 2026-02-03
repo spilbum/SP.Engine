@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading;
+using System.Threading.Tasks;
 using SP.Core.Logging;
 
 namespace SP.Core.Fiber
@@ -8,18 +9,19 @@ namespace SP.Core.Fiber
     {
         [ThreadStatic] private static IAsyncJob[] _batchBuf;
         private readonly CancellationTokenSource _cts = new CancellationTokenSource();
-        private readonly ILogger _logger;
         private readonly int _maxBatch;
         private readonly BatchQueue<IAsyncJob> _queue;
         private readonly Thread _thread;
         private volatile bool _disposed;
         private volatile bool _running = true;
+        
+        public ILogger Logger { get; }
 
         public ThreadFiber(ILogger logger, string name, int maxBatchSize = 1024, int queueCapacity = -1)
         {
             _maxBatch = Math.Max(1, maxBatchSize);
             _queue = new BatchQueue<IAsyncJob>(queueCapacity);
-            _logger = logger;
+            Logger = logger;
             _thread = new Thread(Run) { IsBackground = true, Name = name };
             _thread.Start();
         }
@@ -34,6 +36,7 @@ namespace SP.Core.Fiber
             _cts.Cancel();
 
             if (Thread.CurrentThread != _thread)
+            {
                 try
                 {
                     _thread.Join();
@@ -42,24 +45,28 @@ namespace SP.Core.Fiber
                 {
                     /* ignore */
                 }
+            }
         }
 
-        public bool TryEnqueue(Action action)
-            => TryEnqueue(AsyncJob.From(action));
+        public bool Enqueue(Func<Task> action)
+            => Enqueue(AsyncJob.From(action));
 
-        public bool TryEnqueue<T>(Action<T> action, T state)
-            => TryEnqueue(AsyncJob.From(action, state));
+        public bool Enqueue(Action action)
+            => Enqueue(AsyncJob.From(action));
 
-        public bool TryEnqueue<T1, T2>(Action<T1, T2> action, T1 state1, T2 state2)
-            => TryEnqueue(AsyncJob.From(action, state1, state2));
+        public bool Enqueue<T>(Action<T> action, T state)
+            => Enqueue(AsyncJob.From(action, state));
+
+        public bool Enqueue<T1, T2>(Action<T1, T2> action, T1 s1, T2 s2)
+            => Enqueue(AsyncJob.From(action, s1, s2));
         
-        public bool TryEnqueue<T1, T2, T3>(Action<T1, T2, T3> action, T1 state1, T2 state2, T3 state3)
-            => TryEnqueue(AsyncJob.From(action, state1, state2, state3));
+        public bool Enqueue<T1, T2, T3>(Action<T1, T2, T3> action, T1 state1, T2 state2, T3 state3)
+            => Enqueue(AsyncJob.From(action, state1, state2, state3));
         
-        public bool TryEnqueue<T1, T2, T3, T4>(Action<T1, T2, T3, T4> action, T1 state1, T2 state2, T3 state3, T4 state4)
-            => TryEnqueue(AsyncJob.From(action, state1, state2, state3, state4));
+        public bool Enqueue<T1, T2, T3, T4>(Action<T1, T2, T3, T4> action, T1 state1, T2 state2, T3 state3, T4 state4)
+            => Enqueue(AsyncJob.From(action, state1, state2, state3, state4));
 
-        public bool TryEnqueue(IAsyncJob job)
+        public bool Enqueue(IAsyncJob job)
         {
             if (job == null) throw new ArgumentNullException(nameof(job));
             if (!_running || _disposed) return false;
@@ -68,7 +75,7 @@ namespace SP.Core.Fiber
                 return true;
             }
             
-            _logger.Error("ThreadFiber queue full! Job dropped.");
+            Logger.Error("ThreadFiber queue full! Job dropped.");
             return false;
         }
 
@@ -108,7 +115,7 @@ namespace SP.Core.Fiber
                         }
                         catch (Exception e)
                         {
-                            _logger.Error(e, "ThreadFiber batch failed");
+                            Logger.Error(e, "ThreadFiber batch failed");
                         }
                     }
                 }

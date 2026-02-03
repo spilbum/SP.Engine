@@ -74,8 +74,8 @@ namespace SP.Engine.Client
         private readonly Dictionary<ushort, ICommand> _commands = new Dictionary<ushort, ICommand>();
         private readonly DiffieHellman _diffieHellman = new DiffieHellman(DhKeySize.Bit2048);
         private readonly Dictionary<ushort, ICommand> _internalCommands = new Dictionary<ushort, ICommand>();
-        private readonly PooledReceiveBuffer _receiveBuffer = new PooledReceiveBuffer(1024);
         private readonly ConcurrentQueue<IMessage> _receiveQueue = new ConcurrentQueue<IMessage>();
+        private PooledReceiveBuffer _receiveBuffer;
         private Lz4Compressor _compressor;
         private bool _disposed;
         private AesCbcEncryptor _encryptor;
@@ -379,6 +379,9 @@ namespace SP.Engine.Client
         {
             var session = _session;
             session?.Close();
+            
+            _receiveBuffer?.Dispose();
+            _receiveBuffer = new PooledReceiveBuffer(Config.ReceiveBufferSize);
 
             session = new TcpNetworkSession(Config);
             session.Opened += OnSessionOpened;
@@ -674,7 +677,10 @@ namespace SP.Engine.Client
                     CancelTimer();
 
                     StopUdpKeepAliveTimer();
+                    
                     _receiveBuffer?.Dispose();
+                    _receiveBuffer = null;
+                    
                     _udpSocket?.Close();
                     _udpSocket = null;
 
@@ -737,48 +743,54 @@ namespace SP.Engine.Client
         {
             if (_udpSocket == null) return;
 
-            var buffer = new PooledBuffer(e.Length);
-            Buffer.BlockCopy(e.Data, e.Offset, buffer.Array, 0, e.Length);
-
-            var headerSpan = buffer.Span.Slice(0, UdpHeader.ByteSize);
-            if (!UdpHeader.TryRead(headerSpan, out var header, out var consumed))
-                return;
-
-            if (PeerId != header.PeerId)
-                return;
-
-            var bodyOffset = consumed;
-
-            IMessage message;
-            if (header.Fragmented == 0x01)
+            using (var buf = new PooledBuffer(e.Length))
             {
-                var bodySpan = buffer.Span.Slice(bodyOffset, header.PayloadLength);
-                if (!FragmentHeader.TryParse(bodySpan, out var fragHeader, out consumed))
+                e.Data.AsSpan(e.Offset, e.Length).CopyTo(buf.Span);
+
+                var headerSpan = buf.Span.Slice(0, UdpHeader.ByteSize);
+                if (!UdpHeader.TryRead(headerSpan, out var header, out var consumed))
                     return;
 
-                var fragPayload = new PooledBuffer(fragHeader.FragLength);
-                buffer.Span.Slice(bodyOffset + consumed, fragHeader.FragLength).CopyTo(fragPayload.Span);
-
-                if (!_udpSocket.Assembler.TryAssemble(header, fragHeader, fragPayload, out var assembled))
+                if (PeerId != header.PeerId)
                     return;
 
-                using (assembled)
+                var bodyOffset = consumed;
+
+                if (header.Fragmented == 0x01)
                 {
-                    var normalizedHeader = new UdpHeaderBuilder()
-                        .From(header)
-                        .WithPayloadLength(assembled.Count)
-                        .Build();
+                    var bodySpan = buf.Span.Slice(bodyOffset, header.PayloadLength);
+                    if (!FragmentHeader.TryParse(bodySpan, out var fragHeader, out consumed))
+                        return;
 
-                    var payload = new ReadOnlyMemory<byte>(assembled.Array, 0, assembled.Count);
-                    message = new UdpMessage(normalizedHeader, payload);
+                    var fragPayload = new PooledBuffer(fragHeader.FragLength);
+                    buf.Span.Slice(bodyOffset + consumed, fragHeader.FragLength).CopyTo(fragPayload.Span);
+
+                    if (!_udpSocket.Assembler.TryAssemble(header, fragHeader, fragPayload, out var assembled))
+                        return;
+
+                    using (assembled)
+                    {
+                        var normalizedHeader = new UdpHeaderBuilder()
+                            .From(header)
+                            .WithPayloadLength(assembled.Count)
+                            .Build();
+
+                        var payload = new ReadOnlyMemory<byte>(assembled.Array, 0, assembled.Count);
+                        var message = new UdpMessage(normalizedHeader, payload);
+                        ProcessReceivedUdpMessage(message);
+                    }
+                }
+                else
+                {
+                    var payload = new ReadOnlyMemory<byte>(buf.Array, bodyOffset, header.PayloadLength);
+                    var message = new UdpMessage(header, payload);
+                    ProcessReceivedUdpMessage(message);
                 }
             }
-            else
-            {
-                var payload = new ReadOnlyMemory<byte>(buffer.Array, bodyOffset, header.PayloadLength);
-                message = new UdpMessage(header, payload);
-            }
+        }
 
+        private void ProcessReceivedUdpMessage(UdpMessage message)
+        {
             try
             {
                 if (_internalCommands.TryGetValue(message.Id, out var command))
@@ -787,8 +799,7 @@ namespace SP.Engine.Client
                 }
                 else
                 {
-                    var clone = message.Clone();
-                    EnqueueReceivedMessage(clone);   
+                    EnqueueReceivedMessage(message.Clone());
                 }
             }
             catch (Exception ex)

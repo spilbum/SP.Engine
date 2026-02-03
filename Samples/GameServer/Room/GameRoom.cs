@@ -221,7 +221,7 @@ public class GameRoom : BaseRoom
 
     public void EnqueueLeaveRoom(long uid, RoomLeaveReason reason)
     {
-        Scheduler.TryEnqueue(LeaveRoom, uid, reason);
+        Scheduler.Enqueue(LeaveRoom, uid, reason);
     }
 
     protected override void ExecuteProtocol(GamePeer peer, IProtocolData protocol)

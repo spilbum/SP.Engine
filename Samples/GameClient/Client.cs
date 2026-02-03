@@ -5,11 +5,11 @@ using SP.Engine.Client.Configuration;
 
 namespace GameClient;
 
-public class NetworkClient : BaseNetPeer
+public class Client : BaseNetPeer
 {
     private int _seqNo = 1;
 
-    public NetworkClient(EngineConfig config, ILogger logger)
+    public Client(EngineConfig config, ILogger logger)
     {
         Initialize(config, logger);
         Connected += OnConnected;

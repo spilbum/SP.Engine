@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using SP.Engine.Runtime.Networking;
 
 namespace SP.Engine.Runtime.Command
@@ -6,6 +7,6 @@ namespace SP.Engine.Runtime.Command
     public interface ICommand
     {
         Type ContextType { get; }
-        void Execute(ICommandContext context, IMessage message);
+        Task Execute(ICommandContext context, IMessage message);
     }
 }

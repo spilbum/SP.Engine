@@ -7,8 +7,9 @@ namespace GameServer.Connector.Command;
 [ProtocolCommand(S2SProtocol.RegisterAck)]
 public class RegisterAck : BaseCommand<RankConnector, S2SProtocolData.RegisterAck>
 {
-    protected override void ExecuteProtocol(RankConnector context, S2SProtocolData.RegisterAck protocol)
+    protected override Task ExecuteCommand(RankConnector context, S2SProtocolData.RegisterAck protocol)
     {
         context.OnRegisterAck(protocol.Result);
+        return Task.CompletedTask;
     }
 }

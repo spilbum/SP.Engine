@@ -26,7 +26,8 @@ namespace SP.Engine.Runtime
 
             if (WriteableBytes < data.Length)
             {
-                Resize(Math.Max(_buffer.Length * 2, _buffer.Length + data.Length));
+                var newSize = Math.Max(_buffer.Length * 2, _count + data.Length);
+                Resize(newSize);
             }
             
             var rightSpace = _buffer.Length - _writeHead;

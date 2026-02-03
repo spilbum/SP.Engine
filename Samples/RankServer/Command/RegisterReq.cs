@@ -8,7 +8,7 @@ namespace RankServer.Command;
 [ProtocolCommand(S2SProtocol.RegisterReq)]
 public class RegisterReq : BaseCommand<BaseServerPeer, S2SProtocolData.RegisterReq>
 {
-    protected override void ExecuteProtocol(BaseServerPeer context, S2SProtocolData.RegisterReq protocol)
+    protected override Task ExecuteCommand(BaseServerPeer context, S2SProtocolData.RegisterReq protocol)
     {
         var ack = new S2SProtocolData.RegisterAck { Result = ErrorCode.Unknown };
 
@@ -16,7 +16,7 @@ public class RegisterReq : BaseCommand<BaseServerPeer, S2SProtocolData.RegisterR
         {
             ack.Result = ErrorCode.InvalidRequest;
             context.Send(ack);
-            return;
+            return Task.CompletedTask;
         }
         
         var errorCode = RankServer.Instance.RegisterPeer(protocol, context);
@@ -24,10 +24,11 @@ public class RegisterReq : BaseCommand<BaseServerPeer, S2SProtocolData.RegisterR
         {
             ack.Result = errorCode;
             context.Send(ack);
-            return;
+            return Task.CompletedTask;
         }
 
         ack.Result = ErrorCode.Ok;
         context.Send(ack);
+        return Task.CompletedTask;
     }
 }

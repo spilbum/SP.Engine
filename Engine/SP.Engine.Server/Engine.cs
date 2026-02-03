@@ -4,8 +4,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
+using System.Threading.Tasks;
 using SP.Core;
-using SP.Core.Fiber;
 using SP.Core.Logging;
 using SP.Engine.Protocol;
 using SP.Engine.Runtime;
@@ -33,13 +33,13 @@ public abstract class Engine : BaseEngine, IEngine
     private readonly List<IConnector> _connectors = [];
     private readonly Dictionary<ushort, ICommand> _internalCommands = new();
     private readonly ConcurrentDictionary<uint, BasePeer> _peers = new();
-    private readonly List<ThreadFiber> _updatePeerFibers = [];
+    private readonly List<PeerFiber> _peerFibers = [];
 
     private readonly ConcurrentDictionary<uint, WaitingReconnectPeer> _waitingReconnectPeerDict = new();
     private ILogger _perfLogger;
     private PerfMonitor _perfMonitor;
-
     private Timer _waitingReconnectCheckingTimer;
+    private int _nextFiberIndex = -1;
 
     public override bool Initialize(string name, EngineConfig config)
     {
@@ -67,12 +67,13 @@ public abstract class Engine : BaseEngine, IEngine
         Scheduler.Schedule(ScheduleUpdateConnectors, connectorUpdatePeriod, connectorUpdatePeriod);
 
         var fiberCnt = Math.Max(Config.Network.LimitConnectionCount / 300, 10);
+        var period = TimeSpan.FromMilliseconds(Config.Session.PeerUpdateIntervalMs);
+        
         for (var index = 0; index < fiberCnt; index++)
         {
-            var fiber = new ThreadFiber(Logger, $"PeerFiber-{index:D2}");
-            var peerUpdatePeriod = TimeSpan.FromMilliseconds(Config.Session.PeerUpdateIntervalMs);
-            Scheduler.Schedule(ScheduleUpdatePeers, index, peerUpdatePeriod, peerUpdatePeriod);
-            _updatePeerFibers.Add(fiber);
+            var fiber = new PeerFiber(Logger, $"PeerFiber-{index:D2}");
+            _peerFibers.Add(fiber);
+            Scheduler.Schedule(() => { fiber.Enqueue(fiber.Tick); }, period, period);
         }
         
         foreach (var connector in _connectors) 
@@ -85,7 +86,7 @@ public abstract class Engine : BaseEngine, IEngine
     public override void Stop()
     {
         _perfMonitor?.Dispose();
-        foreach (var fiber in _updatePeerFibers) fiber.Dispose();
+        foreach (var fiber in _peerFibers) fiber.Dispose();
         foreach (var connector in _connectors) connector.Close();
         StopWaitingReconnectCheckingTimer();
 
@@ -197,48 +198,60 @@ public abstract class Engine : BaseEngine, IEngine
 
     internal void ExecuteMessage(Session session, IMessage message)
     {
+        if (session.Fiber == null)
+        {
+            Logger.Error($"Session has no assigned fiber! SessionId={session.Id}");
+            return;
+        }
+
+        session.Fiber.Enqueue(() => ProcessMessageAsync(session, message));
+    }
+
+    private async Task ProcessMessageAsync(Session session, IMessage message)
+    {
         if (_internalCommands.TryGetValue(message.Id, out var command))
         {
-            command.Execute(session, message);
+            await command.Execute(session, message);
+            return;
         }
-        else
+        
+        command = GetCommand(message.Id);
+        if (command == null)
         {
-            command = GetCommand(message.Id);
-            if (command != null)
-            {
-                var peer = session.Peer;
-                if (peer == null)
+            if (message is TcpMessage tcp)
+                session.SendMessageAck(tcp.SequenceNumber);
+            
+            Logger.Error("Unknown command: msgId={0}, session={1}/{2}",
+                message.Id, session.Id, session.RemoteEndPoint);
+            return;
+        }
+        
+        var peer = session.Peer;
+        if (peer == null)
+        {
+            Logger.Warn("Peer not authenticated. sessionId={0}", session.Id);
+            session.Close();
+            return;
+        }
+
+        switch (message)
+        {
+            case TcpMessage tcp:
+                session.SendMessageAck(tcp.SequenceNumber);
+
+                foreach (var msg in peer.ProcessMessageInOrder(message))
                 {
-                    Logger.Warn("Not found peer. sessionId={0}", session.Id);
-                    session.Close();
-                    return;
+                    var cmd = GetCommand(msg.Id);
+                    if (cmd != null)
+                    {
+                        await cmd.Execute(peer, msg);
+                    }
                 }
 
-                switch (message)
-                {
-                    case TcpMessage tcp:
-                        session.SendMessageAck(tcp.SequenceNumber);
-                        foreach (var inOrder in peer.ProcessMessageInOrder(message))
-                        {
-                            command = GetCommand(inOrder.Id);
-                            command?.Execute(peer, inOrder);
-                        }
-
-                        break;
-                    case UdpMessage udp:
-                        command = GetCommand(udp.Id);
-                        command?.Execute(peer, udp);
-                        break;
-                }
-            }
-            else
-            {
-                if (message is TcpMessage tcp)
-                    session.SendMessageAck(tcp.SequenceNumber);
-
-                Logger.Error("Unknown command: msgId={0}, session={1}/{2}", message.Id, session.Id,
-                    session.RemoteEndPoint);
-            }
+                break;
+            case UdpMessage udp:
+                await command.Execute(peer, udp);
+                break;
         }
     }
 
@@ -291,19 +304,16 @@ public abstract class Engine : BaseEngine, IEngine
 
         try
         {
-            foreach (var waitingReconnectPeer in _waitingReconnectPeerDict.Values)
+            foreach (var (peerId, info) in _waitingReconnectPeerDict)
             {
-                var peer = waitingReconnectPeer.Peer;
-                var expireTime = waitingReconnectPeer.ExpireTime;
-
-                if (DateTime.UtcNow < expireTime)
+                if (DateTime.UtcNow < info.ExpireTime)
                     continue;
 
-                Logger.Debug("Client terminated due to timeout. peerId={0}", peer.PeerId);
-
-                // 재 연결 타임아웃으로 종료함
-                _waitingReconnectPeerDict.TryRemove(peer.PeerId, out _);
-                peer.LeaveServer(CloseReason.TimeOut);
+                if (!_waitingReconnectPeerDict.TryRemove(peerId, out var removed)) 
+                    continue;
+                
+                Logger.Debug("Client terminated due to timeout. peerId={0}", peerId);
+                removed.Peer.LeaveServer(CloseReason.TimeOut);
             }
         }
         catch (Exception e)
@@ -312,23 +322,11 @@ public abstract class Engine : BaseEngine, IEngine
         }
         finally
         {
-            var ts = TimeSpan.FromSeconds(Config.Session.WaitingReconnectTimerIntervalSec);
-            _waitingReconnectCheckingTimer.Change(ts, ts);
-        }
-    }
-
-    private void ScheduleUpdatePeers(int index)
-    {
-        var source = SessionsSource;
-        foreach (var kvp in source)
-        {
-            if (kvp.Value is not Session s || s.Peer == null)
-                continue;
-
-            if (s.Peer.PeerId % _updatePeerFibers.Count != index)
-                continue;
-
-            s.Peer.Tick();
+            if (_waitingReconnectCheckingTimer != null)
+            {
+                var ts = TimeSpan.FromSeconds(Config.Session.WaitingReconnectTimerIntervalSec);
+                _waitingReconnectCheckingTimer.Change(ts, ts);
+            }
         }
     }
 
@@ -381,7 +379,19 @@ public abstract class Engine : BaseEngine, IEngine
         return false;
     }
 
-    internal override void OnSessionClosed(Session session, CloseReason reason)
+    protected override void OnNewSessionConnected(Session session)
+    {
+        base.OnNewSessionConnected(session);
+
+        var current = Interlocked.Increment(ref _nextFiberIndex);
+        var index = (int)((uint)current % _peerFibers.Count);
+
+        var fiber = _peerFibers[index];
+        session.Fiber = fiber;
+        fiber.AddSession(session);
+    }
+
+    protected override void OnSessionClosed(Session session, CloseReason reason)
     {
         base.OnSessionClosed(session, reason);
 
@@ -389,6 +399,9 @@ public abstract class Engine : BaseEngine, IEngine
         if (null == peer)
             return;
 
+        if (session.Fiber is PeerFiber fiber)
+            fiber.RemoveSession(session);
+        
         if (session.IsClosing)
         {
             LeavePeer(peer, reason);
@@ -405,13 +418,23 @@ public abstract class Engine : BaseEngine, IEngine
         peer.Offline(reason);
     }
 
-    internal void OnlinePeer(BasePeer peer, ISession session)
+    internal bool OnlinePeer(BasePeer peer, ISession session)
     {
-        RemoveWaitingReconnectPeer(peer);
+        if (!_waitingReconnectPeerDict.TryRemove(peer.PeerId, out _))
+        {
+            Logger.Warn("Reconnection rejected: Peer timed out just now. peerId={0}", peer.PeerId);
+            return false;
+        }
+        
         if (AddOrUpdatePeer(peer))
+        {
             peer.Online(session);
-        else
-            Logger.Warn("Failed to add or update peer. peerId={0}", peer.PeerId);
+            return true;
+        }
+
+        Logger.Error("Failed to add peer to active lis. peerId={0}", peer.PeerId);
+        peer.LeaveServer(CloseReason.InternalError);
+        return false;
     }
 
     internal void JoinPeer(BasePeer peer)
@@ -443,19 +466,15 @@ public abstract class Engine : BaseEngine, IEngine
         if (!TryRemovePeer(peer.PeerId, out _))
             return;
 
-        if (!_waitingReconnectPeerDict.TryAdd(peer.PeerId,
-                new WaitingReconnectPeer(peer, Config.Session.WaitingReconnectTimeoutSec)))
+        var waiting = new WaitingReconnectPeer(peer, Config.Session.WaitingReconnectTimeoutSec);
+        if (_waitingReconnectPeerDict.TryAdd(peer.PeerId, waiting))
+        {
+            Logger.Debug("Peer waiting reconnect registered. peerId={0}", peer.PeerId);
             return;
-
-        Logger.Debug("Peer waiting reconnect registered. peerId={0}", peer.PeerId);
-    }
-
-    private void RemoveWaitingReconnectPeer(BasePeer peer)
-    {
-        if (!_waitingReconnectPeerDict.TryRemove(peer.PeerId, out _))
-            return;
-
-        Logger.Debug("Peer waiting reconnect removed. peerId={0}", peer.PeerId);
+        }
+        
+        Logger.Error("Failed to register waiting reconnect peer. peerId={0}", peer.PeerId);
+        peer.LeaveServer(CloseReason.InternalError);
     }
 
     public BasePeer GetWaitingReconnectPeer(uint peerId)

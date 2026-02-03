@@ -138,7 +138,7 @@ public class DailyRankSeason : BaseRankSeason<long, PlayerRankRecord, PlayerScor
                 break;
             case SeasonState.Break:
                 if (now >= GetBreakEndUtc())
-                    Scheduler.TryEnqueue(NewSeason, now);
+                    Scheduler.Enqueue(NewSeason, now);
                 break;
             default:
                 throw new Exception($"Invalid state: {State}");
@@ -166,7 +166,7 @@ public class DailyRankSeason : BaseRankSeason<long, PlayerRankRecord, PlayerScor
         switch ((SeasonState)state)
         {
             case SeasonState.Ending:
-                Scheduler.TryEnqueue(EndSeason);
+                Scheduler.Enqueue(EndSeason);
                 break;
             case SeasonState.Ended:
                 RequestState((int)SeasonState.Break);

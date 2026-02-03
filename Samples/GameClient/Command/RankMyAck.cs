@@ -5,18 +5,19 @@ using SP.Engine.Runtime.Protocol;
 namespace GameClient.Command;
 
 [ProtocolCommand(G2CProtocol.RankMyAck)]
-public class RankMyAck : BaseCommand<NetworkClient, G2CProtocolData.RankMyAck>
+public class RankMyAck : BaseCommand<Client, G2CProtocolData.RankMyAck>
 {
-    protected override void ExecuteProtocol(NetworkClient context, G2CProtocolData.RankMyAck protocol)
+    protected override Task ExecuteCommand(Client context, G2CProtocolData.RankMyAck protocol)
     {
         if (protocol.Result != ErrorCode.Ok)
         {
             context.Logger.Error("RankMyAck failed. result={0}, kind={1}", protocol.Result, protocol.SeasonKind);
-            return;
+            return Task.CompletedTask;
         }
 
         var info = protocol.Info;
         context.Logger.Debug("RankMyAck - kind={0}, rank={1}, score={2}, name={3}, countryCode={4}",
             protocol.SeasonKind, protocol.Rank, protocol.Score, info?.Name, info?.CountryCode);
+        return Task.CompletedTask;
     }
 }

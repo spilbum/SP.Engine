@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Net.Sockets;
 using System.Threading;
+using SP.Core;
 using SP.Core.Logging;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Networking;
@@ -42,7 +43,7 @@ public class TcpNetworkSession(Socket client, SocketReceiveContext socketReceive
 
         try
         {
-            Session.ProcessBuffer(e.Buffer, e.Offset, e.BytesTransferred);
+            Session.ProcessTcpBuffer(e.Buffer, e.Offset, e.BytesTransferred);
         }
         catch (Exception ex)
         {
