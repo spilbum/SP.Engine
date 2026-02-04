@@ -29,22 +29,22 @@ public interface IEngine : ILogContext
 
 public abstract class Engine : BaseEngine, IEngine
 {
-    private readonly Dictionary<ushort, ICommand> _commands = new();
+    private readonly Dictionary<ushort, ICommand> _userCommands = new();
     private readonly List<IConnector> _connectors = [];
     private readonly Dictionary<ushort, ICommand> _internalCommands = new();
-    private readonly ConcurrentDictionary<uint, BasePeer> _peers = new();
     private readonly List<PeerFiber> _peerFibers = [];
-
-    private readonly ConcurrentDictionary<uint, WaitingReconnectPeer> _waitingReconnectPeerDict = new();
+    private int _nextFiberIndex = -1;
+    private PeerManager _peerManager;
     private ILogger _perfLogger;
     private PerfMonitor _perfMonitor;
     private Timer _waitingReconnectCheckingTimer;
-    private int _nextFiberIndex = -1;
 
     public override bool Initialize(string name, EngineConfig config)
     {
         if (!base.Initialize(name, config))
             return false;
+        
+        _peerManager = new PeerManager(Logger, config);
 
         if (!SetupCommand())
             return false;
@@ -53,7 +53,7 @@ public abstract class Engine : BaseEngine, IEngine
             return false;
 
         SetupPerfMonitor(config.Perf);
-
+        
         Logger.Info("The server {0} is initialized.", name);
         return true;
     }
@@ -79,7 +79,7 @@ public abstract class Engine : BaseEngine, IEngine
         foreach (var connector in _connectors) 
             connector.Connect();
         
-        StartWaitingReconnectCheckingTimer();
+        StartReconnectTimer();
         return true;
     }
 
@@ -88,21 +88,114 @@ public abstract class Engine : BaseEngine, IEngine
         _perfMonitor?.Dispose();
         foreach (var fiber in _peerFibers) fiber.Dispose();
         foreach (var connector in _connectors) connector.Close();
-        StopWaitingReconnectCheckingTimer();
+        StopReconnectTimer();
 
         base.Stop();
     }
+    
+    protected TPeer GetPeer<TPeer>(uint peerId) where TPeer : BasePeer
+        => GetBasePeer(peerId) as TPeer;
 
     protected override BasePeer GetBasePeer(uint peerId)
+        => _peerManager.GetPeer(peerId);
+
+    protected bool ChangeServerPeer(BasePeer newPeer)
+        => _peerManager.ChangeServerPeer(newPeer);
+    
+    internal BasePeer GetWaitingReconnectPeer(uint peerId)
+        => _peerManager.GetWaitingPeer(peerId);
+    
+    internal bool OnlinePeer(BasePeer peer, ISession session)
+        => _peerManager.Online(peer, session);
+
+    internal void JoinPeer(BasePeer peer)
+        => _peerManager.Join(peer);
+    
+    internal bool CreatePeer(ISession session, out BasePeer peer)
     {
-        return FindPeerByPeerId<BasePeer>(peerId);
+        peer = CreatePeer(session) as BasePeer;
+        return peer != null;
+    }
+    
+    protected abstract IPeer CreatePeer(ISession session);
+    
+    protected override void OnNewSessionConnected(Session session)
+    {
+        base.OnNewSessionConnected(session);
+
+        var current = Interlocked.Increment(ref _nextFiberIndex);
+        var index = (int)((uint)current % _peerFibers.Count);
+        var fiber = _peerFibers[index];
+        
+        session.Fiber = fiber;
+        fiber.AddSession(session);
     }
 
-    public static long GetServerTimeMs()
+    protected override void OnSessionClosed(Session session, CloseReason reason)
     {
-        return DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        base.OnSessionClosed(session, reason);
+
+        if (session.Fiber is PeerFiber fiber)
+            fiber.RemoveSession(session);
+        
+        var peer = session.Peer;
+        if (null == peer) return;
+        
+        if (session.IsClosing)
+        {
+            _peerManager.RemovePeer(peer, reason);
+            OnPeerLeaved(peer, reason);
+        }
+        else if (peer.State is PeerState.Authenticated or PeerState.Online)
+        {
+            _peerManager.Offline(peer, reason);
+        }
+        else
+        {
+            _peerManager.RemovePeer(peer, reason);
+            OnPeerLeaved(peer, reason);
+        }
     }
 
+    protected virtual void OnPeerLeaved(BasePeer peer, CloseReason reason)
+    {
+    }
+    
+    private void StartReconnectTimer()
+    {
+        var ts = TimeSpan.FromSeconds(Config.Session.WaitingReconnectTimerIntervalSec);
+        _waitingReconnectCheckingTimer = new Timer(OnCheckWaitingReconnectCallback, null, ts, ts);
+    }
+
+    private void StopReconnectTimer()
+    {
+        _waitingReconnectCheckingTimer?.Dispose();
+        _waitingReconnectCheckingTimer = null;
+    }
+
+    private void OnCheckWaitingReconnectCallback(object state)
+    {
+        if (null == _waitingReconnectCheckingTimer) return;
+        _waitingReconnectCheckingTimer.Change(Timeout.Infinite, Timeout.Infinite);
+
+        try
+        {
+            _peerManager.CheckTimeouts();
+        }
+        catch (Exception e)
+        {
+            Logger.Error(e, "Error checking reconnect timeouts");
+        }
+        finally
+        {
+            if (_waitingReconnectCheckingTimer != null)
+            {
+                var ts = TimeSpan.FromSeconds(Config.Session.WaitingReconnectTimerIntervalSec);
+                _waitingReconnectCheckingTimer.Change(ts, ts);
+            }
+        }
+    }
+    
     private void SetupPerfMonitor(PerfConfig config)
     {
         if (!config.MonitorEnabled)
@@ -126,14 +219,15 @@ public abstract class Engine : BaseEngine, IEngine
     {
         foreach (var config in connectors)
         {
-            if (!TryCreateConnector(config.Name, out var connector))
-            {
-                Logger.Info("Failed to create connector. name={0}.", config.Name);
-                return false;
-            }
-
             try
             {
+                var connector = CreateConnector(config.Name);
+                if (connector == null)
+                {
+                    Logger.Info("Failed to create connector. name={0}.", config.Name);
+                    return false;
+                }
+                
                 if (!connector.Initialize(Logger, Scheduler, config))
                     throw new InvalidOperationException($"Failed to initialize connector. name={connector.Name}.");
 
@@ -148,20 +242,36 @@ public abstract class Engine : BaseEngine, IEngine
 
         return true;
     }
+    
+    private void ScheduleUpdateConnectors()
+    {
+        try
+        {
+            foreach (var connector in _connectors)
+                connector.Update();
+        }
+        catch (Exception e)
+        {
+            Logger.Error(e);
+        }
+    }
+    
+    protected abstract IConnector CreateConnector(string name);
 
     private bool SetupCommand()
     {
         try
         {
-            _internalCommands[C2SEngineProtocolId.SessionAuthReq] = new SessionAuth();
-            _internalCommands[C2SEngineProtocolId.Close] = new Close();
-            _internalCommands[C2SEngineProtocolId.Ping] = new Ping();
-            _internalCommands[C2SEngineProtocolId.MessageAck] = new MessageAck();
-            _internalCommands[C2SEngineProtocolId.UdpHelloReq] = new UdpHelloReq();
-            _internalCommands[C2SEngineProtocolId.UdpKeepAlive] = new UdpKeepAlive();
+            RegisterInternalCommand<SessionAuth>(C2SEngineProtocolId.SessionAuthReq);
+            RegisterInternalCommand<Close>(C2SEngineProtocolId.Close);
+            RegisterInternalCommand<Ping>(C2SEngineProtocolId.Ping);
+            RegisterInternalCommand<MessageAck>(C2SEngineProtocolId.MessageAck);
+            RegisterInternalCommand<UdpHelloReq>(C2SEngineProtocolId.UdpHelloReq);
+            RegisterInternalCommand<UdpKeepAlive>(C2SEngineProtocolId.UdpKeepAlive);
 
-            DiscoverCommands();
-            Logger.Debug("Discover commands: [{0}]", string.Join(", ", _commands.Keys));
+            var assembly = GetType().Assembly;
+            DiscoverUserCommands(assembly);
+        
             return true;
         }
         catch (Exception e)
@@ -171,13 +281,15 @@ public abstract class Engine : BaseEngine, IEngine
         }
     }
 
-    private void DiscoverCommands()
-    {
-        var assembly = GetType().Assembly;
-        var types = assembly.GetTypes();
-        var peerTypes = types.Where(t => typeof(IPeer).IsAssignableFrom(t)).ToList();
+    private void RegisterInternalCommand<T>(ushort protocolId) where T : ICommand, new()
+        => _internalCommands[protocolId] = new T();
 
-        foreach (var t in types)
+    private void DiscoverUserCommands(Assembly assembly)
+    {
+        var commandTypes = assembly.GetTypes();
+        var peerTypes = commandTypes.Where(t => typeof(IPeer).IsAssignableFrom(t)).ToList();
+
+        foreach (var t in commandTypes)
         {
             if (!t.IsClass || t.IsAbstract) continue;
             var attr = t.GetCustomAttribute<ProtocolCommandAttribute>();
@@ -185,14 +297,16 @@ public abstract class Engine : BaseEngine, IEngine
             if (!typeof(ICommand).IsAssignableFrom(t)) continue;
             if (Activator.CreateInstance(t) is not ICommand command) continue;
             if (!peerTypes.Contains(command.ContextType)) continue;
-            if (!_commands.TryAdd(attr.Id, command))
+            if (!_userCommands.TryAdd(attr.Id, command))
                 throw new Exception($"Duplicate command: {attr.Id}");
         }
+
+        Logger.Debug($"Discovered {_userCommands.Count} commands: [{{0}}]", string.Join(", ", _userCommands.Keys));
     }
 
-    private ICommand GetCommand(ushort id)
+    private ICommand GetUserCommand(ushort protocolId)
     {
-        _commands.TryGetValue(id, out var command);
+        _userCommands.TryGetValue(protocolId, out var command);
         return command;
     }
 
@@ -215,7 +329,7 @@ public abstract class Engine : BaseEngine, IEngine
             return;
         }
         
-        command = GetCommand(message.Id);
+        command = GetUserCommand(message.Id);
         if (command == null)
         {
             if (message is TcpMessage tcp)
@@ -238,16 +352,11 @@ public abstract class Engine : BaseEngine, IEngine
         {
             case TcpMessage tcp:
                 session.SendMessageAck(tcp.SequenceNumber);
-
                 foreach (var msg in peer.ProcessMessageInOrder(message))
                 {
-                    var cmd = GetCommand(msg.Id);
-                    if (cmd != null)
-                    {
-                        await cmd.Execute(peer, msg);
-                    }
+                    var cmd = GetUserCommand(msg.Id);
+                    if (cmd != null) await cmd.Execute(peer, msg);
                 }
-
                 break;
             case UdpMessage udp:
                 await command.Execute(peer, udp);
@@ -255,237 +364,8 @@ public abstract class Engine : BaseEngine, IEngine
         }
     }
 
-    private void ScheduleUpdateConnectors()
-    {
-        try
-        {
-            foreach (var connector in _connectors)
-                connector.Update();
-        }
-        catch (Exception e)
-        {
-            Logger.Error(e);
-        }
-    }
-
-    public IEnumerable<IConnector> GetAllConnectors()
-    {
-        return _connectors;
-    }
-
-    public IEnumerable<IConnector> GetConnectors(string name)
-    {
-        return _connectors.Where(connector => connector.Name == name);
-    }
-
-    public IConnector GetConnector(string name, string host, int port)
-    {
-        return _connectors.FirstOrDefault(x => x.Name == name && x.Host == host && x.Port == port);
-    }
-
-    private void StartWaitingReconnectCheckingTimer()
-    {
-        var ts = TimeSpan.FromSeconds(Config.Session.WaitingReconnectTimerIntervalSec);
-        _waitingReconnectCheckingTimer = new Timer(OnCheckWaitingReconnectCallback, null, ts, ts);
-    }
-
-    private void StopWaitingReconnectCheckingTimer()
-    {
-        _waitingReconnectCheckingTimer?.Dispose();
-        _waitingReconnectCheckingTimer = null;
-    }
-
-    private void OnCheckWaitingReconnectCallback(object state)
-    {
-        if (null == _waitingReconnectCheckingTimer)
-            return;
-
-        _waitingReconnectCheckingTimer.Change(Timeout.Infinite, Timeout.Infinite);
-
-        try
-        {
-            foreach (var (peerId, info) in _waitingReconnectPeerDict)
-            {
-                if (DateTime.UtcNow < info.ExpireTime)
-                    continue;
-
-                if (!_waitingReconnectPeerDict.TryRemove(peerId, out var removed)) 
-                    continue;
-                
-                Logger.Debug("Client terminated due to timeout. peerId={0}", peerId);
-                removed.Peer.LeaveServer(CloseReason.TimeOut);
-            }
-        }
-        catch (Exception e)
-        {
-            Logger.Error(e);
-        }
-        finally
-        {
-            if (_waitingReconnectCheckingTimer != null)
-            {
-                var ts = TimeSpan.FromSeconds(Config.Session.WaitingReconnectTimerIntervalSec);
-                _waitingReconnectCheckingTimer.Change(ts, ts);
-            }
-        }
-    }
-
-    internal bool CreatePeer(ISession session, out IPeer peer)
-    {
-        return TryCreatePeer(session, out peer);
-    }
-
-    protected abstract bool TryCreatePeer(ISession session, out IPeer peer);
-    protected abstract bool TryCreateConnector(string name, out IConnector connector);
-
-    protected TPeer FindPeerByPeerId<TPeer>(uint peerId)
-        where TPeer : BasePeer
-    {
-        if (!_peers.TryGetValue(peerId, out var peer))
-            peer = GetWaitingReconnectPeer(peerId);
-        return peer as TPeer;
-    }
-
-    protected virtual bool AddOrUpdatePeer(BasePeer peer)
-    {
-        switch (peer.Kind)
-        {
-            case PeerKind.User:
-                return _peers.TryAdd(peer.PeerId, peer);
-            case PeerKind.Server:
-                _peers.AddOrUpdate(peer.PeerId, peer,
-                    (_, exists) =>
-                    {
-                        ((Session)exists.Session).UpdatePeer(peer);
-                        return peer;
-                    });
-                return true;
-            case PeerKind.None:
-            default:
-                Logger.Error("Unknown peer kind: {0}", peer.Kind);
-                return false;
-        }
-    }
-
-    protected virtual bool TryRemovePeer(uint peerId, out BasePeer peer)
-    {
-        if (_peers.TryRemove(peerId, out var removed))
-        {
-            peer = removed;
-            return true;
-        }
-
-        peer = null;
-        return false;
-    }
-
-    protected override void OnNewSessionConnected(Session session)
-    {
-        base.OnNewSessionConnected(session);
-
-        var current = Interlocked.Increment(ref _nextFiberIndex);
-        var index = (int)((uint)current % _peerFibers.Count);
-
-        var fiber = _peerFibers[index];
-        session.Fiber = fiber;
-        fiber.AddSession(session);
-    }
-
-    protected override void OnSessionClosed(Session session, CloseReason reason)
-    {
-        base.OnSessionClosed(session, reason);
-
-        var peer = session.Peer;
-        if (null == peer)
-            return;
-
-        if (session.Fiber is PeerFiber fiber)
-            fiber.RemoveSession(session);
-        
-        if (session.IsClosing)
-        {
-            LeavePeer(peer, reason);
-            return;
-        }
-
-        if (peer.State is PeerState.Authenticated or PeerState.Online) OfflinePeer(peer, reason);
-        else LeavePeer(peer, reason);
-    }
-
-    private void OfflinePeer(BasePeer peer, CloseReason reason)
-    {
-        RegisterWaitingReconnectPeer(peer);
-        peer.Offline(reason);
-    }
-
-    internal bool OnlinePeer(BasePeer peer, ISession session)
-    {
-        if (!_waitingReconnectPeerDict.TryRemove(peer.PeerId, out _))
-        {
-            Logger.Warn("Reconnection rejected: Peer timed out just now. peerId={0}", peer.PeerId);
-            return false;
-        }
-        
-        if (AddOrUpdatePeer(peer))
-        {
-            peer.Online(session);
-            return true;
-        }
-
-        Logger.Error("Failed to add peer to active lis. peerId={0}", peer.PeerId);
-        peer.LeaveServer(CloseReason.InternalError);
-        return false;
-    }
-
-    internal void JoinPeer(BasePeer peer)
-    {
-        if (!_peers.TryAdd(peer.PeerId, peer))
-            return;
-
-        peer.JoinServer();
-    }
-
-    private void LeavePeer(BasePeer peer, CloseReason reason)
-    {
-        if (!TryRemovePeer(peer.PeerId, out var removed))
-        {
-            Logger.Error("Failed to remove peer: {0}", peer);
-            return;
-        }
-
-        removed.LeaveServer(reason);
-        OnPeerLeaved(removed, reason);
-    }
-
-    protected virtual void OnPeerLeaved(BasePeer peer, CloseReason reason)
-    {
-    }
-
-    private void RegisterWaitingReconnectPeer(BasePeer peer)
-    {
-        if (!TryRemovePeer(peer.PeerId, out _))
-            return;
-
-        var waiting = new WaitingReconnectPeer(peer, Config.Session.WaitingReconnectTimeoutSec);
-        if (_waitingReconnectPeerDict.TryAdd(peer.PeerId, waiting))
-        {
-            Logger.Debug("Peer waiting reconnect registered. peerId={0}", peer.PeerId);
-            return;
-        }
-        
-        Logger.Error("Failed to register waiting reconnect peer. peerId={0}", peer.PeerId);
-        peer.LeaveServer(CloseReason.InternalError);
-    }
-
-    public BasePeer GetWaitingReconnectPeer(uint peerId)
-    {
-        _waitingReconnectPeerDict.TryGetValue(peerId, out var waitingReconnectPeer);
-        return waitingReconnectPeer?.Peer;
-    }
-
-    private sealed class WaitingReconnectPeer(BasePeer peer, int timeOutSec)
-    {
-        public BasePeer Peer { get; } = peer;
-        public DateTime ExpireTime { get; } = DateTime.UtcNow.AddSeconds(timeOutSec);
-    }
+    public static long GetServerTimeMs() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+    public IEnumerable<IConnector> GetAllConnectors() => _connectors;
+    public IEnumerable<IConnector> GetConnectors(string name) => _connectors.Where(c => c.Name == name); 
+    public IConnector GetConnector(string name, string host, int port) => _connectors.FirstOrDefault(x => x.Name == name && x.Host == host && x.Port == port);
 }

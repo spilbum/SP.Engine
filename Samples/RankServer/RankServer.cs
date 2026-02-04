@@ -220,13 +220,12 @@ public class RankServer : Engine
         return true;
     }
 
-    protected override bool TryCreatePeer(ISession session, out IPeer peer)
+    protected override IPeer CreatePeer(ISession session)
     {
-        peer = new BaseServerPeer(session);
-        return true;
+        return new BaseServerPeer(session);
     }
 
-    protected override bool TryCreateConnector(string name, out IConnector connector)
+    protected override IConnector CreateConnector(string name)
     {
         throw new NotImplementedException();
     }
@@ -236,23 +235,29 @@ public class RankServer : Engine
         if (!_acceptServers.Contains(req.ServerKind))
             return ErrorCode.InternalError;
         
-        BasePeer serverPeer;
+        BasePeer newPeer;
         switch (req.ServerKind)
         {
             case "Game":
-                var gs = new GameServerPeer(peer, req.ProcessId);
-                gs.BuildVersion = req.BuildVersion;
-                gs.Host = req.IpAddress;
-                gs.Port = req.OpenPort;
-                serverPeer = gs;
+                var gs = new GameServerPeer(peer, req.ProcessId)
+                {
+                    BuildVersion = req.BuildVersion,
+                    Host = req.IpAddress,
+                    Port = req.OpenPort
+                };
+                newPeer = gs;
                 break;
+            
             default:
                 Logger.Warn("Unknown server: {0}", req.ServerKind);
                 return ErrorCode.InternalError;
         }
         
-        if (!AddOrUpdatePeer(serverPeer))
+        if (!ChangeServerPeer(newPeer))
+        {
+            Logger.Error("Failed to change peer. kind={0}", req.ServerKind);
             return ErrorCode.InternalError;
+        }
 
         Logger.Info("Server {0} registered.", req.ServerKind);
         return ErrorCode.Ok;

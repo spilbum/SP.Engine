@@ -1,0 +1,15 @@
+[18:41:06.202 INF] [T:1] [Game] Logger setup was successful: Game
+[18:41:06.341 DBG] [T:1] [Game] Discovered 11 commands: [10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[18:41:06.358 DBG] [T:1] [Game] Discover commands: [4003, 4002, 4001, 4000, 2000]
+[18:41:06.359 INF] [T:1] [Game] The server Game is initialized.
+[18:41:12.056 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[18:41:12.058 INF] [T:1] [Game] The server instance Game was been started!
+[18:41:12.059 INF] [T:1] [Game] [Rank] State changed: "None" -> "Connecting"
+[18:41:12.059 INF] [T:1] [Game] Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.109, DnsName=
+[18:41:12.092 INF] [T:10] [Game] [Rank] State changed: "Connecting" -> "Handshake"
+[18:41:12.194 INF] [T:55] [Game] [Rank] State changed: "Handshake" -> "Open"
+[18:41:12.194 DBG] [T:55] [Game] [Rank] Connected
+[18:41:12.212 INF] [T:7] [Game] Register succeeded: Rank
+[18:41:17.590 DBG] [T:43] [Game] A new session connected. sessionId=f133928d-9526-4cca-bb8d-9f21dcb5981c, remoteEndPoint=192.168.0.109:56100
+[18:41:17.668 DBG] [T:45] [Game] Session authentication succeeded. sessionId=f133928d-9526-4cca-bb8d-9f21dcb5981c, peerId=1
+[18:41:24.508 DBG] [T:45] [Game] Bind peer: uid=1000001, peerId=1

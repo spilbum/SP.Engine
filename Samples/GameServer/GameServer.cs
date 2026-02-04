@@ -116,30 +116,27 @@ public class GameServer : Engine
         RoomManager.Stop();
     }
 
-    protected override bool TryCreatePeer(ISession session, out IPeer peer)
+    protected override IPeer CreatePeer(ISession session)
     {
-        peer = new GamePeer(session);
-        return true;
+        return new GamePeer(session);
     }
 
-    protected override bool TryCreateConnector(string name, out IConnector? connector)
+    protected override IConnector? CreateConnector(string name)
     {
-        connector = null;
-
         try
         {
-            connector = name switch
+            var connector = name switch
             {
                 "Rank" => new RankConnector(),
                 _ => throw new InvalidCastException($"Unknown connector name: {name}")
             };
 
-            return true;
+            return connector;
         }
         catch (Exception e)
         {
             Logger.Error(e);
-            return false;
+            return null;
         }
     }
 
@@ -155,10 +152,10 @@ public class GameServer : Engine
         if (!_byUid.TryGetValue(uid, out var peerId))
             return false;
 
-        peer = FindPeerByPeerId<GamePeer>(peerId);
+        peer = GetPeer<GamePeer>(peerId);
         return peer != null;
     }
-
+    
     public void Bind(GamePeer peer)
     {
         if (_byUid.TryAdd(peer.Uid, peer.PeerId))

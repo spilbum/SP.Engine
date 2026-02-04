@@ -1,0 +1,65 @@
+[18:41:03.034 INF] [T:1] [Rank] Logger setup was successful: Rank
+[18:41:03.176 DBG] [T:1] [Rank] Discovered 5 commands: [3003, 3002, 3001, 3000, 1000]
+[18:41:03.177 INF] [T:1] [Rank] The server Rank is initialized.
+[18:41:03.438 DBG] [T:1] [Rank] [Daily] Reward loaded. season="Daily"/1, uid=1, rank=2, score=30, isRewarded=false, item=[0:0:70]
+[18:41:03.438 DBG] [T:1] [Rank] [Daily] Reward loaded. season="Daily"/1, uid=2, rank=1, score=40, isRewarded=false, item=[0:0:100]
+[18:41:03.438 DBG] [T:1] [Rank] [Daily] Reward loaded. season="Daily"/1, uid=1000001, rank=3, score=10, isRewarded=false, item=[0:0:50]
+[18:41:03.438 DBG] [T:1] [Rank] [Daily] Reward loaded. season="Daily"/12, uid=1000001, rank=1, score=30, isRewarded=false, item=[0:0:100]
+[18:41:03.450 INF] [T:1] [Rank] [Daily] Season loaded. kind="Daily", num=73, state="Running", start="2026-02-02T15:00:00.0000000+09:00", end="2026-02-03T15:00:00.0000000+09:00"
+[18:41:03.453 INF] [T:1] [Rank] Listener (0.0.0.0:20000:"Tcp") was started.
+[18:41:03.456 INF] [T:1] [Rank] The server instance Rank was been started!
+[18:41:03.491 DBG] [T:12] [Rank] [Daily] Reward loaded. season="Daily"/1, uid=1, rank=2, score=30, isRewarded=false, item=[0:0:70]
+[18:41:03.491 DBG] [T:12] [Rank] [Daily] Reward loaded. season="Daily"/1, uid=2, rank=1, score=40, isRewarded=false, item=[0:0:100]
+[18:41:03.491 DBG] [T:12] [Rank] [Daily] Reward loaded. season="Daily"/1, uid=1000001, rank=3, score=10, isRewarded=false, item=[0:0:50]
+[18:41:03.491 DBG] [T:12] [Rank] [Daily] Reward loaded. season="Daily"/12, uid=1000001, rank=1, score=30, isRewarded=false, item=[0:0:100]
+[18:41:03.584 INF] [T:12] [Rank] [Daily] Next season scheduled. kind="Daily", num=74, start="2026-02-04T00:00:00.0000000+00:00", end="2026-02-05T00:00:00.0000000+00:00"
+[18:41:12.093 DBG] [T:15] [Rank] A new session connected. sessionId=5d4c4121-1146-4b9d-ad1d-be2bddcafdf5, remoteEndPoint=127.0.0.1:56095
+[18:41:12.158 DBG] [T:16] [Rank] Session authentication succeeded. sessionId=5d4c4121-1146-4b9d-ad1d-be2bddcafdf5, peerId=1
+[18:41:12.203 INF] [T:16] [Rank] Server Game registered.
+[18:41:33.184 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:41:32.177Z CPU=0.1% WS=55.44MB Managed=190.80MB Threads=35
+[18:42:03.178 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:42:02.178Z CPU=0.0% WS=71.53MB Managed=192.66MB Threads=33
+[18:42:33.178 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:42:32.178Z CPU=0.0% WS=74.22MB Managed=193.50MB Threads=34
+[18:43:03.179 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:43:02.179Z CPU=0.0% WS=73.45MB Managed=194.32MB Threads=33
+[18:43:33.179 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:43:32.179Z CPU=0.1% WS=77.12MB Managed=195.23MB Threads=35
+[18:44:03.179 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:44:02.179Z CPU=0.0% WS=80.64MB Managed=196.06MB Threads=34
+[18:44:33.179 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:44:32.179Z CPU=0.1% WS=78.28MB Managed=196.91MB Threads=36
+[18:45:03.179 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:45:02.179Z CPU=0.0% WS=76.86MB Managed=197.75MB Threads=33
+[18:45:33.180 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:45:32.179Z CPU=0.1% WS=76.53MB Managed=198.60MB Threads=34
+[18:46:03.179 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:46:02.180Z CPU=0.0% WS=77.30MB Managed=199.42MB Threads=33
+[18:46:33.179 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:46:32.180Z CPU=0.1% WS=83.16MB Managed=200.27MB Threads=33
+[18:47:03.181 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:47:02.180Z CPU=0.0% WS=82.59MB Managed=193.21MB Threads=34
+[18:47:33.181 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:47:32.180Z CPU=0.1% WS=78.28MB Managed=194.07MB Threads=33
+[18:48:03.179 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:48:02.180Z CPU=0.0% WS=74.80MB Managed=194.89MB Threads=34
+[18:48:33.180 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:48:32.180Z CPU=0.1% WS=75.16MB Managed=195.71MB Threads=33
+[18:49:03.182 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:49:02.181Z CPU=0.0% WS=75.58MB Managed=196.54MB Threads=33
+[18:49:33.181 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:49:32.182Z CPU=0.0% WS=76.27MB Managed=197.39MB Threads=34
+[18:50:03.181 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:50:02.181Z CPU=0.0% WS=75.52MB Managed=198.23MB Threads=33
+[18:50:33.181 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:50:32.182Z CPU=0.0% WS=76.19MB Managed=199.05MB Threads=34
+[18:51:03.181 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:51:02.182Z CPU=0.0% WS=76.88MB Managed=199.89MB Threads=33
+[18:51:33.181 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:51:32.180Z CPU=0.1% WS=79.25MB Managed=192.93MB Threads=34
+[18:52:03.182 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:52:03.181Z CPU=0.0% WS=44.55MB Managed=193.80MB Threads=32
+[18:52:33.181 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:52:32.181Z CPU=0.0% WS=52.94MB Managed=194.57MB Threads=32
+[18:53:03.182 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:53:02.182Z CPU=0.0% WS=53.81MB Managed=195.38MB Threads=32
+[18:53:33.181 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:53:32.181Z CPU=0.1% WS=57.73MB Managed=196.21MB Threads=33
+[18:54:03.182 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:54:02.181Z CPU=0.0% WS=58.69MB Managed=197.02MB Threads=32
+[18:54:33.182 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:54:32.182Z CPU=0.1% WS=50.66MB Managed=197.84MB Threads=33
+[18:55:03.182 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:55:02.182Z CPU=0.0% WS=59.78MB Managed=198.69MB Threads=34
+[18:55:33.182 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:55:32.182Z CPU=0.0% WS=61.97MB Managed=199.53MB Threads=33
+[18:56:03.182 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:56:02.182Z CPU=0.0% WS=64.09MB Managed=200.37MB Threads=34
+[18:56:33.182 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:56:32.181Z CPU=0.0% WS=71.19MB Managed=193.36MB Threads=33
+[18:57:03.182 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:57:02.182Z CPU=0.1% WS=73.11MB Managed=194.19MB Threads=33
+[18:57:33.182 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:57:32.182Z CPU=0.0% WS=73.33MB Managed=195.02MB Threads=33
+[18:58:03.182 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:58:02.182Z CPU=0.0% WS=73.36MB Managed=195.84MB Threads=32
+[18:58:33.182 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:58:32.182Z CPU=0.0% WS=73.47MB Managed=196.66MB Threads=33
+[18:59:03.182 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:59:02.182Z CPU=0.1% WS=73.61MB Managed=197.50MB Threads=33
+[18:59:33.182 INF] [T:7] [PerfMonitor] Time:2026-02-04 09:59:32.183Z CPU=0.0% WS=73.66MB Managed=198.31MB Threads=32
+[19:00:03.183 INF] [T:7] [PerfMonitor] Time:2026-02-04 10:00:02.183Z CPU=0.0% WS=73.70MB Managed=199.18MB Threads=34
+[19:00:33.184 INF] [T:7] [PerfMonitor] Time:2026-02-04 10:00:32.184Z CPU=0.0% WS=73.70MB Managed=200.00MB Threads=33
+[19:01:03.184 INF] [T:7] [PerfMonitor] Time:2026-02-04 10:01:02.185Z CPU=0.0% WS=73.73MB Managed=193.02MB Threads=32
+[19:01:33.185 INF] [T:7] [PerfMonitor] Time:2026-02-04 10:01:32.185Z CPU=0.0% WS=73.75MB Managed=193.84MB Threads=32
+[19:02:03.184 INF] [T:7] [PerfMonitor] Time:2026-02-04 10:02:02.185Z CPU=0.0% WS=73.88MB Managed=194.70MB Threads=34
+[19:02:33.184 INF] [T:7] [PerfMonitor] Time:2026-02-04 10:02:32.184Z CPU=0.0% WS=73.05MB Managed=195.52MB Threads=33
+[19:03:03.183 INF] [T:7] [PerfMonitor] Time:2026-02-04 10:03:02.184Z CPU=0.0% WS=69.02MB Managed=196.36MB Threads=34
+[19:03:33.184 INF] [T:7] [PerfMonitor] Time:2026-02-04 10:03:32.184Z CPU=0.0% WS=62.98MB Managed=197.20MB Threads=34
+[19:03:37.109 DBG] [T:16] [Rank] Received a termination request from the client. isClosing=false
+[19:03:37.112 DBG] [T:16] [Rank] The session 5d4c4121-1146-4b9d-ad1d-be2bddcafdf5 has been closed. reason="ClientClosing"

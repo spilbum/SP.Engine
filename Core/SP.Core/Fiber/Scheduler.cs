@@ -6,7 +6,7 @@ namespace SP.Core.Fiber
 {
     public class Scheduler : IScheduler, IDisposable
     {
-        private readonly List<TimerAction> _timers = new List<TimerAction>();
+        private readonly List<TimerHandle> _timers = new List<TimerHandle>();
         private volatile bool _disposed;
 
         public void Dispose()
@@ -14,10 +14,10 @@ namespace SP.Core.Fiber
             if (_disposed) return;
             _disposed = true;
 
-            List<TimerAction> temp;
+            List<TimerHandle> temp;
             lock (_timers)
             {
-                temp = new List<TimerAction>(_timers);
+                temp = new List<TimerHandle>(_timers);
                 _timers.Clear();
             }
 
@@ -59,7 +59,7 @@ namespace SP.Core.Fiber
             if (fiber == null) throw new ArgumentNullException(nameof(fiber));
             if (tickEnqueue == null) throw new ArgumentNullException(nameof(tickEnqueue));
 
-            var ta = new TimerAction(tickEnqueue, dueTime, period);
+            var ta = new TimerHandle(tickEnqueue, dueTime, period);
             lock (_timers)
             {
                 if (_disposed)

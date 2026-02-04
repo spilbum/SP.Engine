@@ -3,7 +3,7 @@ using System.Threading;
 
 namespace SP.Core.Fiber
 {
-    internal sealed class TimerAction : IDisposable
+    internal sealed class TimerHandle : IDisposable
     {
         private readonly Action _tickEnqueue;
         private volatile bool _disposed;
@@ -11,7 +11,7 @@ namespace SP.Core.Fiber
         private int _gate; // 0:idle, 1:running
         private Timer _timer;
 
-        public TimerAction(Action tickEnqueue, TimeSpan dueTime, TimeSpan period)
+        public TimerHandle(Action tickEnqueue, TimeSpan dueTime, TimeSpan period)
         {
             _tickEnqueue = tickEnqueue ?? throw new ArgumentNullException(nameof(tickEnqueue));
             if (period <= TimeSpan.Zero)

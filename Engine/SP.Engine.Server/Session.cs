@@ -71,10 +71,8 @@ public sealed class Session : BaseSession, ISession
                     throw new SessionAuthException(SessionHandshakeResult.InvalidRequest,
                         $"Already created peer. sessionId={peer.Session.Id}, peerId={peer.PeerId}");
 
-                if (!engine.CreatePeer(this, out var p) || p is not BasePeer basePeer)
-                    throw new SessionAuthException(SessionHandshakeResult.InternalError, "Failed to create peer.");
-
-                peer = basePeer;
+                if (!engine.CreatePeer(this, out peer))
+                    throw new SessionAuthException(SessionHandshakeResult.InternalError, $"Failed to create peer. sessionId={Id}");
 
                 if (!peer.TryKeyExchange(data.KeySize, data.ClientPublicKey))
                     throw new SessionAuthException(SessionHandshakeResult.KeyExchangeFailed, "Key exchange failed.");
@@ -97,7 +95,7 @@ public sealed class Session : BaseSession, ISession
                 }
                 else
                 {
-                    // 재 연결 대기인 경우
+                    // 재 연결 대기 피어 조회
                     peer = engine.GetWaitingReconnectPeer(data.PeerId);
                     if (peer == null)
                         throw new SessionAuthException(SessionHandshakeResult.SessionNotFound,
