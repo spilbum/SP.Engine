@@ -76,7 +76,7 @@ namespace SP.Engine.Client
         private PooledReceiveBuffer _receiveBuffer;
         private Lz4Compressor _compressor;
         private bool _disposed;
-        private AesCbcEncryptor _encryptor;
+        private AesGcmEncryptor _encryptor;
         private TickTimer _keepAliveTimer;
         private IPolicyView _networkPolicy = new NetworkPolicyView(in PolicyDefaults.Globals);
         private ReliableMessageProcessor _reliableMessageProcessor;
@@ -859,7 +859,7 @@ namespace SP.Engine.Client
             if (p.UseEncrypt)
             {
                 var sharedKey = _diffieHellman.DeriveSharedKey(p.ServerPublicKey);
-                _encryptor = new AesCbcEncryptor(sharedKey);
+                _encryptor = new AesGcmEncryptor(sharedKey);
             }
 
             if (p.UseCompress) _compressor = new Lz4Compressor(p.MaxFrameBytes);

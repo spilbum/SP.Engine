@@ -120,7 +120,7 @@ namespace Common
             public int StartRank;
         }
 
-        [Protocol(C2GProtocol.EchoReq)]
+        [Protocol(C2GProtocol.EchoReq, encrypt: Toggle.On)]
         public class EchoReq : BaseProtocolData
         {
             public string? Message;
@@ -244,7 +244,7 @@ namespace Common
         }
 
 
-        [Protocol(G2CProtocol.EchoAck)]
+        [Protocol(G2CProtocol.EchoAck, encrypt: Toggle.On)]
         public class EchoAck : BaseProtocolData
         {
             public string? Message;

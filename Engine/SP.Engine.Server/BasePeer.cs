@@ -56,7 +56,7 @@ public abstract class BasePeer : IPeer, IDisposable
     private readonly ReliableMessageProcessor _reliableMessageProcessor;
     private DiffieHellman _diffieHellman;
     private bool _disposed;
-    private AesCbcEncryptor _encryptor;
+    private AesGcmEncryptor _encryptor;
     private IPolicyView _networkPolicy = new NetworkPolicyView(in PolicyDefaults.Globals);
 
     private int _stateCode = PeerStateConst.NotAuthenticated;
@@ -282,13 +282,13 @@ public abstract class BasePeer : IPeer, IDisposable
             return false;
         }
 
-        byte[] shared = null;
+        byte[] sharedKey = null;
 
         try
         {
             _diffieHellman = new DiffieHellman(keySize);
-            shared = _diffieHellman.DeriveSharedKey(peerPublicKey);
-            _encryptor = new AesCbcEncryptor(shared);
+            sharedKey = _diffieHellman.DeriveSharedKey(peerPublicKey);
+            _encryptor = new AesGcmEncryptor(sharedKey);
             return true;
         }
         catch (ArgumentException ex)
@@ -308,8 +308,8 @@ public abstract class BasePeer : IPeer, IDisposable
         }
         finally
         {
-            if (shared != null)
-                CryptographicOperations.ZeroMemory(shared);
+            if (sharedKey != null)
+                CryptographicOperations.ZeroMemory(sharedKey);
         }
     }
 
