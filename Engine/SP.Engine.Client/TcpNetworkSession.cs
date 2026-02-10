@@ -357,14 +357,16 @@ namespace SP.Engine.Client
             {
                 if (e.SocketError != SocketError.Success || e.BytesTransferred == 0)
                 {
-                    if (EnsureSocketClosed()) OnClosed();
+                    if (EnsureSocketClosed()) 
+                        OnClosed();
 
-                    if (e.SocketError != SocketError.Success)
-                    {
-                        var ex = new SocketException((int)e.SocketError);
-                        if (!IsIgnorableException(ex)) OnError(ex);
-                    }
-
+                    if (e.SocketError == SocketError.Success) 
+                        return;
+                    
+                    var ex = new SocketException((int)e.SocketError);
+                    if (!IsIgnorableException(ex)) 
+                        OnError(ex);
+                    
                     return;
                 }
 
@@ -422,7 +424,6 @@ namespace SP.Engine.Client
                     // 부분 소비: 현재 세그먼트만 슬라이스
                     if (seg.Array != null)
                         list[i] = new ArraySegment<byte>(seg.Array, seg.Offset + remaining, seg.Count - remaining);
-                    remaining = 0;
                     break;
                 }
             }

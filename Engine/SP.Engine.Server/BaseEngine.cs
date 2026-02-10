@@ -22,7 +22,7 @@ public interface IBaseEngine : ILogContext
     IFiberScheduler Scheduler { get; }
     IBaseSession CreateSession(TcpNetworkSession networkSession);
     bool RegisterSession(IBaseSession session);
-    void ProcessUdpClient(PooledBuffer buffer, Socket socket, IPEndPoint remoteEndPoint);
+    void ProcessUdpClient(ArraySegment<byte> segment, Socket socket, IPEndPoint remoteEndPoint);
 }
 
 public interface ISocketServerAccessor
@@ -111,21 +111,24 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
         return true;
     }
 
-    void IBaseEngine.ProcessUdpClient(PooledBuffer buffer, Socket socket, IPEndPoint remoteEndPoint)
+    void IBaseEngine.ProcessUdpClient(ArraySegment<byte> segment, Socket socket, IPEndPoint remoteEndPoint)
     {
-        using (buffer)
+        if (!UdpHeader.TryRead(segment.AsSpan(), out var header, out var consumed))
         {
-            if (!UdpHeader.TryRead(buffer.Span, out var header, out var consumed))
-                return;
-
-            if (buffer.Count < consumed + header.PayloadLength)
-                return;
-
-            var peer = GetBasePeer(header.PeerId);
-            if (peer?.Session is not IBaseSession session) return;
-
-            session.ProcessUdpBuffer(buffer, header, socket, remoteEndPoint);
+            // 헤더 파싱 실패
+            return;
         }
+
+        if (segment.Count < consumed + header.PayloadLength)
+        {
+            // 데이터 부족
+            return;
+        }
+
+        var peer = GetBasePeer(header.PeerId);
+        if (peer?.Session is not IBaseSession session) return;
+
+        session.ProcessUdpBuffer(segment, header, socket, remoteEndPoint);
     }
 
     public void Dispose()
@@ -217,13 +220,22 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
         StopClearIdleSessionTimer();
         StopHandshakePendingTimer();
         LogManager.Dispose();
-
+        
         var sessions = _sessions.ToArray();
-        if (0 < sessions.Length)
+        if (sessions.Length > 0)
         {
-            var tasks = sessions.Select(s => Task.Run(() => { s.Value.Close(CloseReason.ServerShutdown); })).ToArray();
-
-            Task.WaitAll(tasks);
+            var options = new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount * 2 };
+            Parallel.ForEach(sessions, options, s =>
+            {
+                try
+                {
+                    s.Value.Close(CloseReason.ServerShutdown);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error(ex, "Error closing session {0} during shutdown", s.Key);
+                }
+            });
         }
 
         OnStopped();

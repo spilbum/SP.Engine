@@ -232,18 +232,19 @@ public sealed class Session : BaseSession, ISession
         {
             case ChannelKind.Reliable:
             {
-                var msg = new TcpMessage();
-                msg.SetSequenceNumber(0);
-                msg.Serialize(data, policy, encryptor, compressor);
-                return TrySend(channel, msg);
+                var tcp = new TcpMessage();
+                tcp.SetSequenceNumber(0);
+                tcp.Serialize(data, policy, encryptor, compressor);
+                return TrySend(channel, tcp);
             }
             case ChannelKind.Unreliable:
             {
-                var msg = new UdpMessage();
+                var udp = new UdpMessage();
                 if (Peer != null)
-                    msg.SetPeerId(Peer.PeerId);
-                msg.Serialize(data, policy, encryptor, compressor);
-                return TrySend(channel, msg);
+                    udp.SetPeerId(Peer.PeerId);
+                    
+                udp.Serialize(data, policy, encryptor, compressor);
+                return TrySend(channel, udp);
             }
             default:
                 throw new Exception($"Unknown channel: {channel}");
@@ -280,7 +281,13 @@ public sealed class Session : BaseSession, ISession
 
     protected override void ExecuteMessage(IMessage message)
     {
-        _engine.ExecuteMessage(this, message);
+        if (Fiber == null)
+        {
+            Logger.Error($"Session has no assigned fiber! SessionId={Id}");
+            return;
+        }
+        
+        Fiber.Enqueue(() => _engine.ExecuteMessageAsync(this, message));
     }
 
     public override void Close()

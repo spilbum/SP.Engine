@@ -6,7 +6,7 @@ namespace RankServer;
 
 public class ServerConfig
 {
-    public string GroupType { get; set; } = string.Empty;
+    public string Group { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public int Port { get; set; } = 0;
     public string[] AcceptServers { get; set; } = [];

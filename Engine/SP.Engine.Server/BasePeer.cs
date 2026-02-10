@@ -130,26 +130,26 @@ public abstract class BasePeer : IPeer, IDisposable
         {
             case ChannelKind.Reliable:
             {
-                var msg = new TcpMessage();
+                var tcp = new TcpMessage();
                 var seq = _reliableMessageProcessor.GetNextReliableSeq();
-                msg.SetSequenceNumber(seq);
-                msg.Serialize(data, policy, encryptor, compressor);
+                tcp.SetSequenceNumber(seq);
+                tcp.Serialize(data, policy, encryptor, compressor);
 
                 if (!IsConnected)
                 {
-                    _reliableMessageProcessor.EnqueuePendingMessage(msg);
+                    _reliableMessageProcessor.EnqueuePendingMessage(tcp);
                     return true;
                 }
 
-                _reliableMessageProcessor.RegisterMessageState(msg);
-                return Session.TrySend(channel, msg);
+                _reliableMessageProcessor.RegisterMessageState(tcp);
+                return Session.TrySend(channel, tcp);
             }
             case ChannelKind.Unreliable:
             {
-                var msg = new UdpMessage();
-                msg.SetPeerId(PeerId);
-                msg.Serialize(data, policy, encryptor, compressor);
-                return Session.TrySend(channel, msg);
+                var udp = new UdpMessage();
+                udp.SetPeerId(PeerId);
+                udp.Serialize(data, policy, encryptor, compressor);
+                return Session.TrySend(channel, udp);
             }
             default:
                 throw new Exception($"Unknown channel: {channel}");
@@ -185,10 +185,16 @@ public abstract class BasePeer : IPeer, IDisposable
             return;
 
         if (_reliableMessageProcessor.TryGetRetryMessages(out var retries))
+        {
             foreach (var message in retries)
+            {
                 Session.TrySend(ChannelKind.Reliable, message);
+            }
+        }
         else
+        {
             Close(CloseReason.LimitExceededRetry);
+        }
     }
 
     internal void OnPing(double rttMs, double avgRttMs, double jitterMs, float packetLossRate)
@@ -204,7 +210,7 @@ public abstract class BasePeer : IPeer, IDisposable
         _reliableMessageProcessor.RemoveMessageState(sequenceNumber);
     }
 
-    internal List<IMessage> ProcessMessageInOrder(IMessage message)
+    internal List<TcpMessage> ProcessMessageInOrder(TcpMessage message)
     {
         return _reliableMessageProcessor.ProcessMessageInOrder(message);
     }
@@ -241,7 +247,13 @@ public abstract class BasePeer : IPeer, IDisposable
         Session = session;
 
         foreach (var message in _reliableMessageProcessor.DequeuePendingMessages())
+        {
+            // 재전송 트래커에 등록
+            _reliableMessageProcessor.RegisterMessageState(message);
+                
+            // 전송
             session.TrySend(ChannelKind.Reliable, message);
+        }
 
         OnOnline();
     }
@@ -250,7 +262,6 @@ public abstract class BasePeer : IPeer, IDisposable
     {
         Interlocked.Exchange(ref _stateCode, PeerStateConst.Offline);
         _networkPolicy = new NetworkPolicyView(PolicyDefaults.Globals);
-        _reliableMessageProcessor.ResetAllMessageStates();
         OnOffline(reason);
     }
 

@@ -1,13 +1,7 @@
 {
   "Server": {
+    "Group" : "Live",
     "Name": "Game",
     "Port": 10000
-  },
-  "Connector": [
-    {
-      "Name": "Rank",
-      "Host": "127.0.0.1",
-      "Port": 20000
-    }
-  ]
+  }
 }

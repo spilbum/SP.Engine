@@ -1,7 +1,7 @@
 {
   "Server": {
+    "Group": "Live",
     "Name": "Rank",
-    "Port": 20000,
-    "AcceptServers": [ "Game" ]
+    "Port": 20000
   }
 }

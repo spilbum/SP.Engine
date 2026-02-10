@@ -7,7 +7,7 @@ public sealed record SessionConfig
     public int IdleSessionTimeoutSec { get; init; } = 300;
 
     public bool EnableSessionSnapshot { get; init; } = true;
-    public int SessionSnapshotIntervalSec { get; init; } = 1;
+    public int SessionSnapshotIntervalSec { get; init; } = 3;
 
     public int WaitingReconnectTimeoutSec { get; init; } = 120;
     public int WaitingReconnectTimerIntervalSec { get; init; } = 60;

@@ -8,10 +8,6 @@ namespace SP.Engine.Runtime.Networking
         {
         }
 
-        public TcpMessage(TcpHeader header, byte[] body) : base(header, body)
-        {
-        }
-
         public TcpMessage(TcpHeader header, ReadOnlyMemory<byte> payload) : base(header, payload)
         {
         }
@@ -48,12 +44,6 @@ namespace SP.Engine.Runtime.Networking
                 .WithId(id)
                 .WithPayloadLength(payloadLength)
                 .Build();
-        }
-
-        public override IMessage Clone()
-        {
-            var newBody = Body.ToArray();
-            return new TcpMessage(Header, newBody);
         }
     }
 }

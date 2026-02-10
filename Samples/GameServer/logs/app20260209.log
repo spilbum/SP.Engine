@@ -1,0 +1,698 @@
+[11:05:44.468 INF] [T:1] [Game] Logger setup was successful: Game
+[11:05:44.593 DBG] [T:1] [Game] Discovered 12 commands: [19999, 10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[11:05:44.626 DBG] [T:1] [Game] [BaseNetPeer] Discovered commands: [4003, 4002, 4001, 4000, 2000]
+[11:05:44.629 INF] [T:1] [Game] The server Game is initialized.
+[11:05:50.367 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[11:05:50.371 INF] [T:1] [Game] The server instance Game was been started!
+[11:05:50.372 INF] [T:1] [Game] [Rank] State changed: "None" -> "Connecting"
+[11:05:50.373 INF] [T:1] [Game] Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.109, DnsName=
+[11:05:50.407 ERR] [T:8] [Game] [Rank] An error occurred: Connection refused
+null
+[11:05:55.412 ERR] [T:44] [Game] [Rank] An error occurred: Connection refused
+null
+[11:06:00.422 WRN] [T:7] [Game] Max connect attempts exceeded: 3 > 2
+[11:06:00.423 INF] [T:7] [Game] [Rank] State changed: "Connecting" -> "Closing"
+[11:06:00.425 INF] [T:7] [Game] [Rank] State changed: "Closing" -> "Closed"
+[11:06:00.426 INF] [T:7] [Game] [Rank] Disconnected
+[11:06:00.427 INF] [T:7] [Game] [Rank] State changed: "Closed" -> "Connecting"
+[11:06:00.452 ERR] [T:56] [Game] [Rank] An error occurred: Connection refused
+null
+[11:06:05.462 ERR] [T:43] [Game] [Rank] An error occurred: Connection refused
+null
+[11:06:10.472 WRN] [T:7] [Game] Max connect attempts exceeded: 3 > 2
+[11:06:10.472 INF] [T:7] [Game] [Rank] State changed: "Connecting" -> "Closing"
+[11:06:10.472 INF] [T:7] [Game] [Rank] State changed: "Closing" -> "Closed"
+[11:06:10.472 INF] [T:7] [Game] [Rank] Disconnected
+[11:06:15.427 INF] [T:7] [Game] [Rank] State changed: "Closed" -> "Connecting"
+[11:06:15.452 ERR] [T:43] [Game] [Rank] An error occurred: Connection refused
+null
+[11:06:18.466 INF] [T:44] [Game] [Rank] State changed: "Connecting" -> "Closing"
+[11:06:18.466 INF] [T:44] [Game] [Rank] State changed: "Closing" -> "Closed"
+[11:06:18.466 INF] [T:44] [Game] [Rank] Disconnected
+[11:07:12.847 INF] [T:1] [Game] Logger setup was successful: Game
+[11:07:12.997 DBG] [T:1] [Game] Discovered 12 commands: [19999, 10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[11:07:13.000 INF] [T:1] [Game] The server Game is initialized.
+[11:07:18.671 INF] [T:1] [Game] Listener (0.0.0.0:10000:"Tcp") was started.
+[11:07:18.674 INF] [T:1] [Game] The server instance Game was been started!
+[11:07:18.675 INF] [T:1] [Game] Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.109, DnsName=
+[11:07:19.633 DBG] [T:8] [Game] A new session connected. sessionId=a9e2b56a-bc89-4ae7-bc46-e2e8367e6d72, remoteEndPoint=127.0.0.1:59917
+[11:07:19.697 DBG] [T:45] [Game] Session authentication succeeded. sessionId=a9e2b56a-bc89-4ae7-bc46-e2e8367e6d72, peerId=1
+[11:07:36.008 DBG] [T:45] [Game] Received a termination request from the client. isClosing=false
+[11:07:36.011 DBG] [T:44] [Game] The session a9e2b56a-bc89-4ae7-bc46-e2e8367e6d72 has been closed. reason="Unknown"
+[11:07:36.014 DBG] [T:44] [Game] Peer leaved. uid=0, reason="Unknown"
+[11:09:25.497 DBG] [T:8] [Game] A new session connected. sessionId=2027faef-45dd-4cb3-b76b-88c4fbf324b7, remoteEndPoint=127.0.0.1:59924
+[11:09:25.536 DBG] [T:46] [Game] Session authentication succeeded. sessionId=2027faef-45dd-4cb3-b76b-88c4fbf324b7, peerId=1
+[11:09:56.643 DBG] [T:46] [Game] Received a termination request from the client. isClosing=false
+[11:09:56.644 DBG] [T:43] [Game] The session 2027faef-45dd-4cb3-b76b-88c4fbf324b7 has been closed. reason="ClientClosing"
+[11:09:56.644 DBG] [T:43] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[11:12:03.387 INF] [T:1] [Game] Logger setup was successful: Game
+[11:12:03.524 DBG] [T:1] [Game] Discovered 12 commands: [19999, 10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[11:12:03.525 INF] [T:1] [Game] The server Game is initialized.
+[11:12:09.210 INF] [T:1] [Game] Listener (0.0.0.0:10000:"Tcp") was started.
+[11:12:09.214 INF] [T:1] [Game] The server instance Game was been started!
+[11:12:09.215 INF] [T:1] [Game] Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.109, DnsName=
+[11:12:10.051 DBG] [T:44] [Game] A new session connected. sessionId=7107dc73-e001-487e-a2c1-d6dc03906aef, remoteEndPoint=127.0.0.1:59948
+[11:12:10.109 DBG] [T:45] [Game] Session authentication succeeded. sessionId=7107dc73-e001-487e-a2c1-d6dc03906aef, peerId=1
+[11:12:17.565 DBG] [T:45] [Game] Retrying: seq=55, retry=1/5
+[11:12:17.565 DBG] [T:45] [Game] Retrying: seq=56, retry=1/5
+[11:12:17.565 DBG] [T:45] [Game] Retrying: seq=57, retry=1/5
+[11:12:17.565 DBG] [T:45] [Game] Retrying: seq=58, retry=1/5
+[11:12:17.565 DBG] [T:45] [Game] Retrying: seq=59, retry=1/5
+[11:12:17.565 DBG] [T:45] [Game] Retrying: seq=60, retry=1/5
+[11:12:17.565 DBG] [T:45] [Game] Retrying: seq=61, retry=1/5
+[11:12:17.565 DBG] [T:45] [Game] Retrying: seq=62, retry=1/5
+[11:12:17.565 DBG] [T:45] [Game] Retrying: seq=63, retry=1/5
+[11:12:17.565 DBG] [T:45] [Game] Retrying: seq=64, retry=1/5
+[11:12:17.565 DBG] [T:45] [Game] Retrying: seq=65, retry=1/5
+[11:12:17.565 DBG] [T:45] [Game] Retrying: seq=66, retry=1/5
+[11:12:17.565 DBG] [T:45] [Game] Retrying: seq=67, retry=1/5
+[11:12:17.565 DBG] [T:45] [Game] Retrying: seq=68, retry=1/5
+[11:12:17.565 DBG] [T:45] [Game] Retrying: seq=69, retry=1/5
+[11:12:17.566 DBG] [T:45] [Game] Retrying: seq=70, retry=1/5
+[11:12:17.566 DBG] [T:45] [Game] Retrying: seq=71, retry=1/5
+[11:12:17.566 DBG] [T:45] [Game] Retrying: seq=72, retry=1/5
+[11:12:17.566 DBG] [T:45] [Game] Retrying: seq=73, retry=1/5
+[11:12:17.566 DBG] [T:45] [Game] Retrying: seq=74, retry=1/5
+[11:12:17.566 DBG] [T:45] [Game] Retrying: seq=75, retry=1/5
+[11:12:17.566 DBG] [T:45] [Game] Retrying: seq=76, retry=1/5
+[11:12:17.566 DBG] [T:45] [Game] Retrying: seq=77, retry=1/5
+[11:12:17.566 DBG] [T:45] [Game] Retrying: seq=78, retry=1/5
+[11:12:17.566 DBG] [T:45] [Game] Retrying: seq=79, retry=1/5
+[11:12:17.566 DBG] [T:45] [Game] Retrying: seq=80, retry=1/5
+[11:12:17.566 DBG] [T:45] [Game] Retrying: seq=81, retry=1/5
+[11:12:17.567 DBG] [T:45] [Game] Retrying: seq=82, retry=1/5
+[11:12:17.567 DBG] [T:45] [Game] Retrying: seq=83, retry=1/5
+[11:12:17.567 DBG] [T:45] [Game] Retrying: seq=84, retry=1/5
+[11:12:17.567 DBG] [T:45] [Game] Retrying: seq=85, retry=1/5
+[11:12:17.567 DBG] [T:45] [Game] Retrying: seq=86, retry=1/5
+[11:12:17.567 DBG] [T:45] [Game] Retrying: seq=87, retry=1/5
+[11:12:17.567 DBG] [T:45] [Game] Retrying: seq=88, retry=1/5
+[11:12:17.567 DBG] [T:45] [Game] Retrying: seq=89, retry=1/5
+[11:12:17.567 DBG] [T:45] [Game] Retrying: seq=90, retry=1/5
+[11:12:17.567 DBG] [T:45] [Game] Retrying: seq=91, retry=1/5
+[11:12:17.567 DBG] [T:45] [Game] Retrying: seq=92, retry=1/5
+[11:12:17.567 DBG] [T:45] [Game] Retrying: seq=93, retry=1/5
+[11:12:17.567 DBG] [T:45] [Game] Retrying: seq=97, retry=1/5
+[11:12:17.567 DBG] [T:45] [Game] Retrying: seq=98, retry=1/5
+[11:12:17.567 DBG] [T:45] [Game] Retrying: seq=99, retry=1/5
+[11:12:17.567 DBG] [T:45] [Game] Retrying: seq=100, retry=1/5
+[11:12:53.015 DBG] [T:45] [Game] Retrying: seq=113, retry=1/5
+[11:12:53.016 DBG] [T:45] [Game] Retrying: seq=114, retry=1/5
+[11:12:53.016 DBG] [T:45] [Game] Retrying: seq=115, retry=1/5
+[11:12:53.016 DBG] [T:45] [Game] Retrying: seq=116, retry=1/5
+[11:12:53.016 DBG] [T:45] [Game] Retrying: seq=117, retry=1/5
+[11:12:53.016 DBG] [T:45] [Game] Retrying: seq=118, retry=1/5
+[11:12:53.016 DBG] [T:45] [Game] Retrying: seq=119, retry=1/5
+[11:12:53.016 DBG] [T:45] [Game] Retrying: seq=120, retry=1/5
+[11:12:53.016 DBG] [T:45] [Game] Retrying: seq=121, retry=1/5
+[11:12:53.016 DBG] [T:45] [Game] Retrying: seq=122, retry=1/5
+[11:12:53.016 DBG] [T:45] [Game] Retrying: seq=123, retry=1/5
+[11:12:53.016 DBG] [T:45] [Game] Retrying: seq=124, retry=1/5
+[11:12:53.016 DBG] [T:45] [Game] Retrying: seq=125, retry=1/5
+[11:12:53.016 DBG] [T:45] [Game] Retrying: seq=126, retry=1/5
+[11:12:53.016 DBG] [T:45] [Game] Retrying: seq=127, retry=1/5
+[11:12:53.016 DBG] [T:45] [Game] Retrying: seq=128, retry=1/5
+[11:12:53.016 DBG] [T:45] [Game] Retrying: seq=129, retry=1/5
+[11:12:53.016 DBG] [T:45] [Game] Retrying: seq=130, retry=1/5
+[11:12:53.016 DBG] [T:45] [Game] Retrying: seq=131, retry=1/5
+[11:12:53.016 DBG] [T:45] [Game] Retrying: seq=132, retry=1/5
+[11:12:53.016 DBG] [T:45] [Game] Retrying: seq=133, retry=1/5
+[11:12:53.016 DBG] [T:45] [Game] Retrying: seq=134, retry=1/5
+[11:12:53.265 DBG] [T:45] [Game] Retrying: seq=113, retry=2/5
+[11:12:53.265 DBG] [T:45] [Game] Retrying: seq=114, retry=2/5
+[11:12:53.265 DBG] [T:45] [Game] Retrying: seq=115, retry=2/5
+[11:12:53.265 DBG] [T:45] [Game] Retrying: seq=116, retry=2/5
+[11:12:53.265 DBG] [T:45] [Game] Retrying: seq=117, retry=2/5
+[11:12:53.265 DBG] [T:45] [Game] Retrying: seq=118, retry=2/5
+[11:12:53.265 DBG] [T:45] [Game] Retrying: seq=119, retry=2/5
+[11:12:53.265 DBG] [T:45] [Game] Retrying: seq=120, retry=2/5
+[11:12:53.265 DBG] [T:45] [Game] Retrying: seq=121, retry=2/5
+[11:12:53.265 DBG] [T:45] [Game] Retrying: seq=122, retry=2/5
+[11:12:53.265 DBG] [T:45] [Game] Retrying: seq=123, retry=2/5
+[11:12:53.265 DBG] [T:45] [Game] Retrying: seq=124, retry=2/5
+[11:12:53.265 DBG] [T:45] [Game] Retrying: seq=125, retry=2/5
+[11:12:53.265 DBG] [T:45] [Game] Retrying: seq=126, retry=2/5
+[11:12:53.265 DBG] [T:45] [Game] Retrying: seq=127, retry=2/5
+[11:12:53.265 DBG] [T:45] [Game] Retrying: seq=128, retry=2/5
+[11:12:53.265 DBG] [T:45] [Game] Retrying: seq=129, retry=2/5
+[11:12:53.265 DBG] [T:45] [Game] Retrying: seq=130, retry=2/5
+[11:12:53.265 DBG] [T:45] [Game] Retrying: seq=131, retry=2/5
+[11:12:53.265 DBG] [T:45] [Game] Retrying: seq=132, retry=2/5
+[11:12:53.265 DBG] [T:45] [Game] Retrying: seq=133, retry=2/5
+[11:12:53.265 DBG] [T:45] [Game] Retrying: seq=134, retry=2/5
+[11:12:53.465 DBG] [T:45] [Game] Retrying: seq=113, retry=3/5
+[11:12:53.465 DBG] [T:45] [Game] Retrying: seq=114, retry=3/5
+[11:12:53.465 DBG] [T:45] [Game] Retrying: seq=115, retry=3/5
+[11:12:53.465 DBG] [T:45] [Game] Retrying: seq=116, retry=3/5
+[11:12:53.465 DBG] [T:45] [Game] Retrying: seq=117, retry=3/5
+[11:12:53.465 DBG] [T:45] [Game] Retrying: seq=118, retry=3/5
+[11:12:53.465 DBG] [T:45] [Game] Retrying: seq=119, retry=3/5
+[11:12:53.465 DBG] [T:45] [Game] Retrying: seq=120, retry=3/5
+[11:12:53.465 DBG] [T:45] [Game] Retrying: seq=121, retry=3/5
+[11:12:53.465 DBG] [T:45] [Game] Retrying: seq=122, retry=3/5
+[11:12:53.465 DBG] [T:45] [Game] Retrying: seq=123, retry=3/5
+[11:12:53.465 DBG] [T:45] [Game] Retrying: seq=124, retry=3/5
+[11:12:53.465 DBG] [T:45] [Game] Retrying: seq=125, retry=3/5
+[11:12:53.465 DBG] [T:45] [Game] Retrying: seq=126, retry=3/5
+[11:12:53.465 DBG] [T:45] [Game] Retrying: seq=127, retry=3/5
+[11:12:53.465 DBG] [T:45] [Game] Retrying: seq=128, retry=3/5
+[11:12:53.465 DBG] [T:45] [Game] Retrying: seq=129, retry=3/5
+[11:12:53.465 DBG] [T:45] [Game] Retrying: seq=130, retry=3/5
+[11:12:53.465 DBG] [T:45] [Game] Retrying: seq=131, retry=3/5
+[11:12:53.465 DBG] [T:45] [Game] Retrying: seq=132, retry=3/5
+[11:12:53.465 DBG] [T:45] [Game] Retrying: seq=133, retry=3/5
+[11:12:53.465 DBG] [T:45] [Game] Retrying: seq=134, retry=3/5
+[11:12:53.665 DBG] [T:45] [Game] Retrying: seq=113, retry=4/5
+[11:12:53.665 DBG] [T:45] [Game] Retrying: seq=114, retry=4/5
+[11:12:53.665 DBG] [T:45] [Game] Retrying: seq=115, retry=4/5
+[11:12:53.665 DBG] [T:45] [Game] Retrying: seq=116, retry=4/5
+[11:12:53.665 DBG] [T:45] [Game] Retrying: seq=117, retry=4/5
+[11:12:53.665 DBG] [T:45] [Game] Retrying: seq=118, retry=4/5
+[11:12:53.665 DBG] [T:45] [Game] Retrying: seq=119, retry=4/5
+[11:12:53.665 DBG] [T:45] [Game] Retrying: seq=120, retry=4/5
+[11:12:53.665 DBG] [T:45] [Game] Retrying: seq=121, retry=4/5
+[11:12:53.665 DBG] [T:45] [Game] Retrying: seq=122, retry=4/5
+[11:12:53.665 DBG] [T:45] [Game] Retrying: seq=123, retry=4/5
+[11:12:53.665 DBG] [T:45] [Game] Retrying: seq=124, retry=4/5
+[11:12:53.665 DBG] [T:45] [Game] Retrying: seq=125, retry=4/5
+[11:12:53.665 DBG] [T:45] [Game] Retrying: seq=126, retry=4/5
+[11:12:53.665 DBG] [T:45] [Game] Retrying: seq=127, retry=4/5
+[11:12:53.665 DBG] [T:45] [Game] Retrying: seq=128, retry=4/5
+[11:12:53.665 DBG] [T:45] [Game] Retrying: seq=129, retry=4/5
+[11:12:53.665 DBG] [T:45] [Game] Retrying: seq=130, retry=4/5
+[11:12:53.665 DBG] [T:45] [Game] Retrying: seq=131, retry=4/5
+[11:12:53.665 DBG] [T:45] [Game] Retrying: seq=132, retry=4/5
+[11:12:53.665 DBG] [T:45] [Game] Retrying: seq=133, retry=4/5
+[11:12:53.665 DBG] [T:45] [Game] Retrying: seq=134, retry=4/5
+[11:12:53.915 DBG] [T:45] [Game] Retrying: seq=113, retry=5/5
+[11:12:53.915 DBG] [T:45] [Game] Retrying: seq=114, retry=5/5
+[11:12:53.915 DBG] [T:45] [Game] Retrying: seq=115, retry=5/5
+[11:12:53.915 DBG] [T:45] [Game] Retrying: seq=116, retry=5/5
+[11:12:53.915 DBG] [T:45] [Game] Retrying: seq=117, retry=5/5
+[11:12:53.915 DBG] [T:45] [Game] Retrying: seq=118, retry=5/5
+[11:12:53.915 DBG] [T:45] [Game] Retrying: seq=119, retry=5/5
+[11:12:53.915 DBG] [T:45] [Game] Retrying: seq=120, retry=5/5
+[11:12:53.915 DBG] [T:45] [Game] Retrying: seq=121, retry=5/5
+[11:12:53.915 DBG] [T:45] [Game] Retrying: seq=122, retry=5/5
+[11:12:53.915 DBG] [T:45] [Game] Retrying: seq=123, retry=5/5
+[11:12:53.915 DBG] [T:45] [Game] Retrying: seq=124, retry=5/5
+[11:12:53.915 DBG] [T:45] [Game] Retrying: seq=125, retry=5/5
+[11:12:53.915 DBG] [T:45] [Game] Retrying: seq=126, retry=5/5
+[11:12:53.915 DBG] [T:45] [Game] Retrying: seq=127, retry=5/5
+[11:12:53.915 DBG] [T:45] [Game] Retrying: seq=128, retry=5/5
+[11:12:53.915 DBG] [T:45] [Game] Retrying: seq=129, retry=5/5
+[11:12:53.915 DBG] [T:45] [Game] Retrying: seq=130, retry=5/5
+[11:12:53.915 DBG] [T:45] [Game] Retrying: seq=131, retry=5/5
+[11:12:53.915 DBG] [T:45] [Game] Retrying: seq=132, retry=5/5
+[11:12:53.915 DBG] [T:45] [Game] Retrying: seq=133, retry=5/5
+[11:12:53.915 DBG] [T:45] [Game] Retrying: seq=134, retry=5/5
+[11:12:54.094 DBG] [T:56] [Game] The session 7107dc73-e001-487e-a2c1-d6dc03906aef has been closed. reason="ClientClosing"
+[11:12:54.095 DBG] [T:56] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:54.152 DBG] [T:43] [Game] A new session connected. sessionId=efb13a5a-4f0b-43ad-a319-25f5a4c11e79, remoteEndPoint=127.0.0.1:59949
+[11:12:54.154 DBG] [T:46] [Game] Session authentication succeeded. sessionId=efb13a5a-4f0b-43ad-a319-25f5a4c11e79, peerId=1
+[11:12:54.165 ERR] [T:46] [Game] Retry message expired. seq=113, id=29999
+[11:12:54.165 DBG] [T:43] [Game] The session efb13a5a-4f0b-43ad-a319-25f5a4c11e79 has been closed. reason="LimitExceededRetry"
+[11:12:54.165 DBG] [T:43] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:54.207 DBG] [T:43] [Game] A new session connected. sessionId=fb528f9e-33f1-4f7c-a4e1-330a0c01b228, remoteEndPoint=127.0.0.1:59950
+[11:12:54.207 DBG] [T:47] [Game] Session authentication succeeded. sessionId=fb528f9e-33f1-4f7c-a4e1-330a0c01b228, peerId=1
+[11:12:54.215 ERR] [T:47] [Game] Retry message expired. seq=114, id=29999
+[11:12:54.215 DBG] [T:56] [Game] The session fb528f9e-33f1-4f7c-a4e1-330a0c01b228 has been closed. reason="LimitExceededRetry"
+[11:12:54.215 DBG] [T:56] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:54.260 DBG] [T:56] [Game] A new session connected. sessionId=c217fec4-d1f5-4d7d-9aff-a8f8e76c81b7, remoteEndPoint=127.0.0.1:59951
+[11:12:54.260 DBG] [T:48] [Game] Session authentication succeeded. sessionId=c217fec4-d1f5-4d7d-9aff-a8f8e76c81b7, peerId=1
+[11:12:54.265 ERR] [T:48] [Game] Retry message expired. seq=115, id=29999
+[11:12:54.265 DBG] [T:43] [Game] The session c217fec4-d1f5-4d7d-9aff-a8f8e76c81b7 has been closed. reason="LimitExceededRetry"
+[11:12:54.266 DBG] [T:43] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:54.315 DBG] [T:43] [Game] A new session connected. sessionId=a4e24b13-f5c7-4ae4-905e-2209f23402e5, remoteEndPoint=127.0.0.1:59952
+[11:12:54.315 DBG] [T:49] [Game] Session authentication succeeded. sessionId=a4e24b13-f5c7-4ae4-905e-2209f23402e5, peerId=1
+[11:12:54.365 ERR] [T:49] [Game] Retry message expired. seq=116, id=29999
+[11:12:54.365 DBG] [T:56] [Game] The session a4e24b13-f5c7-4ae4-905e-2209f23402e5 has been closed. reason="LimitExceededRetry"
+[11:12:54.365 DBG] [T:56] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:54.367 DBG] [T:59] [Game] A new session connected. sessionId=dfa7e22a-26fc-4ec5-a076-0d20da1f6518, remoteEndPoint=127.0.0.1:59953
+[11:12:54.367 DBG] [T:50] [Game] Session authentication succeeded. sessionId=dfa7e22a-26fc-4ec5-a076-0d20da1f6518, peerId=1
+[11:12:54.415 ERR] [T:50] [Game] Retry message expired. seq=117, id=29999
+[11:12:54.415 DBG] [T:43] [Game] The session dfa7e22a-26fc-4ec5-a076-0d20da1f6518 has been closed. reason="LimitExceededRetry"
+[11:12:54.415 DBG] [T:43] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:54.418 DBG] [T:43] [Game] A new session connected. sessionId=87c49fec-5589-4ad2-a7e9-71dcd9dea5aa, remoteEndPoint=127.0.0.1:59954
+[11:12:54.418 DBG] [T:51] [Game] Session authentication succeeded. sessionId=87c49fec-5589-4ad2-a7e9-71dcd9dea5aa, peerId=1
+[11:12:54.465 ERR] [T:51] [Game] Retry message expired. seq=118, id=29999
+[11:12:54.465 DBG] [T:59] [Game] The session 87c49fec-5589-4ad2-a7e9-71dcd9dea5aa has been closed. reason="LimitExceededRetry"
+[11:12:54.465 DBG] [T:59] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:54.473 DBG] [T:59] [Game] A new session connected. sessionId=6ef4a61f-e863-4cc6-bdbf-5cbcb862df58, remoteEndPoint=127.0.0.1:59955
+[11:12:54.473 DBG] [T:52] [Game] Session authentication succeeded. sessionId=6ef4a61f-e863-4cc6-bdbf-5cbcb862df58, peerId=1
+[11:12:54.514 ERR] [T:52] [Game] Retry message expired. seq=119, id=29999
+[11:12:54.515 DBG] [T:56] [Game] The session 6ef4a61f-e863-4cc6-bdbf-5cbcb862df58 has been closed. reason="LimitExceededRetry"
+[11:12:54.515 DBG] [T:56] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:54.526 DBG] [T:59] [Game] A new session connected. sessionId=d0fe711b-be58-4d2f-a561-bfc6e8fb7efd, remoteEndPoint=127.0.0.1:59956
+[11:12:54.526 DBG] [T:53] [Game] Session authentication succeeded. sessionId=d0fe711b-be58-4d2f-a561-bfc6e8fb7efd, peerId=1
+[11:12:54.565 ERR] [T:53] [Game] Retry message expired. seq=120, id=29999
+[11:12:54.565 DBG] [T:56] [Game] The session d0fe711b-be58-4d2f-a561-bfc6e8fb7efd has been closed. reason="LimitExceededRetry"
+[11:12:54.565 DBG] [T:56] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:54.577 DBG] [T:59] [Game] A new session connected. sessionId=c0a8de68-88ef-4e84-871d-1c74a48cf5ea, remoteEndPoint=127.0.0.1:59957
+[11:12:54.577 DBG] [T:54] [Game] Session authentication succeeded. sessionId=c0a8de68-88ef-4e84-871d-1c74a48cf5ea, peerId=1
+[11:12:54.614 ERR] [T:54] [Game] Retry message expired. seq=121, id=29999
+[11:12:54.615 DBG] [T:59] [Game] The session c0a8de68-88ef-4e84-871d-1c74a48cf5ea has been closed. reason="LimitExceededRetry"
+[11:12:54.615 DBG] [T:59] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:54.632 DBG] [T:55] [Game] A new session connected. sessionId=547e0297-c9c8-4f3d-8a33-144c46bd26de, remoteEndPoint=127.0.0.1:59958
+[11:12:54.632 DBG] [T:45] [Game] Session authentication succeeded. sessionId=547e0297-c9c8-4f3d-8a33-144c46bd26de, peerId=1
+[11:12:54.665 ERR] [T:45] [Game] Retry message expired. seq=122, id=29999
+[11:12:54.665 DBG] [T:55] [Game] The session 547e0297-c9c8-4f3d-8a33-144c46bd26de has been closed. reason="LimitExceededRetry"
+[11:12:54.665 DBG] [T:55] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:54.686 DBG] [T:55] [Game] A new session connected. sessionId=f0494caf-0bd5-4835-9c03-ecd65da4e968, remoteEndPoint=127.0.0.1:59959
+[11:12:54.687 DBG] [T:46] [Game] Session authentication succeeded. sessionId=f0494caf-0bd5-4835-9c03-ecd65da4e968, peerId=1
+[11:12:54.715 ERR] [T:46] [Game] Retry message expired. seq=123, id=29999
+[11:12:54.715 DBG] [T:46] [Game] The session f0494caf-0bd5-4835-9c03-ecd65da4e968 has been closed. reason="LimitExceededRetry"
+[11:12:54.715 DBG] [T:46] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:54.742 DBG] [T:55] [Game] A new session connected. sessionId=808dd124-523e-40e8-bde9-b49b43140e32, remoteEndPoint=127.0.0.1:59960
+[11:12:54.742 DBG] [T:47] [Game] Session authentication succeeded. sessionId=808dd124-523e-40e8-bde9-b49b43140e32, peerId=1
+[11:12:54.765 ERR] [T:47] [Game] Retry message expired. seq=124, id=29999
+[11:12:54.765 DBG] [T:43] [Game] The session 808dd124-523e-40e8-bde9-b49b43140e32 has been closed. reason="LimitExceededRetry"
+[11:12:54.765 DBG] [T:43] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:54.797 DBG] [T:43] [Game] A new session connected. sessionId=3ef751e5-6aa2-43c7-857b-02c58019695c, remoteEndPoint=127.0.0.1:59961
+[11:12:54.797 DBG] [T:48] [Game] Session authentication succeeded. sessionId=3ef751e5-6aa2-43c7-857b-02c58019695c, peerId=1
+[11:12:54.815 ERR] [T:48] [Game] Retry message expired. seq=125, id=29999
+[11:12:54.815 DBG] [T:59] [Game] The session 3ef751e5-6aa2-43c7-857b-02c58019695c has been closed. reason="LimitExceededRetry"
+[11:12:54.815 DBG] [T:59] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:54.852 DBG] [T:59] [Game] A new session connected. sessionId=5a85675c-b8da-48cf-a4b1-3b13e7355074, remoteEndPoint=127.0.0.1:59962
+[11:12:54.852 DBG] [T:49] [Game] Session authentication succeeded. sessionId=5a85675c-b8da-48cf-a4b1-3b13e7355074, peerId=1
+[11:12:54.865 ERR] [T:49] [Game] Retry message expired. seq=126, id=29999
+[11:12:54.865 DBG] [T:59] [Game] The session 5a85675c-b8da-48cf-a4b1-3b13e7355074 has been closed. reason="LimitExceededRetry"
+[11:12:54.865 DBG] [T:59] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:54.907 DBG] [T:55] [Game] A new session connected. sessionId=9b37a2ee-9a5c-4253-ae20-4bf9d0243780, remoteEndPoint=127.0.0.1:59963
+[11:12:54.907 DBG] [T:50] [Game] Session authentication succeeded. sessionId=9b37a2ee-9a5c-4253-ae20-4bf9d0243780, peerId=1
+[11:12:54.915 ERR] [T:50] [Game] Retry message expired. seq=127, id=29999
+[11:12:54.915 DBG] [T:59] [Game] The session 9b37a2ee-9a5c-4253-ae20-4bf9d0243780 has been closed. reason="LimitExceededRetry"
+[11:12:54.915 DBG] [T:59] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:54.958 DBG] [T:59] [Game] A new session connected. sessionId=b2793ac5-8181-454f-a19d-74581e38fe7e, remoteEndPoint=127.0.0.1:59964
+[11:12:54.958 DBG] [T:51] [Game] Session authentication succeeded. sessionId=b2793ac5-8181-454f-a19d-74581e38fe7e, peerId=1
+[11:12:54.965 ERR] [T:51] [Game] Retry message expired. seq=128, id=29999
+[11:12:54.966 DBG] [T:55] [Game] The session b2793ac5-8181-454f-a19d-74581e38fe7e has been closed. reason="LimitExceededRetry"
+[11:12:54.966 DBG] [T:55] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:55.010 DBG] [T:55] [Game] A new session connected. sessionId=aec7bda8-969c-4be5-a2bd-207fb8de24f0, remoteEndPoint=127.0.0.1:59965
+[11:12:55.010 DBG] [T:52] [Game] Session authentication succeeded. sessionId=aec7bda8-969c-4be5-a2bd-207fb8de24f0, peerId=1
+[11:12:55.014 ERR] [T:52] [Game] Retry message expired. seq=129, id=29999
+[11:12:55.014 DBG] [T:59] [Game] The session aec7bda8-969c-4be5-a2bd-207fb8de24f0 has been closed. reason="LimitExceededRetry"
+[11:12:55.015 DBG] [T:59] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:55.065 DBG] [T:55] [Game] A new session connected. sessionId=0c007eca-b122-4f4d-8bc7-c82a197f6446, remoteEndPoint=127.0.0.1:59966
+[11:12:55.065 DBG] [T:53] [Game] Session authentication succeeded. sessionId=0c007eca-b122-4f4d-8bc7-c82a197f6446, peerId=1
+[11:12:55.115 ERR] [T:53] [Game] Retry message expired. seq=130, id=29999
+[11:12:55.115 DBG] [T:43] [Game] The session 0c007eca-b122-4f4d-8bc7-c82a197f6446 has been closed. reason="LimitExceededRetry"
+[11:12:55.115 DBG] [T:43] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:55.171 DBG] [T:59] [Game] A new session connected. sessionId=afe16054-2ae3-432c-8679-dba318c80a50, remoteEndPoint=127.0.0.1:59967
+[11:12:55.171 DBG] [T:54] [Game] Session authentication succeeded. sessionId=afe16054-2ae3-432c-8679-dba318c80a50, peerId=1
+[11:12:55.214 ERR] [T:54] [Game] Retry message expired. seq=131, id=29999
+[11:12:55.215 DBG] [T:43] [Game] The session afe16054-2ae3-432c-8679-dba318c80a50 has been closed. reason="LimitExceededRetry"
+[11:12:55.215 DBG] [T:43] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:55.226 DBG] [T:59] [Game] A new session connected. sessionId=31c71856-d2c0-448a-ae1a-89b2ff6978b9, remoteEndPoint=127.0.0.1:59968
+[11:12:55.226 DBG] [T:45] [Game] Session authentication succeeded. sessionId=31c71856-d2c0-448a-ae1a-89b2ff6978b9, peerId=1
+[11:12:55.264 ERR] [T:45] [Game] Retry message expired. seq=132, id=29999
+[11:12:55.264 DBG] [T:55] [Game] The session 31c71856-d2c0-448a-ae1a-89b2ff6978b9 has been closed. reason="LimitExceededRetry"
+[11:12:55.264 DBG] [T:55] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:55.276 DBG] [T:59] [Game] A new session connected. sessionId=4dc9db9b-2ca7-41c4-bdfb-2b15b77fffd0, remoteEndPoint=127.0.0.1:59969
+[11:12:55.276 DBG] [T:46] [Game] Session authentication succeeded. sessionId=4dc9db9b-2ca7-41c4-bdfb-2b15b77fffd0, peerId=1
+[11:12:55.314 ERR] [T:46] [Game] Retry message expired. seq=133, id=29999
+[11:12:55.315 DBG] [T:56] [Game] The session 4dc9db9b-2ca7-41c4-bdfb-2b15b77fffd0 has been closed. reason="LimitExceededRetry"
+[11:12:55.315 DBG] [T:56] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:55.331 DBG] [T:56] [Game] A new session connected. sessionId=f2237fd2-40bf-4455-aaa5-e4360d8a66f7, remoteEndPoint=127.0.0.1:59970
+[11:12:55.331 DBG] [T:47] [Game] Session authentication succeeded. sessionId=f2237fd2-40bf-4455-aaa5-e4360d8a66f7, peerId=1
+[11:12:55.366 ERR] [T:47] [Game] Retry message expired. seq=134, id=29999
+[11:12:55.366 DBG] [T:56] [Game] The session f2237fd2-40bf-4455-aaa5-e4360d8a66f7 has been closed. reason="LimitExceededRetry"
+[11:12:55.366 DBG] [T:56] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:55.382 DBG] [T:56] [Game] A new session connected. sessionId=2b5581c8-822a-424f-bb79-a3c6170e99d3, remoteEndPoint=127.0.0.1:59971
+[11:12:55.382 DBG] [T:48] [Game] Session authentication succeeded. sessionId=2b5581c8-822a-424f-bb79-a3c6170e99d3, peerId=1
+[11:12:55.433 DBG] [T:55] [Game] The session 2b5581c8-822a-424f-bb79-a3c6170e99d3 has been closed. reason="ClientClosing"
+[11:12:55.433 DBG] [T:55] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:55.488 DBG] [T:43] [Game] A new session connected. sessionId=2dc35140-7a68-4e7d-b70e-e5df688c5cdd, remoteEndPoint=127.0.0.1:59972
+[11:12:55.488 DBG] [T:49] [Game] Session authentication succeeded. sessionId=2dc35140-7a68-4e7d-b70e-e5df688c5cdd, peerId=1
+[11:12:55.543 DBG] [T:43] [Game] The session 2dc35140-7a68-4e7d-b70e-e5df688c5cdd has been closed. reason="ClientClosing"
+[11:12:55.543 DBG] [T:43] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:55.598 DBG] [T:55] [Game] A new session connected. sessionId=80141f2a-c5a0-436e-808c-6c0942565d8e, remoteEndPoint=127.0.0.1:59973
+[11:12:55.599 DBG] [T:50] [Game] Session authentication succeeded. sessionId=80141f2a-c5a0-436e-808c-6c0942565d8e, peerId=1
+[11:12:55.649 DBG] [T:43] [Game] The session 80141f2a-c5a0-436e-808c-6c0942565d8e has been closed. reason="ClientClosing"
+[11:12:55.649 DBG] [T:43] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:55.704 DBG] [T:56] [Game] A new session connected. sessionId=75ee36de-8aba-4f90-b057-4693c224a66d, remoteEndPoint=127.0.0.1:59974
+[11:12:55.705 DBG] [T:51] [Game] Session authentication succeeded. sessionId=75ee36de-8aba-4f90-b057-4693c224a66d, peerId=1
+[11:12:55.759 DBG] [T:59] [Game] The session 75ee36de-8aba-4f90-b057-4693c224a66d has been closed. reason="ClientClosing"
+[11:12:55.759 DBG] [T:59] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:55.815 DBG] [T:59] [Game] A new session connected. sessionId=29dd5409-dce3-4aaa-a71f-2ee570363108, remoteEndPoint=127.0.0.1:59975
+[11:12:55.815 DBG] [T:52] [Game] Session authentication succeeded. sessionId=29dd5409-dce3-4aaa-a71f-2ee570363108, peerId=1
+[11:12:55.870 DBG] [T:56] [Game] The session 29dd5409-dce3-4aaa-a71f-2ee570363108 has been closed. reason="ClientClosing"
+[11:12:55.870 DBG] [T:56] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:55.923 DBG] [T:43] [Game] A new session connected. sessionId=c2a73b97-156e-4f3e-a469-fa83d53f57b0, remoteEndPoint=127.0.0.1:59976
+[11:12:55.923 DBG] [T:53] [Game] Session authentication succeeded. sessionId=c2a73b97-156e-4f3e-a469-fa83d53f57b0, peerId=1
+[11:12:55.975 DBG] [T:53] [Game] The session c2a73b97-156e-4f3e-a469-fa83d53f57b0 has been closed. reason="ClientClosing"
+[11:12:55.975 DBG] [T:53] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:56.026 DBG] [T:56] [Game] A new session connected. sessionId=c4564ee4-a248-48af-91f3-32bf86ee1f9b, remoteEndPoint=127.0.0.1:59977
+[11:12:56.026 DBG] [T:54] [Game] Session authentication succeeded. sessionId=c4564ee4-a248-48af-91f3-32bf86ee1f9b, peerId=1
+[11:12:56.081 DBG] [T:56] [Game] The session c4564ee4-a248-48af-91f3-32bf86ee1f9b has been closed. reason="ClientClosing"
+[11:12:56.081 DBG] [T:56] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:56.132 DBG] [T:43] [Game] A new session connected. sessionId=9e5ef85d-c62b-4d3c-8a52-5ae46d7fc290, remoteEndPoint=127.0.0.1:59978
+[11:12:56.133 DBG] [T:45] [Game] Session authentication succeeded. sessionId=9e5ef85d-c62b-4d3c-8a52-5ae46d7fc290, peerId=1
+[11:12:56.187 DBG] [T:56] [Game] The session 9e5ef85d-c62b-4d3c-8a52-5ae46d7fc290 has been closed. reason="ClientClosing"
+[11:12:56.187 DBG] [T:56] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:56.243 DBG] [T:43] [Game] A new session connected. sessionId=f27bba51-af91-4316-9292-bad980c59d1c, remoteEndPoint=127.0.0.1:59979
+[11:12:56.243 DBG] [T:46] [Game] Session authentication succeeded. sessionId=f27bba51-af91-4316-9292-bad980c59d1c, peerId=1
+[11:12:56.298 DBG] [T:43] [Game] The session f27bba51-af91-4316-9292-bad980c59d1c has been closed. reason="ClientClosing"
+[11:12:56.298 DBG] [T:43] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:56.348 DBG] [T:55] [Game] A new session connected. sessionId=bebcddd7-fd3c-4b4f-bc9e-1424289f6d53, remoteEndPoint=127.0.0.1:59980
+[11:12:56.349 DBG] [T:47] [Game] Session authentication succeeded. sessionId=bebcddd7-fd3c-4b4f-bc9e-1424289f6d53, peerId=1
+[11:12:56.398 DBG] [T:55] [Game] The session bebcddd7-fd3c-4b4f-bc9e-1424289f6d53 has been closed. reason="ClientClosing"
+[11:12:56.398 DBG] [T:55] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:56.449 DBG] [T:55] [Game] A new session connected. sessionId=27edccb4-c747-4214-9277-c45057ec9601, remoteEndPoint=127.0.0.1:59981
+[11:12:56.449 DBG] [T:48] [Game] Session authentication succeeded. sessionId=27edccb4-c747-4214-9277-c45057ec9601, peerId=1
+[11:12:56.504 DBG] [T:56] [Game] The session 27edccb4-c747-4214-9277-c45057ec9601 has been closed. reason="ClientClosing"
+[11:12:56.504 DBG] [T:56] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:56.557 DBG] [T:55] [Game] A new session connected. sessionId=075497e6-e6fa-40fe-bc04-7e3edb7024b9, remoteEndPoint=127.0.0.1:59982
+[11:12:56.557 DBG] [T:49] [Game] Session authentication succeeded. sessionId=075497e6-e6fa-40fe-bc04-7e3edb7024b9, peerId=1
+[11:12:56.608 DBG] [T:55] [Game] The session 075497e6-e6fa-40fe-bc04-7e3edb7024b9 has been closed. reason="ClientClosing"
+[11:12:56.608 DBG] [T:55] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:56.663 DBG] [T:43] [Game] A new session connected. sessionId=ca1a6935-4dd5-414b-afe9-d76d1502b265, remoteEndPoint=127.0.0.1:59983
+[11:12:56.663 DBG] [T:50] [Game] Session authentication succeeded. sessionId=ca1a6935-4dd5-414b-afe9-d76d1502b265, peerId=1
+[11:12:56.718 DBG] [T:55] [Game] The session ca1a6935-4dd5-414b-afe9-d76d1502b265 has been closed. reason="ClientClosing"
+[11:12:56.718 DBG] [T:55] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:56.773 DBG] [T:55] [Game] A new session connected. sessionId=ca208bff-4583-4d57-8372-8aef1736cb22, remoteEndPoint=127.0.0.1:59984
+[11:12:56.774 DBG] [T:51] [Game] Session authentication succeeded. sessionId=ca208bff-4583-4d57-8372-8aef1736cb22, peerId=1
+[11:12:56.825 DBG] [T:43] [Game] The session ca208bff-4583-4d57-8372-8aef1736cb22 has been closed. reason="ClientClosing"
+[11:12:56.825 DBG] [T:43] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:56.876 DBG] [T:55] [Game] A new session connected. sessionId=68ce205a-03c8-4599-a851-f6f29520f604, remoteEndPoint=127.0.0.1:59985
+[11:12:56.876 DBG] [T:52] [Game] Session authentication succeeded. sessionId=68ce205a-03c8-4599-a851-f6f29520f604, peerId=1
+[11:12:56.927 DBG] [T:43] [Game] The session 68ce205a-03c8-4599-a851-f6f29520f604 has been closed. reason="ClientClosing"
+[11:12:56.927 DBG] [T:43] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:56.982 DBG] [T:43] [Game] A new session connected. sessionId=6a0bdc3d-67ee-4443-9924-4e70f7b85f8b, remoteEndPoint=127.0.0.1:59986
+[11:12:56.982 DBG] [T:53] [Game] Session authentication succeeded. sessionId=6a0bdc3d-67ee-4443-9924-4e70f7b85f8b, peerId=1
+[11:12:57.037 DBG] [T:55] [Game] The session 6a0bdc3d-67ee-4443-9924-4e70f7b85f8b has been closed. reason="ClientClosing"
+[11:12:57.037 DBG] [T:55] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:57.092 DBG] [T:43] [Game] A new session connected. sessionId=2637ca97-d862-42f3-807c-dcfe3669d340, remoteEndPoint=127.0.0.1:59987
+[11:12:57.092 DBG] [T:54] [Game] Session authentication succeeded. sessionId=2637ca97-d862-42f3-807c-dcfe3669d340, peerId=1
+[11:12:57.147 DBG] [T:55] [Game] The session 2637ca97-d862-42f3-807c-dcfe3669d340 has been closed. reason="ClientClosing"
+[11:12:57.147 DBG] [T:55] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:57.202 DBG] [T:55] [Game] A new session connected. sessionId=b372643e-a01b-4668-965d-6008b2881ba3, remoteEndPoint=127.0.0.1:59988
+[11:12:57.202 DBG] [T:45] [Game] Session authentication succeeded. sessionId=b372643e-a01b-4668-965d-6008b2881ba3, peerId=1
+[11:12:57.257 DBG] [T:43] [Game] The session b372643e-a01b-4668-965d-6008b2881ba3 has been closed. reason="ClientClosing"
+[11:12:57.257 DBG] [T:43] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:57.312 DBG] [T:10] [Game] A new session connected. sessionId=82eafe7e-91c1-4329-bfcd-e91afc7aaf0f, remoteEndPoint=127.0.0.1:59989
+[11:12:57.312 DBG] [T:46] [Game] Session authentication succeeded. sessionId=82eafe7e-91c1-4329-bfcd-e91afc7aaf0f, peerId=1
+[11:12:57.367 DBG] [T:43] [Game] The session 82eafe7e-91c1-4329-bfcd-e91afc7aaf0f has been closed. reason="ClientClosing"
+[11:12:57.367 DBG] [T:43] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:57.423 DBG] [T:10] [Game] A new session connected. sessionId=c055d943-22de-415d-b406-bec97cfb138c, remoteEndPoint=127.0.0.1:59990
+[11:12:57.423 DBG] [T:47] [Game] Session authentication succeeded. sessionId=c055d943-22de-415d-b406-bec97cfb138c, peerId=1
+[11:12:57.476 DBG] [T:55] [Game] The session c055d943-22de-415d-b406-bec97cfb138c has been closed. reason="ClientClosing"
+[11:12:57.476 DBG] [T:55] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:57.531 DBG] [T:43] [Game] A new session connected. sessionId=5e0c25c8-6e91-4199-b5f8-6627e3f2b5c8, remoteEndPoint=127.0.0.1:59991
+[11:12:57.531 DBG] [T:48] [Game] Session authentication succeeded. sessionId=5e0c25c8-6e91-4199-b5f8-6627e3f2b5c8, peerId=1
+[11:12:57.586 DBG] [T:43] [Game] The session 5e0c25c8-6e91-4199-b5f8-6627e3f2b5c8 has been closed. reason="ClientClosing"
+[11:12:57.586 DBG] [T:43] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:57.637 DBG] [T:43] [Game] A new session connected. sessionId=afa02493-ee40-4bd6-8c5c-7d4046654155, remoteEndPoint=127.0.0.1:59992
+[11:12:57.637 DBG] [T:49] [Game] Session authentication succeeded. sessionId=afa02493-ee40-4bd6-8c5c-7d4046654155, peerId=1
+[11:12:57.687 DBG] [T:10] [Game] The session afa02493-ee40-4bd6-8c5c-7d4046654155 has been closed. reason="ClientClosing"
+[11:12:57.687 DBG] [T:10] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:57.739 DBG] [T:55] [Game] A new session connected. sessionId=274714d5-4c9e-45af-b95d-a5611e08c579, remoteEndPoint=127.0.0.1:59993
+[11:12:57.739 DBG] [T:50] [Game] Session authentication succeeded. sessionId=274714d5-4c9e-45af-b95d-a5611e08c579, peerId=1
+[11:12:57.794 DBG] [T:10] [Game] The session 274714d5-4c9e-45af-b95d-a5611e08c579 has been closed. reason="ClientClosing"
+[11:12:57.794 DBG] [T:10] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:57.849 DBG] [T:55] [Game] A new session connected. sessionId=205238d7-699d-4175-93bf-6597b4463918, remoteEndPoint=127.0.0.1:59994
+[11:12:57.849 DBG] [T:51] [Game] Session authentication succeeded. sessionId=205238d7-699d-4175-93bf-6597b4463918, peerId=1
+[11:12:57.904 DBG] [T:10] [Game] The session 205238d7-699d-4175-93bf-6597b4463918 has been closed. reason="ClientClosing"
+[11:12:57.904 DBG] [T:10] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:57.955 DBG] [T:43] [Game] A new session connected. sessionId=9187efc1-6d3c-4cb4-ba8a-75fa8c1362f9, remoteEndPoint=127.0.0.1:59995
+[11:12:57.955 DBG] [T:52] [Game] Session authentication succeeded. sessionId=9187efc1-6d3c-4cb4-ba8a-75fa8c1362f9, peerId=1
+[11:12:58.006 DBG] [T:43] [Game] The session 9187efc1-6d3c-4cb4-ba8a-75fa8c1362f9 has been closed. reason="ClientClosing"
+[11:12:58.006 DBG] [T:43] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:58.061 DBG] [T:10] [Game] A new session connected. sessionId=57b76243-7297-44a9-bfe5-ebedce837e8a, remoteEndPoint=127.0.0.1:59996
+[11:12:58.061 DBG] [T:53] [Game] Session authentication succeeded. sessionId=57b76243-7297-44a9-bfe5-ebedce837e8a, peerId=1
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=197, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=198, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=199, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=200, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=135, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=136, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=137, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=138, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=139, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=140, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=141, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=142, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=143, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=144, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=145, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=146, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=147, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=148, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=149, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=150, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=151, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=152, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=153, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=154, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=155, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=156, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=157, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=158, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=159, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=160, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=161, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=162, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=163, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=164, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=165, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=166, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=167, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=168, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=169, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=170, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=171, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=172, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=173, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=174, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=175, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=176, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=177, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=178, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=179, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=180, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=181, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=182, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=183, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=184, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=185, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=186, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=187, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=188, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=189, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=190, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=191, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=192, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=193, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=194, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=195, retry=1/5
+[11:12:58.065 DBG] [T:53] [Game] Retrying: seq=196, retry=1/5
+[11:12:58.114 DBG] [T:43] [Game] The session 57b76243-7297-44a9-bfe5-ebedce837e8a has been closed. reason="ClientClosing"
+[11:12:58.114 DBG] [T:43] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:58.165 DBG] [T:43] [Game] A new session connected. sessionId=336855c6-d46a-4158-99ad-84bfca813454, remoteEndPoint=127.0.0.1:59997
+[11:12:58.165 DBG] [T:54] [Game] Session authentication succeeded. sessionId=336855c6-d46a-4158-99ad-84bfca813454, peerId=1
+[11:12:58.215 DBG] [T:43] [Game] The session 336855c6-d46a-4158-99ad-84bfca813454 has been closed. reason="ClientClosing"
+[11:12:58.215 DBG] [T:43] [Game] Peer waiting reconnect registered. peerId=1
+[11:12:58.270 DBG] [T:59] [Game] A new session connected. sessionId=078aa051-ba13-4a2d-93aa-d00986468dcc, remoteEndPoint=127.0.0.1:59998
+[11:12:58.271 DBG] [T:45] [Game] Session authentication succeeded. sessionId=078aa051-ba13-4a2d-93aa-d00986468dcc, peerId=1
+[11:12:58.325 DBG] [T:43] [Game] The session 078aa051-ba13-4a2d-93aa-d00986468dcc has been closed. reason="ClientClosing"
+[11:12:58.325 DBG] [T:43] [Game] Peer[11:25:38.017 INF] [T:1] [Game] Logger setup was successful: Game
+[11:25:38.146 DBG] [T:1] [Game] Discovered 12 commands: [19999, 10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[11:25:38.149 INF] [T:1] [Game] The server Game is initialized.
+[11:25:43.849 INF] [T:1] [Game] Listener (0.0.0.0:10000:"Tcp") was started.
+[11:25:43.852 INF] [T:1] [Game] The server instance Game was been started!
+[11:25:43.852 INF] [T:1] [Game] Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.109, DnsName=
+[11:25:44.198 DBG] [T:43] [Game] A new session connected. sessionId=932092fa-38dc-4d79-a094-c85c204a4d65, remoteEndPoint=127.0.0.1:60079
+[11:25:44.260 DBG] [T:45] [Game] Session authentication succeeded. sessionId=932092fa-38dc-4d79-a094-c85c204a4d65, peerId=1
+[11:27:09.971 DBG] [T:45] [Game] Received a termination request from the client. isClosing=false
+[11:27:09.973 DBG] [T:45] [Game] The session 932092fa-38dc-4d79-a094-c85c204a4d65 has been closed. reason="ClientClosing"
+[11:27:09.976 DBG] [T:45] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[11:35:22.015 DBG] [T:8] [Game] A new session connected. sessionId=02e68ae5-7bba-4df4-8696-46fcd722f44e, remoteEndPoint=127.0.0.1:60102
+[11:35:22.059 DBG] [T:46] [Game] Session authentication succeeded. sessionId=02e68ae5-7bba-4df4-8696-46fcd722f44e, peerId=1
+[11:35:36.953 DBG] [T:46] [Game] Received a termination request from the client. isClosing=false
+[11:35:36.954 DBG] [T:8] [Game] The session 02e68ae5-7bba-4df4-8696-46fcd722f44e has been closed. reason="ClientClosing"
+[11:35:36.954 DBG] [T:8] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[11:36:43.883 DBG] [T:64] [Game] A new session connected. sessionId=59fedf0d-f846-4a2f-a59a-111407770ffb, remoteEndPoint=127.0.0.1:60108
+[11:36:43.921 DBG] [T:47] [Game] Session authentication succeeded. sessionId=59fedf0d-f846-4a2f-a59a-111407770ffb, peerId=1
+[11:43:02.064 DBG] [T:47] [Game] Retrying: seq=1251, retry=1/5
+[11:43:02.065 DBG] [T:47] [Game] Retrying: seq=1252, retry=1/5
+[11:43:02.065 DBG] [T:47] [Game] Retrying: seq=1253, retry=1/5
+[11:43:02.065 DBG] [T:47] [Game] Retrying: seq=1254, retry=1/5
+[11:43:02.065 DBG] [T:47] [Game] Retrying: seq=1255, retry=1/5
+[11:43:02.065 DBG] [T:47] [Game] Retrying: seq=1256, retry=1/5
+[11:43:02.065 DBG] [T:47] [Game] Retrying: seq=1257, retry=1/5
+[11:43:02.065 DBG] [T:47] [Game] Retrying: seq=1258, retry=1/5
+[11:43:02.312 DBG] [T:47] [Game] Retrying: seq=1251, retry=2/5
+[11:43:02.312 DBG] [T:47] [Game] Retrying: seq=1252, retry=2/5
+[11:43:02.312 DBG] [T:47] [Game] Retrying: seq=1253, retry=2/5
+[11:43:02.312 DBG] [T:47] [Game] Retrying: seq=1254, retry=2/5
+[11:43:02.312 DBG] [T:47] [Game] Retrying: seq=1255, retry=2/5
+[11:43:02.312 DBG] [T:47] [Game] Retrying: seq=1256, retry=2/5
+[11:43:02.312 DBG] [T:47] [Game] Retrying: seq=1257, retry=2/5
+[11:43:02.312 DBG] [T:47] [Game] Retrying: seq=1258, retry=2/5
+[11:43:02.362 DBG] [T:47] [Game] Retrying: seq=1259, retry=1/5
+[11:43:02.362 DBG] [T:47] [Game] Retrying: seq=1260, retry=1/5
+[11:43:02.362 DBG] [T:47] [Game] Retrying: seq=1261, retry=1/5
+[11:43:02.362 DBG] [T:47] [Game] Retrying: seq=1262, retry=1/5
+[11:43:02.362 DBG] [T:47] [Game] Retrying: seq=1263, retry=1/5
+[11:43:02.362 DBG] [T:47] [Game] Retrying: seq=1264, retry=1/5
+[11:43:02.362 DBG] [T:47] [Game] Retrying: seq=1265, retry=1/5
+[11:43:02.362 DBG] [T:47] [Game] Retrying: seq=1266, retry=1/5
+[11:43:02.513 DBG] [T:47] [Game] Retrying: seq=1251, retry=3/5
+[11:43:02.513 DBG] [T:47] [Game] Retrying: seq=1252, retry=3/5
+[11:43:02.513 DBG] [T:47] [Game] Retrying: seq=1253, retry=3/5
+[11:43:02.513 DBG] [T:47] [Game] Retrying: seq=1254, retry=3/5
+[11:43:02.513 DBG] [T:47] [Game] Retrying: seq=1255, retry=3/5
+[11:43:02.513 DBG] [T:47] [Game] Retrying: seq=1256, retry=3/5
+[11:43:02.513 DBG] [T:47] [Game] Retrying: seq=1257, retry=3/5
+[11:43:02.513 DBG] [T:47] [Game] Retrying: seq=1258, retry=3/5
+[11:43:02.562 DBG] [T:47] [Game] Retrying: seq=1267, retry=1/5
+[11:43:02.562 DBG] [T:47] [Game] Retrying: seq=1268, retry=1/5
+[11:43:02.611 DBG] [T:47] [Game] Retrying: seq=1259, retry=2/5
+[11:43:02.611 DBG] [T:47] [Game] Retrying: seq=1260, retry=2/5
+[11:43:02.611 DBG] [T:47] [Game] Retrying: seq=1261, retry=2/5
+[11:43:02.611 DBG] [T:47] [Game] Retrying: seq=1262, retry=2/5
+[11:43:02.611 DBG] [T:47] [Game] Retrying: seq=1263, retry=2/5
+[11:43:02.611 DBG] [T:47] [Game] Retrying: seq=1264, retry=2/5
+[11:43:02.611 DBG] [T:47] [Game] Retrying: seq=1265, retry=2/5
+[11:43:02.611 DBG] [T:47] [Game] Retrying: seq=1266, retry=2/5
+[11:43:02.762 DBG] [T:47] [Game] Retrying: seq=1251, retry=4/5
+[11:43:02.762 DBG] [T:47] [Game] Retrying: seq=1252, retry=4/5
+[11:43:02.762 DBG] [T:47] [Game] Retrying: seq=1253, retry=4/5
+[11:43:02.762 DBG] [T:47] [Game] Retrying: seq=1254, retry=4/5
+[11:43:02.762 DBG] [T:47] [Game] Retrying: seq=1255, retry=4/5
+[11:43:02.762 DBG] [T:47] [Game] Retrying: seq=1256, retry=4/5
+[11:43:02.762 DBG] [T:47] [Game] Retrying: seq=1257, retry=4/5
+[11:43:02.762 DBG] [T:47] [Game] Retrying: seq=1258, retry=4/5
+[11:43:02.812 DBG] [T:47] [Game] Retrying: seq=1259, retry=3/5
+[11:43:02.812 DBG] [T:47] [Game] Retrying: seq=1260, retry=3/5
+[11:43:02.812 DBG] [T:47] [Game] Retrying: seq=1261, retry=3/5
+[11:43:02.812 DBG] [T:47] [Game] Retrying: seq=1262, retry=3/5
+[11:43:02.812 DBG] [T:47] [Game] Retrying: seq=1263, retry=3/5
+[11:43:02.812 DBG] [T:47] [Game] Retrying: seq=1264, retry=3/5
+[11:43:02.813 DBG] [T:47] [Game] Retrying: seq=1265, retry=3/5
+[11:43:02.813 DBG] [T:47] [Game] Retrying: seq=1266, retry=3/5
+[11:43:02.813 DBG] [T:47] [Game] Retrying: seq=1267, retry=2/5
+[11:43:02.813 DBG] [T:47] [Game] Retrying: seq=1268, retry=2/5
+[11:43:02.963 DBG] [T:47] [Game] Retrying: seq=1251, retry=5/5
+[11:43:02.963 DBG] [T:47] [Game] Retrying: seq=1252, retry=5/5
+[11:43:02.963 DBG] [T:47] [Game] Retrying: seq=1253, retry=5/5
+[11:43:02.963 DBG] [T:47] [Game] Retrying: seq=1254, retry=5/5
+[11:43:02.963 DBG] [T:47] [Game] Retrying: seq=1255, retry=5/5
+[11:43:02.963 DBG] [T:47] [Game] Retrying: seq=1256, retry=5/5
+[11:43:02.963 DBG] [T:47] [Game] Retrying: seq=1257, retry=5/5
+[11:43:02.963 DBG] [T:47] [Game] Retrying: seq=1258, retry=5/5
+[11:43:03.013 DBG] [T:47] [Game] Retrying: seq=1259, retry=4/5
+[11:43:03.013 DBG] [T:47] [Game] Retrying: seq=1260, retry=4/5
+[11:43:03.013 DBG] [T:47] [Game] Retrying: seq=1261, retry=4/5
+[11:43:03.013 DBG] [T:47] [Game] Retrying: seq=1262, retry=4/5
+[11:43:03.013 DBG] [T:47] [Game] Retrying: seq=1263, retry=4/5
+[11:43:03.013 DBG] [T:47] [Game] Retrying: seq=1264, retry=4/5
+[11:43:03.013 DBG] [T:47] [Game] Retrying: seq=1265, retry=4/5
+[11:43:03.013 DBG] [T:47] [Game] Retrying: seq=1266, retry=4/5
+[11:43:03.013 DBG] [T:47] [Game] Retrying: seq=1267, retry=3/5
+[11:43:03.013 DBG] [T:47] [Game] Retrying: seq=1268, retry=3/5
+[11:43:03.212 ERR] [T:47] [Game] Retry message expired. seq=1251, id=29999
+[11:43:03.214 DBG] [T:72] [Game] The session 59fedf0d-f846-4a2f-a59a-111407770ffb has been closed. reason="LimitExceededRetry"
+[11:43:03.215 DBG] [T:72] [Game] Peer waiting reconnect registered. peerId=1
+[11:43:04.270 DBG] [T:72] [Game] A new session connected. sessionId=cfddfb84-75a1-4597-8618-107ff9da0b4d, remoteEndPoint=127.0.0.1:60132
+[11:43:05.375 DBG] [T:48] [Game] Session authentication succeeded. sessionId=cfddfb84-75a1-4597-8618-107ff9da0b4d, peerId=1
+[11:43:05.412 ERR] [T:48] [Game] Retry message expired. seq=1252, id=29999
+[11:43:05.412 DBG] [T:72] [Game] The session cfddfb84-75a1-4597-8618-107ff9da0b4d has been closed. reason="LimitExceededRetry"
+[11:43:05.412 DBG] [T:72] [Game] Peer waiting reconnect registered. peerId=1
+[11:43:06.420 DBG] [T:72] [Game] A new session connected. sessionId=7a1f2565-6653-4dab-b851-0cadc147dcaa, remoteEndPoint=127.0.0.1:60133
+[11:43:06.420 DBG] [T:49] [Game] Session authentication succeeded. sessionId=7a1f2565-6653-4dab-b851-0cadc147dcaa, peerId=1
+[11:43:06.462 ERR] [T:49] [Game] Retry message expired. seq=1253, id=29999
+[11:43:06.463 DBG] [T:74] [Game] The session 7a1f2565-6653-4dab-b851-0cadc147dcaa has been closed. reason="LimitExceededRetry"
+[11:43:06.463 DBG] [T:74] [Game] Peer waiting reconnect registered. peerId=1
+[11:43:07.995 DBG] [T:57] [Game] A new session connected. sessionId=0b1cd2cc-7f08-4c58-88dc-2eb006c73653, remoteEndPoint=127.0.0.1:60134
+[11:43:07.996 DBG] [T:50] [Game] Session authentication succeeded. sessionId=0b1cd2cc-7f08-4c58-88dc-2eb006c73653, peerId=1
+[11:43:08.011 ERR] [T:50] [Game] Retry message expired. seq=1254, id=29999
+[11:43:08.011 DBG] [T:72] [Game] The session 0b1cd2cc-7f08-4c58-88dc-2eb006c73653 has been closed. reason="LimitExceededRetry"
+[11:43:08.011 DBG] [T:72] [Game] Peer waiting reconnect registered. peerId=1
+[11:43:09.051 DBG] [T:72] [Game] A new session connected. sessionId=e3cbfaa8-6029-48b6-a315-806d22fa3b98, remoteEndPoint=127.0.0.1:60135
+[11:43:09.052 DBG] [T:51] [Game] Session authentication succeeded. sessionId=e3cbfaa8-6029-48b6-a315-806d22fa3b98, peerId=1
+[11:43:09.062 ERR] [T:51] [Game] Retry message expired. seq=1255, id=29999
+[11:43:09.062 DBG] [T:74] [Game] The session e3cbfaa8-6029-48b6-a315-806d22fa3b98 has been closed. reason="LimitExceededRetry"
+[11:43:09.062 DBG] [T:74] [Game] Peer waiting reconnect registered. peerId=1
+[11:43:10.118 DBG] [T:73] [Game] A new session connected. sessionId=d227413b-bb6a-452f-b89a-906b202636c6, remoteEndPoint=127.0.0.1:60136
+[11:43:10.118 DBG] [T:52] [Game] Session authentication succeeded. sessionId=d227413b-bb6a-452f-b89a-906b202636c6, peerId=1
+[11:43:10.162 ERR] [T:52] [Game] Retry message expired. seq=1256, id=29999
+[11:43:10.162 DBG] [T:73] [Game] The session d227413b-bb6a-452f-b89a-906b202636c6 has been closed. reason="LimitExceededRetry"
+[11:43:10.162 DBG] [T:73] [Game] Peer waiting reconnect registered. peerId=1
+[11:43:11.691 DBG] [T:76] [Game] A new session connected. sessionId=68ffeb31-437c-42fc-808a-ee595b4095e8, remoteEndPoint=127.0.0.1:60137
+[11:43:12.294 DBG] [T:53] [Game] Session authentication succeeded. sessionId=68ffeb31-437c-42fc-808a-ee595b4095e8, peerId=1
+[11:43:12.312 ERR] [T:53] [Game] Retry message expired. seq=1257, id=29999
+[11:43:12.312 DBG] [T:73] [Game] The session 68ffeb31-437c-42fc-808a-ee595b4095e8 has been closed. reason="LimitExceededRetry"
+[11:43:12.312 DBG] [T:73] [Game] Peer waiting reconnect registered. peerId=1
+[11:43:13.346 DBG] [T:72] [Game] A new session connected. sessionId=0603bff4-96d1-4f86-bcc8-84cc05494897, remoteEndPoint=127.0.0.1:60138
+[11:43:13.347 DBG] [T:54] [Game] Session authentication succeeded. sessionId=0603bff4-96d1-4f86-bcc8-84cc05494897, peerId=1
+[11:43:13.362 ERR] [T:54] [Game] Retry message expired. seq=1258, id=29999
+[11:43:13.362 DBG] [T:76] [Game] The session 0603bff4-96d1-4f86-bcc8-84cc05494897 has been closed. reason="LimitExceededRetry"
+[11:43:13.362 DBG] [T:76] [Game] Peer waiting reconnect registered. peerId=1
+[11:43:14.413 DBG] [T:72] [Game] A new session connected. sessionId=7dbfb131-74e4-418a-a331-9fe54abf7fa7, remoteEndPoint=127.0.0.1:60139
+[11:43:14.414 DBG] [T:45] [Game] Session authentication succeeded. sessionId=7dbfb131-74e4-418a-a331-9fe54abf7fa7, peerId=1
+[11:43:14.461 DBG] [T:45] [Game] Retrying: seq=1259, retry=5/5
+[11:43:14.461 DBG] [T:45] [Game] Retrying: seq=1260, retry=5/5
+[11:43:14.461 DBG] [T:45] [Game] Retrying: seq=1261, retry=5/5
+[11:43:14.461 DBG] [T:45] [Game] Retrying: seq=1262, retry=5/5
+[11:43:14.461 DBG] [T:45] [Game] Retrying: seq=1263, retry=5/5
+[11:43:14.461 DBG] [T:45] [Game] Retrying: seq=1264, retry=5/5
+[11:43:14.461 DBG] [T:45] [Game] Retrying: seq=1265, retry=5/5
+[11:43:14.461 DBG] [T:45] [Game] Retrying: seq=1266, retry=5/5
+[11:43:14.461 DBG] [T:45] [Game] Retrying: seq=1267, retry=4/5
+[11:43:14.461 DBG] [T:45] [Game] Retrying: seq=1268, retry=4/5
+[11:43:14.663 ERR] [T:45] [Game] Retry message expired. seq=1259, id=29999
+[11:43:14.666 DBG] [T:72] [Game] The session 7dbfb131-74e4-418a-a331-9fe54abf7fa7 has been closed. reason="LimitExceededRetry"
+[11:43:14.666 DBG] [T:72] [Game] Peer waiting reconnect registered. peerId=1
+[11:43:16.690 DBG] [T:72] [Game] A new session connected. sessionId=306fa44d-7933-4030-9e3c-4f9c672e0596, remoteEndPoint=127.0.0.1:60140
+[11:43:16.691 DBG] [T:46] [Game] Session authentication succeeded. sessionId=306fa44d-7933-4030-9e3c-4f9c672e0596, peerId=1
+[11:43:16.712 ERR] [T:46] [Game] Retry message expired. seq=1260, id=29999
+[11:43:16.712 DBG] [T:57] [Game] The session 306fa44d-7933-4030-9e3c-4f9c672e0596 has been closed. reason="LimitExceededRetry"
+[11:43:16.712 DBG] [T:57] [Game] Peer waiting reconnect registered. peerId=1
+[11:43:17.762 DBG] [T:57] [Game] A new session connected. sessionId=8b07d2d1-1eff-4547-83fb-5efe847f19cc, remoteEndPoint=127.0.0.1:60141
+[11:43:17.763 DBG] [T:47] [Game] Session authentication succeeded. sessionId=8b07d2d1-1eff-4547-83fb-5efe847f19cc, peerId=1
+[11:43:17.813 ERR] [T:47] [Game] Retry message expired. seq=1261, id=29999
+[11:43:17.813 DBG] [T:47] [Game] The session 8b07d2d1-1eff-4547-83fb-5efe847f19cc has been closed. reason="LimitExceededRetry"
+[11:43:17.813 DBG] [T:47] [Game] Peer waiting reconnect registered. peerId=1
+[11:43:18.844 DBG] [T:74] [Game] A new session connected. sessionId=b64fb501-0b1f-43ee-a322-ef459c24106e, remoteEndPoint=127.0.0.1:60142
+[11:43:18.845 DBG] [T:48] [Game] Session authentication succeeded. sessionId=b64fb501-0b1f-43ee-a322-ef459c24106e, peerId=1
+[11:43:18.862 ERR] [T:48] [Game] Retry message expired. seq=1262, id=29999
+[11:43:18.862 DBG] [T:73] [Game] The session b64fb501-0b1f-43ee-a322-ef459c24106e has been closed. reason="LimitExceededRetry"
+[11:43:18.862 DBG] [T:73] [Game] Peer waiting reconnect registered. peerId=1
+[11:45:43.875 DBG] [T:57] [Game] Client terminated due to timeout. peerId=1
+[12:02:15.464 DBG] [T:89] [Game] A new session connected. sessionId=4865c66b-8dd0-466b-a5b9-45df8c7f1e45, remoteEndPoint=127.0.0.1:60254
+[12:02:16.126 DBG] [T:49] [Game] Session authentication succeeded. sessionId=4865c66b-8dd0-466b-a5b9-45df8c7f1e45, peerId=1
+[12:48:25.910 DBG] [T:49] [Game] Received a termination request from the client. isClosing=false
+[12:48:25.911 DBG] [T:55] [Game] The session 4865c66b-8dd0-466b-a5b9-45df8c7f1e45 has been closed. reason="ClientClosing"
+[12:48:25.912 DBG] [T:55] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[13:10:16.482 INF] [T:1] [Game] Logger setup was successful: Game
+[13:10:16.620 DBG] [T:1] [Game] Discovered 12 commands: [19999, 10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[13:10:16.622 INF] [T:1] [Game] The server Game is initialized.
+[13:10:22.354 INF] [T:1] [Game] Listener (0.0.0.0:10000:"Tcp") was started.
+[13:10:22.357 INF] [T:1] [Game] The server instance Game was been started!
+[13:10:22.358 INF] [T:1] [Game] Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.109, DnsName=
+[13:10:28.015 DBG] [T:44] [Game] A new session connected. sessionId=c49c6731-1452-4dcd-bcd3-b73116aeaf74, remoteEndPoint=127.0.0.1:61077
+[13:10:28.113 DBG] [T:45] [Game] Session authentication succeeded. sessionId=c49c6731-1452-4dcd-bcd3-b73116aeaf74, peerId=1
+[13:11:48.906 DBG] [T:45] [Game] Received a termination request from the client. isClosing=false
+[13:11:48.909 DBG] [T:43] [Game] The session c49c6731-1452-4dcd-bcd3-b73116aeaf74 has been closed. reason="ClientClosing"
+[13:11:48.911 DBG] [T:43] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[13:18:38.060 DBG] [T:57] [Game] A new session connected. sessionId=80e0b4ff-ad8a-45d9-87ac-7ad401bb38ce, remoteEndPoint=127.0.0.1:61168
+[13:18:38.104 DBG] [T:46] [Game] Session authentication succeeded. sessionId=80e0b4ff-ad8a-45d9-87ac-7ad401bb38ce, peerId=1
+[13:20:36.353 DBG] [T:46] [Game] Received a termination request from the client. isClosing=false
+[13:20:36.353 DBG] [T:65] [Game] The session 80e0b4ff-ad8a-45d9-87ac-7ad401bb38ce has been closed. reason="ClientClosing"
+[13:20:36.354 DBG] [T:65] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[13:30:18.865 DBG] [T:66] [Game] A new session connected. sessionId=d63aa755-1465-41d6-b215-8749c9ba748a, remoteEndPoint=127.0.0.1:61253
+[13:30:18.911 DBG] [T:47] [Game] Session authentication succeeded. sessionId=d63aa755-1465-41d6-b215-8749c9ba748a, peerId=1
+[13:40:23.701 DBG] [T:47] [Game] Received a termination request from the client. isClosing=false
+[13:40:23.701 DBG] [T:89] [Game] The session d63aa755-1465-41d6-b215-8749c9ba748a has been closed. reason="ClientClosing"
+[13:40:23.701 DBG] [T:89] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[13:41:07.783 DBG] [T:90] [Game] A new session connected. sessionId=f72938c2-ffb9-4eb1-9609-b9d58c4a8115, remoteEndPoint=127.0.0.1:61321
+[13:41:07.819 DBG] [T:48] [Game] Session authentication succeeded. sessionId=f72938c2-ffb9-4eb1-9609-b9d58c4a8115, peerId=1
+[13:43:32.240 DBG] [T:48] [Game] Received a termination request from the client. isClosing=false
+[13:43:32.240 DBG] [T:90] [Game] The session f72938c2-ffb9-4eb1-9609-b9d58c4a8115 has been closed. reason="ClientClosing"
+[13:43:32.241 DBG] [T:90] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[13:43:39.571 DBG] [T:80] [Game] A new session connected. sessionId=16395679-126e-4b51-8280-94ec4771187c, remoteEndPoint=127.0.0.1:61325
+[13:43:39.606 DBG] [T:49] [Game] Session authentication succeeded. sessionId=16395679-126e-4b51-8280-94ec4771187c, peerId=1
+[13:47:58.375 DBG] [T:49] [Game] Received a termination request from the client. isClosing=false
+[13:47:58.378 DBG] [T:94] [Game] The session 16395679-126e-4b51-8280-94ec4771187c has been closed. reason="ClientClosing"
+[13:47:58.378 DBG] [T:94] [Game] Peer leaved. uid=0, reason="ClientClosing"

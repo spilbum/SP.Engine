@@ -86,8 +86,8 @@ public class RankServer : Engine
     private readonly List<string> _acceptServers = [];
     private readonly CancellationToken _shutdown;
     private HttpRpc? _resourceRpc;
-    
-    public ServerGroupType GroupType { get; private set; }
+
+    public ServerGroupType ServerGroupType { get; private set; }
     
     public RankServer(CancellationToken shutdown)
     {
@@ -103,6 +103,7 @@ public class RankServer : Engine
         var config = EngineConfigBuilder.Create()
             .WithNetwork(n => n with
             {
+                LimitConnectionCount = 100
             })
             .WithSession(s => s with
             {
@@ -120,10 +121,10 @@ public class RankServer : Engine
         if (!base.Initialize(buildConfig.Server.Name, config))
             return false;
 
-        if (!Enum.TryParse(buildConfig.Server.GroupType, out ServerGroupType groupType))
+        if (!Enum.TryParse(buildConfig.Server.Group, out ServerGroupType group))
             return false;
         
-        GroupType = groupType;
+        ServerGroupType = group;
 
         foreach (var database in buildConfig.Database)
         {
@@ -176,7 +177,7 @@ public class RankServer : Engine
             var req = new SyncServerListReq
             {
                 List = list,
-                ServerGroupType = GroupType,
+                ServerGroupType = ServerGroupType,
                 UpdatedUtcMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
             };
 

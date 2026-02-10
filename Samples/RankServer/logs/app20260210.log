@@ -1,0 +1,322 @@
+[10:06:45.364 INF] [T:1] [Rank] Logger setup was successful: Rank
+[10:06:45.502 DBG] [T:1] [Rank] [Engine] Discovered '5' commands: [3003, 3002, 3001, 3000, 1000]
+[10:06:45.503 INF] [T:1] [Rank] The server Rank is initialized.
+[10:06:45.830 DBG] [T:1] [Rank] [Daily] Reward loaded. season="Daily"/1, uid=1, rank=2, score=30, isRewarded=false, item=[0:0:70]
+[10:06:45.830 DBG] [T:1] [Rank] [Daily] Reward loaded. season="Daily"/1, uid=2, rank=1, score=40, isRewarded=false, item=[0:0:100]
+[10:06:45.830 DBG] [T:1] [Rank] [Daily] Reward loaded. season="Daily"/1, uid=1000001, rank=3, score=10, isRewarded=false, item=[0:0:50]
+[10:06:45.830 DBG] [T:1] [Rank] [Daily] Reward loaded. season="Daily"/12, uid=1000001, rank=1, score=30, isRewarded=false, item=[0:0:100]
+[10:06:45.842 INF] [T:1] [Rank] [Daily] Season loaded. kind="Daily", num=80, state="Running", start="2026-02-08T00:00:00.0000000+09:00", end="2026-02-09T00:00:00.0000000+09:00"
+[10:06:45.844 INF] [T:1] [Rank] Listener (0.0.0.0:20001:"Tcp") was started.
+[10:06:45.846 INF] [T:1] [Rank] The server instance Rank was been started!
+[10:06:45.866 DBG] [T:12] [Rank] [Daily] Reward loaded. season="Daily"/1, uid=1, rank=2, score=30, isRewarded=false, item=[0:0:70]
+[10:06:45.866 DBG] [T:12] [Rank] [Daily] Reward loaded. season="Daily"/1, uid=2, rank=1, score=40, isRewarded=false, item=[0:0:100]
+[10:06:45.866 DBG] [T:12] [Rank] [Daily] Reward loaded. season="Daily"/1, uid=1000001, rank=3, score=10, isRewarded=false, item=[0:0:50]
+[10:06:45.866 DBG] [T:12] [Rank] [Daily] Reward loaded. season="Daily"/12, uid=1000001, rank=1, score=30, isRewarded=false, item=[0:0:100]
+[10:06:45.963 INF] [T:12] [Rank] [Daily] Next season scheduled. kind="Daily", num=81, start="2026-02-10T00:00:00.0000000+00:00", end="2026-02-11T00:00:00.0000000+00:00"
+[10:06:55.908 ERR] [T:8] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:07:05.849 ERR] [T:25] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:07:08.202 DBG] [T:25] [Rank] A new session connected. sessionId=786af302-d7a1-44ee-8d14-ba439e173bb3, remoteEndPoint=127.0.0.1:49339
+[10:07:08.260 DBG] [T:15] [Rank] Session authentication succeeded. sessionId=786af302-d7a1-44ee-8d14-ba439e173bb3, peerId=1
+[10:07:08.300 INF] [T:15] [Rank] Server Game registered.
+[10:07:15.510 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:07:14.505Z CPU=0.0% WS=77.42MB Managed=194.05MB Threads=35
+[10:07:15.859 ERR] [T:28] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:07:25.848 ERR] [T:10] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:07:35.848 ERR] [T:27] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:07:45.505 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:07:44.505Z CPU=0.0% WS=80.33MB Managed=195.21MB Threads=33
+[10:07:45.850 ERR] [T:28] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:07:55.848 ERR] [T:25] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:08:05.848 ERR] [T:28] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:08:15.505 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:08:14.505Z CPU=0.0% WS=85.52MB Managed=193.43MB Threads=33
+[10:08:15.848 ERR] [T:10] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:08:25.848 ERR] [T:25] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:08:35.848 ERR] [T:28] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:08:45.505 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:08:44.505Z CPU=0.0% WS=87.50MB Managed=194.32MB Threads=34
+[10:08:45.848 ERR] [T:11] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:08:55.848 ERR] [T:8] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:09:05.849 ERR] [T:8] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:09:15.506 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:09:14.504Z CPU=0.0% WS=88.19MB Managed=195.33MB Threads=33
+[10:09:15.849 ERR] [T:34] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:09:25.850 ERR] [T:8] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:09:35.849 ERR] [T:34] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:09:45.505 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:09:44.506Z CPU=0.0% WS=90.00MB Managed=196.24MB Threads=33
+[10:09:45.848 ERR] [T:26] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:09:55.848 ERR] [T:26] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:10:05.848 ERR] [T:26] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:10:15.506 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:10:14.506Z CPU=0.0% WS=90.53MB Managed=197.12MB Threads=32
+[10:10:15.849 ERR] [T:3] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:10:25.848 ERR] [T:8] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:10:35.849 ERR] [T:8] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:10:45.506 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:10:44.505Z CPU=0.0% WS=90.80MB Managed=197.98MB Threads=32
+[10:10:45.849 ERR] [T:29] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:10:55.848 ERR] [T:34] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:11:05.848 ERR] [T:26] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:11:15.506 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:11:14.505Z CPU=0.0% WS=91.72MB Managed=198.87MB Threads=32
+[10:11:15.849 ERR] [T:34] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:11:25.849 ERR] [T:34] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:11:35.849 ERR] [T:36] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:11:45.506 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:11:44.506Z CPU=0.0% WS=92.77MB Managed=199.77MB Threads=33
+[10:11:45.850 ERR] [T:36] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:11:55.850 ERR] [T:29] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:12:05.849 ERR] [T:36] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:12:15.507 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:12:14.507Z CPU=0.0% WS=94.14MB Managed=192.76MB Threads=34
+[10:12:15.850 ERR] [T:34] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:12:25.849 ERR] [T:29] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:12:35.849 ERR] [T:34] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:12:45.507 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:12:44.506Z CPU=0.0% WS=94.19MB Managed=193.70MB Threads=32
+[10:12:45.849 ERR] [T:33] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:12:55.850 ERR] [T:30] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:13:05.848 ERR] [T:30] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:13:15.507 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:13:14.506Z CPU=0.0% WS=94.28MB Managed=194.59MB Threads=33
+[10:13:15.847 ERR] [T:36] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:13:25.850 ERR] [T:33] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:13:35.850 ERR] [T:33] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:13:45.507 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:13:44.506Z CPU=0.1% WS=93.31MB Managed=195.48MB Threads=33
+[10:13:45.849 ERR] [T:36] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:13:55.850 ERR] [T:3] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:14:05.850 ERR] [T:33] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:14:15.506 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:14:14.507Z CPU=0.0% WS=93.36MB Managed=196.38MB Threads=34
+[10:14:15.850 ERR] [T:34] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:14:25.849 ERR] [T:36] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:14:35.852 ERR] [T:31] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:14:45.508 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:14:44.507Z CPU=0.0% WS=93.25MB Managed=197.25MB Threads=33
+[10:14:45.850 ERR] [T:36] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:14:55.850 ERR] [T:31] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:15:05.851 ERR] [T:36] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:15:15.507 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:15:14.507Z CPU=0.0% WS=93.19MB Managed=198.14MB Threads=32
+[10:15:15.850 ERR] [T:31] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:15:25.850 ERR] [T:36] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:15:35.851 ERR] [T:31] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:15:45.507 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:15:44.508Z CPU=0.1% WS=93.19MB Managed=199.00MB Threads=32
+[10:15:45.851 ERR] [T:31] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:15:55.851 ERR] [T:31] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:16:05.851 ERR] [T:34] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:16:15.508 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:16:15.508Z CPU=0.0% WS=93.17MB Managed=199.91MB Threads=32
+[10:16:15.851 ERR] [T:34] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:16:25.851 ERR] [T:27] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:16:35.849 ERR] [T:31] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:16:45.508 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:16:44.508Z CPU=0.0% WS=93.38MB Managed=192.93MB Threads=34
+[10:16:45.851 ERR] [T:27] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:16:55.852 ERR] [T:28] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:17:05.852 ERR] [T:27] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:17:15.508 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:17:14.508Z CPU=0.0% WS=94.20MB Managed=193.83MB Threads=32
+[10:17:15.851 ERR] [T:27] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:17:25.850 ERR] [T:33] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:17:35.851 ERR] [T:34] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:17:45.508 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:17:44.509Z CPU=0.0% WS=94.36MB Managed=194.72MB Threads=33
+[10:17:45.851 ERR] [T:28] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:17:55.850 ERR] [T:34] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:18:05.850 ERR] [T:28] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:18:15.508 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:18:14.508Z CPU=0.0% WS=94.33MB Managed=195.61MB Threads=34
+[10:18:15.851 ERR] [T:34] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:18:25.851 ERR] [T:33] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:18:35.852 ERR] [T:8] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:18:45.509 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:18:44.509Z CPU=0.0% WS=94.36MB Managed=196.48MB Threads=33
+[10:18:45.851 ERR] [T:34] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:18:55.851 ERR] [T:34] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:19:05.851 ERR] [T:30] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:19:15.509 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:19:14.509Z CPU=0.0% WS=94.41MB Managed=197.39MB Threads=33
+[10:19:15.851 ERR] [T:28] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:19:25.851 ERR] [T:8] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:19:35.850 ERR] [T:28] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:19:45.510 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:19:44.509Z CPU=0.0% WS=94.36MB Managed=198.25MB Threads=33
+[10:19:45.851 ERR] [T:34] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:19:55.850 ERR] [T:11] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:20:05.852 ERR] [T:34] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:20:15.509 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:20:14.509Z CPU=0.0% WS=94.36MB Managed=199.14MB Threads=33
+[10:20:15.851 ERR] [T:28] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:20:25.852 ERR] [T:28] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:20:35.851 ERR] [T:11] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:20:45.509 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:20:44.510Z CPU=0.0% WS=94.42MB Managed=200.02MB Threads=35
+[10:20:45.852 ERR] [T:34] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:20:55.852 ERR] [T:10] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:21:05.852 ERR] [T:10] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:21:15.510 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:21:14.510Z CPU=0.0% WS=94.41MB Managed=193.11MB Threads=33
+[10:21:15.851 ERR] [T:37] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:21:25.852 ERR] [T:34] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:21:35.854 ERR] [T:10] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:21:42.672 DBG] [T:15] [Rank] Received a termination request from the client. isClosing=false
+[10:21:42.675 DBG] [T:28] [Rank] The session 786af302-d7a1-44ee-8d14-ba439e173bb3 has been closed. reason="ClientClosing"
+[10:21:45.510 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:21:44.510Z CPU=0.0% WS=94.62MB Managed=194.06MB Threads=33
+[10:21:45.851 ERR] [T:28] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:21:55.853 ERR] [T:28] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:22:05.853 ERR] [T:34] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:22:15.511 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:22:14.510Z CPU=0.0% WS=94.72MB Managed=194.85MB Threads=34
+[10:22:15.851 ERR] [T:10] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:22:25.853 ERR] [T:8] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:22:35.853 ERR] [T:30] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:22:37.848 DBG] [T:30] [Rank] A new session connected. sessionId=1cdf0e76-9426-47d0-9c6f-03fa05925dea, remoteEndPoint=127.0.0.1:49783
+[10:22:37.897 DBG] [T:16] [Rank] Session authentication succeeded. sessionId=1cdf0e76-9426-47d0-9c6f-03fa05925dea, peerId=1
+[10:22:37.926 INF] [T:16] [Rank] Server Game registered.
+[10:22:45.509 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:22:44.508Z CPU=0.0% WS=94.92MB Managed=196.06MB Threads=35
+[10:22:45.852 ERR] [T:10] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:22:55.850 ERR] [T:37] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:23:05.850 ERR] [T:34] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:23:15.508 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:23:14.507Z CPU=0.0% WS=94.84MB Managed=196.97MB Threads=33
+[10:23:15.851 ERR] [T:34] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:23:25.851 ERR] [T:30] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:23:35.852 ERR] [T:38] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:23:45.508 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:23:44.508Z CPU=0.0% WS=94.88MB Managed=197.85MB Threads=34
+[10:23:45.851 ERR] [T:37] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:23:55.850 ERR] [T:38] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:24:05.850 ERR] [T:37] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:24:15.508 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:24:14.507Z CPU=0.0% WS=94.81MB Managed=198.72MB Threads=33
+[10:24:15.852 ERR] [T:40] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:24:25.851 ERR] [T:25] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:24:35.850 ERR] [T:37] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:24:45.508 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:24:44.508Z CPU=0.0% WS=94.88MB Managed=199.61MB Threads=33
+[10:24:45.852 ERR] [T:25] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:24:55.850 ERR] [T:38] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:25:12.001 INF] [T:1] [Rank] Logger setup was successful: Rank
+[10:25:12.137 DBG] [T:1] [Rank] [Engine] Discovered '5' commands: [3003, 3002, 3001, 3000, 1000]
+[10:25:12.138 INF] [T:1] [Rank] The server Rank is initialized.
+[10:25:12.383 DBG] [T:1] [Rank] [Daily] Reward loaded. season="Daily"/1, uid=1, rank=2, score=30, isRewarded=false, item=[0:0:70]
+[10:25:12.383 DBG] [T:1] [Rank] [Daily] Reward loaded. season="Daily"/1, uid=2, rank=1, score=40, isRewarded=false, item=[0:0:100]
+[10:25:12.383 DBG] [T:1] [Rank] [Daily] Reward loaded. season="Daily"/1, uid=1000001, rank=3, score=10, isRewarded=false, item=[0:0:50]
+[10:25:12.383 DBG] [T:1] [Rank] [Daily] Reward loaded. season="Daily"/12, uid=1000001, rank=1, score=30, isRewarded=false, item=[0:0:100]
+[10:25:12.389 INF] [T:1] [Rank] [Daily] Season loaded. kind="Daily", num=81, state="Running", start="2026-02-10T00:00:00.0000000+09:00", end="2026-02-11T00:00:00.0000000+09:00"
+[10:25:12.391 INF] [T:1] [Rank] Listener (0.0.0.0:20001:"Tcp") was started.
+[10:25:12.393 INF] [T:1] [Rank] The server instance Rank was been started!
+[10:25:22.223 DBG] [T:11] [Rank] A new session connected. sessionId=928f4a87-f362-40bd-87e9-c332878043d0, remoteEndPoint=127.0.0.1:49851
+[10:25:22.253 ERR] [T:16] [Rank] Session authentication failed ("SessionNotFound"). No waiting reconnection peer found for sessionId=1cdf0e76-9426-47d0-9c6f-03fa05925dea
+stackTrace=   at SP.Engine.Server.Session.OnSessionHandshake(SessionAuthReq data) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Server/Session.cs:line 101
+[10:25:22.275 DBG] [T:15] [Rank] A new session connected. sessionId=e35e08da-f64a-4211-bd20-4d1fcf590366, remoteEndPoint=127.0.0.1:49852
+[10:25:22.313 DBG] [T:17] [Rank] Session authentication succeeded. sessionId=e35e08da-f64a-4211-bd20-4d1fcf590366, peerId=1
+[10:25:22.378 INF] [T:17] [Rank] Server Game registered.
+[10:25:22.428 ERR] [T:11] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:25:32.408 ERR] [T:10] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:25:42.147 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:25:41.139Z CPU=0.0% WS=115.42MB Managed=12.00MB Threads=33
+[10:25:42.394 ERR] [T:15] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:25:52.395 ERR] [T:28] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:26:02.395 ERR] [T:10] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:26:12.141 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:26:11.140Z CPU=0.0% WS=118.38MB Managed=12.94MB Threads=35
+[10:26:12.395 ERR] [T:10] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:26:22.395 ERR] [T:10] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:26:32.396 ERR] [T:28] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:26:42.140 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:26:41.139Z CPU=0.0% WS=120.69MB Managed=13.84MB Threads=34
+[10:26:42.397 ERR] [T:11] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:26:52.409 ERR] [T:15] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:27:02.397 ERR] [T:11] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:27:12.140 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:27:11.139Z CPU=0.0% WS=122.48MB Managed=10.33MB Threads=35
+[10:27:12.395 ERR] [T:11] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:27:22.396 ERR] [T:10] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:27:32.397 ERR] [T:8] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:27:42.141 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:27:41.140Z CPU=0.0% WS=122.98MB Managed=11.32MB Threads=33
+[10:27:42.398 ERR] [T:34] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:27:52.395 ERR] [T:3] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:28:02.395 ERR] [T:11] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:28:12.140 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:28:11.140Z CPU=0.0% WS=88.64MB Managed=12.21MB Threads=33
+[10:28:12.397 ERR] [T:11] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:28:22.396 ERR] [T:3] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:28:32.396 ERR] [T:8] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:28:42.141 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:28:41.140Z CPU=0.0% WS=90.23MB Managed=13.10MB Threads=32
+[10:28:42.396 ERR] [T:8] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:28:52.396 ERR] [T:3] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:29:02.395 ERR] [T:30] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:29:12.142 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:29:12.141Z CPU=0.0% WS=90.11MB Managed=14.02MB Threads=33
+[10:29:12.395 ERR] [T:26] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:29:22.395 ERR] [T:30] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:29:32.396 ERR] [T:11] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:29:42.140 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:29:41.140Z CPU=0.0% WS=89.97MB Managed=14.90MB Threads=34
+[10:29:42.395 ERR] [T:11] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:29:52.397 ERR] [T:11] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:30:02.397 ERR] [T:3] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:30:12.142 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:30:11.141Z CPU=0.0% WS=90.23MB Managed=15.78MB Threads=33
+[10:30:12.395 ERR] [T:11] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:30:22.396 ERR] [T:39] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:30:32.394 ERR] [T:26] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:30:42.142 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:30:41.141Z CPU=0.0% WS=92.11MB Managed=16.68MB Threads=34
+[10:30:42.396 ERR] [T:36] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:30:52.394 ERR] [T:3] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:31:02.394 ERR] [T:39] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:31:12.141 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:31:11.141Z CPU=0.0% WS=93.11MB Managed=17.57MB Threads=33
+[10:31:12.395 ERR] [T:36] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:31:12.395 DBG] [T:36] [Rank] The session 928f4a87-f362-40bd-87e9-c332878043d0 will be closed for 350.132732 timeout, the session start time: "2026-02-10T01:25:22.2214280Z", last active time: "2026-02-10T01:25:22.2625820Z"
+[10:31:12.411 DBG] [T:17] [Rank] Received a termination request from the client. isClosing=false
+[10:31:12.414 DBG] [T:11] [Rank] The session e35e08da-f64a-4211-bd20-4d1fcf590366 has been closed. reason="ClientClosing"
+[10:31:22.393 ERR] [T:11] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:31:32.394 ERR] [T:39] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:31:42.141 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:31:41.142Z CPU=0.2% WS=93.75MB Managed=10.58MB Threads=34
+[10:31:42.394 ERR] [T:39] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:31:52.394 ERR] [T:38] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:32:02.394 ERR] [T:40] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:32:12.141 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:32:11.141Z CPU=0.2% WS=94.67MB Managed=11.37MB Threads=36
+[10:32:12.394 ERR] [T:40] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:32:22.393 ERR] [T:35] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:32:32.394 ERR] [T:38] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:32:42.142 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:32:41.142Z CPU=0.2% WS=94.75MB Managed=12.17MB Threads=37
+[10:32:42.394 ERR] [T:34] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:32:52.393 ERR] [T:33] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:33:02.394 ERR] [T:30] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:33:12.142 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:33:11.141Z CPU=0.2% WS=94.80MB Managed=12.98MB Threads=35
+[10:33:12.394 ERR] [T:35] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:33:12.396 DBG] [T:3] [Rank] Client terminated due to timeout. sessionId=928f4a87-f362-40bd-87e9-c332878043d0
+[10:33:12.396 DBG] [T:36] [Rank] The session 928f4a87-f362-40bd-87e9-c332878043d0 has been closed. reason="ServerClosing"
+[10:33:22.397 ERR] [T:35] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:33:32.398 ERR] [T:36] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:33:42.143 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:33:41.142Z CPU=0.0% WS=94.61MB Managed=13.77MB Threads=32
+[10:33:42.396 ERR] [T:38] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:33:52.397 ERR] [T:3] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:34:02.397 ERR] [T:40] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:34:12.142 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:34:11.142Z CPU=0.0% WS=91.19MB Managed=14.53MB Threads=32
+[10:34:12.398 ERR] [T:3] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:34:22.398 ERR] [T:38] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:34:32.396 ERR] [T:38] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:34:42.143 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:34:41.142Z CPU=0.0% WS=91.22MB Managed=15.29MB Threads=32
+[10:34:42.396 ERR] [T:32] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:34:52.398 ERR] [T:35] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:35:02.395 ERR] [T:40] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:35:12.143 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:35:11.143Z CPU=0.0% WS=91.77MB Managed=16.07MB Threads=33
+[10:35:12.395 ERR] [T:38] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:35:22.397 ERR] [T:35] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:35:32.398 ERR] [T:36] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:35:42.143 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:35:41.142Z CPU=0.0% WS=92.31MB Managed=16.84MB Threads=33
+[10:35:42.397 ERR] [T:38] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:35:52.398 ERR] [T:38] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:36:02.397 ERR] [T:32] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:36:12.144 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:36:12.143Z CPU=0.0% WS=92.33MB Managed=9.77MB Threads=33
+[10:36:12.400 ERR] [T:32] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:36:22.397 ERR] [T:3] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:36:32.398 ERR] [T:32] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:36:42.144 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:36:41.143Z CPU=0.0% WS=92.34MB Managed=10.54MB Threads=33
+[10:36:42.397 ERR] [T:32] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:36:52.397 ERR] [T:38] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:37:02.397 ERR] [T:36] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:37:12.144 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:37:11.143Z CPU=0.0% WS=92.34MB Managed=11.32MB Threads=33
+[10:37:12.398 ERR] [T:38] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:37:22.397 ERR] [T:38] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:37:32.398 ERR] [T:3] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:37:42.144 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:37:41.143Z CPU=0.0% WS=92.28MB Managed=12.08MB Threads=32
+[10:37:42.398 ERR] [T:40] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:37:52.397 ERR] [T:38] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:38:02.399 ERR] [T:38] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:38:12.144 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:38:11.144Z CPU=0.0% WS=92.30MB Managed=12.84MB Threads=33
+[10:38:12.399 ERR] [T:36] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:38:22.398 ERR] [T:36] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:38:32.399 ERR] [T:3] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:38:42.144 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:38:41.143Z CPU=0.0% WS=92.28MB Managed=13.60MB Threads=32
+[10:38:42.399 ERR] [T:3] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:38:52.399 ERR] [T:38] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:39:02.399 ERR] [T:35] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:39:12.144 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:39:11.144Z CPU=0.0% WS=92.30MB Managed=14.36MB Threads=33
+[10:39:12.399 ERR] [T:38] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:39:22.402 ERR] [T:35] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:39:32.398 ERR] [T:35] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:39:42.145 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:39:41.143Z CPU=0.0% WS=92.31MB Managed=15.13MB Threads=33
+[10:39:42.399 ERR] [T:40] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:39:52.399 ERR] [T:36] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:40:02.401 ERR] [T:36] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:40:12.144 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:40:11.144Z CPU=0.0% WS=92.31MB Managed=15.90MB Threads=33
+[10:40:12.399 ERR] [T:36] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:40:22.399 ERR] [T:3] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:40:32.399 ERR] [T:38] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:40:42.148 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:40:41.144Z CPU=0.0% WS=92.36MB Managed=16.67MB Threads=33
+[10:40:42.399 ERR] [T:35] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:40:52.400 ERR] [T:34] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:41:02.400 ERR] [T:37] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:41:12.144 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:41:11.144Z CPU=0.0% WS=92.50MB Managed=17.45MB Threads=34
+[10:41:12.400 ERR] [T:34] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:41:22.402 ERR] [T:36] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:41:32.399 ERR] [T:40] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:41:42.145 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:41:42.145Z CPU=0.0% WS=92.42MB Managed=10.31MB Threads=33
+[10:41:42.399 ERR] [T:33] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError
+[10:41:52.399 ERR] [T:36] [Rank] RpcException: HTTP request failed: Connection refused (localhost:5001), error=TransportError

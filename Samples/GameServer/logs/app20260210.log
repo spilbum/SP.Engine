@@ -1,0 +1,96 @@
+[10:07:02.285 INF] [T:1] [Game] Logger setup was successful: Game
+[10:07:02.425 DBG] [T:1] [Game] [Engine] Discovered '12' commands: [19999, 10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[10:07:02.439 DBG] [T:1] [Game] [NetPeer] Discovered '5' commands: [4003, 4002, 4001, 4000, 2000]
+[10:07:02.441 INF] [T:1] [Game] The server Game is initialized.
+[10:07:08.164 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[10:07:08.167 INF] [T:1] [Game] The server instance Game was been started!
+[10:07:08.168 INF] [T:1] [Game] [Rank] State changed: "None" -> "Connecting"
+[10:07:08.168 INF] [T:1] [Game] Group=Dev, Name=Game, Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.109, DnsName=
+[10:07:08.200 INF] [T:10] [Game] [Rank] State changed: "Connecting" -> "Handshake"
+[10:07:08.293 INF] [T:43] [Game] [Rank] State changed: "Handshake" -> "Open"
+[10:07:08.293 DBG] [T:43] [Game] [Rank] Connected
+[10:07:08.321 INF] [T:7] [Game] Register succeeded: Rank
+[10:22:31.970 INF] [T:1] [Game] Logger setup was successful: Game
+[10:22:32.092 DBG] [T:1] [Game] [Engine] Discovered '12' commands: [19999, 10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[10:22:32.106 DBG] [T:1] [Game] [NetPeer] Discovered '5' commands: [4003, 4002, 4001, 4000, 2000]
+[10:22:32.107 INF] [T:1] [Game] The server Game is initialized.
+[10:22:37.812 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[10:22:37.815 INF] [T:1] [Game] The server instance Game was been started!
+[10:22:37.816 INF] [T:1] [Game] [Rank] State changed: "None" -> "Connecting"
+[10:22:37.816 INF] [T:1] [Game] Group=Dev, Name=Game, Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.109, DnsName=
+[10:22:37.849 INF] [T:8] [Game] [Rank] State changed: "Connecting" -> "Handshake"
+[10:22:37.923 INF] [T:8] [Game] [Rank] State changed: "Handshake" -> "Open"
+[10:22:37.924 DBG] [T:8] [Game] [Rank] Connected
+[10:22:37.939 INF] [T:7] [Game] Register succeeded: Rank
+[10:23:02.112 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:23:01.107Z CPU=0.0% WS=91.23MB Managed=193.22MB Threads=62
+[10:23:32.107 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:23:31.105Z CPU=0.0% WS=93.03MB Managed=194.31MB Threads=63
+[10:24:02.107 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:24:01.107Z CPU=0.0% WS=95.42MB Managed=193.25MB Threads=63
+[10:24:32.106 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:24:31.106Z CPU=0.0% WS=95.50MB Managed=194.38MB Threads=63
+[10:25:02.107 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:25:01.106Z CPU=0.0% WS=97.42MB Managed=195.49MB Threads=64
+[10:25:07.189 INF] [T:44] [Game] [Rank] Offline...
+[10:25:07.189 INF] [T:44] [Game] [Rank] State changed: "Open" -> "Reconnecting"
+[10:25:07.215 DBG] [T:7] [Game] Reconnecting... 1
+[10:25:07.215 ERR] [T:58] [Game] [Rank] An error occurred: Connection refused
+null
+[10:25:22.215 DBG] [T:7] [Game] Reconnecting... 2
+[10:25:22.217 INF] [T:10] [Game] [Rank] State changed: "Reconnecting" -> "Handshake"
+[10:25:22.261 ERR] [T:58] [Game] [Rank] An error occurred: Session auth failed: SessionNotFound
+null
+[10:25:22.262 INF] [T:58] [Game] [Rank] State changed: "Handshake" -> "Closed"
+[10:25:22.262 INF] [T:58] [Game] [Rank] Disconnected
+[10:25:22.263 INF] [T:7] [Game] [Rank] State changed: "Closed" -> "Connecting"
+[10:25:22.275 INF] [T:57] [Game] [Rank] State changed: "Connecting" -> "Handshake"
+[10:25:22.374 INF] [T:58] [Game] [Rank] State changed: "Handshake" -> "Open"
+[10:25:22.374 DBG] [T:58] [Game] [Rank] Connected
+[10:25:22.394 INF] [T:7] [Game] Register succeeded: Rank
+[10:25:32.107 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:25:31.106Z CPU=0.0% WS=99.41MB Managed=196.79MB Threads=62
+[10:26:02.107 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:26:01.106Z CPU=0.0% WS=99.41MB Managed=197.88MB Threads=61
+[10:26:32.108 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:26:31.107Z CPU=0.0% WS=100.23MB Managed=199.00MB Threads=63
+[10:27:02.108 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:27:01.107Z CPU=0.0% WS=101.38MB Managed=200.09MB Threads=62
+[10:27:32.107 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:27:31.107Z CPU=0.0% WS=102.42MB Managed=193.01MB Threads=62
+[10:28:02.109 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:28:01.108Z CPU=0.0% WS=66.69MB Managed=194.13MB Threads=62
+[10:28:32.108 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:28:31.107Z CPU=0.0% WS=66.94MB Managed=195.23MB Threads=62
+[10:29:00.252 DBG] [T:62] [Game] A new session connected. sessionId=ad8c7fb7-c804-47f2-a216-c79c57c8b469, remoteEndPoint=127.0.0.1:49928
+[10:29:00.290 DBG] [T:45] [Game] Session authentication succeeded. sessionId=ad8c7fb7-c804-47f2-a216-c79c57c8b469, peerId=1
+[10:29:02.108 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:29:01.108Z CPU=0.0% WS=68.41MB Managed=196.47MB Threads=63
+[10:29:32.108 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:29:31.108Z CPU=0.0% WS=71.25MB Managed=198.51MB Threads=63
+[10:30:02.108 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:30:01.108Z CPU=0.0% WS=71.19MB Managed=199.71MB Threads=61
+[10:30:19.156 DBG] [T:45] [Game] Received a termination request from the client. isClosing=false
+[10:30:19.158 DBG] [T:45] [Game] The session ad8c7fb7-c804-47f2-a216-c79c57c8b469 has been closed. reason="ClientClosing"
+[10:30:19.160 DBG] [T:45] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[10:30:32.108 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:30:31.108Z CPU=0.0% WS=72.11MB Managed=193.29MB Threads=62
+[10:31:02.108 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:31:01.108Z CPU=0.0% WS=72.11MB Managed=194.41MB Threads=62
+[10:31:12.399 INF] [T:57] [Game] [Rank] State changed: "Open" -> "Closing"
+[10:31:12.419 INF] [T:55] [Game] [Rank] State changed: "Closing" -> "Closed"
+[10:31:12.419 INF] [T:55] [Game] [Rank] Disconnected
+[10:31:32.108 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:31:31.108Z CPU=0.0% WS=72.27MB Managed=195.40MB Threads=60
+[10:31:50.227 DBG] [T:57] [Game] A new session connected. sessionId=bedc873a-befb-4e1c-b5b6-bfbe52cf1a55, remoteEndPoint=127.0.0.1:49978
+[10:31:50.260 DBG] [T:46] [Game] Session authentication succeeded. sessionId=bedc873a-befb-4e1c-b5b6-bfbe52cf1a55, peerId=1
+[10:32:02.109 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:32:01.109Z CPU=0.0% WS=72.31MB Managed=196.81MB Threads=63
+[10:32:32.109 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:32:31.109Z CPU=0.0% WS=72.50MB Managed=200.74MB Threads=62
+[10:33:02.109 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:33:01.109Z CPU=0.0% WS=73.17MB Managed=198.50MB Threads=61
+[10:33:32.109 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:33:31.109Z CPU=0.0% WS=73.19MB Managed=200.01MB Threads=62
+[10:34:02.110 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:34:01.109Z CPU=0.0% WS=73.19MB Managed=201.08MB Threads=62
+[10:34:32.110 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:34:31.110Z CPU=0.0% WS=73.22MB Managed=194.31MB Threads=61
+[10:35:02.110 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:35:01.109Z CPU=0.0% WS=73.23MB Managed=195.35MB Threads=62
+[10:35:30.967 DBG] [T:46] [Game] Received a termination request from the client. isClosing=false
+[10:35:30.967 DBG] [T:60] [Game] The session bedc873a-befb-4e1c-b5b6-bfbe52cf1a55 has been closed. reason="ClientClosing"
+[10:35:30.967 DBG] [T:60] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[10:35:32.110 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:35:31.110Z CPU=0.0% WS=73.31MB Managed=196.39MB Threads=64
+[10:35:36.758 DBG] [T:65] [Game] A new session connected. sessionId=988513f7-e1f2-4503-a108-948a0720035e, remoteEndPoint=127.0.0.1:50059
+[10:35:36.795 DBG] [T:47] [Game] Session authentication succeeded. sessionId=988513f7-e1f2-4503-a108-948a0720035e, peerId=1
+[10:35:54.529 DBG] [T:47] [Game] Received a termination request from the client. isClosing=false
+[10:35:54.531 DBG] [T:60] [Game] The session 988513f7-e1f2-4503-a108-948a0720035e has been closed. reason="ClientClosing"
+[10:35:54.531 DBG] [T:60] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[10:36:02.110 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:36:01.109Z CPU=0.0% WS=73.72MB Managed=198.26MB Threads=63
+[10:36:32.111 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:36:31.110Z CPU=0.0% WS=73.69MB Managed=199.18MB Threads=61
+[10:37:02.110 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:37:01.110Z CPU=0.0% WS=73.89MB Managed=200.11MB Threads=62
+[10:37:32.111 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:37:31.110Z CPU=0.0% WS=73.95MB Managed=201.04MB Threads=62
+[10:38:02.112 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:38:01.110Z CPU=0.0% WS=73.95MB Managed=194.21MB Threads=62
+[10:38:32.111 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:38:31.110Z CPU=0.0% WS=74.02MB Managed=195.15MB Threads=62
+[10:39:02.111 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:39:01.111Z CPU=0.0% WS=74.03MB Managed=196.10MB Threads=63
+[10:39:32.111 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:39:31.111Z CPU=0.0% WS=74.02MB Managed=197.03MB Threads=62
+[10:40:02.111 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:40:01.112Z CPU=0.0% WS=74.00MB Managed=197.94MB Threads=61
+[10:40:32.111 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:40:31.111Z CPU=0.0% WS=74.00MB Managed=198.85MB Threads=61
+[10:41:02.111 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:41:01.111Z CPU=0.0% WS=74.02MB Managed=199.78MB Threads=62
+[10:41:32.111 INF] [T:7] [PerfMonitor] Time:2026-02-10 01:41:31.111Z CPU=0.0% WS=74.02MB Managed=200.70MB Threads=62

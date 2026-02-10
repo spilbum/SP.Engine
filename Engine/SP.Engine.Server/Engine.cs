@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -30,13 +31,13 @@ public interface IEngine : ILogContext
 public abstract class Engine : BaseEngine, IEngine
 {
     private readonly Dictionary<ushort, ICommand> _userCommands = new();
-    private readonly List<IConnector> _connectors = [];
     private readonly Dictionary<ushort, ICommand> _internalCommands = new();
+    private readonly List<IConnector> _connectors = [];
     private readonly List<PeerFiber> _peerFibers = [];
     private int _nextFiberIndex = -1;
     private PeerManager _peerManager;
-    private ILogger _perfLogger;
     private PerfMonitor _perfMonitor;
+    private ILogger _perfLogger;
     private Timer _waitingReconnectCheckingTimer;
 
     public override bool Initialize(string name, EngineConfig config)
@@ -143,22 +144,20 @@ public abstract class Engine : BaseEngine, IEngine
         
         if (session.IsClosing)
         {
+            // 종료중이면 제거
             _peerManager.RemovePeer(peer, reason);
-            OnPeerLeaved(peer, reason);
+            return;
         }
-        else if (peer.State is PeerState.Authenticated or PeerState.Online)
+        
+        if (peer.State is PeerState.Authenticated or PeerState.Online)
         {
+            // 연결 끊김
             _peerManager.Offline(peer, reason);
         }
         else
         {
             _peerManager.RemovePeer(peer, reason);
-            OnPeerLeaved(peer, reason);
         }
-    }
-
-    protected virtual void OnPeerLeaved(BasePeer peer, CloseReason reason)
-    {
     }
     
     private void StartReconnectTimer()
@@ -292,16 +291,29 @@ public abstract class Engine : BaseEngine, IEngine
         foreach (var t in commandTypes)
         {
             if (!t.IsClass || t.IsAbstract) continue;
-            var attr = t.GetCustomAttribute<ProtocolCommandAttribute>();
-            if (attr == null) continue;
             if (!typeof(ICommand).IsAssignableFrom(t)) continue;
+            
+            var attr = t.GetCustomAttribute<ProtocolCommandAttribute>();
+            if (attr == null)
+            {
+                throw new InvalidDataException($"[{t.FullName}] requires {nameof(ProtocolCommandAttribute)}");
+            }
+  
             if (Activator.CreateInstance(t) is not ICommand command) continue;
             if (!peerTypes.Contains(command.ContextType)) continue;
             if (!_userCommands.TryAdd(attr.Id, command))
-                throw new Exception($"Duplicate command: {attr.Id}");
+            {
+                throw new InvalidDataException($"Duplicate command: {attr.Id}");
+            }
         }
 
-        Logger.Debug($"Discovered {_userCommands.Count} commands: [{{0}}]", string.Join(", ", _userCommands.Keys));
+        Logger.Debug("[Engine] Discovered '{0}' commands: [{1}]", _userCommands.Count, string.Join(", ", _userCommands.Keys));
+    }
+
+    private ICommand GetInternalCommand(ushort protocolId)
+    {
+        _internalCommands.TryGetValue(protocolId, out var command);
+        return command;
     }
 
     private ICommand GetUserCommand(ushort protocolId)
@@ -310,20 +322,10 @@ public abstract class Engine : BaseEngine, IEngine
         return command;
     }
 
-    internal void ExecuteMessage(Session session, IMessage message)
+    internal async Task ExecuteMessageAsync(Session session, IMessage message)
     {
-        if (session.Fiber == null)
-        {
-            Logger.Error($"Session has no assigned fiber! SessionId={session.Id}");
-            return;
-        }
-
-        session.Fiber.Enqueue(() => ProcessMessageAsync(session, message));
-    }
-
-    private async Task ProcessMessageAsync(Session session, IMessage message)
-    {
-        if (_internalCommands.TryGetValue(message.Id, out var command))
+        var command = GetInternalCommand(message.Id);
+        if (command != null)
         {
             await command.Execute(session, message);
             return;
@@ -352,7 +354,7 @@ public abstract class Engine : BaseEngine, IEngine
         {
             case TcpMessage tcp:
                 session.SendMessageAck(tcp.SequenceNumber);
-                foreach (var msg in peer.ProcessMessageInOrder(message))
+                foreach (var msg in peer.ProcessMessageInOrder(tcp))
                 {
                     var cmd = GetUserCommand(msg.Id);
                     if (cmd != null) await cmd.Execute(peer, msg);
@@ -363,7 +365,7 @@ public abstract class Engine : BaseEngine, IEngine
                 break;
         }
     }
-
+    
     public static long GetServerTimeMs() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     public IEnumerable<IConnector> GetAllConnectors() => _connectors;
     public IEnumerable<IConnector> GetConnectors(string name) => _connectors.Where(c => c.Name == name); 

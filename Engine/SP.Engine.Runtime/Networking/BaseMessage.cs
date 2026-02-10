@@ -1,7 +1,5 @@
 using System;
 using System.Buffers;
-using System.IO;
-using System.Security.Cryptography;
 using SP.Core.Serialization;
 using SP.Engine.Runtime.Compression;
 using SP.Engine.Runtime.Protocol;
@@ -16,12 +14,6 @@ namespace SP.Engine.Runtime.Networking
         {
         }
 
-        protected BaseMessage(THeader header, byte[] body)
-        {
-            Header = header;
-            Body = new ReadOnlyMemory<byte>(body);
-        }
-
         protected BaseMessage(THeader header, ReadOnlyMemory<byte> body)
         {
             Header = header;
@@ -32,7 +24,7 @@ namespace SP.Engine.Runtime.Networking
         protected ReadOnlyMemory<byte> Body { get; private set; }
 
         public ushort Id => Header.MsdId;
-
+        
         public void Serialize(IProtocolData protocol, IPolicy policy, IEncryptor encryptor, ICompressor compressor)
         {
             if (protocol is null) throw new ArgumentNullException(nameof(protocol));
@@ -49,7 +41,6 @@ namespace SP.Engine.Runtime.Networking
             if (!useComp && !useEncrypt)
             {
                 var bodyBytes = dataSpan.ToArray();
-                
                 Header = CreateHeader(flags, protocol.ProtocolId, bodyBytes.Length);
                 Body = new ReadOnlyMemory<byte>(bodyBytes);
                 return;
@@ -134,6 +125,5 @@ namespace SP.Engine.Runtime.Networking
 
         private bool HasFlag(HeaderFlags flag) => Header != null && Header.HasFlag(flag);
         protected abstract THeader CreateHeader(HeaderFlags flags, ushort id, int payloadLength);
-        public abstract IMessage Clone();
     }
 }

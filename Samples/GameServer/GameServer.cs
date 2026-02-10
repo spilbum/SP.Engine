@@ -28,6 +28,8 @@ public class GameServer : Engine
     public static GameServer Instance { get; private set; } = null!;
 
     private readonly MySqlDbConnector _connector = new();
+
+    public string ServerGroupType { get; private set; } = "";
     public NetworkEnv Env => _networkInfo?.Env ?? NetworkEnv.Unknown;
     public string Region => _networkInfo?.Region ?? string.Empty;
     public string PublicIpAddress => _networkInfo?.PublicIpAddress ?? string.Empty;
@@ -61,8 +63,10 @@ public class GameServer : Engine
             })
             .WithPerf(r => r with
             {
-                LoggerEnabled = false,
-                LoggingPeriod = TimeSpan.FromSeconds(15)
+                MonitorEnabled = true,
+                SamplePeriod = TimeSpan.FromSeconds(1),
+                LoggerEnabled = true,
+                LoggingPeriod = TimeSpan.FromSeconds(30)
             })
             .AddListener(new ListenerConfig { Ip = "Any", Port = appConfig.Server.Port });
 
@@ -76,6 +80,7 @@ public class GameServer : Engine
         if (!base.Initialize(appConfig.Server.Name, config))
             return false;
 
+        ServerGroupType = appConfig.Server.Group;
         OpenPort = appConfig.Server.Port;
 
         foreach (var database in appConfig.Database)
@@ -105,8 +110,8 @@ public class GameServer : Engine
         if (!base.Start())
             return false;
         
-        Logger.Info("Env={0}, Region={1}, Public={2}, Private={3}, DnsName={4}", Env, Region, PublicIpAddress,
-            PrivateIpAddress, PublicDnsName);
+        Logger.Info("Group={0}, Name={1}, Env={2}, Region={3}, Public={4}, Private={5}, DnsName={6}",
+            ServerGroupType, Name, Env, Region, PublicIpAddress, PrivateIpAddress, PublicDnsName);
         return true;
     }
 
@@ -168,12 +173,14 @@ public class GameServer : Engine
             Logger.Debug("Unbind peer: uid={0}, peerId={1}", peer.Uid, peerId);
     }
 
-    protected override void OnPeerLeaved(BasePeer peer, CloseReason reason)
+    protected override void OnSessionClosed(Session session, CloseReason reason)
     {
-        if (peer is not GamePeer gp)
+        base.OnSessionClosed(session, reason);
+        
+        if (session.Peer is not GamePeer peer)
             return;
-
-        Unbind(gp);
-        Logger.Debug("Peer leaved. uid={0}, reason={1}", gp.Uid, reason);
+        
+        Unbind(peer);
+        Logger.Debug("Peer leaved. uid={0}, reason={1}", peer.Uid, reason);
     }
 }

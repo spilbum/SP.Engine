@@ -5,6 +5,7 @@ namespace GameServer;
 
 public class ServerConfig
 {
+    public string Group { get; set; } = "";
     public string Name { get; set; } = "";
     public int Port { get; set; } = 0;
 }

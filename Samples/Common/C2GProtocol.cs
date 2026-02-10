@@ -18,6 +18,8 @@ namespace Common
         public const ushort RankMyReq = 10008;
         public const ushort RankTopReq = 10009;
         public const ushort RankRangeReq = 10010;
+        
+        public const ushort EchoReq = 19999;
     }
 
     public static class G2CProtocol
@@ -39,6 +41,8 @@ namespace Common
         public const ushort RankMyAck = 20011;
         public const ushort RankTopAck = 20012;
         public const ushort RankRangeAck = 20013;
+        
+        public const ushort EchoAck = 29999;
     }
 
     public static class C2GProtocolData
@@ -114,6 +118,12 @@ namespace Common
             public int Count;
             public SeasonKind SeasonKind;
             public int StartRank;
+        }
+
+        [Protocol(C2GProtocol.EchoReq)]
+        public class EchoReq : BaseProtocolData
+        {
+            public string? Message;
         }
     }
 
@@ -231,6 +241,13 @@ namespace Common
             public List<PlayerRankInfo>? Infos;
             public ErrorCode Result;
             public SeasonKind SeasonKind;
+        }
+
+
+        [Protocol(G2CProtocol.EchoAck)]
+        public class EchoAck : BaseProtocolData
+        {
+            public string? Message;
         }
     }
 }

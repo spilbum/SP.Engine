@@ -1,0 +1,48 @@
+[14:19:12.213 INF] [T:1] [Game] Logger setup was successful: Game
+[14:19:12.351 DBG] [T:1] [Game] Discovered 11 commands: [10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[14:19:12.367 DBG] [T:1] [Game] Discover commands: [4003, 4002, 4001, 4000, 2000]
+[14:19:12.368 INF] [T:1] [Game] The server Game is initialized.
+[14:19:18.107 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[14:19:18.110 INF] [T:1] [Game] The server instance Game was been started!
+[14:19:18.111 INF] [T:1] [Game] [Rank] State changed: "None" -> "Connecting"
+[14:19:18.112 INF] [T:1] [Game] Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.109, DnsName=
+[14:19:18.145 INF] [T:10] [Game] [Rank] State changed: "Connecting" -> "Handshake"
+[14:19:18.238 INF] [T:10] [Game] [Rank] State changed: "Handshake" -> "Open"
+[14:19:18.239 DBG] [T:10] [Game] [Rank] Connected
+[14:19:18.266 INF] [T:7] [Game] Register succeeded: Rank
+[14:19:30.299 DBG] [T:43] [Game] A new session connected. sessionId=e652cb90-13fb-4241-955a-b9bafa088565, remoteEndPoint=192.168.0.109:60482
+[14:19:30.375 DBG] [T:45] [Game] Session authentication succeeded. sessionId=e652cb90-13fb-4241-955a-b9bafa088565, peerId=1
+[14:19:33.516 DBG] [T:45] [Game] Bind peer: uid=1000001, peerId=1
+[15:10:24.280 DBG] [T:45] [Game] Received a termination request from the client. isClosing=false
+[15:10:24.284 DBG] [T:66] [Game] The session e652cb90-13fb-4241-955a-b9bafa088565 has been closed. reason="ClientClosing"
+[15:10:24.287 DBG] [T:66] [Game] Unbind peer: uid=1000001, peerId=1
+[15:10:24.287 DBG] [T:66] [Game] Peer leaved. uid=1000001, reason="ClientClosing"
+[15:17:04.578 DBG] [T:67] [Game] A new session connected. sessionId=ff8f7c18-8a67-44d2-b7e5-1b2c2f61e749, remoteEndPoint=192.168.0.109:60694
+[15:17:04.607 DBG] [T:46] [Game] Session authentication succeeded. sessionId=ff8f7c18-8a67-44d2-b7e5-1b2c2f61e749, peerId=1
+[15:17:06.663 DBG] [T:46] [Game] Bind peer: uid=1000001, peerId=1
+[15:17:08.690 DBG] [T:46] [Game] Received a termination request from the client. isClosing=false
+[15:17:08.691 DBG] [T:77] [Game] The session ff8f7c18-8a67-44d2-b7e5-1b2c2f61e749 has been closed. reason="ClientClosing"
+[15:17:08.691 DBG] [T:77] [Game] Unbind peer: uid=1000001, peerId=1
+[15:17:08.691 DBG] [T:77] [Game] Peer leaved. uid=1000001, reason="ClientClosing"
+[15:47:08.413 INF] [T:85] [Game] [Rank] Offline...
+[15:47:08.413 INF] [T:85] [Game] [Rank] State changed: "Open" -> "Reconnecting"
+[15:47:08.432 DBG] [T:7] [Game] Reconnecting... 1
+[15:47:08.432 ERR] [T:85] [Game] [Rank] An error occurred: Connection refused
+null
+[15:47:19.362 INF] [T:1] [Game] Logger setup was successful: Game
+[15:47:19.504 DBG] [T:1] [Game] Discovered 11 commands: [10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[15:47:19.521 DBG] [T:1] [Game] Discover commands: [4003, 4002, 4001, 4000, 2000]
+[15:47:19.522 INF] [T:1] [Game] The server Game is initialized.
+[15:47:25.198 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[15:47:25.200 INF] [T:1] [Game] The server instance Game was been started!
+[15:47:25.201 INF] [T:1] [Game] [Rank] State changed: "None" -> "Connecting"
+[15:47:25.201 INF] [T:1] [Game] Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.109, DnsName=
+[15:47:25.233 INF] [T:8] [Game] [Rank] State changed: "Connecting" -> "Handshake"
+[15:47:25.326 INF] [T:10] [Game] [Rank] State changed: "Handshake" -> "Open"
+[15:47:25.327 DBG] [T:10] [Game] [Rank] Connected
+[15:47:25.355 INF] [T:7] [Game] Register succeeded: Rank
+[15:47:27.447 DBG] [T:8] [Game] A new session connected. sessionId=04983967-6fbc-4e0c-ac36-fb713bc056cc, remoteEndPoint=192.168.0.109:60980
+[15:47:27.526 DBG] [T:45] [Game] Session authentication succeeded. sessionId=04983967-6fbc-4e0c-ac36-fb713bc056cc, peerId=1
+[16:15:54.478 DBG] [T:45] [Game] Received a termination request from the client. isClosing=false
+[16:15:54.480 DBG] [T:56] [Game] The session 04983967-6fbc-4e0c-ac36-fb713bc056cc has been closed. reason="ClientClosing"
+[16:15:54.482 DBG] [T:56] [Game] Peer leaved. uid=0, reason="ClientClosing"

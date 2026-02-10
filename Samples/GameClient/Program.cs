@@ -1,4 +1,5 @@
-﻿using Common;
+﻿using System.Diagnostics;
+using Common;
 using SP.Core.Logging;
 using SP.Engine.Client.Configuration;
 using SP.Shared.Resource;
@@ -16,13 +17,13 @@ internal static class Program
     
     private static async Task CheckResourceServer(
         StoreType storeType, 
-        string buildVersion,
+        BuildVersion buildVersion,
         CancellationToken ct)
     {
         _resourceManager = new ResourceManager("http://localhost:5001");
         var response = await _resourceManager.BootstrapAsync(
             storeType,
-            buildVersion,
+            buildVersion.ToString(),
             _resourceVersion,
             "1234",
             ct);
@@ -123,8 +124,11 @@ internal static class Program
         _client = new Client(config, logger);
         _client.Connect(server.Host, server.Port);
     }
+
+    private static StoreType _storeType;
+    private static BuildVersion _buildVersion;
     
-    private static async Task Main(string[] args)
+    private static void Main(string[] args)
     {
         Console.CancelKeyPress += (_, e) =>
         {
@@ -138,13 +142,11 @@ internal static class Program
             if (args.Length != 2)
                 throw new InvalidOperationException("Invalid number of arguments.");
             
-            if (!Enum.TryParse(args[0], out StoreType storeType))
-                throw new ArgumentException($"Invalid store type: {args[1]}");
+            if (!Enum.TryParse(args[0], out _storeType))
+                throw new ArgumentException($"Invalid store type: {args[0]}");
             
-            var buildVersion = args[1];
-            
-            var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
-            await CheckResourceServer(storeType, buildVersion, cts.Token);
+            if (!BuildVersion.TryParse(args[1], out _buildVersion))
+                throw new ArgumentException($"Invalid build version: {args[1]}");
 
             while (true)
             {
@@ -172,16 +174,16 @@ internal static class Program
         var splits = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var command = splits[0].ToLowerInvariant();
         var args = splits.Skip(1).ToArray();
-
-        if (_client == null)
-        {
-            Console.WriteLine("client is null");
-            return;
-        }
         
         switch (command)
         {
             case "login":
+                if (_client == null)
+                {
+                    Console.WriteLine("client is null");
+                    return;
+                }
+                
                 switch (args.Length)
                 {
                     case 0:
@@ -223,7 +225,7 @@ internal static class Program
                 var maxMembers = Convert.ToInt32(args[2]);
                 var readyCountdownSec = Convert.ToInt32(args[3]);
                 var matchDurationSec = Convert.ToInt32(args[4]);
-                _client.RoomCreateReq(kind, visibility, maxMembers, readyCountdownSec, matchDurationSec);
+                _client?.RoomCreateReq(kind, visibility, maxMembers, readyCountdownSec, matchDurationSec);
                 break;
             }
             case "search":
@@ -235,7 +237,7 @@ internal static class Program
                 }
 
                 var roomId = Convert.ToInt64(args[0]);
-                _client.RoomSearchReq(roomId);
+                _client?.RoomSearchReq(roomId);
                 break;
             }
             case "random":
@@ -252,7 +254,7 @@ internal static class Program
                 var maxMembers = Convert.ToInt32(args[2]);
                 var readyCountdownSec = Convert.ToInt32(args[3]);
                 var matchDurationSec = Convert.ToInt32(args[4]);
-                _client.RoomRandomSearchReq(kind, visibility, maxMembers, readyCountdownSec, matchDurationSec);
+                _client?.RoomRandomSearchReq(kind, visibility, maxMembers, readyCountdownSec, matchDurationSec);
                 break;
             }
             case "join":
@@ -264,7 +266,7 @@ internal static class Program
                 }
 
                 var roomId = Convert.ToInt64(args[0]);
-                _client.RoomJoinReq(roomId);
+                _client?.RoomJoinReq(roomId);
                 break;
             }
             case "leave":
@@ -276,7 +278,7 @@ internal static class Program
                 }
 
                 var reason = (RoomLeaveReason)Convert.ToByte(args[0]);
-                _client.RoomLeaveNtf(reason);
+                _client?.RoomLeaveNtf(reason);
                 break;
             }
             case "action":
@@ -289,7 +291,7 @@ internal static class Program
 
                 var action = (ActionKind)Convert.ToByte(args[0]);
                 var value = args[1];
-                _client.GameActionReq(action, value);
+                _client?.GameActionReq(action, value);
                 break;
             }
             case "rank":
@@ -301,7 +303,7 @@ internal static class Program
                 }
 
                 var kind = (SeasonKind)Convert.ToByte(args[0]);
-                _client.RankMyReq(kind);
+                _client?.RankMyReq(kind);
                 break;
             }
             case "top":
@@ -314,7 +316,7 @@ internal static class Program
 
                 var kind = (SeasonKind)Convert.ToByte(args[0]);
                 var count = Convert.ToInt32(args[1]);
-                _client.RankTopReq(kind, count);
+                _client?.RankTopReq(kind, count);
                 break;
             }
             case "range":
@@ -328,14 +330,67 @@ internal static class Program
                 var kind = (SeasonKind)Convert.ToByte(args[0]);
                 var start = Convert.ToInt32(args[1]);
                 var count = Convert.ToInt32(args[2]);
-                _client.RankRangeReq(kind, start, count);
+                _client?.RankRangeReq(kind, start, count);
                 break;
+            }
+            case "connect":
+            {
+#if DEBUG
+                var info = new ServerConnectInfo("1", "Game", "kr", "127.0.0.1", 10001, ServerStatus.Online);
+                ConnectTo(info);
+#else
+                var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+                Task.Run(async () =>
+                {
+                    await CheckResourceServer(_storeType, _buildVersion, cts.Token);
+                }, cts.Token);
+#endif
+
+                break;
+            }
+            case "send":
+            {
+                if (_running)
+                    break;
+                
+                _sendCount = Convert.ToInt32(args[0]);
+                var period = Convert.ToInt32(args[1]);
+
+                Console.WriteLine("Sending... count {0}, period {1}", _sendCount, period);
+                
+                if (_sendCount > 0)
+                {
+                    _running = true;
+                    _timer = new Timer(
+                        TimerCallback, 
+                        null, 
+                        TimeSpan.FromMilliseconds(period), 
+                        TimeSpan.FromMilliseconds(period));
+                }
+                
+                break;
+
+                static void TimerCallback(object? state)
+                {
+                    var p = new C2GProtocolData.EchoReq { Message = "Hi" };
+                    _client?.Send(p);
+
+                    if (--_sendCount != 0) return;
+                    _timer?.Change(Timeout.Infinite, Timeout.Infinite);
+                    _running = false;
+                    
+                    Console.WriteLine("Sending completed");
+                }
             }
             case "quit":
             case "exit":
-                _client.Close();
+                _client?.Close();
                 Environment.Exit(0);
                 break;
         }
     }
+
+    private static bool _running;
+    private static int _sendCount;
+    private static Timer? _timer;
 }

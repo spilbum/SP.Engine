@@ -1,12 +1,10 @@
 ﻿using System;
-using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Reflection;
 using System.Threading;
-using SP.Core;
 using SP.Core.Logging;
 using SP.Engine.Client.Command;
 using SP.Engine.Client.Configuration;
@@ -71,10 +69,10 @@ namespace SP.Engine.Client
     public abstract class BaseNetPeer : ICommandContext, IDisposable
     {
         private readonly MessageChannelRouter _channelRouter = new MessageChannelRouter();
-        private readonly Dictionary<ushort, ICommand> _commands = new Dictionary<ushort, ICommand>();
         private readonly DiffieHellman _diffieHellman = new DiffieHellman(DhKeySize.Bit2048);
         private readonly Dictionary<ushort, ICommand> _internalCommands = new Dictionary<ushort, ICommand>();
-        private readonly ConcurrentQueue<IMessage> _receiveQueue = new ConcurrentQueue<IMessage>();
+        private readonly Dictionary<ushort, ICommand> _userCommands = new Dictionary<ushort, ICommand>();
+        private readonly ConcurrentQueue<IMessage> _receivedMessageQueue = new ConcurrentQueue<IMessage>();
         private PooledReceiveBuffer _receiveBuffer;
         private Lz4Compressor _compressor;
         private bool _disposed;
@@ -129,14 +127,14 @@ namespace SP.Engine.Client
             LatencyStats = new LatencyStats(config.LatencySampleWindowSize);
             _reliableMessageProcessor = new ReliableMessageProcessor(logger);
 
-            _internalCommands[S2CEngineProtocolId.SessionAuthAck] = new SessionAuth();
-            _internalCommands[S2CEngineProtocolId.Close] = new Close();
-            _internalCommands[S2CEngineProtocolId.MessageAck] = new MessageAck();
-            _internalCommands[S2CEngineProtocolId.Pong] = new Pong();
-            _internalCommands[S2CEngineProtocolId.UdpHelloAck] = new UdpHelloAck();
+            RegisterInternalCommand<SessionAuth>(S2CEngineProtocolId.SessionAuthAck);
+            RegisterInternalCommand<Close>(S2CEngineProtocolId.Close);
+            RegisterInternalCommand<MessageAck>(S2CEngineProtocolId.MessageAck);
+            RegisterInternalCommand<Pong>(S2CEngineProtocolId.Pong);
+            RegisterInternalCommand<UdpHelloAck>(S2CEngineProtocolId.UdpHelloAck);
 
-            DiscoverCommands();
-            Logger.Debug("Discover commands: [{0}]", string.Join(", ", _commands.Keys));
+            var assembly = GetType().Assembly;
+            DiscoverUserCommands(assembly);
         }
 
         ~BaseNetPeer()
@@ -144,43 +142,55 @@ namespace SP.Engine.Client
             Dispose(false);
         }
 
-        private void DiscoverCommands()
+        private void RegisterInternalCommand<T>(ushort protocolId) where T : ICommand, new()
+            => _internalCommands[protocolId] = new T();
+
+        private ICommand GetInternalCommand(ushort protocolId)
+        {
+            _internalCommands.TryGetValue(protocolId, out var command);
+            return command;
+        }
+        
+        private void DiscoverUserCommands(Assembly assembly)
         {
             var type = GetType();
-            var assembly = GetType().Assembly;
             foreach (var t in assembly.GetTypes())
             {
                 if (!t.IsClass || t.IsAbstract) continue;
-                var attr = t.GetCustomAttribute<ProtocolCommandAttribute>();
-                if (attr == null) continue;
                 if (!typeof(ICommand).IsAssignableFrom(t)) continue;
+                
+                var attr = t.GetCustomAttribute<ProtocolCommandAttribute>();
+                if (attr == null)
+                {
+                    Logger.Warn($"[{t.FullName}] requires {nameof(ProtocolCommandAttribute)}");
+                    continue;
+                }
+   
                 if (!(Activator.CreateInstance(t) is ICommand command)) continue;
                 if (type != command.ContextType) continue;
-                if (!_commands.TryAdd(attr.Id, command))
-                    throw new Exception($"Duplicate command: {attr.Id}");
+                if (!_userCommands.TryAdd(attr.Id, command))
+                {
+                    Logger.Warn($"Duplicate command: {attr.Id}");
+                }
             }
+            
+            Logger.Debug("[NetPeer] Discovered '{0}' commands: [{1}]", _userCommands.Count, string.Join(", ", _userCommands.Keys));
         }
 
-        private ICommand GetCommand(ushort id)
+        private ICommand GetUserCommand(ushort protocolId)
         {
-            _commands.TryGetValue(id, out var command);
+            _userCommands.TryGetValue(protocolId, out var command);
             return command;
         }
 
         public TrafficInfo GetTcpTrafficInfo()
-        {
-            return _session?.GetTrafficInfo();
-        }
+            => _session?.GetTrafficInfo();
 
         public TrafficInfo GetUdpTrafficInfo()
-        {
-            return _udpSocket?.GetTrafficInfo();
-        }
+            => _udpSocket?.GetTrafficInfo();
 
         private static long GetCurrentTimeMs()
-        {
-            return DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        }
+            => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
         public DateTime GetServerTime()
         {
@@ -216,20 +226,71 @@ namespace SP.Engine.Client
             // 수신된 메시지 처리
             DequeueReceivedMessage();
 
-            // 대기 중인 메시지 전송
+            // 보류된 메시지 전송
             DequeuePendingMessage();
 
             // 재 전송 메시지 체크
             CheckRetryMessage();
         }
 
+        private void DequeueReceivedMessage()
+        {
+            if (!IsConnected) return;
+            
+            while (_receivedMessageQueue.TryDequeue(out var message))
+            {
+                switch (message)
+                {
+                    case TcpMessage tcp:
+                        var processedList = _reliableMessageProcessor.ProcessMessageInOrder(tcp);
+                        foreach (var msg in processedList)
+                        {
+                            OnMessageReceived(msg);
+                        }
+
+                        break;
+                    
+                    case UdpMessage udp:
+                        OnMessageReceived(udp);
+                        break;
+                }
+            }
+        }
+        
         private void DequeuePendingMessage()
         {
             if (!IsConnected)
                 return;
 
             foreach (var message in _reliableMessageProcessor.DequeuePendingMessages())
+            {
+                // 재전송 트래커에 등록
+                _reliableMessageProcessor.RegisterMessageState(message);
+                    
+                // 전송
                 TrySend(ChannelKind.Reliable, message);
+            }
+        }
+        
+        private void CheckRetryMessage()
+        {
+            // 연결 상태일때만 체크함
+            if (!IsConnected)
+                return;
+
+            // 메시지 재전송 
+            if (_reliableMessageProcessor.TryGetRetryMessages(out var retries))
+            {
+                foreach (var message in retries)
+                {
+                    TrySend(ChannelKind.Reliable, message);
+                }
+            }
+            else
+            {
+                Logger.Warn("Reliable message retransmit limit reached. Force reconnecting...");
+                _session?.Close();
+            }
         }
 
         public bool Send(IProtocolData data)
@@ -262,25 +323,31 @@ namespace SP.Engine.Client
                 {
                     case ChannelKind.Reliable:
                     {
-                        var msg = new TcpMessage();
-                        msg.SetSequenceNumber(sequenceNumber);
-                        msg.Serialize(data, policy, encryptor, compressor);
-
+                        var tcp = new TcpMessage();
+                        tcp.SetSequenceNumber(sequenceNumber);
+                        tcp.Serialize(data, policy, encryptor, compressor);
+                            
                         if (sequenceNumber > 0 && !IsConnected)
                         {
-                            _reliableMessageProcessor.EnqueuePendingMessage(msg);
-                            return true;
+                            // 연결 끊김
+                            if (_reliableMessageProcessor.EnqueuePendingMessage(tcp)) return true;
+                            
+                            Logger.Error("Pending queue is full! Message dropped. Seq={0}", tcp.SequenceNumber);
+                            return false;
                         }
 
-                        if (sequenceNumber > 0) _reliableMessageProcessor.RegisterMessageState(msg);
-                        return TrySend(channel, msg);
+                        // 재 전송을 위해 메시지 등록
+                        if (sequenceNumber > 0)
+                            _reliableMessageProcessor.RegisterMessageState(tcp);
+
+                        return TrySend(channel, tcp);
                     }
                     case ChannelKind.Unreliable:
                     {
-                        var msg = new UdpMessage();
-                        msg.SetPeerId(PeerId);
-                        msg.Serialize(data, policy, encryptor, compressor);
-                        return TrySend(channel, msg);
+                        var udp = new UdpMessage();
+                        udp.SetPeerId(PeerId);
+                        udp.Serialize(data, policy, encryptor, compressor);
+                        return TrySend(channel, udp);
                     }
                     default:
                         throw new Exception($"Unknown channel: {channel}");
@@ -454,7 +521,9 @@ namespace SP.Engine.Client
                         ClientPublicKey = _diffieHellman.PublicKey,
                         KeySize = _diffieHellman.KeySize
                     }))
+                {
                     throw new Exception("Failed to send auth handshake");
+                }
             }
             catch (Exception e)
             {
@@ -525,33 +594,10 @@ namespace SP.Engine.Client
                 }
             }, null, 5000, Timeout.Infinite);
         }
-
-        private void DequeueReceivedMessage()
-        {
-            if (!IsConnected) return;
-            while (_receiveQueue.TryDequeue(out var message))
-                foreach (var msg in _reliableMessageProcessor.ProcessMessageInOrder(message))
-                    OnMessageReceived(msg);
-        }
-
-        private void CheckRetryMessage()
-        {
-            // 연결 상태일때만 체크함
-            if (!IsConnected)
-                return;
-
-            // 메시지 재전송 
-            if (_reliableMessageProcessor.TryGetRetryMessages(out var retries))
-                foreach (var message in retries)
-                    _reliableMessageProcessor.EnqueuePendingMessage(message);
-            else
-                // 재전송 실패인 경우 종료함
-                Close();
-        }
-
+        
         private void OnSessionDataReceived(object sender, DataEventArgs e)
         {
-            _receiveBuffer.Write(new ReadOnlySpan<byte>(e.Data, e.Offset, e.Length));
+            _receiveBuffer?.Write(new ReadOnlySpan<byte>(e.Data, e.Offset, e.Length));
 
             try
             {
@@ -561,9 +607,9 @@ namespace SP.Engine.Client
 
                 Span<byte> headerSpan = stackalloc byte[headerSize];
                 
-                while (_receiveBuffer.ReadableBytes >= headerSize)
+                while (processedCount++ < maxProcessPerTick)
                 {
-                    if (processedCount++ >= maxProcessPerTick)
+                    if (_receiveBuffer == null || _receiveBuffer.ReadableBytes < headerSize)
                         break;
 
                     _receiveBuffer.Peek(headerSpan);
@@ -589,15 +635,13 @@ namespace SP.Engine.Client
 
                     if (bodyLen > 0)
                     {
-                        using (var pb = new PooledBuffer(bodyLen))
-                        {
-                            _receiveBuffer.Peek(pb.Span);
-                            _receiveBuffer.Consume(bodyLen);
+                        var payload = new byte[bodyLen];
+                        
+                        _receiveBuffer.Peek(payload);
+                        _receiveBuffer.Consume(bodyLen);
 
-                            var payload = new ReadOnlyMemory<byte>(pb.Array, 0, bodyLen);
-                            var message = new TcpMessage(header, payload);
-                            OnReceivedMessage(message);
-                        }    
+                        var message = new TcpMessage(header, payload);
+                        OnReceivedMessage(message);
                     }
                     else
                     {
@@ -613,16 +657,19 @@ namespace SP.Engine.Client
             }
         }
 
-        private void OnReceivedMessage(TcpMessage message)
+        private void OnReceivedMessage(IMessage message)
         {
-            if (_internalCommands.TryGetValue(message.Id, out var command))
+            var command = GetInternalCommand(message.Id);
+            if (command != null)
             {
                 command.Execute(this, message);
             }
             else
             {               
-                SendMessageAck(message.SequenceNumber);
-                EnqueueReceivedMessage(message.Clone());
+                if (message is TcpMessage tcp)
+                    SendMessageAck(tcp.SequenceNumber);
+                
+                EnqueueReceivedMessage(message);
             }
         }
 
@@ -644,12 +691,9 @@ namespace SP.Engine.Client
             SendAuthHandshake();
         }
 
-        /// <summary>
-        ///     수신된 메시지를 큐에 넣습니다.
-        /// </summary>
         private void EnqueueReceivedMessage(IMessage message)
         {
-            _receiveQueue.Enqueue(message);
+            _receivedMessageQueue.Enqueue(message);
         }
 
         private void OnError(ErrorEventArgs e)
@@ -743,71 +787,47 @@ namespace SP.Engine.Client
         {
             if (_udpSocket == null) return;
 
-            using (var buf = new PooledBuffer(e.Length))
-            {
-                e.Data.AsSpan(e.Offset, e.Length).CopyTo(buf.Span);
+            var segment = new ArraySegment<byte>(e.Data, e.Offset, e.Length);
+            if (segment.Array == null) return;
+            
+            var headerSpan = segment.AsSpan(0, UdpHeader.ByteSize);
+            if (!UdpHeader.TryRead(headerSpan, out var header, out var consumed))
+                return;
 
-                var headerSpan = buf.Span.Slice(0, UdpHeader.ByteSize);
-                if (!UdpHeader.TryRead(headerSpan, out var header, out var consumed))
+            if (PeerId != header.PeerId)
+                return;
+
+            var bodyOffset = consumed;
+
+            if (header.Fragmented == 0x01)
+            {
+                var bodySpan = segment.AsSpan(bodyOffset, header.PayloadLength);
+                if (!FragmentHeader.TryParse(bodySpan, out var fragHeader, out consumed))
+                    return;
+                
+                var fragSegment = new ArraySegment<byte>(segment.Array, bodyOffset + consumed, fragHeader.FragLength);
+                    
+                if (!_udpSocket.Assembler.TryAssemble(fragHeader, fragSegment, out var assembled))
                     return;
 
-                if (PeerId != header.PeerId)
-                    return;
+                var normalizedHeader = new UdpHeaderBuilder()
+                    .From(header)
+                    .WithPayloadLength(assembled.Count)
+                    .Build();
 
-                var bodyOffset = consumed;
-
-                if (header.Fragmented == 0x01)
-                {
-                    var bodySpan = buf.Span.Slice(bodyOffset, header.PayloadLength);
-                    if (!FragmentHeader.TryParse(bodySpan, out var fragHeader, out consumed))
-                        return;
-
-                    var fragPayload = new PooledBuffer(fragHeader.FragLength);
-                    buf.Span.Slice(bodyOffset + consumed, fragHeader.FragLength).CopyTo(fragPayload.Span);
-
-                    if (!_udpSocket.Assembler.TryAssemble(header, fragHeader, fragPayload, out var assembled))
-                        return;
-
-                    using (assembled)
-                    {
-                        var normalizedHeader = new UdpHeaderBuilder()
-                            .From(header)
-                            .WithPayloadLength(assembled.Count)
-                            .Build();
-
-                        var payload = new ReadOnlyMemory<byte>(assembled.Array, 0, assembled.Count);
-                        var message = new UdpMessage(normalizedHeader, payload);
-                        ProcessReceivedUdpMessage(message);
-                    }
-                }
-                else
-                {
-                    var payload = new ReadOnlyMemory<byte>(buf.Array, bodyOffset, header.PayloadLength);
-                    var message = new UdpMessage(header, payload);
-                    ProcessReceivedUdpMessage(message);
-                }
+                var message = new UdpMessage(normalizedHeader, assembled);
+                OnReceivedMessage(message);
+            }
+            else
+            {
+                var payload = new byte[header.PayloadLength];
+                segment.AsSpan(bodyOffset, header.PayloadLength).CopyTo(payload);
+                
+                var message = new UdpMessage(header, payload);
+                OnReceivedMessage(message);
             }
         }
-
-        private void ProcessReceivedUdpMessage(UdpMessage message)
-        {
-            try
-            {
-                if (_internalCommands.TryGetValue(message.Id, out var command))
-                {
-                    command.Execute(this, message);
-                }
-                else
-                {
-                    EnqueueReceivedMessage(message.Clone());
-                }
-            }
-            catch (Exception ex)
-            {
-                OnError(ex);
-            }
-        }
-
+        
         private void SendUdpHandshake()
         {
             if (!InternalSend(new C2SEngineProtocolData.UdpHelloReq
@@ -899,21 +919,21 @@ namespace SP.Engine.Client
 
         private void OnOffline()
         {
-            _networkPolicy = new NetworkPolicyView(PolicyDefaults.Globals);
-            _reliableMessageProcessor.ResetAllMessageStates();
             Offline?.Invoke(this, EventArgs.Empty);
 
+            // UDP 연결 해제
             StopUdpKeepAliveTimer();
             _udpSocket?.Close();
             _udpSocket = null;
-
             _channelRouter.Unbind(ChannelKind.Unreliable);
+            
+            // 재연결 시작
             StartReconnection();
         }
 
         private void OnMessageReceived(IMessage message)
         {
-            var command = GetCommand(message.Id);
+            var command = GetUserCommand(message.Id);
             if (command == null)
             {
                 Logger.Warn("Not found command: {0}", message.Id);
@@ -936,6 +956,7 @@ namespace SP.Engine.Client
 
         internal void OnMessageAck(long sequenceNumber)
         {
+            //Logger.Debug($"[ACK] Seq={sequenceNumber} Removed from Sender");
             _reliableMessageProcessor.RemoveMessageState(sequenceNumber);
         }
 
@@ -972,12 +993,14 @@ namespace SP.Engine.Client
                 _channelRouter.Unbind(ChannelKind.Reliable);
                 _channelRouter.Unbind(ChannelKind.Unreliable);
                 _diffieHellman.Dispose();
-
                 _sessionId = null;
+                _reliableMessageProcessor.Reset();
+                _receiveBuffer?.Dispose();
+                _receiveBuffer = null;
+                
                 PeerId = 0;
                 LatencyStats.Clear();
                 CancelTimer();
-                _reliableMessageProcessor.Reset();
             }
 
             _disposed = true;

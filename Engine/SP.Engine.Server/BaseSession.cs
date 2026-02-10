@@ -19,7 +19,7 @@ public interface IBaseSession : ILogContext
     IEngineConfig Config { get; }
     DateTime LastActiveTime { get; }
     void ProcessTcpBuffer(byte[] buffer, int offset, int length);
-    void ProcessUdpBuffer(PooledBuffer buffer, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint);
+    void ProcessUdpBuffer(ArraySegment<byte> segment, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint);
     void Close(CloseReason reason);
     IFiber Fiber { get; }
 }
@@ -57,7 +57,7 @@ public abstract class BaseSession : IBaseSession
     public string Id { get; private set; }
     public INetworkSession NetworkSession { get; private set; }
 
-    void IBaseSession.ProcessUdpBuffer(PooledBuffer buffer, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint)
+    void IBaseSession.ProcessUdpBuffer(ArraySegment<byte> segment, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint)
     {
         EnsureUdpSocket(socket, remoteEndPoint);
 
@@ -65,31 +65,25 @@ public abstract class BaseSession : IBaseSession
         
         if (header.Fragmented == 0x01)
         {
-            var bodySpan = buffer.Span.Slice(bodyOffset, header.PayloadLength);
+            var bodySpan = segment.AsSpan(bodyOffset, header.PayloadLength);
             if (!FragmentHeader.TryParse(bodySpan, out var fragHeader, out var consumed))
                 return;
 
-            var fragBuffer = new PooledBuffer(fragHeader.FragLength);
-            buffer.Span.Slice(bodyOffset + consumed, fragHeader.FragLength).CopyTo(fragBuffer.Span);
-
-            if (!UdpSocket.Assembler.TryAssemble(header, fragHeader, fragBuffer, out var assembled))
+            var fragSegment = new ArraySegment<byte>(segment.Array!, bodyOffset + consumed, fragHeader.FragLength);
+            if (!UdpSocket.Assembler.TryAssemble(fragHeader, fragSegment, out var assembled))
                 return;
 
-            using (assembled)
-            {
-                var normalizedHeader = new UdpHeaderBuilder()
-                    .From(header)
-                    .WithPayloadLength(assembled.Count)
-                    .Build();
+            var normalizedHeader = new UdpHeaderBuilder()
+                .From(header)
+                .WithPayloadLength(assembled.Count)
+                .Build();
 
-                var payload = new ReadOnlyMemory<byte>(assembled.Array, 0, assembled.Count);
-                var message = new UdpMessage(normalizedHeader, payload);
-                OnReceivedMessage(message);
-            }
+            var message = new UdpMessage(normalizedHeader, assembled);
+            OnReceivedMessage(message);
         }
         else
         {
-            var payload = new ReadOnlyMemory<byte>(buffer.Array, bodyOffset, header.PayloadLength);
+            var payload = segment.AsSpan(bodyOffset, header.PayloadLength).ToArray();
             var message = new UdpMessage(header, payload);
             OnReceivedMessage(message);
         }
@@ -139,10 +133,6 @@ public abstract class BaseSession : IBaseSession
         try
         {
             ExecuteMessage(message);
-        }
-        catch (Exception ex)
-        {
-            Logger.Error(ex);
         }
         finally
         {
@@ -227,12 +217,11 @@ public abstract class BaseSession : IBaseSession
 
                 if (bodyLen > 0)
                 {
-                    using var pb = new PooledBuffer(bodyLen);
-                    _receiveBuffer.Peek(pb.Span);
+                    var payload = new byte[bodyLen];
+                    _receiveBuffer.Peek(payload);
                     _receiveBuffer.Consume(bodyLen);
                     
-                    var payload = new ReadOnlyMemory<byte>(pb.Array, 0, bodyLen);
-                    var message = new TcpMessage(header, payload);
+                    var message = new TcpMessage(header, new ReadOnlyMemory<byte>(payload));
                     OnReceivedMessage(message);
                 }
                 else

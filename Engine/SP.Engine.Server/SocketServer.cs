@@ -182,8 +182,8 @@ internal sealed class SocketServer(IBaseEngine engine, ListenerInfo[] listenerIn
 
     private void ProcessUdpClient(Socket socket, object state)
     {
-        if (state is not (PooledBuffer buffer, IPEndPoint remote)) return;
-        Engine.ProcessUdpClient(buffer, socket, remote);
+        if (state is not (ArraySegment<byte> segment, IPEndPoint remote)) return;
+        Engine.ProcessUdpClient(segment, socket, remote);
     }
 
     private void ProcessTcpClient(Socket client)

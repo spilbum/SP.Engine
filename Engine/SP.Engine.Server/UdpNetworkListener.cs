@@ -64,27 +64,26 @@ internal class UdpNetworkListener(ListenerInfo listenerInfo) : BaseNetworkListen
         if (e.LastOperation != SocketAsyncOperation.ReceiveFrom || e.BytesTransferred == 0)
             return;
 
-        var buffer = new PooledBuffer(e.BytesTransferred);
-        
         try
         {
             if (null == e.RemoteEndPoint)
                 throw new Exception("RemoteEndPoint is null");
             
-            e.Buffer.AsSpan(e.Offset, e.BytesTransferred).CopyTo(buffer.Span);
-
+            var segment = new ArraySegment<byte>(e.Buffer!, e.Offset, e.BytesTransferred);
             var remote = (IPEndPoint)e.RemoteEndPoint;
-            OnNewClientAccepted(_listenSocket, (buffer, remote));
+            OnNewClientAccepted(_listenSocket, (segment, remote));
         }
         catch (Exception ex)
         {
-            buffer.Dispose();
             OnError(new Exception($"[UDP] Error receiving data from {e.RemoteEndPoint}: {ex.Message}", ex));
         }
 
+        // 다음 수신 대기
         try
         {
+            // 다음 클라이언트의 주소를 받기 위해 EndPoint 초기화
             e.RemoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
+            
             if (!_listenSocket.ReceiveFromAsync(e))
                 OnReceiveCompleted(this, e);
         }

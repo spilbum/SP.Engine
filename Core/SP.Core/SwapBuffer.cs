@@ -9,6 +9,8 @@ namespace SP.Core
         private readonly int _capacity;
         private Node _active;
         private Node _standby;
+        
+        public int Count => _active.Published;
 
         public SwapBuffer(int capacity)
         {
@@ -105,6 +107,12 @@ namespace SP.Core
             
             filled.Reset();
             _standby = filled;
+        }
+
+        public void Clear()
+        {
+            var dummy = new List<T>();
+            Flush(dummy);
         }
         
         private class Node
