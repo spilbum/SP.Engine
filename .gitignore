@@ -4,6 +4,6 @@ obj/
 .vscode/
 bin/
 .DS_Store
-.users
+.user
 *.dev.json
 .log

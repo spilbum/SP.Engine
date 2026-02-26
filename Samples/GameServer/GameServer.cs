@@ -63,12 +63,8 @@ public class GameServer : Engine
             })
             .WithPerf(r => r with
             {
-                MonitorEnabled = true,
-                SamplePeriod = TimeSpan.FromSeconds(1),
-                LoggerEnabled = true,
-                LoggingPeriod = TimeSpan.FromSeconds(30)
             })
-            .AddListener(new ListenerConfig { Ip = "Any", Port = appConfig.Server.Port });
+            .AddListener(new ListenerConfig { Ip = "Any", Port = 10000 });
 
         foreach (var connector in appConfig.Connector)
         {

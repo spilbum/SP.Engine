@@ -1,35 +1,21 @@
 using System;
-using System.Buffers;
 using System.Security.Cryptography;
-using Org.BouncyCastle.Crypto.Engines;
-using Org.BouncyCastle.Crypto.Modes;
-using Org.BouncyCastle.Crypto.Parameters;
-using Org.BouncyCastle.Security;
 
 namespace SP.Engine.Runtime.Security
 {
     public class AesGcmEncryptor : IEncryptor, IDisposable
     {
-        /// <summary>
-        /// GCM 표준 Nonce 크기
-        /// </summary>
         private const int NonceSize = 12;
-        /// <summary>
-        ///128-bit 인증 태그
-        /// </summary>
         private const int TagSize = 16;
 
-        private readonly KeyParameter _keyParam;
-        private readonly SecureRandom _random;
+        private AesGcm _aesGcm;
         private bool _disposed;
 
         public AesGcmEncryptor(byte[] key)
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
             if (key.Length != 32) throw new ArgumentException("AES-256 requires a 32-byte key.");
-
-            _keyParam = new KeyParameter((byte[])key.Clone());
-            _random = new SecureRandom();
+            _aesGcm = new AesGcm(key);
         }
 
         public int GetCiphertextLength(int plainLength)
@@ -41,88 +27,54 @@ namespace SP.Engine.Runtime.Security
         public int Encrypt(ReadOnlySpan<byte> source, Span<byte> destination)
         {
             ThrowIfDisposed();
-            
-            // Nonce 생성 및 배치
-            var nonce = new byte[NonceSize];
-            _random.NextBytes(nonce);
-            nonce.CopyTo(destination[..NonceSize]);
 
-            // GCM 엔진 초기화
-            var cipher = new GcmBlockCipher(new AesEngine());
-            var parameters = new AeadParameters(_keyParam, TagSize * 8, nonce);
-            cipher.Init(true, parameters);
+            // 1. Nonce 생성 
+            var nonce = destination[..NonceSize];
+            RandomNumberGenerator.Fill(nonce);
 
-            var outSize = cipher.GetOutputSize(source.Length);
-            var inputBuffer = ArrayPool<byte>.Shared.Rent(source.Length);
-            var outputBuffer = ArrayPool<byte>.Shared.Rent(outSize);
-            
-            try
-            {
-                source.CopyTo(inputBuffer);
-                
-                var len = cipher.ProcessBytes(inputBuffer, 0, source.Length, outputBuffer, 0);
-                len += cipher.DoFinal(outputBuffer, len);
-            
-                // 결과 복사 (Ciphertext + Tag)
-                outputBuffer.AsSpan(0, len).CopyTo(destination[NonceSize..]);
-                return NonceSize + len;
-            }
-            finally
-            {
-                CryptographicOperations.ZeroMemory(inputBuffer);
-                CryptographicOperations.ZeroMemory(outputBuffer);
-                ArrayPool<byte>.Shared.Return(inputBuffer);
-                ArrayPool<byte>.Shared.Return(outputBuffer);
-            }
+            // 2. 영역 분할: [Nonce(12)] [Ciphertext(N)] [Tag(16)]
+            var ciphertextLength = source.Length;
+            var ciphertext = destination.Slice(NonceSize, ciphertextLength);
+            var tag = destination.Slice(NonceSize + ciphertextLength, TagSize);
+
+            // 3. 암호화 수행
+            _aesGcm.Encrypt(nonce, source, ciphertext, tag);
+
+            return NonceSize + ciphertextLength + TagSize;
         }
 
         public int Decrypt(ReadOnlySpan<byte> source, Span<byte> destination)
         {
             ThrowIfDisposed();
-            
+
             if (source.Length < NonceSize + TagSize)
                 throw new CryptographicException("Ciphertext too short.");
-            
-            var nonce = new byte[NonceSize];
-            source[..NonceSize].CopyTo(nonce);
-            
-            var cipherDataLen = source.Length - NonceSize;
-            
-            var cipher = new GcmBlockCipher(new AesEngine());
-            var parameters = new AeadParameters(_keyParam, TagSize * 8, nonce);
-            cipher.Init(false, parameters);
-            
-            var inputBuffer = ArrayPool<byte>.Shared.Rent(cipherDataLen);
-            var outputBuffer = ArrayPool<byte>.Shared.Rent(cipher.GetOutputSize(cipherDataLen));
-            
+
+            // 1. 영역 분해
+            var nonce = source[..NonceSize];
+            var ciphertextLength = source.Length - NonceSize - TagSize;
+            var ciphertext = source.Slice(NonceSize, ciphertextLength);
+            var tag = source.Slice(NonceSize + ciphertextLength, TagSize);
+
+            // 2. 복호화 및 인증
             try
             {
-                source[NonceSize..].CopyTo(inputBuffer);
-                
-                var len = cipher.ProcessBytes(inputBuffer, 0, cipherDataLen, outputBuffer, 0);
-                len += cipher.DoFinal(outputBuffer, len);
-                
-                outputBuffer.AsSpan(0, len).CopyTo(destination);
-                return len;
+                _aesGcm.Decrypt(nonce, ciphertext, tag, destination.Slice(0, ciphertextLength));
+                return ciphertextLength;
             }
-            catch (Exception e)
+            catch (CryptographicException e)
             {
+                // 데이터가 변조되었거나 키가 틀린 경우
                 throw new CryptographicException("Decryption failed (Integrity check failed).", e);
-            }
-            finally
-            {
-                CryptographicOperations.ZeroMemory(inputBuffer);
-                CryptographicOperations.ZeroMemory(outputBuffer);
-                ArrayPool<byte>.Shared.Return(inputBuffer);
-                ArrayPool<byte>.Shared.Return(outputBuffer);
             }
         }
 
         public void Dispose()
         {
             if (_disposed) return;
+            _aesGcm?.Dispose();
+            _aesGcm = null;
             _disposed = true;
-            CryptographicOperations.ZeroMemory(_keyParam.GetKey());
             GC.SuppressFinalize(this);
         }
 
