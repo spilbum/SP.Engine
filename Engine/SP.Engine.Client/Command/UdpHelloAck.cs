@@ -8,10 +8,9 @@ namespace SP.Engine.Client.Command
     [ProtocolCommand(S2CEngineProtocolId.UdpHelloAck)]
     public class UdpHelloAck : BaseCommand<BaseNetPeer, S2CEngineProtocolData.UdpHelloAck>
     {
-        protected override Task ExecuteCommand(BaseNetPeer context, S2CEngineProtocolData.UdpHelloAck protocol)
+        protected override void ExecuteCommand(BaseNetPeer context, S2CEngineProtocolData.UdpHelloAck protocol)
         {
             context.OnUdpHandshake(protocol);
-            return Task.CompletedTask;
         }
     }
 }

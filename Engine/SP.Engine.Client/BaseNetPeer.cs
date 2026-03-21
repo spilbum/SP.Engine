@@ -960,7 +960,7 @@ namespace SP.Engine.Client
             _reliableMessageProcessor.RemoveMessageState(sequenceNumber);
         }
 
-        private void Dispose(bool disposing)
+        protected virtual void Dispose(bool disposing)
         {
             if (_disposed)
                 return;

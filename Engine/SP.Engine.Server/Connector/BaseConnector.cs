@@ -5,52 +5,36 @@ using SP.Core.Logging;
 using SP.Engine.Client;
 using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Networking;
-using SP.Engine.Runtime.Protocol;
 using SP.Engine.Server.Configuration;
 using EngineConfigBuilder = SP.Engine.Client.Configuration.EngineConfigBuilder;
 
 namespace SP.Engine.Server.Connector;
 
-public interface IConnector
-{
-    string Name { get; }
-    string Host { get; }
-    int Port { get; }
-    bool Initialize(ILogger logger, IFiberScheduler scheduler, ConnectorConfig config);
-    void Connect();
-    void Close();
-    void Update();
-    bool Send(IProtocolData data);
-}
-
 public abstract class BaseConnector : BaseNetPeer, IConnector, ICommandContext
 {
     private volatile int _connecting;
-    private IDisposable _reconnectSchedule;
-    private IFiberScheduler _scheduler;
-
-    TProtocol ICommandContext.Deserialize<TProtocol>(IMessage message)
-    {
-        return message.Deserialize<TProtocol>(Encryptor, Compressor);
-    }
-
+    private IDisposable _reconnectTimer;
+    private IFiber _fiber;
+    private IScheduler _globalScheduler;
+    
     public string Name { get; private set; }
     public string Host { get; private set; }
     public int Port { get; private set; }
 
-    public virtual bool Initialize(ILogger logger, IFiberScheduler scheduler, ConnectorConfig config)
+    public virtual bool Initialize(ConnectorConfig config, IFiber fiber, IScheduler globalScheduler, ILogger logger)
     {
-        if (string.IsNullOrEmpty(config.Host) || 0 >= config.Port)
+        if (config == null || string.IsNullOrEmpty(config.Host) || 0 >= config.Port)
         {
-            logger.Error("Invalid connector config. host={0}, port={1}", config.Host,
-                config.Port);
+            logger.Error("Invalid connector config. host={0}, port={1}", config?.Host, config?.Port);
             return false;
         }
 
         Name = config.Name;
         Host = config.Host;
         Port = config.Port;
-        _scheduler = scheduler;
+        
+        _fiber = fiber;
+        _globalScheduler = globalScheduler;
 
         try
         {
@@ -95,21 +79,35 @@ public abstract class BaseConnector : BaseNetPeer, IConnector, ICommandContext
     private void OnConnected(object sender, EventArgs e)
     {
         Interlocked.Exchange(ref _connecting, 0);
-        _reconnectSchedule?.Dispose();
+        _reconnectTimer?.Dispose();
     }
 
     private void OnDisconnected(object sender, EventArgs e)
     {
         Interlocked.Exchange(ref _connecting, 0);
 
-        if (_scheduler.IsRunning)
+        _reconnectTimer ??= _globalScheduler.Schedule(
+            _fiber,
+            Connect,
+            Host,
+            Port,
+            TimeSpan.Zero,
+            TimeSpan.FromSeconds(Config.ReconnectAttemptIntervalSec)); 
+    }
+    
+    TProtocol ICommandContext.Deserialize<TProtocol>(IMessage message)
+    {
+        return message.Deserialize<TProtocol>(Encryptor, Compressor);
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
         {
-            _reconnectSchedule ??= _scheduler.Schedule(
-                Connect,
-                Host,
-                Port,
-                TimeSpan.Zero,
-                TimeSpan.FromSeconds(Config.ReconnectAttemptIntervalSec));   
+            _reconnectTimer?.Dispose();
+            _fiber?.Dispose();
         }
+        
+        base.Dispose(disposing);
     }
 }

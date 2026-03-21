@@ -3,6 +3,7 @@ using Common;
 using GameServer.Room;
 using GameServer.UserPeer;
 using SP.Core.Fiber;
+using SP.Engine.Server;
 using SP.Engine.Server.Logging;
 
 namespace GameServer.Matchmaking;
@@ -13,7 +14,7 @@ public class Matchmaker : IDisposable
         new(ReferenceEqualityComparer<GamePeer>.Instance);
 
     private readonly GameRoomManager _roomManager;
-    private readonly FiberScheduler _scheduler;
+    private readonly ThreadFiber _fiber;
 
     private readonly TimeSpan _searchingTimeout;
     private int _disposed;
@@ -29,8 +30,8 @@ public class Matchmaker : IDisposable
         _searchingTimeout = searchingTimeout;
 
         var logger = LogManager.GetLogger();
-        _scheduler = new FiberScheduler(logger, nameof(Matchmaker));
-        _tickTimer = _scheduler.Schedule(Searching, TimeSpan.Zero, searchingPeriod);
+        _fiber = new ThreadFiber("MatchmakerFiber");
+        _tickTimer = GameServer.Instance.Scheduler.Schedule(_fiber, Searching, TimeSpan.Zero, searchingPeriod);
     }
 
     public void Dispose()
@@ -39,13 +40,12 @@ public class Matchmaker : IDisposable
         _pending.Clear();
         _tickTimer?.Dispose();
         _tickTimer = null;
-        _scheduler.Dispose();
         GC.SuppressFinalize(this);
     }
 
     public void Enqueue(GamePeer peer, RoomOptionsInfo options, Action<ErrorCode, long?> callback)
     {
-        _scheduler.Enqueue(() =>
+        _fiber.Enqueue(() =>
         {
             if (_disposed != 0) return;
             if (_pending.TryGetValue(peer, out var ticket))
@@ -63,7 +63,7 @@ public class Matchmaker : IDisposable
 
     public void Cancel(GamePeer peer)
     {
-        _scheduler.Enqueue(() =>
+        _fiber.Enqueue(() =>
         {
             if (_disposed != 0) return;
             if (!_pending.TryGetValue(peer, out var t)) return;

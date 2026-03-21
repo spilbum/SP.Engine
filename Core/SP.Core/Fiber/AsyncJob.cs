@@ -2,7 +2,6 @@
 using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using System.Reflection;
-using System.Threading.Tasks;
 
 namespace SP.Core.Fiber
 {
@@ -11,52 +10,40 @@ namespace SP.Core.Fiber
         private static readonly ConcurrentDictionary<MethodInfo, Action<object, object[]>> Cache =
             new ConcurrentDictionary<MethodInfo, Action<object, object[]>>();
 
-        public static IAsyncJob From(Action action)
+        public static IWorkJob From(Action action)
         {
             var job = SimplePool<DelegateJob>.Get();
             job.Init(action);
             return job;
         }
 
-        public static IAsyncJob From(Func<Task> action)
-        {
-            var job = SimplePool<AsyncTaskJob>.Get();
-            job.Init(action);
-            return job;
-        }
-
-        public static IAsyncJob From<T>(Action<T> action, T state)
+        public static IWorkJob From<T>(Action<T> action, T state)
         {
             var job = SimplePool<StateJob<T>>.Get();
             job.Init(action, state);
             return job;
         }
         
-        public static IAsyncJob From<T1, T2>(Action<T1, T2> action, T1 state1, T2 state2)
+        public static IWorkJob From<T1, T2>(Action<T1, T2> action, T1 state1, T2 state2)
         {
             var job = SimplePool<StateJob<T1, T2>>.Get();
             job.Init(action, state1, state2);
             return job;
         }
 
-        public static IAsyncJob From<T1, T2, T3>(Action<T1, T2, T3> action, T1 state1, T2 state2, T3 state3)
+        public static IWorkJob From<T1, T2, T3>(Action<T1, T2, T3> action, T1 state1, T2 state2, T3 state3)
         {
             var job = SimplePool<StateJob<T1, T2, T3>>.Get();
             job.Init(action, state1, state2, state3);
             return job;
         }
 
-        public static IAsyncJob From<T1, T2, T3, T4>(Action<T1, T2, T3, T4> action, T1 state1, T2 state2, T3 state3, T4 state4)
-        {
-            var job = SimplePool<StateJob<T1, T2, T3, T4>>.Get();
-            job.Init(action, state1, state2, state3, state4);
-            return job;
-        }
-
-        public static IAsyncJob From(object target, MethodInfo method, params object[] args)
+        public static IWorkJob From(object target, MethodInfo method, params object[] args)
         {
             var invoker = Cache.GetOrAdd(method, BuildInvoker);
-            return new ReflectionJob(target, invoker, args);
+            var job = SimplePool<ReflectionJob>.Get();
+            job.Init(method.Name, target, invoker, args);
+            return job;
         }
 
         private static class SimplePool<T> where T : new()
@@ -70,57 +57,42 @@ namespace SP.Core.Fiber
                 => _queue.Enqueue(item);
         }
         
-        private class DelegateJob : IAsyncJob
+        private sealed class DelegateJob : IWorkJob
         {
             private Action _action;
-            
-            public void Init(Action action) => _action = action;
+         
+            public string Name { get; private set; }
+
+            public void Init(Action action)
+            {
+                Name = action.Method.Name;
+                _action = action;
+            }
 
             public void Invoke()
             {
                 try
                 {
                     _action();
-                    _action = null;
-                    SimplePool<DelegateJob>.Return(this);
                 }
-                catch
+                finally
                 {
                     _action = null;
-                    throw;
+                    SimplePool<DelegateJob>.Return(this);
                 }
             }
         }
         
-        private class AsyncTaskJob : IAsyncJob
-        {
-            private Func<Task> _action;
-
-            public void Init(Func<Task> action) => _action = action;
-
-            public void Invoke()
-            {
-                try
-                {
-                    _action().GetAwaiter().GetResult();
-                    _action = null;
-                    SimplePool<AsyncTaskJob>.Return(this);
-                }
-                catch
-                {
-                    _action = null;
-                    throw;
-                }
-            }
-        }
-
-        private class StateJob<T> : IAsyncJob
+        private sealed class StateJob<T> : IWorkJob
         {
             private Action<T> _run;
             private T _state;
 
+            public string Name { get; private set; }
+
             public void Init(Action<T> run, T state)
             {
+                Name = run.Method.Name;
                 _run = run;
                 _state = state;
             }
@@ -130,27 +102,27 @@ namespace SP.Core.Fiber
                 try
                 {
                     _run(_state);
+                }
+                finally
+                {
                     _run = null;
                     _state = default;
                     SimplePool<StateJob<T>>.Return(this);
                 }
-                catch
-                {
-                    _run = null;
-                    _state = default;
-                    throw;
-                }
             }
         }
         
-        private class StateJob<T1, T2> : IAsyncJob
+        private sealed class StateJob<T1, T2> : IWorkJob
         {
             private Action<T1, T2> _run;
             private T1 _s1;
             private T2 _s2;
 
+            public string Name { get; private set; }
+            
             public void Init(Action<T1, T2> run, T1 s1, T2 s2)
             {
+                Name = run.Method.Name;
                 _run = run; _s1 = s1; _s2 = s2;
             }
 
@@ -159,24 +131,27 @@ namespace SP.Core.Fiber
                 try
                 {
                     _run(_s1, _s2);
-                    _run = null; _s1 = default; _s2 = default;
-                    SimplePool<StateJob<T1, T2>>.Return(this);
                 }
-                catch
+                finally
                 {
                     _run = null; _s1 = default; _s2 = default;
-                    throw;
+                    SimplePool<StateJob<T1, T2>>.Return(this);
                 }
             }
         }
 
-        private class StateJob<T1, T2, T3> : IAsyncJob
+        private sealed class StateJob<T1, T2, T3> : IWorkJob
         {
             private Action<T1, T2, T3> _run;
-            private T1 _s1; private T2 _s2; private T3 _s3;
+            private T1 _s1;
+            private T2 _s2;
+            private T3 _s3;
 
+            public string Name { get; private set; }
+            
             public void Init(Action<T1, T2, T3> run, T1 s1, T2 s2, T3 s3)
             {
+                Name = run.Method.Name;
                 _run = run; _s1 = s1; _s2 = s2; _s3 = s3;
             }
 
@@ -185,57 +160,45 @@ namespace SP.Core.Fiber
                 try
                 {
                     _run(_s1, _s2, _s3);
+                }
+                finally
+                {
                     _run = null; _s1 = default; _s2 = default; _s3 = default;
                     SimplePool<StateJob<T1, T2, T3>>.Return(this);
                 }
-                catch
-                {
-                    _run = null; _s1 = default; _s2 = default; _s3 = default;
-                    throw;
-                }
             }
         }
 
-        private class StateJob<T1, T2, T3, T4> : IAsyncJob
+        private sealed class ReflectionJob : IWorkJob
         {
-            private Action<T1, T2, T3, T4> _run;
-            private T1 _s1; private T2 _s2; private T3 _s3; private T4 _s4;
+            private object _target;
+            private Action<object, object[]> _invoker;
+            private object[] _args;
 
-            public void Init(Action<T1, T2, T3, T4> run, T1 s1, T2 s2, T3 s3, T4 s4)
+            public string Name { get; private set; }
+            
+            public void Init(string name, object target, Action<object, object[]> invoker, params object[] args)
             {
-                _run = run; _s1 = s1; _s2 = s2; _s3 = s3; _s4 = s4;
-            }
-
-            public void Invoke()
-            {
-                try
-                {
-                    _run(_s1, _s2, _s3, _s4);
-                    _run = null; _s1 = default; _s2 = default; _s3 = default; _s4 = default;
-                    SimplePool<StateJob<T1, T2, T3, T4>>.Return(this);
-                }
-                catch
-                {
-                    _run = null; _s1 = default; _s2 = default; _s3 = default; _s4 = default;
-                    throw;
-                }
-            }
-        }
-
-        private class ReflectionJob : IAsyncJob
-        {
-            private readonly object _target;
-            private readonly Action<object, object[]> _invoker;
-            private readonly object[] _args;
-
-            public ReflectionJob(object target, Action<object, object[]> invoker, params object[] args)
-            {
+                Name = name;
                 _target = target;
                 _invoker = invoker;
                 _args = args;
             }
             
-            public void Invoke() => _invoker(_target, _args);
+            public void Invoke() 
+            { 
+                try
+                {
+                    _invoker(_target, _args);
+                }
+                finally
+                {
+                    _invoker = null;
+                    _target = null;
+                    _args = null;
+                    SimplePool<ReflectionJob>.Return(this);
+                }
+            }
         }
         
         private static Action<object, object[]> BuildInvoker(MethodInfo method)

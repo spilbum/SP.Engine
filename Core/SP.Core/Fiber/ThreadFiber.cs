@@ -1,27 +1,40 @@
 ﻿using System;
 using System.Threading;
-using System.Threading.Tasks;
-using SP.Core.Logging;
 
 namespace SP.Core.Fiber
 {
-    public class ThreadFiber : IFiber, IDisposable
+    public sealed class FiberException : Exception
     {
-        [ThreadStatic] private static IAsyncJob[] _batchBuf;
+        public IFiber Fiber { get; }
+        public IWorkJob Job { get; }
+
+        public FiberException(IFiber fiber, IWorkJob job, string message = "", Exception innerException = null)
+            : base(message, innerException)
+        {
+            Fiber = fiber;
+            Job = job;
+        }
+    }
+    
+    public sealed class ThreadFiber : IFiber
+    {
+        private IWorkJob[] _batchBuf;
         private readonly CancellationTokenSource _cts = new CancellationTokenSource();
         private readonly int _maxBatch;
-        private readonly BatchQueue<IAsyncJob> _queue;
+        private readonly BatchQueue<IWorkJob> _queue;
         private readonly Thread _thread;
+        private readonly Action<FiberException> _onError;
         private volatile bool _disposed;
         private volatile bool _running = true;
-        
-        public ILogger Logger { get; }
 
-        public ThreadFiber(ILogger logger, string name, int maxBatchSize = 1024, int queueCapacity = -1)
+        public string Name { get; }
+
+        public ThreadFiber(string name, int maxBatchSize = 1024, int queueCapacity = 4096, Action<FiberException> onError = null)
         {
+            Name = name;
+            _onError = onError;
             _maxBatch = Math.Max(1, maxBatchSize);
-            _queue = new BatchQueue<IAsyncJob>(queueCapacity);
-            Logger = logger;
+            _queue = new BatchQueue<IWorkJob>(queueCapacity);
             _thread = new Thread(Run) { IsBackground = true, Name = name };
             _thread.Start();
         }
@@ -31,100 +44,76 @@ namespace SP.Core.Fiber
             if (_disposed) return;
             _disposed = true;
             _running = false;
-
-            _queue.Close();
+            
             _cts.Cancel();
-
+                
             if (Thread.CurrentThread != _thread)
             {
-                try
+                if (!_thread.Join(TimeSpan.FromSeconds(3)))
                 {
-                    _thread.Join();
-                }
-                catch
-                {
-                    /* ignore */
+                    Console.WriteLine($"Warning: Fiber '{Name}' shutdown timeout.");
                 }
             }
+            
+            _queue.Dispose();
+            _cts.Dispose();
         }
-
-        public bool Enqueue(Func<Task> action)
-            => Enqueue(AsyncJob.From(action));
-
-        public bool Enqueue(Action action)
-            => Enqueue(AsyncJob.From(action));
-
-        public bool Enqueue<T>(Action<T> action, T state)
-            => Enqueue(AsyncJob.From(action, state));
-
-        public bool Enqueue<T1, T2>(Action<T1, T2> action, T1 s1, T2 s2)
-            => Enqueue(AsyncJob.From(action, s1, s2));
         
-        public bool Enqueue<T1, T2, T3>(Action<T1, T2, T3> action, T1 state1, T2 state2, T3 state3)
-            => Enqueue(AsyncJob.From(action, state1, state2, state3));
-        
-        public bool Enqueue<T1, T2, T3, T4>(Action<T1, T2, T3, T4> action, T1 state1, T2 state2, T3 state3, T4 state4)
-            => Enqueue(AsyncJob.From(action, state1, state2, state3, state4));
+        public bool Enqueue(Action action) => Enqueue(AsyncJob.From(action));
+        public bool Enqueue<T>(Action<T> action, T state) => Enqueue(AsyncJob.From(action, state));
+        public bool Enqueue<T1, T2>(Action<T1, T2> action, T1 s1, T2 s2) => Enqueue(AsyncJob.From(action, s1, s2));
+        public bool Enqueue<T1, T2, T3>(Action<T1, T2, T3> action, T1 s1, T2 s2, T3 s3) => Enqueue(AsyncJob.From(action, s1, s2, s3));
 
-        public bool Enqueue(IAsyncJob job)
+        private bool Enqueue(IWorkJob job)
         {
             if (job == null) throw new ArgumentNullException(nameof(job));
             if (!_running || _disposed) return false;
-            if (_queue.TryEnqueue(job, spinBudge: 1000))
-            {
+            if (_queue.TryEnqueue(job))
                 return true;
-            }
-            
-            Logger.Error("ThreadFiber queue full! Job dropped.");
+
+            var ex = new FiberException(this, job, $"Fiber '{Name}' queue full! Job dropped. Job: {job.Name}");
+            _onError?.Invoke(ex);
             return false;
         }
 
         private void Run()
         {
             var ct = _cts.Token;
-            _batchBuf ??= new IAsyncJob[_maxBatch];
+            _batchBuf ??= new IWorkJob[_maxBatch];
 
-            try
+            while (_running)
             {
-                while (_running || _queue.Count > 0)
+                if (!_queue.WaitForItem(ct))
+                    break;
+
+                if (!_running)
+                    break;
+
+                var buf = _batchBuf;
+                var n = _queue.DequeueBatch(buf);
+
+                for (var i = 0; i < n; i++)
                 {
-                    if (_queue.Count == 0)
-                    {
-                        try
-                        {
-                            _queue.WaitForItem(ct);
-                        }
-                        catch (OperationCanceledException)
-                        {
-                            break;
-                        }
+                    var job = buf[i];
+                    buf[i] = null;
 
-                        if (!_running && _queue.Count == 0)
-                            break;
+                    try
+                    {
+                        job.Invoke();
                     }
-
-                    var buf = _batchBuf;
-                    var n = _queue.DequeueBatch(buf);
-                    for (var i = 0; i < n; i++)
+                    catch (Exception e)
                     {
-                        var job = buf[i];
-                        buf[i] = null;
-                        try
+                        var message = $"Fiber '{Name}' execute failed. Job: {job.Name}, Error: {e.Message}";
+                        if (_onError != null)
                         {
-                            job.Invoke();
+                            _onError(new FiberException(this, job, message, e));
                         }
-                        catch (Exception e)
+                        else
                         {
-                            Logger.Error(e, "ThreadFiber batch failed");
+                            Console.WriteLine(message);
                         }
                     }
                 }
-            }
-            finally
-            {
-                _running = false;
-                _queue.Close();
-                _cts.Cancel();
             }
         }
     }

@@ -8,9 +8,8 @@ namespace SP.Engine.Server.Command;
 [ProtocolCommand(C2SEngineProtocolId.SessionAuthReq)]
 internal class SessionAuth : BaseCommand<Session, C2SEngineProtocolData.SessionAuthReq>
 {
-    protected override Task ExecuteCommand(Session session, C2SEngineProtocolData.SessionAuthReq protocol)
+    protected override void ExecuteCommand(Session session, C2SEngineProtocolData.SessionAuthReq protocol)
     {
         session.OnSessionHandshake(protocol);
-        return Task.CompletedTask;
     }
 }

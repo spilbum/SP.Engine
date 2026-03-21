@@ -8,8 +8,7 @@ namespace SP.Engine.Server.Command;
 [ProtocolCommand(C2SEngineProtocolId.UdpKeepAlive)]
 internal class UdpKeepAlive : BaseCommand<Session, C2SEngineProtocolData.UdpKeepAlive>
 {
-    protected override Task ExecuteCommand(Session session, C2SEngineProtocolData.UdpKeepAlive protocol)
+    protected override void ExecuteCommand(Session session, C2SEngineProtocolData.UdpKeepAlive protocol)
     {
-        return Task.CompletedTask;
     }
 }

@@ -25,29 +25,33 @@ internal static class Program
         using var cts = new CancellationTokenSource();
         using var _ = SubscribeCtrlC(cts);
 
+        GameServer? server = null;
         try
         {
             var config = JsonConfigLoader.Load<AppConfig>("config.json", "config.dev.json");
             if (config == null)
                 throw new InvalidOperationException("Failed to load config file(s).");
 
-            using var server = new GameServer();
+            server = new GameServer();
             if (!server.Initialize(config)) throw new InvalidOperationException("Failed to initialize server.");
             if (!server.Start()) throw new InvalidOperationException("Failed to start server.");
 
             await Task.Delay(Timeout.Infinite, cts.Token);
-
-            server.Stop();
-            return 0;
         }
         catch (OperationCanceledException)
         {
-            return 0;
+            Console.WriteLine("Shutdown signal received");
         }
         catch (Exception e)
         {
             await Console.Error.WriteLineAsync($"Fatal: {e.Message}\n{e.StackTrace}");
             return 1;
         }
+        finally
+        {
+            server?.Dispose();
+        }
+        
+        return 0;
     }
 }

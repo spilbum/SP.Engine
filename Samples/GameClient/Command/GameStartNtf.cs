@@ -7,9 +7,8 @@ namespace GameClient.Command;
 [ProtocolCommand(G2CProtocol.GameStartNtf)]
 public class GameStartNtf : BaseCommand<Client, G2CProtocolData.GameStartNtf>
 {
-    protected override Task ExecuteCommand(Client context, G2CProtocolData.GameStartNtf protocol)
+    protected override void ExecuteCommand(Client context, G2CProtocolData.GameStartNtf protocol)
     {
         context.OnGameStart();
-        return Task.CompletedTask;
     }
 }

@@ -8,9 +8,8 @@ namespace SP.Engine.Server.Command;
 [ProtocolCommand(C2SEngineProtocolId.UdpHelloReq)]
 internal class UdpHelloReq : BaseCommand<Session, C2SEngineProtocolData.UdpHelloReq>
 {
-    protected override Task ExecuteCommand(Session session, C2SEngineProtocolData.UdpHelloReq protocol)
+    protected override void ExecuteCommand(Session session, C2SEngineProtocolData.UdpHelloReq protocol)
     {
         session.OnUdpHandshake(protocol);
-        return Task.CompletedTask;
     }
 }

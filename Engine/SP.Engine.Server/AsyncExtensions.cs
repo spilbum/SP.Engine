@@ -1,23 +1,25 @@
 ﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
+using SP.Core.Fiber;
 using SP.Core.Logging;
 
 namespace SP.Engine.Server;
 
 public static class AsyncExtensions
 {
-    public static Task AsyncRun(this ILogContext logContext, Action task, Action<Exception> exceptionHandler = null)
+    public static Task AsyncRun(this ILogContext logContext, Action task, Action<Exception> onError = null)
     {
-        return Task.Run(task).ContinueWith(t => { HandleException(logContext, t, exceptionHandler); },
+        return Task.Run(task).ContinueWith(t => { HandleException(logContext, t, onError); },
             TaskContinuationOptions.OnlyOnFaulted);
     }
 
     public static Task AsyncRun(this ILogContext logContext,
         Action<object> task,
         object state,
-        Action<Exception> exceptionHandler = null)
+        Action<Exception> onError = null)
     {
-        return Task.Run(() => task(state)).ContinueWith(t => { HandleException(logContext, t, exceptionHandler); },
+        return Task.Run(() => task(state)).ContinueWith(t => { HandleException(logContext, t, onError); },
             TaskContinuationOptions.OnlyOnFaulted);
     }
 
@@ -33,5 +35,39 @@ public static class AsyncExtensions
         else
             foreach (var ex in exceptions)
                 logContext.Logger.Error(ex);
+    }
+    
+    public static void RunAsync(this IFiber fiber, Func<CancellationToken, Task> task, Action callback = null, 
+        Action<Exception> onError = null, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(fiber);
+
+        Task.Run(async () =>
+        {
+            try
+            {
+                await task(ct);
+
+                if (callback != null)
+                {
+                    fiber.Enqueue(callback);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // cancel
+            }
+            catch (Exception ex)
+            {
+                if (onError != null)
+                {
+                    fiber.Enqueue(onError, ex);
+                }
+                else
+                {
+                    Console.WriteLine($"[{fiber.Name}] Async task failed: {ex.Message}");
+                }
+            }
+        }, ct);
     }
 }

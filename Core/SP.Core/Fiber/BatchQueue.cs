@@ -6,67 +6,72 @@ namespace SP.Core.Fiber
     public sealed class BatchQueue<T> : IDisposable where T : class
     {
         private readonly T[] _array;
+        private readonly int _mask;
         private readonly int _capacity;
-        private readonly SemaphoreSlim _signal = new SemaphoreSlim(0);
+        
         private long _head;
         private long _tail;
+        
+        private readonly SemaphoreSlim _signal = new SemaphoreSlim(0);
         private volatile bool _closed;
 
-        public BatchQueue(int capacity = 1000)
+        public BatchQueue(int capacity = 4096)
         {
-            if (capacity <= 0) capacity = 1000;
-            _capacity = capacity;
-            _array = new T[capacity];
+            _capacity = NextPowerOfTwo(capacity);
+            _mask = _capacity - 1;
+            _array = new T[_capacity];
         }
 
-        public int Count => (int)(Volatile.Read(ref _head) - Volatile.Read(ref _tail));
-
-        public bool TryEnqueue(T item, int spinBudge)
+        private static int NextPowerOfTwo(int v)
         {
-            var spin = new SpinWait();
+            v--;
+            v |= v >> 1; 
+            v |= v >> 2; 
+            v |= v >> 4; 
+            v |= v >> 8; 
+            v |= v >> 16;
+            return v + 1;
+        }
 
-            for (var i = 0; i < spinBudge; i++)
+        public bool TryEnqueue(T item, int maxSpinCount = 100)
+        {
+            if (_closed) return false;
+
+            var spinner = new SpinWait();
+            for (var i = 0; i < maxSpinCount; i++)
             {
-                if (TryEnqueue(item)) return true;
-                spin.SpinOnce();
+                var head = Volatile.Read(ref _head);
+                var tail = Volatile.Read(ref _tail);
+
+                if (head - tail < _capacity)
+                {
+                    if (Interlocked.CompareExchange(ref _head, head + 1, head) == head)
+                    {
+                        Volatile.Write(ref _array[head & _mask], item);
+                        if (_signal.CurrentCount == 0) _signal.Release();
+                        return true;
+                    }
+                }
+                
+                spinner.SpinOnce();
             }
-            
             return false;
         }
         
-        private bool TryEnqueue(T item)
-        {
-            if (_closed) return false;
-            
-            var head = Volatile.Read(ref _head);
-            var tail = Volatile.Read(ref _tail);
-
-            if (head - tail >= _capacity) return false;
-            
-            if (Interlocked.CompareExchange(ref _head, head + 1, head) != head)
-                return false;
-
-            _array[head % _capacity] = item;
-
-            if (_signal.CurrentCount != 0) return true;
-            
-            try { _signal.Release(); } catch { /* ignore */ }
-            return true;
-        }
-
         public int DequeueBatch(Span<T> buffer)
         {
             var tail = _tail;
             var head = Volatile.Read(ref _head);
-
             var count = 0;
+            
             while (tail < head && count < buffer.Length)
             {
-                var index = tail % _capacity;
-                var item = _array[index];
+                var index = (int)(tail & _mask);
+                var item = Interlocked.Exchange(ref _array[index], null);
+                
                 if (item == null) break;
+                
                 buffer[count++] = item;
-                _array[index] = null;
                 tail++;
             }
 
@@ -74,13 +79,22 @@ namespace SP.Core.Fiber
             return count;
         }
 
-        public void WaitForItem(CancellationToken ct) => _signal.Wait(ct);
-        public void Close()
+        public bool WaitForItem(CancellationToken ct)
+        {
+            try
+            {
+                _signal.Wait(ct);
+                return true;
+            }
+            catch (OperationCanceledException)
+            {
+                return false;
+            }
+        }
+        public void Dispose()
         {
             _closed = true;
             _signal.Dispose();
         }
-        
-        public void Dispose() => Close();
     }
 }

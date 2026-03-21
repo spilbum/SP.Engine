@@ -7,10 +7,10 @@ namespace GameServer.Connector.Command;
 [ProtocolCommand(R2GProtocol.RankTopAck)]
 public class RankTopAck : BaseCommand<RankConnector, R2GProtocolData.RankTopAck>
 {
-    protected override Task ExecuteCommand(RankConnector context, R2GProtocolData.RankTopAck protocol)
+    protected override void ExecuteCommand(RankConnector context, R2GProtocolData.RankTopAck protocol)
     {
         if (!GameServer.Instance.TryGetPeer(protocol.Uid, out var peer))
-            return Task.CompletedTask;
+            return;
 
         var ack = new G2CProtocolData.RankTopAck
         {
@@ -20,6 +20,5 @@ public class RankTopAck : BaseCommand<RankConnector, R2GProtocolData.RankTopAck>
         };
         if (!peer!.Send(ack))
             context.Logger.Warn("Failed to send RankMyAck");
-        return Task.CompletedTask;
     }
 }

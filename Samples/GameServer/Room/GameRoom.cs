@@ -3,6 +3,7 @@ using GameServer.UserPeer;
 using SP.Core.Fiber;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Protocol;
+using SP.Engine.Server;
 using SP.Engine.Server.Logging;
 
 namespace GameServer.Room;
@@ -71,14 +72,14 @@ public class GameRoom : BaseRoom
 
     public GameRoom(
         GameRoomManager manager,
-        IFiberScheduler scheduler,
+        IFiber fiber,
         long roomId,
         TimeSpan idleTimeout,
         RoomOptions options)
-        : base(manager, scheduler, roomId, idleTimeout)
+        : base(manager, fiber, roomId, idleTimeout)
     {
         _options = options;
-        Scheduler.Schedule(Tick, TimeSpan.Zero, TimeSpan.FromMilliseconds(50));
+        GameServer.Instance.Scheduler.Schedule(fiber, Tick, TimeSpan.Zero, TimeSpan.FromMilliseconds(50));
     }
 
     public RoomState State { get; private set; } = RoomState.Waiting;
@@ -190,7 +191,7 @@ public class GameRoom : BaseRoom
                     _members.Count, _options.ReadyTimeSec);
 
                 _readyTimer?.Dispose();
-                _readyTimer = Scheduler.Schedule(OnReadyTimeout, _options.ReadyTime, TimeSpan.Zero);
+                _readyTimer = GameServer.Instance.Scheduler.Schedule(Fiber, OnReadyTimeout, _options.ReadyTime, TimeSpan.Zero);
                 break;
 
             case RoomState.Playing:
@@ -199,7 +200,7 @@ public class GameRoom : BaseRoom
                     _options.GameDurationSec);
 
                 _gameTimer?.Dispose();
-                _gameTimer = Scheduler.Schedule(EndGameByTimeout, _options.GameDurationMs, TimeSpan.Zero);
+                _gameTimer = GameServer.Instance.Scheduler.Schedule(Fiber, EndGameByTimeout, _options.GameDurationMs, TimeSpan.Zero);
                 break;
 
             case RoomState.Ended:
@@ -221,7 +222,7 @@ public class GameRoom : BaseRoom
 
     public void EnqueueLeaveRoom(long uid, RoomLeaveReason reason)
     {
-        Scheduler.Enqueue(LeaveRoom, uid, reason);
+        Fiber.Enqueue(LeaveRoom, uid, reason);
     }
 
     protected override void ExecuteProtocol(GamePeer peer, IProtocolData protocol)

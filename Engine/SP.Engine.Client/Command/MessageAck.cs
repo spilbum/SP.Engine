@@ -8,10 +8,9 @@ namespace SP.Engine.Client.Command
     [ProtocolCommand(S2CEngineProtocolId.MessageAck)]
     public class MessageAck : BaseCommand<BaseNetPeer, S2CEngineProtocolData.MessageAck>
     {
-        protected override Task ExecuteCommand(BaseNetPeer context, S2CEngineProtocolData.MessageAck protocol)
+        protected override void ExecuteCommand(BaseNetPeer context, S2CEngineProtocolData.MessageAck protocol)
         {
             context.OnMessageAck(protocol.SequenceNumber);
-            return Task.CompletedTask;
         }
     }
 }

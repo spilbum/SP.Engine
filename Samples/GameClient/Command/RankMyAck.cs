@@ -7,17 +7,15 @@ namespace GameClient.Command;
 [ProtocolCommand(G2CProtocol.RankMyAck)]
 public class RankMyAck : BaseCommand<Client, G2CProtocolData.RankMyAck>
 {
-    protected override Task ExecuteCommand(Client context, G2CProtocolData.RankMyAck protocol)
+    protected override void ExecuteCommand(Client context, G2CProtocolData.RankMyAck protocol)
     {
         if (protocol.Result != ErrorCode.Ok)
         {
             context.Logger.Error("RankMyAck failed. result={0}, kind={1}", protocol.Result, protocol.SeasonKind);
-            return Task.CompletedTask;
         }
 
         var info = protocol.Info;
         context.Logger.Debug("RankMyAck - kind={0}, rank={1}, score={2}, name={3}, countryCode={4}",
             protocol.SeasonKind, protocol.Rank, protocol.Score, info?.Name, info?.CountryCode);
-        return Task.CompletedTask;
     }
 }

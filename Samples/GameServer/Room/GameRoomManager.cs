@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using Common;
 using SP.Core.Fiber;
 using SP.Core.Logging;
+using SP.Engine.Server;
 using SP.Engine.Server.Logging;
 
 namespace GameServer.Room;
@@ -26,47 +27,39 @@ public static class RoomIdAllocator
 
 public sealed class GameRoomManager : BaseRoomManager
 {
+    private readonly List<ThreadFiber> _fibers = [];
     private readonly ConcurrentDictionary<long, GameRoom> _rooms = new();
-    private readonly FiberScheduler[] _schedulers;
+    private int _nextFiberIndex;
 
     public GameRoomManager()
     {
         var cores = Math.Max(1, Environment.ProcessorCount);
-        var schedulerCount = Math.Min(64, cores * 2);
+        var fiberCount = Math.Min(64, cores * 2);
 
-        var logger = LogManager.GetLogger();
-        _schedulers = CreateRoomScheduler(schedulerCount, logger);
+        for (var i = 0; i < fiberCount; i++)
+        {
+            var fiber = new ThreadFiber($"RoomFiber_{i:D2}",
+                onError: LogManager.Error);
+
+            _fibers.Add(fiber);
+        }
     }
 
-    private static FiberScheduler[] CreateRoomScheduler(int count, ILogger logger)
+    public override void Dispose()
     {
-        var arr = new FiberScheduler[count];
-        for (var i = 0; i < count; i++)
-            arr[i] = new FiberScheduler(logger, $"RoomScheduler-{i:D2}");
-        return arr;
+        foreach (var fiber in _fibers) fiber.Dispose();
+        _fibers.Clear();
+        
+        base.Dispose();
     }
 
-    private FiberScheduler GetRoomScheduler(long roomId)
+    protected override BaseRoom CreateRoom(long roomId, object? args)
     {
-        var key = unchecked((int)(roomId ^ (roomId >> 32))) & 0x7FFFFFFF;
-        var idx = key % _schedulers.Length;
-        return _schedulers[idx];
-    }
+        if (args is not RoomOptionsInfo optionsInfo)
+            throw new ArgumentException("Invalid RoomOptionsSpecInfo", nameof(args));
 
-    public override void Stop()
-    {
-        foreach (var fiber in _schedulers)
-            fiber.Dispose();
-
-        base.Stop();
-    }
-
-    protected override BaseRoom CreateRoom(long roomId, object? context)
-    {
-        if (context is not RoomOptionsInfo optionsInfo)
-            throw new ArgumentException("Invalid RoomOptionsSpecInfo", nameof(context));
-
-        var fiber = GetRoomScheduler(roomId);
+        var index = Interlocked.Increment(ref _nextFiberIndex) % _fibers.Count;
+        var fiber = _fibers[index];
         var options = RoomOptionsResolver.Resolve(optionsInfo);
 
         return new GameRoom(

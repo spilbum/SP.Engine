@@ -28,8 +28,8 @@ public class DailyRankSeason : BaseRankSeason<long, PlayerRankRecord, PlayerScor
 
     public SeasonState State => (SeasonState)StateValue;
     
-    public DailyRankSeason(ILogger logger)
-        : base(logger, SeasonKind.Daily.ToString())
+    public DailyRankSeason()
+        : base(SeasonKind.Daily.ToString())
     {
         Error += OnError;
     }
@@ -138,7 +138,7 @@ public class DailyRankSeason : BaseRankSeason<long, PlayerRankRecord, PlayerScor
                 break;
             case SeasonState.Break:
                 if (now >= GetBreakEndUtc())
-                    Scheduler.Enqueue(NewSeason, now);
+                    Fiber.Enqueue(NewSeason, now);
                 break;
             default:
                 throw new Exception($"Invalid state: {State}");
@@ -166,7 +166,7 @@ public class DailyRankSeason : BaseRankSeason<long, PlayerRankRecord, PlayerScor
         switch ((SeasonState)state)
         {
             case SeasonState.Ending:
-                Scheduler.Enqueue(EndSeason);
+                Fiber.Enqueue(EndSeason);
                 break;
             case SeasonState.Ended:
                 RequestState((int)SeasonState.Break);

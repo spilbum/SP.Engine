@@ -11,15 +11,15 @@ namespace SP.Engine.Runtime.Command
     {
         public Type ContextType => typeof(TContext);
 
-        public Task Execute(ICommandContext context, IMessage message)
+        public void Execute(ICommandContext context, IMessage message)
         {
             if (!(context is TContext ctx))
-                return Task.CompletedTask;
+                return;
 
             var protocol = context.Deserialize<TProtocol>(message);
-            return ExecuteCommand(ctx, protocol);
+            ExecuteCommand(ctx, protocol);
         }
 
-        protected abstract Task ExecuteCommand(TContext context, TProtocol protocol);
+        protected abstract void ExecuteCommand(TContext context, TProtocol protocol);
     }
 }

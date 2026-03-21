@@ -8,9 +8,8 @@ namespace GameServer.Command;
 [ProtocolCommand(C2GProtocol.GameReadyCompletedNtf)]
 public class GameReadyCompletedNtf : BaseCommand<GamePeer, C2GProtocolData.GameReadyCompletedNtf>
 {
-    protected override Task ExecuteCommand(GamePeer context, C2GProtocolData.GameReadyCompletedNtf protocol)
+    protected override void ExecuteCommand(GamePeer context, C2GProtocolData.GameReadyCompletedNtf protocol)
     {
         context.ExecuteProtocol(protocol);
-        return Task.CompletedTask;
     }
 }

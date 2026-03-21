@@ -1,0 +1,422 @@
+[10:54:49.753 INF] [T:1] [Game] Logger setup was successful: Game
+[10:54:49.889 DBG] [T:1] [Game] [Engine] Discovered '12' commands: [19999, 10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[10:54:49.906 DBG] [T:1] [Game] [NetPeer] Discovered '5' commands: [4003, 4002, 4001, 4000, 2000]
+[10:54:49.907 INF] [T:1] [Game] The server Game is initialized.
+[10:54:49.911 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:54:49.908Z CPU=0.4% WS=64.31MB Managed=926.80KB Threads=19
+[10:54:54.909 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:54:53.908Z CPU=0.0% WS=74.83MB Managed=2.48MB Threads=53
+[10:54:55.581 INF] [T:1] [Game] Listener (0.0.0.0:10000:"Tcp") was started.
+[10:54:55.587 INF] [T:1] [Game] The server instance Game was been started!
+[10:54:55.588 INF] [T:1] [Game] [Rank] State changed: "None" -> "Connecting"
+[10:54:55.589 INF] [T:1] [Game] Group=Dev, Name=Game, Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.191, DnsName=
+[10:54:55.622 INF] [T:11] [Game] [Rank] State changed: "Connecting" -> "Handshake"
+[10:54:55.718 INF] [T:57] [Game] [Rank] State changed: "Handshake" -> "Open"
+[10:54:55.718 DBG] [T:57] [Game] [Rank] Connected
+[10:54:55.742 INF] [T:7] [Game] Register succeeded: Rank
+[10:54:59.908 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:54:58.908Z CPU=0.0% WS=67.38MB Managed=193.13MB Threads=65
+[10:55:04.908 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:55:03.908Z CPU=0.0% WS=67.73MB Managed=193.26MB Threads=64
+[10:55:09.908 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:55:08.908Z CPU=0.0% WS=68.05MB Managed=193.39MB Threads=65
+[10:55:14.908 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:55:13.908Z CPU=0.0% WS=67.30MB Managed=193.52MB Threads=65
+[10:55:19.908 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:55:18.908Z CPU=0.0% WS=69.89MB Managed=193.64MB Threads=65
+[10:55:24.908 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:55:23.908Z CPU=0.0% WS=70.41MB Managed=193.77MB Threads=65
+[10:55:29.909 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:55:29.908Z CPU=0.0% WS=70.78MB Managed=193.92MB Threads=65
+[10:55:34.908 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:55:33.909Z CPU=0.0% WS=70.89MB Managed=194.03MB Threads=65
+[10:55:39.908 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:55:38.908Z CPU=0.0% WS=71.23MB Managed=194.16MB Threads=65
+[10:55:44.909 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:55:43.908Z CPU=0.0% WS=72.02MB Managed=194.28MB Threads=65
+[10:55:49.908 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:55:48.907Z CPU=0.0% WS=72.31MB Managed=194.41MB Threads=65
+[10:55:54.908 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:55:53.909Z CPU=0.0% WS=72.50MB Managed=194.54MB Threads=65
+[10:55:59.909 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:55:58.908Z CPU=0.0% WS=72.81MB Managed=194.68MB Threads=65
+[10:56:04.909 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:56:03.908Z CPU=0.0% WS=71.27MB Managed=194.80MB Threads=65
+[10:56:09.909 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:56:08.908Z CPU=0.0% WS=69.50MB Managed=194.92MB Threads=64
+[10:56:14.908 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:56:13.909Z CPU=0.0% WS=68.20MB Managed=195.04MB Threads=64
+[10:56:19.908 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:56:18.908Z CPU=0.0% WS=68.33MB Managed=195.17MB Threads=64
+[10:56:24.908 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:56:23.908Z CPU=0.0% WS=68.55MB Managed=194.98MB Threads=64
+[10:56:29.909 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:56:28.908Z CPU=0.0% WS=74.89MB Managed=195.12MB Threads=65
+[10:56:34.909 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:56:33.909Z CPU=0.0% WS=74.94MB Managed=195.27MB Threads=66
+[10:56:39.909 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:56:38.908Z CPU=0.0% WS=74.06MB Managed=195.41MB Threads=66
+[10:56:44.909 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:56:44.909Z CPU=0.0% WS=74.22MB Managed=195.57MB Threads=65
+[10:56:49.909 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:56:48.908Z CPU=0.0% WS=74.22MB Managed=195.67MB Threads=65
+[10:56:54.909 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:56:53.909Z CPU=0.0% WS=74.23MB Managed=195.80MB Threads=65
+[10:56:59.908 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:56:58.909Z CPU=0.0% WS=75.72MB Managed=195.93MB Threads=65
+[10:57:04.909 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:57:03.909Z CPU=0.0% WS=61.08MB Managed=196.06MB Threads=66
+[10:57:09.910 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:57:08.909Z CPU=0.0% WS=61.08MB Managed=196.19MB Threads=66
+[10:57:14.910 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:57:13.909Z CPU=0.0% WS=59.58MB Managed=196.31MB Threads=66
+[10:57:19.910 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:57:18.908Z CPU=0.0% WS=57.31MB Managed=196.45MB Threads=66
+[10:57:24.909 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:57:23.908Z CPU=0.0% WS=57.59MB Managed=196.57MB Threads=65
+[10:57:29.909 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:57:28.910Z CPU=0.0% WS=57.81MB Managed=196.70MB Threads=65
+[10:57:34.909 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:57:33.909Z CPU=0.0% WS=57.83MB Managed=196.82MB Threads=64
+[10:57:39.909 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:57:38.909Z CPU=0.0% WS=57.86MB Managed=196.94MB Threads=63
+[10:57:44.909 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:57:43.909Z CPU=0.0% WS=58.00MB Managed=197.06MB Threads=64
+[10:57:49.909 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:57:48.909Z CPU=0.0% WS=58.02MB Managed=197.19MB Threads=64
+[10:57:54.909 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:57:53.910Z CPU=0.0% WS=58.03MB Managed=197.30MB Threads=64
+[10:57:59.909 INF] [T:7] [PerfMonitor] Time:2026-03-20 01:57:58.909Z CPU=0.0% WS=54.14MB Managed=197.42MB Threads=65
+[14:56:08.203 INF] [T:1] [Game] Logger setup was successful: Game
+[14:56:08.340 DBG] [T:1] [Game] [Engine] Discovered '12' commands: [19999, 10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[14:56:08.356 DBG] [T:1] [Game] [NetPeer] Discovered '5' commands: [4003, 4002, 4001, 4000, 2000]
+[14:56:08.357 INF] [T:1] [Game] The server Game is initialized.
+[14:56:14.033 INF] [T:1] [Game] Listener (0.0.0.0:10000:"Tcp") was started.
+[14:56:14.036 INF] [T:1] [Game] The server instance Game was been started!
+[14:56:14.037 INF] [T:1] [Game] [Rank] State changed: "None" -> "Connecting"
+[14:56:14.038 INF] [T:1] [Game] Group=Dev, Name=Game, Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.191, DnsName=
+[14:56:14.070 INF] [T:11] [Game] [Rank] State changed: "Connecting" -> "Handshake"
+[14:56:14.161 INF] [T:12] [Game] [Rank] State changed: "Handshake" -> "Open"
+[14:56:14.161 DBG] [T:12] [Game] [Rank] Connected
+[14:56:14.191 INF] [T:7] [Game] Register succeeded: Rank
+[14:57:08.364 INF] [T:7] [PerfMonitor] Time:2026-03-20 05:57:07.358Z CPU=0.0% WS=62.56MB Managed=194.25MB Threads=64
+[14:58:08.359 INF] [T:7] [PerfMonitor] Time:2026-03-20 05:58:07.358Z CPU=0.0% WS=70.11MB Managed=195.46MB Threads=66
+[14:59:08.359 INF] [T:7] [PerfMonitor] Time:2026-03-20 05:59:07.358Z CPU=0.0% WS=71.84MB Managed=196.92MB Threads=64
+[15:00:08.360 INF] [T:7] [PerfMonitor] Time:2026-03-20 06:00:07.359Z CPU=0.1% WS=57.83MB Managed=198.41MB Threads=63
+[15:01:08.362 INF] [T:7] [PerfMonitor] Time:2026-03-20 06:01:07.360Z CPU=0.0% WS=59.34MB Managed=199.85MB Threads=64
+[15:02:08.364 INF] [T:7] [PerfMonitor] Time:2026-03-20 06:02:07.360Z CPU=0.0% WS=64.34MB Managed=201.31MB Threads=64
+[15:03:08.361 INF] [T:7] [PerfMonitor] Time:2026-03-20 06:03:07.361Z CPU=0.0% WS=65.80MB Managed=202.73MB Threads=63
+[15:04:08.362 INF] [T:7] [PerfMonitor] Time:2026-03-20 06:04:07.361Z CPU=0.0% WS=67.55MB Managed=196.25MB Threads=64
+[15:05:08.362 INF] [T:7] [PerfMonitor] Time:2026-03-20 06:05:07.362Z CPU=0.0% WS=65.20MB Managed=197.69MB Threads=64
+[15:06:08.362 INF] [T:7] [PerfMonitor] Time:2026-03-20 06:06:07.360Z CPU=0.0% WS=65.20MB Managed=199.15MB Threads=63
+[15:07:59.582 INF] [T:1] [Game] Logger setup was successful: Game
+[15:07:59.733 DBG] [T:1] [Game] [Engine] Discovered '12' commands: [19999, 10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[15:07:59.749 DBG] [T:1] [Game] [NetPeer] Discovered '5' commands: [4003, 4002, 4001, 4000, 2000]
+[15:07:59.750 INF] [T:1] [Game] The server Game is initialized.
+[15:08:05.447 INF] [T:1] [Game] Listener (0.0.0.0:10000:"Tcp") was started.
+[15:08:05.450 INF] [T:1] [Game] The server instance Game was been started!
+[15:08:05.451 INF] [T:1] [Game] [Rank] State changed: "None" -> "Connecting"
+[15:08:05.451 INF] [T:1] [Game] Group=Dev, Name=Game, Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.191, DnsName=
+[15:08:05.484 INF] [T:12] [Game] [Rank] State changed: "Connecting" -> "Handshake"
+[15:08:05.576 INF] [T:12] [Game] [Rank] State changed: "Handshake" -> "Open"
+[15:08:05.576 DBG] [T:12] [Game] [Rank] Connected
+[15:08:05.605 INF] [T:7] [Game] Register succeeded: Rank
+[15:46:05.854 INF] [T:1] [Game] Logger setup was successful: Game
+[15:46:05.994 DBG] [T:1] [Game] [Engine] Discovered '12' commands: [19999, 10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[15:46:06.009 DBG] [T:1] [Game] [NetPeer] Discovered '5' commands: [4003, 4002, 4001, 4000, 2000]
+[15:46:06.010 INF] [T:1] [Game] The server Game is initialized.
+[15:46:11.700 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[15:46:11.702 INF] [T:1] [Game] The server instance Game was been started!
+[15:46:11.703 INF] [T:1] [Game] [Rank] State changed: "None" -> "Connecting"
+[15:46:11.704 INF] [T:1] [Game] Group=Dev, Name=Game, Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.191, DnsName=
+[15:46:11.736 INF] [T:12] [Game] [Rank] State changed: "Connecting" -> "Handshake"
+[15:46:11.825 INF] [T:12] [Game] [Rank] State changed: "Handshake" -> "Open"
+[15:46:11.826 DBG] [T:12] [Game] [Rank] Connected
+[15:49:44.263 INF] [T:1] [Game] Logger setup was successful: Game
+[15:49:44.434 DBG] [T:1] [Game] [Engine] Discovered '12' commands: [19999, 10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[15:49:44.451 DBG] [T:1] [Game] [NetPeer] Discovered '5' commands: [4003, 4002, 4001, 4000, 2000]
+[15:49:44.452 INF] [T:1] [Game] The server Game is initialized.
+[15:49:50.132 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[15:49:50.135 INF] [T:1] [Game] The server instance Game was been started!
+[15:49:50.136 INF] [T:1] [Game] [Rank] State changed: "None" -> "Connecting"
+[15:49:50.136 INF] [T:1] [Game] Group=Dev, Name=Game, Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.191, DnsName=
+[15:49:50.168 INF] [T:11] [Game] [Rank] State changed: "Connecting" -> "Handshake"
+[15:49:50.256 INF] [T:12] [Game] [Rank] State changed: "Handshake" -> "Open"
+[15:49:50.257 DBG] [T:12] [Game] [Rank] Connected
+[15:49:50.289 INF] [T:7] [Game] Register succeeded: Rank
+[15:52:17.865 INF] [T:1] [Game] Logger setup was successful: Game
+[15:52:18.006 DBG] [T:1] [Game] [Engine] Discovered '12' commands: [19999, 10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[15:52:18.022 DBG] [T:1] [Game] [NetPeer] Discovered '5' commands: [4003, 4002, 4001, 4000, 2000]
+[15:52:18.023 INF] [T:1] [Game] The server Game is initialized.
+[15:52:18.027 INF] [T:7] [PerfMonitor] Time:2026-03-20 06:52:18.025Z CPU=0.4% WS=64.11MB Managed=897.34KB Threads=19
+[15:52:23.704 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[15:52:23.706 INF] [T:1] [Game] The server instance Game was been started!
+[15:52:23.707 INF] [T:1] [Game] [Rank] State changed: "None" -> "Connecting"
+[15:52:23.707 INF] [T:1] [Game] Group=Dev, Name=Game, Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.191, DnsName=
+[15:52:23.740 INF] [T:9] [Game] [Rank] State changed: "Connecting" -> "Handshake"
+[15:52:23.830 INF] [T:9] [Game] [Rank] State changed: "Handshake" -> "Open"
+[15:52:23.831 DBG] [T:9] [Game] [Rank] Connected
+[15:52:23.862 INF] [T:7] [Game] Register succeeded: Rank
+[15:54:28.785 INF] [T:1] [Game] Logger setup was successful: Game
+[15:54:28.921 DBG] [T:1] [Game] [Engine] Discovered '12' commands: [19999, 10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[15:54:28.935 DBG] [T:1] [Game] [NetPeer] Discovered '5' commands: [4003, 4002, 4001, 4000, 2000]
+[15:54:28.936 INF] [T:1] [Game] The server Game is initialized.
+[16:04:13.632 INF] [T:1] [Game] Logger setup was successful: Game
+[16:04:13.770 DBG] [T:1] [Game] [Engine] Discovered '12' commands: [19999, 10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[16:04:13.784 DBG] [T:1] [Game] [NetPeer] Discovered '5' commands: [4003, 4002, 4001, 4000, 2000]
+[16:04:13.785 INF] [T:1] [Game] The server Game is initialized.
+[16:04:19.512 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[16:04:19.515 INF] [T:1] [Game] The server instance Game was been started!
+[16:04:19.516 INF] [T:1] [Game] [Rank] State changed: "None" -> "Connecting"
+[16:04:19.516 INF] [T:1] [Game] Group=Dev, Name=Game, Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.191, DnsName=
+[16:04:19.549 INF] [T:11] [Game] [Rank] State changed: "Connecting" -> "Handshake"
+[16:04:19.643 INF] [T:12] [Game] [Rank] State changed: "Handshake" -> "Open"
+[16:04:19.643 DBG] [T:12] [Game] [Rank] Connected
+[16:04:19.669 INF] [T:7] [Game] Register succeeded: Rank
+[16:04:28.885 INF] [T:1] [Game] Logger setup was successful: Game
+[16:04:29.025 DBG] [T:1] [Game] [Engine] Discovered '12' commands: [19999, 10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[16:04:29.041 DBG] [T:1] [Game] [NetPeer] Discovered '5' commands: [4003, 4002, 4001, 4000, 2000]
+[16:04:29.042 INF] [T:1] [Game] The server Game is initialized.
+[16:04:29.693 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[16:04:29.696 INF] [T:1] [Game] The server instance Game was been started!
+[16:04:29.698 INF] [T:1] [Game] [Rank] State changed: "None" -> "Connecting"
+[16:04:29.698 INF] [T:1] [Game] Group=Dev, Name=Game, Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.191, DnsName=
+[16:04:29.731 INF] [T:9] [Game] [Rank] State changed: "Connecting" -> "Handshake"
+[16:04:29.791 INF] [T:45] [Game] [Rank] State changed: "Handshake" -> "Open"
+[16:04:29.791 DBG] [T:45] [Game] [Rank] Connected
+[16:04:29.822 INF] [T:7] [Game] Register succeeded: Rank
+[16:04:38.477 DBG] [T:45] [Game] A new session connected. sessionId=b3cff92b-da36-4230-8133-0ed18481aff8, remoteEndPoint=192.168.0.191:56167
+[16:04:38.551 DBG] [T:57] [Game] Session authentication succeeded. sessionId=b3cff92b-da36-4230-8133-0ed18481aff8, peerId=1
+[16:04:45.207 DBG] [T:12] [Game] Bind peer: uid=1000001, peerId=1
+[16:04:49.290 DBG] [T:45] [Game] Received a termination request from the client. isClosing=false
+[16:04:49.293 DBG] [T:45] [Game] The session b3cff92b-da36-4230-8133-0ed18481aff8 has been closed. reason="ClientClosing"
+[16:04:49.296 DBG] [T:45] [Game] Unbind peer: uid=1000001, peerId=1
+[16:04:49.296 DBG] [T:45] [Game] Peer leaved. uid=1000001, reason="ClientClosing"
+[16:05:29.053 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:05:28.044Z CPU=0.0% WS=75.88MB Managed=197.13MB Threads=65
+[16:06:29.044 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:06:28.044Z CPU=0.0% WS=80.94MB Managed=198.60MB Threads=64
+[16:07:29.045 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:07:28.045Z CPU=0.0% WS=76.59MB Managed=200.06MB Threads=63
+[16:08:29.044 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:08:28.045Z CPU=0.0% WS=73.19MB Managed=201.53MB Threads=64
+[16:09:29.046 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:09:28.045Z CPU=0.0% WS=65.02MB Managed=202.98MB Threads=64
+[16:10:29.045 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:10:28.045Z CPU=0.1% WS=72.44MB Managed=196.22MB Threads=63
+[16:11:29.046 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:11:28.045Z CPU=0.1% WS=72.86MB Managed=197.65MB Threads=63
+[16:12:29.046 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:12:28.045Z CPU=0.1% WS=72.95MB Managed=199.08MB Threads=63
+[16:13:29.047 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:13:28.046Z CPU=0.1% WS=73.11MB Managed=200.51MB Threads=63
+[16:14:29.047 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:14:28.046Z CPU=0.1% WS=73.75MB Managed=201.94MB Threads=63
+[16:15:29.047 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:15:28.047Z CPU=0.1% WS=76.41MB Managed=203.38MB Threads=63
+[16:16:29.047 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:16:28.047Z CPU=0.1% WS=77.11MB Managed=196.93MB Threads=64
+[16:17:29.046 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:17:28.046Z CPU=0.1% WS=77.11MB Managed=198.37MB Threads=63
+[16:18:29.047 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:18:28.046Z CPU=0.1% WS=77.20MB Managed=199.81MB Threads=63
+[16:19:29.047 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:19:28.046Z CPU=0.1% WS=77.23MB Managed=201.24MB Threads=63
+[16:20:29.047 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:20:28.046Z CPU=0.1% WS=78.00MB Managed=202.67MB Threads=63
+[16:21:29.048 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:21:28.047Z CPU=0.1% WS=78.08MB Managed=196.22MB Threads=63
+[16:22:29.049 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:22:28.049Z CPU=0.1% WS=78.12MB Managed=197.68MB Threads=64
+[16:23:29.049 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:23:28.049Z CPU=0.1% WS=78.09MB Managed=199.11MB Threads=62
+[16:24:29.048 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:24:28.049Z CPU=0.0% WS=78.17MB Managed=200.57MB Threads=64
+[16:25:29.049 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:25:28.049Z CPU=0.1% WS=78.16MB Managed=202.01MB Threads=63
+[16:26:29.050 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:26:28.050Z CPU=0.1% WS=78.20MB Managed=203.45MB Threads=63
+[16:27:29.049 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:27:28.051Z CPU=0.1% WS=68.73MB Managed=197.02MB Threads=63
+[16:28:29.049 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:28:28.050Z CPU=0.0% WS=69.78MB Managed=198.45MB Threads=64
+[16:29:29.050 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:29:28.050Z CPU=0.1% WS=63.00MB Managed=199.89MB Threads=63
+[16:30:29.050 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:30:28.051Z CPU=0.1% WS=64.97MB Managed=201.35MB Threads=64
+[16:31:29.050 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:31:28.050Z CPU=0.1% WS=66.75MB Managed=202.79MB Threads=63
+[16:32:29.050 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:32:28.050Z CPU=0.1% WS=68.69MB Managed=196.31MB Threads=62
+[16:33:29.051 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:33:28.052Z CPU=0.0% WS=68.86MB Managed=197.74MB Threads=63
+[16:34:29.052 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:34:28.052Z CPU=0.0% WS=66.67MB Managed=199.21MB Threads=63
+[16:35:29.053 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:35:28.051Z CPU=0.0% WS=66.45MB Managed=200.65MB Threads=63
+[16:36:29.052 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:36:29.052Z CPU=0.1% WS=62.73MB Managed=202.10MB Threads=63
+[16:37:29.053 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:37:28.053Z CPU=0.1% WS=63.34MB Managed=203.54MB Threads=65
+[16:38:29.053 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:38:28.053Z CPU=0.0% WS=65.78MB Managed=197.12MB Threads=65
+[16:39:29.054 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:39:29.054Z CPU=0.1% WS=66.02MB Managed=198.60MB Threads=64
+[16:40:29.053 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:40:29.053Z CPU=0.0% WS=66.19MB Managed=200.04MB Threads=64
+[16:41:29.054 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:41:29.054Z CPU=0.0% WS=59.22MB Managed=201.47MB Threads=63
+[16:42:29.054 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:42:29.054Z CPU=0.1% WS=60.89MB Managed=202.91MB Threads=64
+[16:43:29.053 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:43:29.053Z CPU=0.1% WS=62.83MB Managed=196.49MB Threads=63
+[16:44:29.055 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:44:28.055Z CPU=0.1% WS=41.66MB Managed=197.91MB Threads=63
+[16:45:29.055 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:45:28.055Z CPU=0.1% WS=44.77MB Managed=199.34MB Threads=64
+[16:46:29.055 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:46:28.055Z CPU=0.1% WS=46.06MB Managed=200.78MB Threads=63
+[16:47:29.055 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:47:28.055Z CPU=0.1% WS=49.53MB Managed=202.24MB Threads=64
+[16:48:29.056 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:48:28.056Z CPU=0.0% WS=43.17MB Managed=203.66MB Threads=64
+[16:49:29.057 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:49:28.057Z CPU=0.1% WS=52.14MB Managed=197.23MB Threads=63
+[16:50:29.057 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:50:28.057Z CPU=0.1% WS=60.05MB Managed=198.68MB Threads=63
+[16:51:29.057 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:51:28.057Z CPU=0.1% WS=59.70MB Managed=200.13MB Threads=63
+[16:52:29.056 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:52:28.057Z CPU=0.1% WS=57.34MB Managed=201.55MB Threads=63
+[16:53:29.056 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:53:28.057Z CPU=0.1% WS=59.44MB Managed=202.99MB Threads=64
+[16:54:29.056 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:54:28.057Z CPU=0.1% WS=60.12MB Managed=196.51MB Threads=63
+[16:55:29.057 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:55:28.058Z CPU=0.0% WS=53.27MB Managed=197.95MB Threads=64
+[16:56:29.058 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:56:28.058Z CPU=0.1% WS=53.53MB Managed=199.39MB Threads=63
+[16:57:29.058 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:57:28.059Z CPU=0.0% WS=51.88MB Managed=200.81MB Threads=63
+[16:58:29.058 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:58:28.062Z CPU=0.0% WS=51.47MB Managed=202.25MB Threads=63
+[16:59:29.058 INF] [T:7] [PerfMonitor] Time:2026-03-20 07:59:28.058Z CPU=0.1% WS=42.25MB Managed=203.68MB Threads=63
+[17:00:29.059 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:00:28.059Z CPU=0.0% WS=48.81MB Managed=197.24MB Threads=63
+[17:01:29.060 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:01:28.060Z CPU=0.0% WS=48.78MB Managed=198.66MB Threads=63
+[17:02:29.060 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:02:28.060Z CPU=0.0% WS=55.67MB Managed=200.12MB Threads=63
+[17:03:29.060 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:03:28.061Z CPU=0.1% WS=54.89MB Managed=201.57MB Threads=65
+[17:04:29.060 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:04:28.061Z CPU=0.1% WS=50.48MB Managed=203.03MB Threads=63
+[17:05:29.061 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:05:28.060Z CPU=0.1% WS=57.30MB Managed=196.56MB Threads=63
+[17:06:29.061 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:06:28.061Z CPU=0.1% WS=59.77MB Managed=198.01MB Threads=63
+[17:07:29.059 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:07:28.060Z CPU=0.1% WS=61.06MB Managed=199.44MB Threads=63
+[17:08:29.058 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:08:28.059Z CPU=0.1% WS=61.22MB Managed=200.88MB Threads=63
+[17:09:29.058 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:09:28.059Z CPU=0.1% WS=61.41MB Managed=202.34MB Threads=65
+[17:10:29.059 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:10:28.059Z CPU=0.1% WS=61.48MB Managed=203.78MB Threads=63
+[17:11:29.059 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:11:28.060Z CPU=0.1% WS=55.22MB Managed=197.31MB Threads=63
+[17:12:29.059 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:12:28.061Z CPU=0.1% WS=55.22MB Managed=198.74MB Threads=63
+[17:13:29.060 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:13:28.061Z CPU=0.1% WS=55.22MB Managed=200.17MB Threads=63
+[17:14:29.060 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:14:28.061Z CPU=0.1% WS=55.97MB Managed=201.60MB Threads=63
+[17:15:29.060 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:15:28.062Z CPU=0.1% WS=55.98MB Managed=203.04MB Threads=63
+[17:20:01.808 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:20:00.807Z CPU=0.0% WS=36.31MB Managed=196.12MB Threads=63
+[17:21:01.808 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:21:00.809Z CPU=0.1% WS=42.38MB Managed=197.57MB Threads=64
+[17:22:01.808 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:22:00.809Z CPU=0.1% WS=43.89MB Managed=199.00MB Threads=64
+[17:23:01.809 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:23:00.810Z CPU=0.1% WS=45.38MB Managed=200.45MB Threads=64
+[17:24:01.808 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:24:00.809Z CPU=0.1% WS=47.05MB Managed=201.90MB Threads=63
+[17:25:01.810 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:25:00.810Z CPU=0.1% WS=48.62MB Managed=203.32MB Threads=63
+[17:26:01.809 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:26:00.811Z CPU=0.1% WS=51.94MB Managed=196.88MB Threads=64
+[17:27:01.811 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:27:00.810Z CPU=0.1% WS=51.97MB Managed=198.37MB Threads=65
+[17:28:01.810 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:28:00.810Z CPU=0.1% WS=51.95MB Managed=199.84MB Threads=64
+[17:29:01.811 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:29:00.812Z CPU=0.0% WS=52.05MB Managed=201.33MB Threads=65
+[17:30:01.811 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:30:00.813Z CPU=0.0% WS=52.03MB Managed=202.76MB Threads=64
+[17:31:01.811 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:31:00.813Z CPU=0.0% WS=52.05MB Managed=196.36MB Threads=64
+[17:32:01.813 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:32:00.814Z CPU=0.0% WS=52.05MB Managed=197.81MB Threads=64
+[17:33:01.812 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:33:00.813Z CPU=0.0% WS=52.06MB Managed=199.25MB Threads=64
+[17:34:01.812 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:34:00.813Z CPU=0.0% WS=52.06MB Managed=200.69MB Threads=63
+[17:35:01.813 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:35:00.815Z CPU=0.0% WS=52.12MB Managed=202.18MB Threads=65
+[17:36:01.813 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:36:00.814Z CPU=0.1% WS=53.73MB Managed=195.76MB Threads=63
+[17:37:01.813 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:37:00.814Z CPU=0.0% WS=54.12MB Managed=197.25MB Threads=64
+[17:38:01.814 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:38:00.815Z CPU=0.1% WS=54.12MB Managed=198.69MB Threads=64
+[17:39:01.814 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:39:00.814Z CPU=0.0% WS=55.55MB Managed=200.17MB Threads=65
+[17:40:01.815 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:40:00.814Z CPU=0.1% WS=55.53MB Managed=201.61MB Threads=63
+[17:41:01.815 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:41:00.816Z CPU=0.0% WS=55.88MB Managed=203.09MB Threads=64
+[17:42:01.815 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:42:00.816Z CPU=0.1% WS=56.67MB Managed=196.66MB Threads=63
+[17:43:01.816 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:43:00.815Z CPU=0.1% WS=56.47MB Managed=198.08MB Threads=63
+[17:44:01.816 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:44:00.816Z CPU=0.0% WS=56.41MB Managed=199.57MB Threads=64
+[17:45:01.817 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:45:00.816Z CPU=0.1% WS=56.41MB Managed=200.99MB Threads=63
+[17:46:01.817 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:46:00.817Z CPU=0.1% WS=56.41MB Managed=202.43MB Threads=63
+[17:47:01.817 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:47:00.817Z CPU=0.1% WS=56.41MB Managed=196.01MB Threads=63
+[17:48:01.818 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:48:00.818Z CPU=0.1% WS=56.41MB Managed=197.45MB Threads=63
+[17:49:01.818 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:49:00.819Z CPU=0.1% WS=55.70MB Managed=198.91MB Threads=64
+[17:50:01.818 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:50:00.820Z CPU=0.1% WS=55.69MB Managed=200.34MB Threads=63
+[17:51:01.818 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:51:00.819Z CPU=0.1% WS=55.70MB Managed=201.77MB Threads=63
+[17:52:01.817 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:52:00.820Z CPU=0.1% WS=55.69MB Managed=203.20MB Threads=62
+[17:53:01.819 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:53:00.818Z CPU=0.1% WS=55.72MB Managed=196.79MB Threads=64
+[17:54:01.819 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:54:00.821Z CPU=0.1% WS=55.70MB Managed=198.20MB Threads=63
+[17:55:58.728 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:55:57.728Z CPU=0.1% WS=31.31MB Managed=199.63MB Threads=63
+[17:56:58.728 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:56:57.728Z CPU=0.1% WS=35.23MB Managed=201.07MB Threads=64
+[17:57:58.728 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:57:57.728Z CPU=0.1% WS=37.27MB Managed=202.52MB Threads=63
+[17:58:58.729 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:58:57.729Z CPU=0.1% WS=41.80MB Managed=196.05MB Threads=63
+[17:59:58.729 INF] [T:7] [PerfMonitor] Time:2026-03-20 08:59:57.728Z CPU=0.1% WS=42.36MB Managed=197.54MB Threads=65
+[18:00:58.729 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:00:57.729Z CPU=0.1% WS=42.50MB Managed=198.96MB Threads=63
+[18:01:58.729 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:01:57.729Z CPU=0.1% WS=42.50MB Managed=200.40MB Threads=63
+[18:02:58.729 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:02:58.729Z CPU=0.1% WS=42.56MB Managed=201.88MB Threads=65
+[18:03:58.729 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:03:57.729Z CPU=0.1% WS=42.53MB Managed=203.32MB Threads=63
+[18:04:58.729 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:04:57.730Z CPU=0.0% WS=42.50MB Managed=196.88MB Threads=63
+[18:05:58.730 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:05:57.730Z CPU=0.0% WS=42.53MB Managed=198.32MB Threads=64
+[18:06:58.730 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:06:57.730Z CPU=0.1% WS=42.52MB Managed=199.75MB Threads=63
+[18:07:58.731 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:07:57.731Z CPU=0.1% WS=42.55MB Managed=201.20MB Threads=64
+[18:08:58.731 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:08:57.730Z CPU=0.1% WS=42.53MB Managed=202.62MB Threads=63
+[18:09:58.731 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:09:57.731Z CPU=0.1% WS=43.25MB Managed=196.17MB Threads=63
+[18:10:58.731 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:10:57.731Z CPU=0.1% WS=43.55MB Managed=197.64MB Threads=64
+[18:11:58.731 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:11:57.732Z CPU=0.0% WS=50.19MB Managed=199.08MB Threads=64
+[18:12:58.732 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:12:57.732Z CPU=0.0% WS=50.22MB Managed=200.53MB Threads=64
+[18:13:58.732 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:13:57.732Z CPU=0.1% WS=50.20MB Managed=201.97MB Threads=63
+[18:14:58.733 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:14:57.732Z CPU=0.1% WS=50.20MB Managed=203.41MB Threads=63
+[18:15:58.733 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:15:57.732Z CPU=0.0% WS=50.23MB Managed=197.02MB Threads=64
+[18:16:58.733 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:16:57.733Z CPU=0.0% WS=50.06MB Managed=198.46MB Threads=64
+[18:17:58.732 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:17:57.733Z CPU=0.1% WS=50.03MB Managed=199.90MB Threads=63
+[18:18:58.734 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:18:57.734Z CPU=0.0% WS=50.03MB Managed=201.33MB Threads=63
+[18:19:58.733 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:19:57.734Z CPU=0.0% WS=50.05MB Managed=202.78MB Threads=63
+[18:20:58.734 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:20:57.733Z CPU=0.1% WS=50.09MB Managed=196.35MB Threads=63
+[18:21:58.734 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:21:57.734Z CPU=0.1% WS=50.23MB Managed=197.78MB Threads=63
+[18:22:58.734 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:22:57.734Z CPU=0.1% WS=50.23MB Managed=199.21MB Threads=63
+[18:23:58.735 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:23:57.735Z CPU=0.1% WS=50.23MB Managed=200.65MB Threads=63
+[18:24:58.743 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:24:57.742Z CPU=0.1% WS=50.27MB Managed=202.12MB Threads=64
+[18:25:58.743 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:25:57.743Z CPU=0.1% WS=50.25MB Managed=203.54MB Threads=63
+[18:26:58.743 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:26:57.743Z CPU=0.1% WS=54.88MB Managed=196.74MB Threads=64
+[18:27:58.743 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:27:57.744Z CPU=0.1% WS=54.88MB Managed=198.17MB Threads=64
+[18:28:58.745 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:28:57.743Z CPU=0.1% WS=54.86MB Managed=199.60MB Threads=63
+[18:29:58.744 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:29:57.744Z CPU=0.1% WS=54.86MB Managed=201.04MB Threads=63
+[18:31:24.760 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:31:23.758Z CPU=0.1% WS=30.34MB Managed=202.52MB Threads=66
+[18:32:24.759 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:32:23.759Z CPU=0.1% WS=42.20MB Managed=196.11MB Threads=64
+[18:33:24.759 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:33:23.758Z CPU=0.1% WS=42.61MB Managed=197.53MB Threads=63
+[18:34:24.760 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:34:24.759Z CPU=0.1% WS=43.28MB Managed=199.00MB Threads=63
+[18:35:24.760 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:35:23.759Z CPU=0.1% WS=43.66MB Managed=200.44MB Threads=65
+[18:36:24.759 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:36:23.760Z CPU=0.0% WS=43.72MB Managed=201.87MB Threads=63
+[18:37:24.760 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:37:23.760Z CPU=0.1% WS=43.78MB Managed=203.31MB Threads=64
+[18:38:24.760 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:38:23.760Z CPU=0.1% WS=43.88MB Managed=196.86MB Threads=63
+[18:39:24.760 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:39:23.760Z CPU=0.0% WS=43.89MB Managed=198.29MB Threads=64
+[18:40:24.760 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:40:23.760Z CPU=0.0% WS=43.84MB Managed=199.77MB Threads=64
+[18:41:24.761 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:41:23.761Z CPU=0.1% WS=33.11MB Managed=201.20MB Threads=63
+[18:42:24.761 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:42:23.762Z CPU=0.0% WS=34.98MB Managed=202.63MB Threads=64
+[18:43:24.761 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:43:23.761Z CPU=0.1% WS=41.23MB Managed=196.19MB Threads=64
+[18:44:24.762 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:44:23.762Z CPU=0.1% WS=41.62MB Managed=197.63MB Threads=63
+[18:45:24.762 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:45:23.762Z CPU=0.1% WS=41.75MB Managed=199.05MB Threads=63
+[18:46:24.761 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:46:24.761Z CPU=0.1% WS=41.92MB Managed=200.51MB Threads=63
+[18:47:24.762 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:47:23.762Z CPU=0.0% WS=41.92MB Managed=201.92MB Threads=63
+[18:48:24.763 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:48:23.763Z CPU=0.0% WS=32.97MB Managed=203.35MB Threads=63
+[18:49:24.762 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:49:23.763Z CPU=0.0% WS=41.95MB Managed=196.86MB Threads=64
+[18:50:24.763 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:50:23.762Z CPU=0.1% WS=41.98MB Managed=198.29MB Threads=63
+[18:51:24.764 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:51:23.763Z CPU=0.1% WS=42.47MB Managed=199.75MB Threads=63
+[18:52:24.763 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:52:23.763Z CPU=0.1% WS=42.84MB Managed=201.18MB Threads=64
+[18:53:24.764 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:53:23.763Z CPU=0.1% WS=42.97MB Managed=202.60MB Threads=62
+[18:54:24.764 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:54:23.764Z CPU=0.1% WS=42.98MB Managed=196.13MB Threads=63
+[18:55:24.764 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:55:23.764Z CPU=0.1% WS=42.98MB Managed=197.57MB Threads=63
+[18:56:24.765 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:56:23.764Z CPU=0.0% WS=43.02MB Managed=199.00MB Threads=63
+[18:57:24.764 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:57:23.765Z CPU=0.0% WS=42.78MB Managed=200.45MB Threads=63
+[18:58:24.765 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:58:24.765Z CPU=0.0% WS=42.81MB Managed=201.90MB Threads=63
+[18:59:24.765 INF] [T:7] [PerfMonitor] Time:2026-03-20 09:59:23.765Z CPU=0.0% WS=42.97MB Managed=203.29MB Threads=63
+[19:00:24.765 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:00:23.765Z CPU=0.0% WS=41.59MB Managed=196.84MB Threads=63
+[19:01:24.765 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:01:23.766Z CPU=0.0% WS=41.91MB Managed=198.26MB Threads=63
+[19:02:24.766 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:02:23.766Z CPU=0.1% WS=41.97MB Managed=199.71MB Threads=64
+[19:03:24.766 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:03:23.766Z CPU=0.0% WS=41.97MB Managed=201.16MB Threads=64
+[19:04:24.766 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:04:23.766Z CPU=0.1% WS=41.95MB Managed=202.59MB Threads=63
+[19:05:24.767 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:05:23.766Z CPU=0.1% WS=42.02MB Managed=196.10MB Threads=63
+[19:06:24.767 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:06:23.767Z CPU=0.1% WS=42.00MB Managed=197.53MB Threads=62
+[19:07:24.767 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:07:23.767Z CPU=0.1% WS=43.86MB Managed=198.96MB Threads=63
+[19:08:24.768 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:08:23.767Z CPU=0.1% WS=43.86MB Managed=200.39MB Threads=63
+[19:09:24.768 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:09:23.768Z CPU=0.1% WS=43.86MB Managed=201.81MB Threads=63
+[19:10:24.768 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:10:23.767Z CPU=0.0% WS=45.88MB Managed=203.26MB Threads=64
+[19:11:24.769 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:11:23.768Z CPU=0.1% WS=45.91MB Managed=196.79MB Threads=64
+[19:12:24.775 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:12:23.775Z CPU=0.0% WS=45.92MB Managed=198.22MB Threads=63
+[19:13:24.776 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:13:23.775Z CPU=0.1% WS=49.06MB Managed=199.64MB Threads=63
+[19:14:24.776 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:14:23.775Z CPU=0.1% WS=49.06MB Managed=201.08MB Threads=63
+[19:15:24.777 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:15:23.776Z CPU=0.1% WS=49.08MB Managed=202.50MB Threads=63
+[19:16:24.777 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:16:23.776Z CPU=0.0% WS=49.11MB Managed=196.01MB Threads=63
+[19:17:24.776 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:17:23.777Z CPU=0.1% WS=49.11MB Managed=197.44MB Threads=63
+[19:18:24.777 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:18:23.778Z CPU=0.1% WS=49.12MB Managed=198.86MB Threads=64
+[19:19:24.778 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:19:23.778Z CPU=0.0% WS=49.12MB Managed=200.30MB Threads=63
+[19:20:24.778 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:20:23.778Z CPU=0.1% WS=49.14MB Managed=201.74MB Threads=63
+[19:21:24.778 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:21:23.778Z CPU=0.1% WS=49.16MB Managed=203.17MB Threads=64
+[19:22:24.779 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:22:23.779Z CPU=0.1% WS=39.80MB Managed=196.70MB Threads=63
+[19:23:24.779 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:23:23.780Z CPU=0.0% WS=40.86MB Managed=198.13MB Threads=63
+[19:24:24.780 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:24:23.780Z CPU=0.0% WS=41.31MB Managed=199.57MB Threads=65
+[19:25:24.780 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:25:23.780Z CPU=0.1% WS=41.52MB Managed=201.02MB Threads=63
+[19:26:24.781 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:26:23.780Z CPU=0.1% WS=41.66MB Managed=202.48MB Threads=64
+[19:27:24.781 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:27:23.781Z CPU=0.1% WS=38.48MB Managed=195.95MB Threads=62
+[19:28:24.781 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:28:23.781Z CPU=0.1% WS=39.25MB Managed=197.40MB Threads=62
+[19:29:24.781 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:29:23.781Z CPU=0.1% WS=39.47MB Managed=198.82MB Threads=62
+[19:30:24.782 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:30:23.782Z CPU=0.1% WS=39.91MB Managed=200.27MB Threads=63
+[19:31:24.782 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:31:23.783Z CPU=0.1% WS=40.00MB Managed=201.71MB Threads=63
+[19:32:24.783 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:32:23.784Z CPU=0.1% WS=40.30MB Managed=203.18MB Threads=63
+[19:33:24.784 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:33:23.784Z CPU=0.1% WS=40.58MB Managed=196.38MB Threads=64
+[19:34:24.784 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:34:23.784Z CPU=0.1% WS=40.56MB Managed=197.82MB Threads=63
+[19:35:24.785 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:35:23.785Z CPU=0.1% WS=40.56MB Managed=199.25MB Threads=63
+[19:36:24.784 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:36:23.786Z CPU=0.1% WS=40.58MB Managed=200.70MB Threads=64
+[19:53:43.706 INF] [T:7] [PerfMonitor] Time:2026-03-20 10:53:42.707Z CPU=0.1% WS=40.59MB Managed=202.15MB Threads=64
+[20:11:50.788 INF] [T:7] [PerfMonitor] Time:2026-03-20 11:11:49.788Z CPU=0.1% WS=40.42MB Managed=195.69MB Threads=64
+[20:29:23.859 INF] [T:7] [PerfMonitor] Time:2026-03-20 11:29:22.859Z CPU=0.1% WS=40.28MB Managed=197.14MB Threads=63
+[20:46:34.239 INF] [T:7] [PerfMonitor] Time:2026-03-20 11:46:33.241Z CPU=0.0% WS=40.33MB Managed=198.56MB Threads=63
+[20:47:34.240 INF] [T:7] [PerfMonitor] Time:2026-03-20 11:47:33.240Z CPU=0.0% WS=34.58MB Managed=199.99MB Threads=64
+[20:48:34.240 INF] [T:7] [PerfMonitor] Time:2026-03-20 11:48:33.242Z CPU=0.1% WS=35.52MB Managed=201.43MB Threads=64
+[20:49:34.240 INF] [T:7] [PerfMonitor] Time:2026-03-20 11:49:33.241Z CPU=0.1% WS=36.48MB Managed=202.88MB Threads=63
+[20:50:34.241 INF] [T:7] [PerfMonitor] Time:2026-03-20 11:50:33.243Z CPU=0.1% WS=40.22MB Managed=196.39MB Threads=63
+[20:51:34.242 INF] [T:7] [PerfMonitor] Time:2026-03-20 11:51:33.243Z CPU=0.1% WS=40.23MB Managed=197.83MB Threads=64
+[20:52:34.241 INF] [T:7] [PerfMonitor] Time:2026-03-20 11:52:33.241Z CPU=0.1% WS=40.23MB Managed=199.24MB Threads=63
+[21:09:55.325 INF] [T:7] [PerfMonitor] Time:2026-03-20 12:09:54.324Z CPU=0.0% WS=40.00MB Managed=200.73MB Threads=65
+[21:27:25.769 INF] [T:7] [PerfMonitor] Time:2026-03-20 12:27:24.770Z CPU=0.1% WS=39.94MB Managed=202.18MB Threads=64
+[21:33:09.940 INF] [T:7] [PerfMonitor] Time:2026-03-20 12:33:08.941Z CPU=0.1% WS=40.05MB Managed=195.72MB Threads=63
+[21:37:24.204 INF] [T:7] [PerfMonitor] Time:2026-03-20 12:37:23.202Z CPU=0.1% WS=40.03MB Managed=197.17MB Threads=62
+[21:54:05.073 INF] [T:7] [PerfMonitor] Time:2026-03-20 12:54:04.075Z CPU=0.1% WS=39.89MB Managed=198.60MB Threads=62
+[22:12:57.346 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:12:56.345Z CPU=0.1% WS=40.12MB Managed=200.05MB Threads=64
+[22:13:57.346 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:13:56.346Z CPU=0.1% WS=40.11MB Managed=201.48MB Threads=63
+[22:14:57.347 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:14:56.347Z CPU=0.1% WS=40.12MB Managed=202.93MB Threads=64
+[22:15:57.347 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:15:56.347Z CPU=0.1% WS=40.12MB Managed=196.44MB Threads=63
+[22:16:57.348 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:16:56.347Z CPU=0.1% WS=40.16MB Managed=197.89MB Threads=64
+[22:17:57.349 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:17:56.349Z CPU=0.1% WS=40.16MB Managed=199.30MB Threads=63
+[22:18:57.348 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:18:56.349Z CPU=0.1% WS=40.16MB Managed=200.74MB Threads=63
+[22:19:57.348 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:19:56.347Z CPU=0.1% WS=40.16MB Managed=202.17MB Threads=63
+[22:20:57.349 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:20:56.350Z CPU=0.1% WS=40.20MB Managed=203.60MB Threads=63
+[22:21:57.350 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:21:56.348Z CPU=0.1% WS=40.22MB Managed=197.11MB Threads=63
+[22:22:57.350 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:22:56.350Z CPU=0.1% WS=40.22MB Managed=198.53MB Threads=63
+[22:23:57.351 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:23:56.350Z CPU=0.1% WS=40.22MB Managed=199.96MB Threads=63
+[22:24:57.351 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:24:56.349Z CPU=0.1% WS=40.22MB Managed=201.40MB Threads=63
+[22:25:57.349 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:25:56.350Z CPU=0.1% WS=40.22MB Managed=202.83MB Threads=63
+[22:26:57.352 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:26:56.350Z CPU=0.1% WS=40.22MB Managed=196.33MB Threads=63
+[22:27:57.352 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:27:56.351Z CPU=0.1% WS=40.22MB Managed=197.78MB Threads=63
+[22:28:57.350 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:28:56.352Z CPU=0.1% WS=40.22MB Managed=199.19MB Threads=63
+[22:29:57.352 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:29:56.351Z CPU=0.1% WS=40.20MB Managed=200.63MB Threads=62
+[22:30:57.352 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:30:56.352Z CPU=0.1% WS=40.22MB Managed=202.06MB Threads=63
+[22:31:57.352 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:31:56.352Z CPU=0.1% WS=40.25MB Managed=203.51MB Threads=64
+[22:32:57.351 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:32:56.353Z CPU=0.1% WS=40.27MB Managed=197.00MB Threads=63
+[22:33:57.352 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:33:56.353Z CPU=0.1% WS=40.30MB Managed=198.45MB Threads=64
+[22:34:57.353 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:34:56.354Z CPU=0.1% WS=40.31MB Managed=199.90MB Threads=64
+[22:35:57.355 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:35:56.354Z CPU=0.1% WS=40.31MB Managed=201.34MB Threads=64
+[22:36:57.354 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:36:56.354Z CPU=0.1% WS=40.33MB Managed=202.78MB Threads=64
+[22:37:57.355 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:37:56.354Z CPU=0.1% WS=40.34MB Managed=196.29MB Threads=64
+[22:38:57.355 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:38:56.355Z CPU=0.0% WS=40.38MB Managed=197.74MB Threads=64
+[22:39:57.355 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:39:56.356Z CPU=0.1% WS=40.36MB Managed=199.16MB Threads=63
+[22:40:57.356 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:40:56.356Z CPU=0.1% WS=40.41MB Managed=200.61MB Threads=64
+[22:41:57.356 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:41:56.355Z CPU=0.1% WS=40.39MB Managed=202.06MB Threads=63
+[22:42:57.355 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:42:56.357Z CPU=0.1% WS=40.44MB Managed=203.51MB Threads=64
+[22:43:57.355 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:43:56.356Z CPU=0.1% WS=40.47MB Managed=197.08MB Threads=64
+[22:44:57.357 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:44:56.355Z CPU=0.1% WS=40.45MB Managed=198.50MB Threads=63
+[22:45:57.357 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:45:56.356Z CPU=0.1% WS=40.45MB Managed=199.93MB Threads=63
+[22:46:57.358 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:46:56.356Z CPU=0.1% WS=40.45MB Managed=201.38MB Threads=63
+[22:47:57.366 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:47:56.365Z CPU=0.1% WS=40.47MB Managed=202.81MB Threads=63
+[22:48:57.366 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:48:56.366Z CPU=0.1% WS=40.48MB Managed=196.33MB Threads=63
+[22:49:57.367 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:49:56.367Z CPU=0.1% WS=40.48MB Managed=197.77MB Threads=63
+[22:50:57.366 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:50:56.367Z CPU=0.1% WS=40.50MB Managed=199.20MB Threads=63
+[22:51:57.366 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:51:56.366Z CPU=0.1% WS=40.53MB Managed=200.65MB Threads=63
+[22:52:57.366 INF] [T:7] [PerfMonitor] Time:2026-03-20 13:52:56.368Z CPU=0.1% WS=40.53MB Managed=202.08MB Threads=63
+[23:08:57.904 INF] [T:7] [PerfMonitor] Time:2026-03-20 14:08:56.903Z CPU=0.1% WS=40.53MB Managed=203.53MB Threads=63
+[23:43:22.731 INF] [T:7] [PerfMonitor] Time:2026-03-20 14:25:40.276Z CPU=0.1% WS=40.55MB Managed=197.08MB Threads=63
+[23:44:22.732 INF] [T:7] [PerfMonitor] Time:2026-03-20 14:44:21.731Z CPU=0.1% WS=40.55MB Managed=198.52MB Threads=63

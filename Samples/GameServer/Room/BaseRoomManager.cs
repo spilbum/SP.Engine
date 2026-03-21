@@ -10,13 +10,13 @@ public abstract class BaseRoomManager : IDisposable
 {
     private readonly ConcurrentDictionary<long, RoomEntry> _entries = new();
     private readonly ConcurrentDictionary<long, RoomPin> _roomPins = new();
-
-    private readonly FiberScheduler _scheduler;
+    private readonly ThreadFiber _fiber;
+    
+    public IFiber Fiber => _fiber;
 
     protected BaseRoomManager()
     {
-        var logger = LogManager.GetLogger();
-        _scheduler = new FiberScheduler(logger, "RoomManager Scheduler");
+        _fiber = new ThreadFiber("RoomManagerFiber", onError: LogManager.Error);
     }
 
     public virtual void Dispose()
@@ -28,13 +28,8 @@ public abstract class BaseRoomManager : IDisposable
 
         _entries.Clear();
         _roomPins.Clear();
-        _scheduler.Dispose();
+        _fiber.Dispose();
         GC.SuppressFinalize(this);
-    }
-
-    public virtual void Stop()
-    {
-        _scheduler.Dispose();
     }
 
     public IDisposable EnsureRoom(long roomId, object? context, TimeSpan timeout)
@@ -51,7 +46,7 @@ public abstract class BaseRoomManager : IDisposable
         _roomPins[roomId] = pin;
 
         if (timeout <= TimeSpan.Zero) return pin;
-        _scheduler.Schedule(RemovePin, roomId, timeout, TimeSpan.Zero);
+        GameServer.Instance.Scheduler.Schedule(_fiber, RemovePin, roomId, timeout, TimeSpan.Zero);
         return pin;
     }
 
@@ -127,7 +122,7 @@ public abstract class BaseRoomManager : IDisposable
         }
     }
 
-    protected abstract BaseRoom CreateRoom(long roomId, object? context);
+    protected abstract BaseRoom CreateRoom(long roomId, object? args);
 
     protected virtual void OnRoomRegistered(BaseRoom room)
     {

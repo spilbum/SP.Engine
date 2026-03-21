@@ -7,10 +7,8 @@ namespace GameClient.Command;
 [ProtocolCommand(G2CProtocol.EchoAck)]
 public class EchoAck : BaseCommand<Client, G2CProtocolData.EchoAck>
 {
-    protected override Task ExecuteCommand(Client context, G2CProtocolData.EchoAck protocol)
+    protected override void ExecuteCommand(Client context, G2CProtocolData.EchoAck protocol)
     {
         //context.Logger.Debug($"EchoAck: {protocol.Message}");
-        
-        return Task.CompletedTask;
     }
 }

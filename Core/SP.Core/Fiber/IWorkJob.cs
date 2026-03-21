@@ -1,7 +1,9 @@
+
 namespace SP.Core.Fiber
 {
-    public interface IAsyncJob
+    public interface IWorkJob
     {
+        string Name { get; }
         void Invoke();
     }
 }

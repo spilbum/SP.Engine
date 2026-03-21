@@ -8,9 +8,8 @@ namespace GameServer.Command;
 [ProtocolCommand(C2GProtocol.RoomLeaveNtf)]
 public class RoomLeaveNtf : BaseCommand<GamePeer, C2GProtocolData.RoomLeaveNtf>
 {
-    protected override Task ExecuteCommand(GamePeer context, C2GProtocolData.RoomLeaveNtf protocol)
+    protected override void ExecuteCommand(GamePeer context, C2GProtocolData.RoomLeaveNtf protocol)
     {
         context.ExecuteProtocol(protocol);
-        return Task.CompletedTask;
     }
 }

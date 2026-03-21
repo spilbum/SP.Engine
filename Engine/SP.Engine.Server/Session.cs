@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Net;
+using SP.Core.Fiber;
 using SP.Engine.Protocol;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Channel;
@@ -16,7 +17,7 @@ public interface ISession : ICommandContext
     IPEndPoint LocalEndPoint { get; }
     IPEndPoint RemoteEndPoint { get; }
     IEngineConfig Config { get; }
-    IEngine Engine { get; }
+    bool IsConnected { get; }
     bool TrySend(ChannelKind channel, IMessage message);
     void Close(CloseReason reason);
 }
@@ -27,7 +28,6 @@ public sealed class Session : BaseSession, ISession
 
     public BasePeer Peer { get; private set; }
     public bool IsClosing { get; private set; }
-    IEngine ISession.Engine => _engine;
 
     public override void Close(CloseReason reason)
     {
@@ -71,7 +71,7 @@ public sealed class Session : BaseSession, ISession
                     throw new SessionAuthException(SessionHandshakeResult.InvalidRequest,
                         $"Already created peer. sessionId={peer.Session.Id}, peerId={peer.PeerId}");
 
-                if (!engine.CreatePeer(this, out peer))
+                if (!engine.NewPeer(this, out peer))
                     throw new SessionAuthException(SessionHandshakeResult.InternalError, $"Failed to create peer. sessionId={Id}");
 
                 if (!peer.TryKeyExchange(data.KeySize, data.ClientPublicKey))
@@ -281,13 +281,7 @@ public sealed class Session : BaseSession, ISession
 
     protected override void ExecuteMessage(IMessage message)
     {
-        if (Fiber == null)
-        {
-            Logger.Error($"Session has no assigned fiber! SessionId={Id}");
-            return;
-        }
-        
-        Fiber.Enqueue(() => _engine.ExecuteMessageAsync(this, message));
+        _engine.ExecuteMessage(this, message);
     }
 
     public override void Close()

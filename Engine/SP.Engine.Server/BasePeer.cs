@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Security.Cryptography;
 using System.Threading;
+using SP.Core.Fiber;
 using SP.Core.Logging;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Channel;
@@ -79,6 +80,7 @@ public abstract class BasePeer : IPeer, IDisposable
         Kind = other.Kind;
         Logger = other.Logger;
         Session = other.Session;
+        Fiber = other.Fiber;
         _stateCode = other._stateCode;
         _diffieHellman = other._diffieHellman;
         _encryptor = other._encryptor;
@@ -95,6 +97,8 @@ public abstract class BasePeer : IPeer, IDisposable
     public IPEndPoint LocalEndPoint => Session.LocalEndPoint;
     public IPEndPoint RemoteEndPoint => Session.RemoteEndPoint;
     public bool IsConnected => _stateCode is PeerStateConst.Authenticated or PeerStateConst.Online;
+    
+    public PeerFiber Fiber { get; private set; }
 
     internal byte[] LocalPublicKey => _diffieHellman?.PublicKey;
 
@@ -170,6 +174,8 @@ public abstract class BasePeer : IPeer, IDisposable
         {
             PeerIdGenerator.Free(PeerId);
             PeerId = 0;
+            Fiber = null;
+            Fiber = null;
             _diffieHellman?.Dispose();
             _diffieHellman = null;
             _encryptor = null;
@@ -218,6 +224,11 @@ public abstract class BasePeer : IPeer, IDisposable
     public IPolicy GetNetworkPolicy(Type protocolType)
     {
         return _networkPolicy.Resolve(protocolType);
+    }
+
+    internal void SetFiber(PeerFiber fiber)
+    {
+        Fiber = fiber;
     }
 
     internal void JoinServer()

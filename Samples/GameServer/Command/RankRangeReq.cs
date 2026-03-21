@@ -8,16 +8,15 @@ namespace GameServer.Command;
 [ProtocolCommand(C2GProtocol.RankRangeReq)]
 public class RankRangeReq : BaseCommand<GamePeer, C2GProtocolData.RankRangeReq>
 {
-    protected override Task ExecuteCommand(GamePeer context, C2GProtocolData.RankRangeReq protocol)
+    protected override void ExecuteCommand(GamePeer context, C2GProtocolData.RankRangeReq protocol)
     {
         var connector = GameServer.Instance.GetRankConnector();
         if (connector == null)
         {
             context.Send(new G2CProtocolData.RankMyAck { Result = ErrorCode.InternalError });
-            return Task.CompletedTask;
+            return;
         }
 
         connector.SearchRangeRank(context, protocol.SeasonKind, protocol.StartRank, protocol.Count);
-        return Task.CompletedTask;
     }
 }

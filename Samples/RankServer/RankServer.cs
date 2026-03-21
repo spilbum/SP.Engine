@@ -8,6 +8,7 @@ using SP.Engine.Server.Configuration;
 using SP.Engine.Server.Connector;
 using DatabaseHandler;
 using SP.Core;
+using SP.Core.Fiber;
 using SP.Shared.Resource;
 using SP.Shared.Rank.Season;
 using SP.Shared.Resource.Web;
@@ -152,46 +153,53 @@ public class RankServer : Engine
         _resourceRpc = new HttpRpc(Http, config.BaseUrl);
         
         var ts = TimeSpan.FromSeconds(config.SyncPeriodSec);
-        Scheduler.ScheduleAsync(async ct =>
+        Scheduler.Schedule(Fiber, SyncServerListSchedule, TimeSpan.Zero, ts);
+    }
+
+    private void SyncServerListSchedule()
+    {
+        var sessions = GetAllSessions().ToList(); 
+        var list = sessions
+            .OfType<Session>()
+            .Where(s => s.Peer is GameServerPeer)
+            .Select(s => {
+                var game = (GameServerPeer)s.Peer;
+                return new ServerSyncInfo(
+                    game.ProcessId.ToString(),
+                    "Game",
+                    "kr",
+                    game.Host,
+                    game.Port,
+                    "1.0.1",
+                    ServerStatus.Online,
+                    null,
+                    game.UpdatedUtc
+                );
+            })
+            .ToList();
+
+        if (list.Count == 0) return;
+        
+        Fiber.RunAsync(ct => SyncServerListAsync(list, ct), null, ex =>
         {
-            var list = new List<ServerSyncInfo>();
-            var sessions = GetAllSessions();
-            foreach (var session in sessions)
-            {
-                if (session is Session { Peer: GameServerPeer game })
-                {
-                    list.Add(new ServerSyncInfo(
-                        $"{game.ProcessId}",
-                        "Game",
-                        "kr",
-                        game.Host,
-                        game.Port,
-                        "1.0.1",
-                        ServerStatus.Online,
-                        null,
-                        game.UpdatedUtc
-                    ));
-                }
-            }
+            Logger.Error("Failed to sync server list: {0}", ex.Message);
+        }, _shutdown);
+    }
+    
+    private async Task SyncServerListAsync(List<ServerSyncInfo> list, CancellationToken ct)
+    {
+        var req = new SyncServerListReq
+        {
+            List = list,
+            ServerGroupType = ServerGroupType,
+            UpdatedUtcMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+        };
 
-            var req = new SyncServerListReq
-            {
-                List = list,
-                ServerGroupType = ServerGroupType,
-                UpdatedUtcMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-            };
-
-            try
-            {
-                await _resourceRpc.CallAsync<SyncServerListReq, SyncServerListRes>(
-                    ResourceMsgId.SyncServerListReq, req, ct);
-            }
-            catch (RpcException ex)
-            {
-                Logger.Error($"RpcException: {ex.Message}, error={ex.Error}");
-            }
-          
-        }, ts, ts, _shutdown);
+        if (_resourceRpc != null)
+        {
+            await _resourceRpc.CallAsync<SyncServerListReq, SyncServerListRes>(
+                ResourceMsgId.SyncServerListReq, req, ct);   
+        }
     }
 
     private void CreateDailyRankSeason()
@@ -205,7 +213,7 @@ public class RankServer : Engine
             MaxUpdatesPerTick = 100
         };
 
-        var daily = new DailyRankSeason(Logger);
+        var daily = new DailyRankSeason();
         daily.Initialize(options);
         _seasons[daily.Kind] = daily;
     }
@@ -260,7 +268,7 @@ public class RankServer : Engine
             return ErrorCode.InternalError;
         }
 
-        Logger.Info("Server {0} registered.", req.ServerKind);
+        Logger.Info("Server {0} registered: {1}:{2}", req.ServerKind, req.IpAddress, req.OpenPort);
         return ErrorCode.Ok;
     }
 

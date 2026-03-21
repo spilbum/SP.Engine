@@ -1,12 +1,10 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Threading;
-using System.Threading.Tasks;
 using SP.Core;
+using SP.Core.Fiber;
 using SP.Core.Logging;
 using SP.Engine.Protocol;
 using SP.Engine.Runtime;
@@ -23,7 +21,6 @@ namespace SP.Engine.Server;
 public interface IEngine : ILogContext
 {
     IEngineConfig Config { get; }
-    bool Initialize(string name, EngineConfig config);
     bool Start();
     void Stop();
 }
@@ -32,13 +29,12 @@ public abstract class Engine : BaseEngine, IEngine
 {
     private readonly Dictionary<ushort, ICommand> _userCommands = new();
     private readonly Dictionary<ushort, ICommand> _internalCommands = new();
-    private readonly List<IConnector> _connectors = [];
+    private readonly List<BaseConnector> _connectors = [];
     private readonly List<PeerFiber> _peerFibers = [];
-    private int _nextFiberIndex = -1;
     private PeerManager _peerManager;
     private PerfMonitor _perfMonitor;
     private ILogger _perfLogger;
-    private Timer _waitingReconnectCheckingTimer;
+    private IDisposable _waitingReconnectCheckingTimer;
 
     public override bool Initialize(string name, EngineConfig config)
     {
@@ -65,16 +61,21 @@ public abstract class Engine : BaseEngine, IEngine
             return false;
 
         var connectorUpdatePeriod = TimeSpan.FromMilliseconds(Config.Session.ConnectorUpdateIntervalMs);
-        Scheduler.Schedule(ScheduleUpdateConnectors, connectorUpdatePeriod, connectorUpdatePeriod);
+        Scheduler.Schedule(Fiber, ScheduleUpdateConnectors, connectorUpdatePeriod, connectorUpdatePeriod);
 
         var fiberCnt = Math.Max(Config.Network.LimitConnectionCount / 300, 10);
-        var period = TimeSpan.FromMilliseconds(Config.Session.PeerUpdateIntervalMs);
+        var tickInterval = TimeSpan.FromMilliseconds(Config.Session.PeerUpdateIntervalMs);
         
-        for (var index = 0; index < fiberCnt; index++)
+        for (var i = 0; i < fiberCnt; i++)
         {
-            var fiber = new PeerFiber(Logger, $"PeerFiber-{index:D2}");
-            _peerFibers.Add(fiber);
-            Scheduler.Schedule(() => { fiber.Enqueue(fiber.Tick); }, period, period);
+            var fiber = new ThreadFiber($"PeerFiber_{i:D2}", maxBatchSize: 1024, queueCapacity: 4096,
+                onError: ex =>
+                {
+                    Logger.Error(ex);
+                });
+            
+            var peerFiber = new PeerFiber(fiber, Scheduler, Logger, tickInterval);
+            _peerFibers.Add(peerFiber);
         }
         
         foreach (var connector in _connectors) 
@@ -106,64 +107,75 @@ public abstract class Engine : BaseEngine, IEngine
     internal BasePeer GetWaitingReconnectPeer(uint peerId)
         => _peerManager.GetWaitingPeer(peerId);
     
+    private PeerFiber GetPeerFiber()
+        => _peerFibers.OrderBy(f => f.PeerCount).First();
+
     internal bool OnlinePeer(BasePeer peer, ISession session)
-        => _peerManager.Online(peer, session);
+    {
+        if (!_peerManager.Online(peer, session))
+            return false;
+
+        // 파이버 재할당
+        var fiber = GetPeerFiber();
+        fiber.AddPeer(peer);
+        return true;
+    }
 
     internal void JoinPeer(BasePeer peer)
-        => _peerManager.Join(peer);
+    {
+        // 파이버 할당
+        var fiber = GetPeerFiber();
+        fiber.AddPeer(peer);
+        
+        // 매니저에 피어 등록
+        _peerManager.Join(peer);
+    }
     
-    internal bool CreatePeer(ISession session, out BasePeer peer)
+    internal bool NewPeer(ISession session, out BasePeer peer)
     {
         peer = CreatePeer(session) as BasePeer;
         return peer != null;
     }
     
     protected abstract IPeer CreatePeer(ISession session);
-    
-    protected override void OnNewSessionConnected(Session session)
+
+    protected virtual void OnPeerRemoved(IPeer peer, CloseReason reason)
     {
-        base.OnNewSessionConnected(session);
-
-        var current = Interlocked.Increment(ref _nextFiberIndex);
-        var index = (int)((uint)current % _peerFibers.Count);
-        var fiber = _peerFibers[index];
         
-        session.Fiber = fiber;
-        fiber.AddSession(session);
     }
-
-    protected override void OnSessionClosed(Session session, CloseReason reason)
+    
+    internal override void OnSessionClosed(Session session, CloseReason reason)
     {
         base.OnSessionClosed(session, reason);
 
-        if (session.Fiber is PeerFiber fiber)
-            fiber.RemoveSession(session);
-        
         var peer = session.Peer;
         if (null == peer) return;
         
+        peer.Fiber.RemovePeer(peer);
+        
         if (session.IsClosing)
         {
-            // 종료중이면 제거
+            // 종료중이면 즉시 제거
             _peerManager.RemovePeer(peer, reason);
+            OnPeerRemoved(peer, reason);
             return;
         }
         
-        if (peer.State is PeerState.Authenticated or PeerState.Online)
+        if (peer.IsConnected)
         {
-            // 연결 끊김
+            // 오프라인 전환
             _peerManager.Offline(peer, reason);
+            return;
         }
-        else
-        {
-            _peerManager.RemovePeer(peer, reason);
-        }
+        
+        _peerManager.RemovePeer(peer, reason);
+        OnPeerRemoved(peer, reason);
     }
     
     private void StartReconnectTimer()
     {
         var ts = TimeSpan.FromSeconds(Config.Session.WaitingReconnectTimerIntervalSec);
-        _waitingReconnectCheckingTimer = new Timer(OnCheckWaitingReconnectCallback, null, ts, ts);
+        _waitingReconnectCheckingTimer = Scheduler.Schedule(Fiber, OnCheckWaitingReconnectCallback, ts, ts);
     }
 
     private void StopReconnectTimer()
@@ -172,11 +184,8 @@ public abstract class Engine : BaseEngine, IEngine
         _waitingReconnectCheckingTimer = null;
     }
 
-    private void OnCheckWaitingReconnectCallback(object state)
+    private void OnCheckWaitingReconnectCallback()
     {
-        if (null == _waitingReconnectCheckingTimer) return;
-        _waitingReconnectCheckingTimer.Change(Timeout.Infinite, Timeout.Infinite);
-
         try
         {
             _peerManager.CheckTimeouts();
@@ -184,14 +193,6 @@ public abstract class Engine : BaseEngine, IEngine
         catch (Exception e)
         {
             Logger.Error(e, "Error checking reconnect timeouts");
-        }
-        finally
-        {
-            if (_waitingReconnectCheckingTimer != null)
-            {
-                var ts = TimeSpan.FromSeconds(Config.Session.WaitingReconnectTimerIntervalSec);
-                _waitingReconnectCheckingTimer.Change(ts, ts);
-            }
         }
     }
     
@@ -201,13 +202,13 @@ public abstract class Engine : BaseEngine, IEngine
             return;
 
         _perfMonitor = new PerfMonitor();
-        Scheduler.Schedule(_perfMonitor.Tick, TimeSpan.Zero, config.SamplePeriod);
+        Scheduler.Schedule(Fiber, _perfMonitor.Tick, TimeSpan.Zero, config.SamplePeriod);
 
         if (!config.LoggerEnabled)
             return;
 
         _perfLogger = LogManager.GetLogger("PerfMonitor");
-        Scheduler.Schedule(() =>
+        Scheduler.Schedule(Fiber, () =>
         {
             if (_perfMonitor.TryGetLast(out var metrics))
                 _perfLogger.Info(metrics.ToString());
@@ -220,14 +221,19 @@ public abstract class Engine : BaseEngine, IEngine
         {
             try
             {
-                var connector = CreateConnector(config.Name);
-                if (connector == null)
+                if (CreateConnector(config.Name) is not BaseConnector connector)
                 {
                     Logger.Info("Failed to create connector. name={0}.", config.Name);
                     return false;
                 }
+
+                var fiber = new ThreadFiber($"ConnectorFiber_{config.Name}",
+                    onError: ex =>
+                    {
+                        Logger.Error(ex.Message);
+                    });
                 
-                if (!connector.Initialize(Logger, Scheduler, config))
+                if (!connector.Initialize(config, fiber, Scheduler, Logger))
                     throw new InvalidOperationException($"Failed to initialize connector. name={connector.Name}.");
 
                 _connectors.Add(connector);
@@ -322,12 +328,12 @@ public abstract class Engine : BaseEngine, IEngine
         return command;
     }
 
-    internal async Task ExecuteMessageAsync(Session session, IMessage message)
+    internal void ExecuteMessage(Session session, IMessage message)
     {
         var command = GetInternalCommand(message.Id);
         if (command != null)
         {
-            await command.Execute(session, message);
+            command.Execute(session, message);
             return;
         }
         
@@ -357,11 +363,11 @@ public abstract class Engine : BaseEngine, IEngine
                 foreach (var msg in peer.ProcessMessageInOrder(tcp))
                 {
                     var cmd = GetUserCommand(msg.Id);
-                    if (cmd != null) await cmd.Execute(peer, msg);
+                    cmd?.Execute(peer, msg);
                 }
                 break;
             case UdpMessage udp:
-                await command.Execute(peer, udp);
+                command.Execute(peer, udp);
                 break;
         }
     }

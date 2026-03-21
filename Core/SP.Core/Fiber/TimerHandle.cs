@@ -3,53 +3,127 @@ using System.Threading;
 
 namespace SP.Core.Fiber
 {
-    internal sealed class TimerHandle : IDisposable
+    internal abstract class TimerHandleBase : IDisposable
     {
-        private readonly Action _tickEnqueue;
+        protected Timer _timer;
+        private int _gate;
         private volatile bool _disposed;
-        private volatile bool _enabled = true;
-        private int _gate; // 0:idle, 1:running
-        private Timer _timer;
+        internal Action<TimerHandleBase> OnDisposed;
 
-        public TimerHandle(Action tickEnqueue, TimeSpan dueTime, TimeSpan period)
+        public void Start(TimeSpan dueTime, TimeSpan period)
         {
-            _tickEnqueue = tickEnqueue ?? throw new ArgumentNullException(nameof(tickEnqueue));
-            if (period <= TimeSpan.Zero)
-                period = Timeout.InfiniteTimeSpan;
-
-            _timer = new Timer(Callback, null, dueTime, period);
+            if (_disposed) return;
+            _timer?.Change(dueTime, period <= TimeSpan.Zero ? Timeout.InfiniteTimeSpan : period);
         }
 
         public void Dispose()
         {
             if (_disposed) return;
             _disposed = true;
-            _enabled = false;
-
             var t = Interlocked.Exchange(ref _timer, null);
             t?.Dispose();
+            OnDisposed?.Invoke(this);
         }
 
-        private void Callback(object state)
-        {
-            if (!_enabled || _disposed) return;
+        protected abstract void OnTick();
 
-            if (Interlocked.Exchange(ref _gate, 1) == 1) return;
+        protected void Callback(object state)
+        {
+            if (_disposed) return;
+            if (Interlocked.CompareExchange(ref _gate, 1, 0) != 0) return;
+
             try
             {
-                if (!_enabled || _disposed) return;
-                _tickEnqueue();
+                if (!_disposed)
+                {
+                    OnTick();
+                }
             }
             finally
             {
-                Volatile.Write(ref _gate, 0);
+                Interlocked.Exchange(ref _gate, 0);
             }
         }
+    }
+    
+    internal sealed class TimerHandle : TimerHandleBase
+    {
+        private readonly IFiber _fiber;
+        private readonly Action _action;
 
-        public void Disable()
+        public TimerHandle(IFiber fiber, Action action)
         {
-            _enabled = false;
-            _timer?.Change(Timeout.Infinite, Timeout.Infinite);
+            _fiber = fiber;
+            _action = action;
+            _timer = new Timer(Callback, null, Timeout.Infinite, Timeout.Infinite);
+        }
+
+        protected override void OnTick()
+        {
+            _fiber.Enqueue(_action);
+        }
+    }
+    
+    internal sealed class TimerHandle<T1> : TimerHandleBase
+    {
+        private readonly IFiber _fiber;
+        private readonly Action<T1> _action;
+        private readonly T1 _state;
+
+        public TimerHandle(IFiber fiber, Action<T1> action, T1 state)
+        {
+            _fiber = fiber;
+            _action = action;
+            _state = state;;
+            _timer = new Timer(Callback, null, Timeout.Infinite, Timeout.Infinite);
+        }
+
+        protected override void OnTick()
+        {
+            _fiber.Enqueue(_action, _state);
+        }
+    }
+    
+    internal sealed class TimerHandle<T1, T2> : TimerHandleBase
+    {
+        private readonly IFiber _fiber;
+        private readonly Action<T1, T2> _action;
+        private readonly T1 _s1;
+        private readonly T2 _s2;
+
+        public TimerHandle(IFiber fiber, Action<T1, T2> action, T1 s1, T2 s2)
+        {
+            _fiber = fiber;
+            _action = action;
+            _s1 = s1; _s2 = s2;
+            _timer = new Timer(Callback, null, Timeout.Infinite, Timeout.Infinite);
+        }
+
+        protected override void OnTick()
+        {
+            _fiber.Enqueue(_action, _s1, _s2);
+        }
+    }
+    
+    internal sealed class TimerHandle<T1, T2, T3> : TimerHandleBase
+    {
+        private readonly IFiber _fiber;
+        private readonly Action<T1, T2, T3> _action;
+        private readonly T1 _s1;
+        private readonly T2 _s2;
+        private readonly T3 _s3;
+
+        public TimerHandle(IFiber fiber, Action<T1, T2, T3> action, T1 s1, T2 s2, T3 s3)
+        {
+            _fiber = fiber;
+            _action = action;
+            _s1 = s1; _s2 = s2; _s3 = s3;
+            _timer = new Timer(Callback, null, Timeout.Infinite, Timeout.Infinite);
+        }
+
+        protected override void OnTick()
+        {
+            _fiber.Enqueue(_action, _s1, _s2, _s3);
         }
     }
 }

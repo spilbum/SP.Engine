@@ -1,6 +1,4 @@
 ﻿
-using Org.BouncyCastle.Tls;
-
 namespace RankServer;
 
 internal static class Program
@@ -39,29 +37,33 @@ internal static class Program
         using var cts = new CancellationTokenSource();
         using var _ = SubscribeShutdown(cts);
         
+        RankServer? server = null;
         try
         {
             var config = JsonConfigLoader.Load<BuildConfig>("config.json", "config.dev.json");
             if (config == null)
                 throw new InvalidOperationException("Failed to load config file(s).");
 
-            using var server = new RankServer(cts.Token);
+            server = new RankServer(cts.Token);
             if (!server.Initialize(config)) throw new InvalidOperationException("Failed to initialize.");
             if (!server.Start()) throw new InvalidOperationException("Failed to start.");
 
             await Task.Delay(Timeout.Infinite, cts.Token);
-            
-            server.Stop();
-            return 0;
         }
         catch (OperationCanceledException)
         {
-            return 0;
+            Console.WriteLine("Shutdown signal received");
         }
         catch (Exception e)
         {
             await Console.Error.WriteLineAsync($"Fatal: {e.Message}\n{e.StackTrace}");
             return 1;
         }
+        finally
+        {
+            server?.Dispose();
+        }
+        
+        return 0;
     }
 }

@@ -1,77 +1,90 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Security.Cryptography;
 
 namespace SP.Core.Fiber
 {
-    public class Scheduler : IScheduler, IDisposable
+    public sealed class Scheduler : IScheduler
     {
-        private readonly List<TimerHandle> _timers = new List<TimerHandle>();
+        private readonly HashSet<TimerHandleBase> _timers = new HashSet<TimerHandleBase>();
         private volatile bool _disposed;
 
+        public IDisposable Schedule(IFiber fiber, Action action, TimeSpan due, TimeSpan period)
+        {
+            ThrowIfDisposed();
+            
+            var handle = new TimerHandle(fiber, action);
+            return Track(handle, due, period);
+        }
+
+        public IDisposable Schedule<T>(IFiber fiber, Action<T> action, T state, TimeSpan due, TimeSpan period)
+        {
+            ThrowIfDisposed();
+            
+            var handle = new TimerHandle<T>(fiber, action, state);
+            return Track(handle, due, period);
+        }
+
+        public IDisposable Schedule<T1, T2>(IFiber fiber, Action<T1, T2> action, T1 s1, T2 s2,
+            TimeSpan due, TimeSpan period)
+        {
+            ThrowIfDisposed();
+            
+            var handle = new TimerHandle<T1, T2>(fiber, action, s1, s2);
+            return Track(handle, due, period);
+        }
+
+        public IDisposable Schedule<T1, T2, T3>(IFiber fiber, Action<T1, T2, T3> action, T1 s1, T2 s2, T3 s3,
+            TimeSpan due, TimeSpan period)
+        {
+            ThrowIfDisposed();
+
+            var handle = new TimerHandle<T1, T2, T3>(fiber, action, s1, s2, s3);
+            return Track(handle, due, period);
+        }
+
+        private void ThrowIfDisposed()
+        {
+            if (_disposed) throw new ObjectDisposedException(nameof(Scheduler));
+        }
+
+        private IDisposable Track(TimerHandleBase handle, TimeSpan dueTime, TimeSpan period)
+        {
+            handle.OnDisposed = h =>
+            {
+                lock (_timers)
+                {
+                    _timers.Remove(h);
+                }
+            };
+            
+            lock (_timers)
+            {
+                if (_disposed)
+                {
+                    handle.Dispose();
+                    throw new ObjectDisposedException(nameof(Scheduler));
+                }
+                    
+                _timers.Add(handle);
+                handle.Start(dueTime, period);
+            }
+
+            return handle;
+        }
+        
         public void Dispose()
         {
             if (_disposed) return;
             _disposed = true;
 
-            List<TimerHandle> temp;
+            List<TimerHandleBase> temp;
             lock (_timers)
             {
-                temp = new List<TimerHandle>(_timers);
+                temp = new List<TimerHandleBase>(_timers);
                 _timers.Clear();
             }
 
-            foreach (var t in temp) t.Disable();
             foreach (var t in temp) t.Dispose();
-        }
-
-        public IDisposable Schedule(IFiber fiber, Action action, TimeSpan dueTime, TimeSpan period)
-        {
-            return InternalSchedule(fiber, () => fiber.Enqueue(action), dueTime, period);
-        }
-
-        public IDisposable Schedule<T>(IFiber fiber, Action<T> action, T state, TimeSpan dueTime, TimeSpan period)
-        {
-            return InternalSchedule(fiber, () => fiber.Enqueue(action, state), dueTime, period);
-        }
-
-        public IDisposable Schedule<T1, T2>(IFiber fiber, Action<T1, T2> action, T1 s1, T2 s2,
-            TimeSpan dueTime, TimeSpan period)
-        {
-            return InternalSchedule(fiber, () => fiber.Enqueue(action, s1, s2), dueTime, period);
-        }
-
-        public IDisposable Schedule<T1, T2, T3>(IFiber fiber, Action<T1, T2, T3> action, T1 s1, T2 s2, T3 s3,
-            TimeSpan dueTime, TimeSpan period)
-        {
-            return InternalSchedule(fiber, () => fiber.Enqueue(action, s1, s2, s3), dueTime, period);
-        }
-
-        public IDisposable Schedule<T1, T2, T3, T4>(IFiber fiber, Action<T1, T2, T3, T4> action, T1 s1, T2 s2, T3 s3,
-            T4 s4, TimeSpan dueTime, TimeSpan period)
-        {
-            return InternalSchedule(fiber, () => fiber.Enqueue(action, s1, s2, s3, s4), dueTime, period);
-        }
-
-        private IDisposable InternalSchedule(IFiber fiber, Action tickEnqueue, TimeSpan dueTime, TimeSpan period)
-        {
-            if (_disposed) throw new ObjectDisposedException(nameof(Scheduler));
-            if (fiber == null) throw new ArgumentNullException(nameof(fiber));
-            if (tickEnqueue == null) throw new ArgumentNullException(nameof(tickEnqueue));
-
-            var ta = new TimerHandle(tickEnqueue, dueTime, period);
-            lock (_timers)
-            {
-                if (_disposed)
-                {
-                    ta.Dispose();
-                    throw new ObjectDisposedException(nameof(Scheduler));
-                }
-
-                _timers.Add(ta);
-            }
-
-            return ta;
         }
     }
 }

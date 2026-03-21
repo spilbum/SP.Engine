@@ -8,9 +8,8 @@ namespace GameServer.Command;
 [ProtocolCommand(C2GProtocol.RoomSearchReq)]
 public class RoomSearchReq : BaseCommand<GamePeer, C2GProtocolData.RoomSearchReq>
 {
-    protected override Task ExecuteCommand(GamePeer context, C2GProtocolData.RoomSearchReq protocol)
+    protected override void ExecuteCommand(GamePeer context, C2GProtocolData.RoomSearchReq protocol)
     {
         context.ExecuteProtocol(protocol);
-        return Task.CompletedTask;
     }
 }

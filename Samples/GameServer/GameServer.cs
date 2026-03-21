@@ -16,7 +16,6 @@ namespace GameServer;
 public class GameServer : Engine
 {
     private readonly ConcurrentDictionary<long, uint> _byUid = new();
-
     private HostNetworkInfo? _networkInfo;
 
     public GameServer()
@@ -63,8 +62,12 @@ public class GameServer : Engine
             })
             .WithPerf(r => r with
             {
+                MonitorEnabled = true,
+                SamplePeriod = TimeSpan.FromSeconds(1),
+                LoggerEnabled = true,
+                LoggingPeriod = TimeSpan.FromMinutes(1),
             })
-            .AddListener(new ListenerConfig { Ip = "Any", Port = 10000 });
+            .AddListener(new ListenerConfig { Ip = "Any", Port = appConfig.Server.Port });
 
         foreach (var connector in appConfig.Connector)
         {
@@ -111,10 +114,14 @@ public class GameServer : Engine
         return true;
     }
 
-    public override void Stop()
+    protected override void Dispose(bool disposing)
     {
-        base.Stop();
-        RoomManager.Stop();
+        if (disposing)
+        {
+            RoomManager.Dispose();
+        }
+        
+        base.Dispose(disposing);
     }
 
     protected override IPeer CreatePeer(ISession session)
@@ -169,14 +176,12 @@ public class GameServer : Engine
             Logger.Debug("Unbind peer: uid={0}, peerId={1}", peer.Uid, peerId);
     }
 
-    protected override void OnSessionClosed(Session session, CloseReason reason)
+    protected override void OnPeerRemoved(IPeer peer, CloseReason reason)
     {
-        base.OnSessionClosed(session, reason);
-        
-        if (session.Peer is not GamePeer peer)
+        if (peer is not GamePeer p)
             return;
         
-        Unbind(peer);
-        Logger.Debug("Peer leaved. uid={0}, reason={1}", peer.Uid, reason);
+        Unbind(p);
+        Logger.Debug("Peer leaved. uid={0}, reason={1}", p.Uid, reason);
     }
 }

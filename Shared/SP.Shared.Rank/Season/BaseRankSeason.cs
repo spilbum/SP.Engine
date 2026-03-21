@@ -1,10 +1,9 @@
 using System.Collections.Concurrent;
 using SP.Core.Fiber;
-using SP.Core.Logging;
 
 namespace SP.Shared.Rank.Season;
 
-public abstract class BaseRankSeason<TKey, TRecord, TComparer>(ILogger logger, string name) : IDisposable
+public abstract class BaseRankSeason<TKey, TRecord, TComparer>(string name) : IDisposable
     where TKey : notnull
     where TRecord : IRankRecord<TKey>
     where TComparer : BaseRankSeasonRecordComparer<TRecord>, new()
@@ -17,16 +16,18 @@ public abstract class BaseRankSeason<TKey, TRecord, TComparer>(ILogger logger, s
     private int _initialized;
     private int _pendingStateValue = -1;
     private bool _running;
-    private FiberScheduler? _scheduler;
     private int _stateChanging;
     private int _stateValue;
+    private ThreadFiber? _fiber;
+    private readonly Scheduler _scheduler = new();
+    
     public string Name { get; } = name;
     public int SeasonNum { get; private set; }
     public DateTimeOffset StartUtc { get; private set; }
     public DateTimeOffset EndUtc { get; private set; }
     
     protected int StateValue => Volatile.Read(ref _stateValue);
-    protected IFiberScheduler Scheduler => _scheduler!;
+    protected IFiber Fiber => _fiber!;
 
     public int Count => _cache?.Count ?? 0;
     public int TotalCount => _cache?.TotalCount ?? 0;
@@ -67,9 +68,9 @@ public abstract class BaseRankSeason<TKey, TRecord, TComparer>(ILogger logger, s
 
         _batchQueue = new List<TRecord>(options.MaxUpdatesPerTick);
 
-        _scheduler = new FiberScheduler(logger, "RankSeasonFiber");
-        _scheduler.Schedule(Tick, TimeSpan.Zero, TimeSpan.FromMilliseconds(50));
-        _scheduler.Schedule(WorkerTick, TimeSpan.Zero, TimeSpan.FromMilliseconds(50));
+        _fiber = new ThreadFiber("RankSeasonFiber");
+        _scheduler.Schedule(_fiber, Tick, TimeSpan.Zero, TimeSpan.FromMilliseconds(50));
+        _scheduler.Schedule(_fiber, WorkerTick, TimeSpan.Zero, TimeSpan.FromMilliseconds(50));
     }
 
     public virtual void Start()
@@ -98,7 +99,8 @@ public abstract class BaseRankSeason<TKey, TRecord, TComparer>(ILogger logger, s
         if (!disposing)
             return;
 
-        _scheduler?.Dispose();
+        _fiber?.Dispose();
+        _scheduler.Dispose();
         while (_updateQueue.TryDequeue(out _)) { }
         _cache?.Clear();
         _cache = null;

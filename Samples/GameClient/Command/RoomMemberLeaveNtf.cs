@@ -7,10 +7,9 @@ namespace GameClient.Command;
 [ProtocolCommand(G2CProtocol.RoomMemberLeaveNtf)]
 public class RoomMemberLeaveNtf : BaseCommand<Client, G2CProtocolData.RoomMemberLeaveNtf>
 {
-    protected override Task ExecuteCommand(Client context, G2CProtocolData.RoomMemberLeaveNtf protocol)
+    protected override void ExecuteCommand(Client context, G2CProtocolData.RoomMemberLeaveNtf protocol)
     {
         context.Logger.Debug("Room member leaved. roomId={0}, member={1}, reason={2}, memberCnt={3}",
             protocol.RoomId, protocol.Uid, protocol.Reason, protocol.RoomMemberCount);
-        return Task.CompletedTask;
     }
 }

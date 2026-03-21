@@ -1,6 +1,7 @@
 using GameServer.UserPeer;
 using SP.Core.Fiber;
 using SP.Engine.Runtime.Protocol;
+using SP.Engine.Server;
 using SP.Engine.Server.Logging;
 
 namespace GameServer.Room;
@@ -13,10 +14,10 @@ public abstract class BaseRoom : IDisposable
     private volatile int _idleArmed;
     private IDisposable? _idleTimer;
 
-    protected BaseRoom(BaseRoomManager manager, IFiberScheduler scheduler, long roomId, TimeSpan idleTimeout)
+    protected BaseRoom(BaseRoomManager manager, IFiber fiber, long roomId, TimeSpan idleTimeout)
     {
         _manager = manager;
-        Scheduler = scheduler;
+        Fiber = fiber;
         RoomId = roomId;
         _idleTimeout = idleTimeout;
     }
@@ -24,7 +25,7 @@ public abstract class BaseRoom : IDisposable
     public long RoomId { get; }
     public DateTime CreatedUtc { get; } = DateTime.UtcNow;
     public bool IsDisposed => _disposed != 0;
-    protected IFiberScheduler Scheduler { get; }
+    public IFiber Fiber { get; }
 
     public void Dispose()
     {
@@ -45,7 +46,7 @@ public abstract class BaseRoom : IDisposable
 
     public void NotifyActive()
     {
-        Scheduler.Enqueue(CancelIdleTimer);
+        Fiber.Enqueue(CancelIdleTimer);
     }
 
     public bool OnIdle()
@@ -54,7 +55,7 @@ public abstract class BaseRoom : IDisposable
         if (Interlocked.CompareExchange(ref _idleArmed, 1, 0) != 0) return false;
 
         _idleTimer?.Dispose();
-        _idleTimer = Scheduler.Schedule(OnIdleTimerFired, _idleTimeout, TimeSpan.Zero);
+        _idleTimer = GameServer.Instance.Scheduler.Schedule(Fiber, OnIdleTimerFired, _idleTimeout, TimeSpan.Zero);
         LogManager.Debug("Entered idle (armed, timeout={0}ms).", _idleTimeout.TotalMilliseconds);
         return false;
     }
@@ -79,7 +80,7 @@ public abstract class BaseRoom : IDisposable
 
     public void Close()
     {
-        Scheduler.Enqueue(() =>
+        Fiber.Enqueue(() =>
         {
             if (IsDisposed) return;
             try
@@ -103,7 +104,7 @@ public abstract class BaseRoom : IDisposable
 
     public void EnqueueProtocol(GamePeer peer, IProtocolData protocol)
     {
-        Scheduler.Enqueue(ExecuteProtocol, peer, protocol);
+        Fiber.Enqueue(ExecuteProtocol, peer, protocol);
     }
 
     protected abstract void ExecuteProtocol(GamePeer peer, IProtocolData protocol);

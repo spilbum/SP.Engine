@@ -21,18 +21,14 @@ public interface IBaseSession : ILogContext
     void ProcessTcpBuffer(byte[] buffer, int offset, int length);
     void ProcessUdpBuffer(ArraySegment<byte> segment, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint);
     void Close(CloseReason reason);
-    IFiber Fiber { get; }
 }
 
 public abstract class BaseSession : IBaseSession
 {
     private readonly MessageChannelRouter _channelRouter = new();
-    private IDisposable _assemblerCleanupScheduler;
+    private IDisposable _assemblerCleanupTimer;
     private BaseEngine _engine;
     private PooledReceiveBuffer _receiveBuffer;
-    private IFiberScheduler _scheduler;
-    
-    public IFiber Fiber { get; internal set; }
 
     protected BaseSession()
     {
@@ -105,7 +101,6 @@ public abstract class BaseSession : IBaseSession
     public virtual void Initialize(IBaseEngine engine, TcpNetworkSession networkSession)
     {
         _engine = (BaseEngine)engine;
-        _scheduler = engine.Scheduler;
         NetworkSession = networkSession;
         Id = networkSession.SessionId;
         _receiveBuffer = new PooledReceiveBuffer(engine.Config.Network.ReceiveBufferSize);
@@ -145,7 +140,7 @@ public abstract class BaseSession : IBaseSession
         var sec = Config.Session.FragmentAssemblerCleanupTimeoutSec;
         var timeout = TimeSpan.FromSeconds(sec);
         var period = TimeSpan.FromSeconds(sec / 2.0);
-        _assemblerCleanupScheduler = _scheduler.Schedule(
+        _assemblerCleanupTimer = _engine.Scheduler.Schedule(_engine.Fiber,
             UdpSocket.Assembler.Cleanup,
             timeout,
             period,
@@ -154,7 +149,7 @@ public abstract class BaseSession : IBaseSession
 
     private void StopFragmentAssemblerCleanupScheduler()
     {
-        _assemblerCleanupScheduler?.Dispose();
+        _assemblerCleanupTimer?.Dispose();
     }
 
     private void EnsureUdpSocket(Socket socket, IPEndPoint remoteEndPoint)

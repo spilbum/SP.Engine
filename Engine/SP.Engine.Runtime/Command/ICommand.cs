@@ -7,6 +7,6 @@ namespace SP.Engine.Runtime.Command
     public interface ICommand
     {
         Type ContextType { get; }
-        Task Execute(ICommandContext context, IMessage message);
+        void Execute(ICommandContext context, IMessage message);
     }
 }
