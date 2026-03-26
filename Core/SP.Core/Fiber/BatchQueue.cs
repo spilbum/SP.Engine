@@ -3,96 +3,149 @@ using System.Threading;
 
 namespace SP.Core.Fiber
 {
+    internal struct Slot<T> where T : class
+    {
+        public T Item;
+        public long Seq;
+    }
+    
     public sealed class BatchQueue<T> : IDisposable where T : class
     {
-        private readonly T[] _array;
+        private readonly Slot<T>[] _buffer;
         private readonly int _mask;
-        private readonly int _capacity;
-        
         private long _head;
         private long _tail;
-        
         private readonly SemaphoreSlim _signal = new SemaphoreSlim(0);
         private volatile bool _closed;
+        private volatile bool _disposed;
+        
+        public bool IsClosed => _closed;
+        
+        private long _totalEnqueuedCount;
+        private long _totalDroppedCount;
+        private long _totalProcessedCount;
+        private long _totalDequeueCount;
 
-        public BatchQueue(int capacity = 4096)
+        public int Capacity => _buffer.Length;
+        public int PendingCount => (int)(Volatile.Read(ref _tail) - Volatile.Read(ref _head));
+        public long TotalEnqueuedCount => Volatile.Read(ref _totalEnqueuedCount);
+        public long TotalDroppedCount => Volatile.Read(ref _totalDroppedCount);
+        public long TotalProcessedCount => Volatile.Read(ref _totalProcessedCount);
+        public long TotalDequeueCount => Volatile.Read(ref _totalDequeueCount);
+        public double AvgBatchSize => _totalDequeueCount == 0 
+            ? 0 
+            : (double)Volatile.Read(ref _totalProcessedCount) / Volatile.Read(ref _totalDequeueCount);
+            
+        public BatchQueue(int capacity)
         {
-            _capacity = NextPowerOfTwo(capacity);
-            _mask = _capacity - 1;
-            _array = new T[_capacity];
-        }
+            // 2의 배수로 만듬
+            var cap = 1;
+            while (cap < capacity) cap <<= 1;
+            
+            _buffer = new Slot<T>[cap];
+            _mask = cap - 1;
 
-        private static int NextPowerOfTwo(int v)
-        {
-            v--;
-            v |= v >> 1; 
-            v |= v >> 2; 
-            v |= v >> 4; 
-            v |= v >> 8; 
-            v |= v >> 16;
-            return v + 1;
+            // 초기 시퀀스 설정
+            for (var i = 0; i < cap; i++) _buffer[i].Seq = i;
         }
 
         public bool TryEnqueue(T item, int maxSpinCount = 100)
         {
-            if (_closed) return false;
+            if (_closed || _disposed) return false;
 
             var spinner = new SpinWait();
-            for (var i = 0; i < maxSpinCount; i++)
-            {
-                var head = Volatile.Read(ref _head);
-                var tail = Volatile.Read(ref _tail);
+            var spins = 0;
 
-                if (head - tail < _capacity)
+            while (true)
+            {
+                var curTail = Volatile.Read(ref _tail);
+                var index = (int)(curTail & _mask);
+                var seq = Volatile.Read(ref _buffer[index].Seq);
+
+                var diff = seq - curTail;
+                if (diff == 0)
                 {
-                    if (Interlocked.CompareExchange(ref _head, head + 1, head) == head)
+                    if (Interlocked.CompareExchange(ref _tail, curTail + 1, curTail) != curTail) 
+                        continue;
+                    
+                    _buffer[index].Item = item;
+                    Volatile.Write(ref _buffer[index].Seq, curTail + 1);
+                        
+                    if (_signal.CurrentCount == 0) _signal.Release();
+                    
+                    Interlocked.Increment(ref _totalEnqueuedCount);
+                    return true;
+                }
+
+                if (diff < 0)
+                {
+                    if (spins++ >= maxSpinCount)
                     {
-                        Volatile.Write(ref _array[head & _mask], item);
-                        if (_signal.CurrentCount == 0) _signal.Release();
-                        return true;
+                        Interlocked.Increment(ref _totalDroppedCount);
+                        return false;
                     }
                 }
-                
+
                 spinner.SpinOnce();
             }
-            return false;
         }
-        
-        public int DequeueBatch(Span<T> buffer)
+
+        public int DequeueBatch(Span<T> destination)
         {
-            var tail = _tail;
-            var head = Volatile.Read(ref _head);
+            var curHead = _head;
             var count = 0;
-            
-            while (tail < head && count < buffer.Length)
+            var maxTake = destination.Length;
+
+            for (var i = 0; i < maxTake; i++)
             {
-                var index = (int)(tail & _mask);
-                var item = Interlocked.Exchange(ref _array[index], null);
-                
-                if (item == null) break;
-                
-                buffer[count++] = item;
-                tail++;
+                var nextHead = curHead + i;
+                var index = (int)(nextHead & _mask);
+                var seq = Volatile.Read(ref _buffer[index].Seq);
+
+                if (seq - (nextHead + 1) == 0)
+                {
+                    destination[i] = _buffer[index].Item;
+                    _buffer[index].Item = null;
+                    Volatile.Write(ref _buffer[index].Seq, nextHead + _buffer.Length);
+                    count++;
+                }
+                else
+                {
+                    break;
+                }
             }
 
-            if (count > 0) Volatile.Write(ref _tail, tail);
+            if (count == 0) 
+                return 0;
+            
+            _head += count;
+            Interlocked.Add(ref _totalProcessedCount, count);
+            Interlocked.Increment(ref _totalDequeueCount);
             return count;
         }
+        
+        public void WaitForItem() => _signal.Wait();
 
-        public bool WaitForItem(CancellationToken ct)
+        public void Close()
         {
+            if (_closed) return;
+            _closed = true;
+
             try
             {
-                _signal.Wait(ct);
-                return true;
+                if (_signal.CurrentCount == 0)
+                    _signal.Release();
             }
-            catch (OperationCanceledException)
+            catch (ObjectDisposedException)
             {
-                return false;
+                
             }
         }
+
         public void Dispose()
         {
+            if (_disposed) return;
+            _disposed = true;
             _closed = true;
             _signal.Dispose();
         }

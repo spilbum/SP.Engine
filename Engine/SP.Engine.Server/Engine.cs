@@ -68,7 +68,7 @@ public abstract class Engine : BaseEngine, IEngine
         
         for (var i = 0; i < fiberCnt; i++)
         {
-            var fiber = new ThreadFiber($"PeerFiber_{i:D2}", maxBatchSize: 1024, queueCapacity: 4096,
+            var fiber = new ThreadFiber($"PeerFiber_{i:D2}", maxBatchSize: 1024, capacity: 4096,
                 onError: ex =>
                 {
                     Logger.Error(ex);

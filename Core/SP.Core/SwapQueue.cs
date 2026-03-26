@@ -4,59 +4,59 @@ using System.Threading;
 
 namespace SP.Core
 {
-    public sealed class SwapBuffer<T>
+    public sealed class SwapQueue<T>
     {
         private readonly int _capacity;
         private Node _active;
         private Node _standby;
         
-        public int Count => _active.Published;
+        public int Count => _active.Head;
 
-        public SwapBuffer(int capacity)
+        public SwapQueue(int capacity)
         {
             _capacity = capacity;
             _active = new Node(capacity);
             _standby = new Node(capacity);
         }
 
-        public bool TryWrite(T item)
+        public bool TryEnqueue(T item)
         {
             var node = _active;
             
-            Interlocked.Increment(ref node.Pending);
+            Interlocked.Increment(ref node.WriterCount);
             if (node != _active)
             {
-                Interlocked.Decrement(ref node.Pending);
+                Interlocked.Decrement(ref node.WriterCount);
                 return false;
             }
 
             try
             {
-                var claimed = Volatile.Read(ref node.Claimed);
+                var claimed = Volatile.Read(ref node.Tail);
                 if (claimed >= _capacity) return false;
             
-                if (Interlocked.CompareExchange(ref node.Claimed, claimed + 1, claimed) != claimed)
+                if (Interlocked.CompareExchange(ref node.Tail, claimed + 1, claimed) != claimed)
                     return false;
 
                 node.Array[claimed] = item;
-                Interlocked.Increment(ref node.Published);
+                Interlocked.Increment(ref node.Head);
                 return true;
             }
             finally
             {
-                Interlocked.Decrement(ref node.Pending);
+                Interlocked.Decrement(ref node.WriterCount);
             }
         }
 
-        public bool TryWriteBatch(List<T> items)
+        public bool TryEnqueue(List<T> items)
         {
             if (items.Count == 0) return false;
             
             var node = _active;
-            Interlocked.Increment(ref node.Pending);
+            Interlocked.Increment(ref node.WriterCount);
             if (node != _active)
             {
-                Interlocked.Decrement(ref node.Pending);
+                Interlocked.Decrement(ref node.WriterCount);
                 return false;
             }
 
@@ -66,69 +66,65 @@ namespace SP.Core
                 int current, next;
                 do
                 {
-                    current = Volatile.Read(ref node.Claimed);
+                    current = Volatile.Read(ref node.Tail);
                     next = current + count;
                     if (next > _capacity) return false;
-                } while (Interlocked.CompareExchange(ref node.Claimed, next, current) != current);
+                } while (Interlocked.CompareExchange(ref node.Tail, next, current) != current);
             
                 for (var i = 0; i < count; i++)
                     node.Array[current + i] = items[i];
             
-                Interlocked.Add(ref node.Published, count);
+                Interlocked.Add(ref node.Head, count);
                 return true;
             }
             finally
             {
-                Interlocked.Decrement(ref node.Pending);
+                Interlocked.Decrement(ref node.WriterCount);
             }
         }
 
-        public void Flush(List<T> outputList)
+        public void Exchange(List<T> destination)
         {
-            // 스왑 (Active -> Standby)
-            var filled = Interlocked.Exchange(ref _active, _standby);
+            var filledNode = Interlocked.Exchange(ref _active, _standby);
             
             var spin = new SpinWait();
-            while (Volatile.Read(ref filled.Pending) != 0)
+            while (Volatile.Read(ref filledNode.WriterCount) != 0)
                 spin.SpinOnce();
             
-            var target = filled.Claimed;
-            while (Volatile.Read(ref filled.Published) < target)
+            var target = filledNode.Tail;
+            while (Volatile.Read(ref filledNode.Head) < target)
                 spin.SpinOnce();
 
-            if (target > 0)
+            for (var i = 0; i < target; i++)
             {
-                for (var i = 0; i < target; i++)
-                {
-                    outputList.Add(filled.Array[i]);
-                    filled.Array[i] = default;
-                }
+                destination[i] = filledNode.Array[i];
+                filledNode.Array[i] = default;
             }
             
-            filled.Reset();
-            _standby = filled;
+            filledNode.Reset();
+            _standby = filledNode;
         }
 
-        public void Clear()
+        public void Reset()
         {
             var dummy = new List<T>();
-            Flush(dummy);
+            Exchange(dummy);
         }
         
         private class Node
         {
             public readonly T[] Array;
-            public int Claimed;
-            public int Published;
-            public int Pending;
+            public int Tail;
+            public int Head;
+            public int WriterCount;
             
             public Node(int capacity) => Array = new T[capacity];
 
             public void Reset()
             {
-                Claimed = 0;
-                Published = 0;
-                Pending = 0;
+                Tail = 0;
+                Head = 0;
+                WriterCount = 0;
             }
         }
     }

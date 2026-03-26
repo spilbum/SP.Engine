@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Linq.Expressions;
 using System.Reflection;
 
 namespace SP.Core.Fiber
@@ -38,14 +37,6 @@ namespace SP.Core.Fiber
             return job;
         }
 
-        public static IWorkJob From(object target, MethodInfo method, params object[] args)
-        {
-            var invoker = Cache.GetOrAdd(method, BuildInvoker);
-            var job = SimplePool<ReflectionJob>.Get();
-            job.Init(method.Name, target, invoker, args);
-            return job;
-        }
-
         private static class SimplePool<T> where T : new()
         {
             private static readonly ConcurrentQueue<T> _queue = new ConcurrentQueue<T>();
@@ -69,7 +60,7 @@ namespace SP.Core.Fiber
                 _action = action;
             }
 
-            public void Invoke()
+            public void Execute()
             {
                 try
                 {
@@ -97,7 +88,7 @@ namespace SP.Core.Fiber
                 _state = state;
             }
 
-            public void Invoke()
+            public void Execute()
             {
                 try
                 {
@@ -126,7 +117,7 @@ namespace SP.Core.Fiber
                 _run = run; _s1 = s1; _s2 = s2;
             }
 
-            public void Invoke()
+            public void Execute()
             {
                 try
                 {
@@ -155,7 +146,7 @@ namespace SP.Core.Fiber
                 _run = run; _s1 = s1; _s2 = s2; _s3 = s3;
             }
 
-            public void Invoke()
+            public void Execute()
             {
                 try
                 {
@@ -167,64 +158,6 @@ namespace SP.Core.Fiber
                     SimplePool<StateJob<T1, T2, T3>>.Return(this);
                 }
             }
-        }
-
-        private sealed class ReflectionJob : IWorkJob
-        {
-            private object _target;
-            private Action<object, object[]> _invoker;
-            private object[] _args;
-
-            public string Name { get; private set; }
-            
-            public void Init(string name, object target, Action<object, object[]> invoker, params object[] args)
-            {
-                Name = name;
-                _target = target;
-                _invoker = invoker;
-                _args = args;
-            }
-            
-            public void Invoke() 
-            { 
-                try
-                {
-                    _invoker(_target, _args);
-                }
-                finally
-                {
-                    _invoker = null;
-                    _target = null;
-                    _args = null;
-                    SimplePool<ReflectionJob>.Return(this);
-                }
-            }
-        }
-        
-        private static Action<object, object[]> BuildInvoker(MethodInfo method)
-        {
-            var targetParam = Expression.Parameter(typeof(object), "target");
-            var argsParam = Expression.Parameter(typeof(object[]), "args");
-
-            var callTarget = method.IsStatic
-                ? null
-                : Expression.Convert(targetParam, method.DeclaringType!);
-
-            var parameters = method.GetParameters();
-            var argsExpr = new Expression[parameters.Length];
-            for (var i = 0; i < parameters.Length; i++)
-            {
-                var index = Expression.Constant(i);
-                var access = Expression.ArrayIndex(argsParam, index);
-                argsExpr[i] = Expression.Convert(access, parameters[i].ParameterType);
-            }
-
-            Expression body = method.IsStatic
-                ? Expression.Call(method, argsExpr)
-                : Expression.Call(callTarget, method, argsExpr);
-
-            var lambda = Expression.Lambda<Action<object, object[]>>(body, targetParam, argsParam);
-            return lambda.Compile();
         }
     }
 }

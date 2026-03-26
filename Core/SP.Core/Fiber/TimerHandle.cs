@@ -5,10 +5,15 @@ namespace SP.Core.Fiber
 {
     internal abstract class TimerHandleBase : IDisposable
     {
-        protected Timer _timer;
+        private Timer _timer;
         private int _gate;
         private volatile bool _disposed;
         internal Action<TimerHandleBase> OnDisposed;
+
+        protected TimerHandleBase()
+        {
+            _timer = new Timer(Callback, null, Timeout.Infinite, Timeout.Infinite);
+        }
 
         public void Start(TimeSpan dueTime, TimeSpan period)
         {
@@ -25,9 +30,7 @@ namespace SP.Core.Fiber
             OnDisposed?.Invoke(this);
         }
 
-        protected abstract void OnTick();
-
-        protected void Callback(object state)
+        private void Callback(object state)
         {
             if (_disposed) return;
             if (Interlocked.CompareExchange(ref _gate, 1, 0) != 0) return;
@@ -44,6 +47,8 @@ namespace SP.Core.Fiber
                 Interlocked.Exchange(ref _gate, 0);
             }
         }
+        
+        protected abstract void OnTick();
     }
     
     internal sealed class TimerHandle : TimerHandleBase
@@ -55,11 +60,14 @@ namespace SP.Core.Fiber
         {
             _fiber = fiber;
             _action = action;
-            _timer = new Timer(Callback, null, Timeout.Infinite, Timeout.Infinite);
+  
         }
 
         protected override void OnTick()
         {
+            if (_fiber.IsDisposed)
+                Dispose();
+
             _fiber.Enqueue(_action);
         }
     }
@@ -75,12 +83,14 @@ namespace SP.Core.Fiber
             _fiber = fiber;
             _action = action;
             _state = state;;
-            _timer = new Timer(Callback, null, Timeout.Infinite, Timeout.Infinite);
         }
 
         protected override void OnTick()
         {
-            _fiber.Enqueue(_action, _state);
+            if (!_fiber.Enqueue(_action, _state))
+            {
+                Dispose();
+            }
         }
     }
     
@@ -95,13 +105,16 @@ namespace SP.Core.Fiber
         {
             _fiber = fiber;
             _action = action;
-            _s1 = s1; _s2 = s2;
-            _timer = new Timer(Callback, null, Timeout.Infinite, Timeout.Infinite);
+            _s1 = s1; 
+            _s2 = s2;
         }
 
         protected override void OnTick()
         {
-            _fiber.Enqueue(_action, _s1, _s2);
+            if (!_fiber.Enqueue(_action, _s1, _s2))
+            {
+                Dispose();
+            }
         }
     }
     
@@ -117,13 +130,17 @@ namespace SP.Core.Fiber
         {
             _fiber = fiber;
             _action = action;
-            _s1 = s1; _s2 = s2; _s3 = s3;
-            _timer = new Timer(Callback, null, Timeout.Infinite, Timeout.Infinite);
+            _s1 = s1;
+            _s2 = s2; 
+            _s3 = s3;
         }
 
         protected override void OnTick()
         {
-            _fiber.Enqueue(_action, _s1, _s2, _s3);
+            if (!_fiber.Enqueue(_action, _s1, _s2, _s3))
+            {
+                Dispose();
+            }
         }
     }
 }

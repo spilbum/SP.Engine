@@ -17,7 +17,7 @@ namespace SP.Engine.Client
         private readonly int _receiveBufferSize;
         private readonly List<ArraySegment<byte>> _sendBufferList = new List<ArraySegment<byte>>();
         private readonly int _sendBufferSize;
-        private readonly SwapBuffer<ArraySegment<byte>> _sendBuffer;
+        private readonly SwapQueue<ArraySegment<byte>> _sendQueue;
         private bool _isConnecting;
         private int _isSending;
         private byte[] _receiveBuffer;
@@ -31,7 +31,7 @@ namespace SP.Engine.Client
         {
             _sendBufferSize = config.SendBufferSize;
             _receiveBufferSize = config.ReceiveBufferSize;
-            _sendBuffer = new SwapBuffer<ArraySegment<byte>>(config.SendQueueSize);
+            _sendQueue = new SwapQueue<ArraySegment<byte>>(config.SendQueueSize);
         }
 
         public bool IsConnected { get; private set; }
@@ -42,7 +42,7 @@ namespace SP.Engine.Client
                 return false;
 
             var seg = message.ToArraySegment();
-            if (!_sendBuffer.TryWrite(seg))
+            if (!_sendQueue.TryEnqueue(seg))
                 return false;
 
             if (Interlocked.CompareExchange(ref _isSending, 1, 0) == 0)
@@ -309,7 +309,7 @@ namespace SP.Engine.Client
 
         private void DequeueSend()
         {
-            _sendBuffer.Flush(_itemsToSend);
+            _sendQueue.Exchange(_itemsToSend);
 
             if (_itemsToSend.Count == 0)
             {
@@ -392,13 +392,13 @@ namespace SP.Engine.Client
         private void OnSendCompleted()
         {
             _itemsToSend.Clear();
-            _sendBuffer.Flush(_itemsToSend);
+            _sendQueue.Exchange(_itemsToSend);
 
             if (_itemsToSend.Count == 0)
             {
                 Interlocked.Exchange(ref _isSending, 0);
 
-                _sendBuffer.Flush(_itemsToSend);
+                _sendQueue.Exchange(_itemsToSend);
                 if (_itemsToSend.Count == 0 || Interlocked.CompareExchange(ref _isSending, 1, 0) != 0)
                     return;
             }

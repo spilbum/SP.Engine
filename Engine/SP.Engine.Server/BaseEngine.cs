@@ -157,7 +157,7 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
         if (!SetupSocketServer())
             return false;
 
-        _fiber = new ThreadFiber("EngineFiber", maxBatchSize: 1024, queueCapacity: 4096,
+        _fiber = new ThreadFiber("EngineFiber", maxBatchSize: 1024, capacity: 4096,
             onError: ex =>
             {
                 Logger.Error(ex);        

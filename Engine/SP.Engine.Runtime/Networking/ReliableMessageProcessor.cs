@@ -241,7 +241,7 @@ namespace SP.Engine.Runtime.Networking
     {
         private const int PendingBufferWindow = 128;
         
-        private readonly SwapBuffer<TcpMessage> _pendingBuffer;
+        private readonly SwapQueue<TcpMessage> _pendingQueue;
         private readonly ReliableSender _sender;
         private readonly ReliableReceiver _receiver;
         private readonly RtoEstimator _rto;
@@ -252,11 +252,11 @@ namespace SP.Engine.Runtime.Networking
         public int SendTimeoutMs { get; private set; } = 500;
         public int MaxRetryCount { get; private set; } = 5;
         
-        public int PendingCount => _pendingBuffer.Count;
+        public int PendingCount => _pendingQueue.Count;
 
         public ReliableMessageProcessor(ILogger logger)
         {
-            _pendingBuffer = new SwapBuffer<TcpMessage>(PendingBufferWindow);
+            _pendingQueue = new SwapQueue<TcpMessage>(PendingBufferWindow);
             _sender = new ReliableSender(logger);
             _receiver = new ReliableReceiver();
             _rto = new RtoEstimator();
@@ -265,12 +265,12 @@ namespace SP.Engine.Runtime.Networking
         public void SetSendTimeoutMs(int ms) => SendTimeoutMs = ms;
         public void SetMaxRetryCount(int count) => MaxRetryCount = count;
         public long GetNextReliableSeq() => Interlocked.Increment(ref _nextReliableSeq);
-        public bool EnqueuePendingMessage(TcpMessage message) => _pendingBuffer.TryWrite(message);
+        public bool EnqueuePendingMessage(TcpMessage message) => _pendingQueue.TryEnqueue(message);
 
         public List<TcpMessage> DequeuePendingMessages()
         {
             _dequeuedCache.Clear();
-            _pendingBuffer.Flush(_dequeuedCache);
+            _pendingQueue.Exchange(_dequeuedCache);
             return _dequeuedCache.ToList();
         }
 
@@ -290,7 +290,7 @@ namespace SP.Engine.Runtime.Networking
 
         public void Reset()
         {
-            _pendingBuffer.Clear();
+            _pendingQueue.Reset();
             _sender.Reset();
             _receiver.Reset();
             _rto.Reset();

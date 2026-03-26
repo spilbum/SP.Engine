@@ -8,55 +8,36 @@ namespace SP.Core.Fiber
         public IFiber Fiber { get; }
         public IWorkJob Job { get; }
 
-        public FiberException(IFiber fiber, IWorkJob job, string message = "", Exception innerException = null)
+        public FiberException(IFiber fiber, IWorkJob job = null, string message = "", Exception innerException = null)
             : base(message, innerException)
         {
             Fiber = fiber;
             Job = job;
         }
     }
-    
+
     public sealed class ThreadFiber : IFiber
     {
-        private IWorkJob[] _batchBuf;
-        private readonly CancellationTokenSource _cts = new CancellationTokenSource();
-        private readonly int _maxBatch;
         private readonly BatchQueue<IWorkJob> _queue;
-        private readonly Thread _thread;
         private readonly Action<FiberException> _onError;
+        private readonly int _maxBatchSize;
+        private readonly Thread _thread;
         private volatile bool _disposed;
-        private volatile bool _running = true;
-
+        
         public string Name { get; }
+        public bool IsDisposed => _disposed;
 
-        public ThreadFiber(string name, int maxBatchSize = 1024, int queueCapacity = 4096, Action<FiberException> onError = null)
+        private long _totalExceptionCount;
+
+        public ThreadFiber(string name, int capacity = 4096, int maxBatchSize = 256, Action<FiberException> onError = null)
         {
             Name = name;
+            _queue = new BatchQueue<IWorkJob>(capacity);
+            _maxBatchSize = Math.Max(1, maxBatchSize);
             _onError = onError;
-            _maxBatch = Math.Max(1, maxBatchSize);
-            _queue = new BatchQueue<IWorkJob>(queueCapacity);
+            
             _thread = new Thread(Run) { IsBackground = true, Name = name };
             _thread.Start();
-        }
-
-        public void Dispose()
-        {
-            if (_disposed) return;
-            _disposed = true;
-            _running = false;
-            
-            _cts.Cancel();
-                
-            if (Thread.CurrentThread != _thread)
-            {
-                if (!_thread.Join(TimeSpan.FromSeconds(3)))
-                {
-                    Console.WriteLine($"Warning: Fiber '{Name}' shutdown timeout.");
-                }
-            }
-            
-            _queue.Dispose();
-            _cts.Dispose();
         }
         
         public bool Enqueue(Action action) => Enqueue(AsyncJob.From(action));
@@ -66,55 +47,98 @@ namespace SP.Core.Fiber
 
         private bool Enqueue(IWorkJob job)
         {
-            if (job == null) throw new ArgumentNullException(nameof(job));
-            if (!_running || _disposed) return false;
-            if (_queue.TryEnqueue(job))
+            if (job == null) return false;
+            if (_disposed) return false;
+            
+            try
+            {
+                if (!_queue.TryEnqueue(job))
+                {
+                    throw new FiberException(this, job, $"Fiber '{Name}' queue full! Job dropped. Job: {job.Name}");
+                }
+                
                 return true;
-
-            var ex = new FiberException(this, job, $"Fiber '{Name}' queue full! Job dropped. Job: {job.Name}");
-            _onError?.Invoke(ex);
-            return false;
+            }
+            catch (FiberException ex)
+            {
+                _onError?.Invoke(ex);
+                return false;
+            }
+            catch (Exception ex)
+            {
+                _onError?.Invoke(new FiberException(this, job, ex.Message, ex));
+                return false;
+            }
         }
 
         private void Run()
         {
-            var ct = _cts.Token;
-            _batchBuf ??= new IWorkJob[_maxBatch];
+            var batchBuf = new IWorkJob[_maxBatchSize];
 
-            while (_running)
+            while (!_disposed)
             {
-                if (!_queue.WaitForItem(ct))
-                    break;
+                var count = _queue.DequeueBatch(batchBuf);
 
-                if (!_running)
-                    break;
-
-                var buf = _batchBuf;
-                var n = _queue.DequeueBatch(buf);
-
-                for (var i = 0; i < n; i++)
+                if (count == 0)
                 {
-                    var job = buf[i];
-                    buf[i] = null;
+                    if (_queue.IsClosed) break;
+                    _queue.WaitForItem();
+                    if (_queue.IsClosed) break;
+                    continue;
+                }
+                
+                ExecuteItems(batchBuf, count);
+            }
+        }
 
-                    try
-                    {
-                        job.Invoke();
-                    }
-                    catch (Exception e)
-                    {
-                        var message = $"Fiber '{Name}' execute failed. Job: {job.Name}, Error: {e.Message}";
-                        if (_onError != null)
-                        {
-                            _onError(new FiberException(this, job, message, e));
-                        }
-                        else
-                        {
-                            Console.WriteLine(message);
-                        }
-                    }
+        private void ExecuteItems(IWorkJob[] jobs, int count)
+        {
+            for (var i = 0; i < count; i++)
+            {
+                var job = jobs[i];
+                try
+                {
+                    job.Execute();
+                }
+                catch (Exception e)
+                {
+                    Interlocked.Increment(ref _totalExceptionCount);
+                    _onError?.Invoke(new FiberException(this, job, e.Message, e));
+                }
+                finally
+                {
+                    jobs[i] = null;
                 }
             }
+        }
+
+        public FiberSnapshot GetSnapshot()
+        {
+            return new FiberSnapshot
+            {
+                Name = Name,
+                IsWorking = !_disposed,
+                QueuePendingCount = _queue.PendingCount,
+                QueueCapacity = _queue.Capacity,
+                TotalProcessedCount = _queue.TotalProcessedCount,
+                TotalDroppedCount = _queue.TotalDroppedCount,
+                TotalDequeueCount = _queue.TotalDequeueCount,
+                AvgBatchCount = _queue.AvgBatchSize,
+                TotalExceptionCount = Volatile.Read(ref _totalExceptionCount),
+            };
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            
+            _queue.Close();
+            
+            if (_thread.IsAlive)
+                _thread.Join(1000);
+            
+            _queue.Dispose();
         }
     }
 }
