@@ -62,11 +62,10 @@ namespace SP.Engine.Runtime
             }
             else
             {
-                var firstLen = rightSpace;
                 var secondLen = destination.Length - rightSpace;
                 
-                _buffer.AsSpan(_readHead, firstLen).CopyTo(destination[..firstLen]);
-                _buffer.AsSpan(0, secondLen).CopyTo(destination.Slice(firstLen, secondLen));
+                _buffer.AsSpan(_readHead, rightSpace).CopyTo(destination[..rightSpace]);
+                _buffer.AsSpan(0, secondLen).CopyTo(destination.Slice(rightSpace, secondLen));
             }
         }
         

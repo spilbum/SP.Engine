@@ -372,7 +372,10 @@ public abstract class Engine : BaseEngine, IEngine
         }
     }
     
-    public static long GetServerTimeMs() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+    private static readonly long _baseUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+    public static long UtcNowMs => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+    internal static uint NetworkTimeMs => (uint)(UtcNowMs - _baseUnixMs);
+    
     public IEnumerable<IConnector> GetAllConnectors() => _connectors;
     public IEnumerable<IConnector> GetConnectors(string name) => _connectors.Where(c => c.Name == name); 
     public IConnector GetConnector(string name, string host, int port) => _connectors.FirstOrDefault(x => x.Name == name && x.Host == host && x.Port == port);

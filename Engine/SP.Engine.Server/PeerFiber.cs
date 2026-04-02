@@ -12,6 +12,7 @@ public sealed class PeerFiber : IDisposable
     private readonly IScheduler _globalScheduler;
     private readonly ILogger _logger;
     private readonly IDisposable _tickTimer;
+    private volatile bool _disposed;
     
     public int PeerCount => _peers.Count;
 
@@ -27,6 +28,7 @@ public sealed class PeerFiber : IDisposable
     {
         _fiber.Enqueue(p =>
         {
+            if (_disposed) return;
             _peers.Add(p);
             p.SetFiber(this);
         }, peer);
@@ -38,9 +40,15 @@ public sealed class PeerFiber : IDisposable
         {
             var index = _peers.IndexOf(p);
             if (index == -1) return;
+            
+            p.SetFiber(null);
         
             var lastIndex = _peers.Count - 1;
-            if (index != lastIndex) _peers[index] = _peers[lastIndex];
+            if (index != lastIndex)
+            {
+                _peers[index] = _peers[lastIndex];
+            }
+            
             _peers.RemoveAt(lastIndex);
         }, peer);
     }
@@ -61,6 +69,26 @@ public sealed class PeerFiber : IDisposable
         }
     }
     
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        
+        _tickTimer.Dispose();
+
+        _fiber.Enqueue(() =>
+        {
+            foreach (var peer in _peers)
+            {
+                peer.SetFiber(null);
+            }
+
+            _peers.Clear();
+        });
+        
+        _fiber.Dispose();
+    }
+    
     public void Enqueue(Action action) => _fiber.Enqueue(action);
     public void Enqueue<T>(Action<T> action, T state) => _fiber.Enqueue(action, state);
     public void Enqueue<T1, T2>(Action<T1, T2> action, T1 s1, T2 s2) => _fiber.Enqueue(action, s1, s2);
@@ -74,10 +102,4 @@ public sealed class PeerFiber : IDisposable
         => _globalScheduler.Schedule(_fiber, action, s1, s2, due, period);
     public IDisposable Schedule<T1, T2, T3>(Action<T1, T2, T3> action, T1 s1, T2 s2, T3 s3, TimeSpan due, TimeSpan period)
         => _globalScheduler.Schedule(_fiber, action, s1, s2, s3, due, period);
-
-    public void Dispose()
-    {
-        _tickTimer.Dispose();
-        _fiber.Dispose();
-    }
 }

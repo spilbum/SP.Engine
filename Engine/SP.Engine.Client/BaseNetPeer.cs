@@ -5,6 +5,7 @@ using System.IO;
 using System.Net;
 using System.Reflection;
 using System.Threading;
+using SP.Core;
 using SP.Core.Logging;
 using SP.Engine.Client.Command;
 using SP.Engine.Client.Configuration;
@@ -80,7 +81,6 @@ namespace SP.Engine.Client
         private TickTimer _keepAliveTimer;
         private IPolicyView _networkPolicy = new NetworkPolicyView(in PolicyDefaults.Globals);
         private ReliableMessageProcessor _reliableMessageProcessor;
-        private double _serverTimeOffsetMs;
         private TcpNetworkSession _session;
         private string _sessionId;
         private int _stateCode;
@@ -90,7 +90,7 @@ namespace SP.Engine.Client
         public int ConnectTryCount { get; private set; }
         public int ReconnectTryCount { get; private set; }
         public int MaxFrameBytes { get; private set; }
-        public long LastSendPingTime { get; private set; }
+        public long LastPingTimeMs { get; private set; }
         public EndPoint RemoteEndPoint { get; private set; }
         public uint PeerId { get; private set; }
         public EngineConfig Config { get; private set; }
@@ -101,6 +101,9 @@ namespace SP.Engine.Client
         protected IEncryptor Encryptor => _encryptor;
         protected ICompressor Compressor => _compressor;
         public ILogger Logger { get; private set; }
+        
+
+        
 
         TProtocol ICommandContext.Deserialize<TProtocol>(IMessage message)
         {
@@ -124,7 +127,7 @@ namespace SP.Engine.Client
             Config = config;
             Logger = logger;
             MaxFrameBytes = 64 * 1024;
-            LatencyStats = new LatencyStats(config.LatencySampleWindowSize);
+            LatencyStats = new LatencyStats();
             _reliableMessageProcessor = new ReliableMessageProcessor(logger);
 
             RegisterInternalCommand<SessionAuth>(S2CEngineProtocolId.SessionAuthAck);
@@ -183,19 +186,17 @@ namespace SP.Engine.Client
             return command;
         }
 
-        public TrafficInfo GetTcpTrafficInfo()
-            => _session?.GetTrafficInfo();
+        private static readonly long _baseUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        private static long UtcNowMs => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        private static uint NetworkTimeMs => (uint)(UtcNowMs - _baseUnixMs);
 
-        public TrafficInfo GetUdpTrafficInfo()
-            => _udpSocket?.GetTrafficInfo();
-
-        private static long GetCurrentTimeMs()
-            => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-
+        private EwmaFilter _serverTimeOffsetFilter = new EwmaFilter(0.1);
+        private long _baseServerTimeOffsetMs;
+        
         public DateTime GetServerTime()
         {
-            var estimateMs = GetCurrentTimeMs() + (long)_serverTimeOffsetMs;
-            return DateTimeOffset.FromUnixTimeMilliseconds(estimateMs).UtcDateTime;
+            var estimateMs = UtcNowMs + _baseServerTimeOffsetMs;
+            return DateTimeOffset.FromUnixTimeMilliseconds(estimateMs).UtcDateTime; 
         }
 
         public void Connect(string ip, int port)
@@ -217,7 +218,7 @@ namespace SP.Engine.Client
             return new DnsEndPoint(ip, port);
         }
 
-        public void Tick()
+        public virtual void Tick()
         {
             _timer?.Tick();
             _keepAliveTimer?.Tick();
@@ -312,7 +313,7 @@ namespace SP.Engine.Client
             return TrySend(0, data, policy, encryptor, compressor);
         }
 
-        private bool TrySend(long sequenceNumber, IProtocolData data, IPolicy policy, IEncryptor encryptor,
+        private bool TrySend(uint sequenceNumber, IProtocolData data, IPolicy policy, IEncryptor encryptor,
             ICompressor compressor)
         {
             var channel = data.Channel;
@@ -374,10 +375,9 @@ namespace SP.Engine.Client
 
         public void SendPing()
         {
-            var now = GetCurrentTimeMs();
             var ping = new C2SEngineProtocolData.Ping
             {
-                SendTimeMs = now,
+                SendTimeMs = NetworkTimeMs,
                 RawRttMs = LatencyStats.LastRttMs,
                 AvgRttMs = LatencyStats.AvgRttMs,
                 JitterMs = LatencyStats.JitterMs,
@@ -391,7 +391,7 @@ namespace SP.Engine.Client
             }
             finally
             {
-                LastSendPingTime = now;
+                LastPingTimeMs = UtcNowMs;
             }
         }
 
@@ -455,8 +455,6 @@ namespace SP.Engine.Client
             session.Closed += OnSessionClosed;
             session.Error += OnSessionError;
             session.DataReceived += OnSessionDataReceived;
-
-            LatencyStats.Clear();
             return session;
         }
 
@@ -619,7 +617,7 @@ namespace SP.Engine.Client
 
                     var bodyLen = header.PayloadLength;
                     
-                    if (bodyLen < 0 || bodyLen > MaxFrameBytes)
+                    if (bodyLen > MaxFrameBytes)
                     {
                         Logger.Warn("Invalid payload length. id={0}, max={1}, len={2}",
                             header.MsdId, MaxFrameBytes, bodyLen);
@@ -638,7 +636,7 @@ namespace SP.Engine.Client
                         var payload = new byte[bodyLen];
                         
                         _receiveBuffer.Peek(payload);
-                        _receiveBuffer.Consume(bodyLen);
+                        _receiveBuffer.Consume((int)bodyLen);
 
                         var message = new TcpMessage(header, payload);
                         OnReceivedMessage(message);
@@ -943,15 +941,19 @@ namespace SP.Engine.Client
             command.Execute(this, message);
         }
 
-        internal void OnPong(long sendTimeMs, long serverTimeMs)
+        internal void OnPong(uint clientSendTimeMs, uint serverNetworkTimeMs)
         {
-            var now = GetCurrentTimeMs();
-            var rttMs = now - sendTimeMs;
+            var nowMs = NetworkTimeMs;
+            var rttMs = nowMs - clientSendTimeMs;
+
+            var estimatedServerNetworkTime = serverNetworkTimeMs + rttMs / 2;
+            var currentSampleOffset = (long)estimatedServerNetworkTime - nowMs;
+
+            _serverTimeOffsetFilter.Update(currentSampleOffset);
+            _baseServerTimeOffsetMs = (long)_serverTimeOffsetFilter.Value;
+            
             LatencyStats.OnReceived(rttMs);
             _reliableMessageProcessor.AddRtoSample(rttMs);
-
-            var estimatedServerTime = serverTimeMs + rttMs / 2.0;
-            _serverTimeOffsetMs = estimatedServerTime - now;
         }
 
         internal void OnMessageAck(long sequenceNumber)
@@ -999,7 +1001,6 @@ namespace SP.Engine.Client
                 _receiveBuffer = null;
                 
                 PeerId = 0;
-                LatencyStats.Clear();
                 CancelTimer();
             }
 

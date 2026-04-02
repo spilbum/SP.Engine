@@ -9,7 +9,7 @@ namespace SP.Engine.Client.Command
     {
         protected override void ExecuteCommand(BaseNetPeer context, S2CEngineProtocolData.Pong protocol)
         {
-            context.OnPong(protocol.SendTimeMs, protocol.ServerTimeMs);
+            context.OnPong(protocol.ClientSendTimeMs, protocol.ServerTimeMs);
         }
     }
 }

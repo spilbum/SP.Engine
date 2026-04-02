@@ -3,19 +3,6 @@ using System.Threading;
 
 namespace SP.Core.Fiber
 {
-    public sealed class FiberException : Exception
-    {
-        public IFiber Fiber { get; }
-        public IWorkJob Job { get; }
-
-        public FiberException(IFiber fiber, IWorkJob job = null, string message = "", Exception innerException = null)
-            : base(message, innerException)
-        {
-            Fiber = fiber;
-            Job = job;
-        }
-    }
-
     public sealed class ThreadFiber : IFiber
     {
         private readonly BatchQueue<IWorkJob> _queue;
@@ -40,33 +27,38 @@ namespace SP.Core.Fiber
             _thread.Start();
         }
         
-        public bool Enqueue(Action action) => Enqueue(AsyncJob.From(action));
-        public bool Enqueue<T>(Action<T> action, T state) => Enqueue(AsyncJob.From(action, state));
-        public bool Enqueue<T1, T2>(Action<T1, T2> action, T1 s1, T2 s2) => Enqueue(AsyncJob.From(action, s1, s2));
-        public bool Enqueue<T1, T2, T3>(Action<T1, T2, T3> action, T1 s1, T2 s2, T3 s3) => Enqueue(AsyncJob.From(action, s1, s2, s3));
+        public bool Enqueue(Action action) => Enqueue(WorkJob.From(action));
+        public bool Enqueue<T>(Action<T> action, T state) => Enqueue(WorkJob.From(action, state));
+        public bool Enqueue<T1, T2>(Action<T1, T2> action, T1 s1, T2 s2) => Enqueue(WorkJob.From(action, s1, s2));
+        public bool Enqueue<T1, T2, T3>(Action<T1, T2, T3> action, T1 s1, T2 s2, T3 s3) => Enqueue(WorkJob.From(action, s1, s2, s3));
 
         private bool Enqueue(IWorkJob job)
         {
             if (job == null) return false;
-            if (_disposed) return false;
-            
+
+            if (_disposed)
+            {
+                job.Dispose();
+                return false;
+            }
+
             try
             {
-                if (!_queue.TryEnqueue(job))
-                {
-                    throw new FiberException(this, job, $"Fiber '{Name}' queue full! Job dropped. Job: {job.Name}");
-                }
-                
-                return true;
-            }
-            catch (FiberException ex)
-            {
+                if (_queue.TryEnqueue(job))
+                    return true;
+
+                // 큐가 꽉참  
+                var ex = new FiberException(this, job, $"Fiber '{Name}' queue full! job dropped.");
                 _onError?.Invoke(ex);
+                
+                job.Dispose();
                 return false;
             }
             catch (Exception ex)
             {
                 _onError?.Invoke(new FiberException(this, job, ex.Message, ex));
+                
+                job.Dispose();
                 return false;
             }
         }
@@ -107,6 +99,7 @@ namespace SP.Core.Fiber
                 }
                 finally
                 {
+                    job.Dispose();
                     jobs[i] = null;
                 }
             }

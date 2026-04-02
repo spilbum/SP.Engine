@@ -12,9 +12,9 @@ namespace SP.Engine.Runtime.Networking
         {
         }
 
-        public long SequenceNumber => Header.SequenceNumber;
+        public uint SequenceNumber => Header.SequenceNumber;
 
-        public void SetSequenceNumber(long sequenceNumber)
+        public void SetSequenceNumber(uint sequenceNumber)
         {
             Header = new TcpHeaderBuilder()
                 .From(Header)

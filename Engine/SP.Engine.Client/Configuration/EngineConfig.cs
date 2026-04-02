@@ -76,11 +76,6 @@ namespace SP.Engine.Client.Configuration
         ///     재연결 주기 (기본값: 30초)
         /// </summary>
         public int ReconnectAttemptIntervalSec { get; set; } = 30;
-
-        /// <summary>
-        ///     레이턴시 샘플 갯수 (기본값: 20개)
-        /// </summary>
-        public int LatencySampleWindowSize { get; set; } = 20;
     }
 
     public class EngineConfigBuilder
@@ -131,12 +126,6 @@ namespace SP.Engine.Client.Configuration
         {
             _config.MaxConnectAttempts = max;
             _config.ConnectAttemptIntervalSec = intervalSec;
-            return this;
-        }
-
-        public EngineConfigBuilder WithLatencySampleWindowSize(int windowSize)
-        {
-            _config.LatencySampleWindowSize = windowSize;
             return this;
         }
 

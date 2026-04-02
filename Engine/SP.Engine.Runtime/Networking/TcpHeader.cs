@@ -4,15 +4,15 @@ namespace SP.Engine.Runtime.Networking
 {
     public readonly struct TcpHeader : IHeader
     {
-        public const int ByteSize = 1 + 8 + 2 + 4; // 15 bytes
+        public const int ByteSize = 1 + 4 + 2 + 4; // 11 bytes
 
         public HeaderFlags Flags { get; }
-        public long SequenceNumber { get; }
+        public uint SequenceNumber { get; }
         public ushort MsdId { get; }
         public int PayloadLength { get; }
         public int Size { get; }
 
-        public TcpHeader(HeaderFlags flags, long sequenceNumber, ushort msdId, int payloadLength)
+        public TcpHeader(HeaderFlags flags, uint sequenceNumber, ushort msdId, int payloadLength)
         {
             Flags = flags;
             SequenceNumber = sequenceNumber;
@@ -29,9 +29,9 @@ namespace SP.Engine.Runtime.Networking
         public void WriteTo(Span<byte> destination)
         {
             destination[0] = (byte)Flags;
-            destination.WriteInt64(1, SequenceNumber);
-            destination.WriteUInt16(9, MsdId);
-            destination.WriteInt32(11, PayloadLength);
+            destination.WriteUInt32(1, SequenceNumber);
+            destination.WriteUInt16(5, MsdId);
+            destination.WriteInt32(7, PayloadLength);
         }
 
         public static bool TryRead(ReadOnlySpan<byte> source, out TcpHeader header, out int consumed)
@@ -44,9 +44,9 @@ namespace SP.Engine.Runtime.Networking
             }
 
             var flags = (HeaderFlags)source[0];
-            var sequenceNumber = source.ReadInt64(1);
-            var id = source.ReadUInt16(9);
-            var len = source.ReadInt32(11);
+            var sequenceNumber = source.ReadUInt32(1);
+            var id = source.ReadUInt16(5);
+            var len = source.ReadInt32(7);
             header = new TcpHeader(flags, sequenceNumber, id, len);
             consumed = ByteSize;
             return true;
@@ -57,8 +57,8 @@ namespace SP.Engine.Runtime.Networking
     {
         private HeaderFlags _flags;
         private ushort _id;
+        private uint _sequenceNumber;
         private int _payloadLength;
-        private long _sequenceNumber;
 
         public TcpHeaderBuilder From(TcpHeader header)
         {
@@ -69,7 +69,7 @@ namespace SP.Engine.Runtime.Networking
             return this;
         }
 
-        public TcpHeaderBuilder WithSequenceNumber(long sequenceNumber)
+        public TcpHeaderBuilder WithSequenceNumber(uint sequenceNumber)
         {
             _sequenceNumber = sequenceNumber;
             return this;

@@ -251,12 +251,12 @@ public sealed class Session : BaseSession, ISession
         }
     }
 
-    internal void SendPong(long sendTimeMs)
+    internal void SendPong(uint clientSendTimeMs)
     {
         InternalSend(new S2CEngineProtocolData.Pong
         {
-            SendTimeMs = sendTimeMs,
-            ServerTimeMs = Engine.GetServerTimeMs()
+            ClientSendTimeMs = clientSendTimeMs,
+            ServerTimeMs = Engine.NetworkTimeMs
         });
     }
 

@@ -44,11 +44,15 @@ namespace SP.Engine.Protocol
         [Protocol(C2SEngineProtocolId.Ping)]
         public class Ping : BaseProtocolData
         {
-            public double AvgRttMs;
-            public double JitterMs;
-            public float PacketLossRate;
-            public double RawRttMs;
-            public long SendTimeMs;
+            public uint SendTimeMs;
+            // 최신 RTT
+            public ushort RawRttMs;
+            // EWMA 평균 RTT
+            public ushort AvgRttMs;
+            // EWMA 지터
+            public ushort JitterMs;
+            // 최근 구간 유실률 (0 ~ 100)
+            public byte PacketLossRate;
         }
 
         [Protocol(C2SEngineProtocolId.Close)]
@@ -92,8 +96,10 @@ namespace SP.Engine.Protocol
         [Protocol(S2CEngineProtocolId.Pong)]
         public class Pong : BaseProtocolData
         {
-            public long SendTimeMs;
-            public long ServerTimeMs;
+            // 클라이언트가 핑 보낸 시간
+            public uint ClientSendTimeMs;
+            // 서버측 현재 시간
+            public uint ServerTimeMs;
         }
 
         [Protocol(S2CEngineProtocolId.MessageAck)]

@@ -35,6 +35,19 @@ public partial class GamePeer(ISession session) : BasePeer(PeerKind.User, sessio
         };
     }
 
+    private DateTime? _monitorTime;
+
+    public override void Tick()
+    {
+        base.Tick();
+
+        if (_monitorTime == null || _monitorTime <= DateTime.Now.AddSeconds(-10))
+        {
+            _monitorTime = DateTime.Now;
+            Logger.Debug("Avg: {0}, Jitter: {1}, LossRate: {2}", LatencyAvgMs, LatencyJitterMs, PacketLossRate);
+        }
+    }
+
     public void ExecuteProtocol(IProtocolData protocol)
     {
         try

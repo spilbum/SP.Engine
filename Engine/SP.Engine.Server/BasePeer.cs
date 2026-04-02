@@ -203,7 +203,7 @@ public abstract class BasePeer : IPeer, IDisposable
         }
     }
 
-    internal void OnPing(double rttMs, double avgRttMs, double jitterMs, float packetLossRate)
+    internal void OnPing(ushort rttMs, ushort avgRttMs, ushort jitterMs, byte packetLossRate)
     {
         _reliableMessageProcessor.AddRtoSample(rttMs);
         LatencyAvgMs = avgRttMs;

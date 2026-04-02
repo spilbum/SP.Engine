@@ -117,7 +117,6 @@ internal static class Program
             .WithUdpMtu(1200)
             .WithKeepAlive(true, 30, 2)
             .WithUdpKeepAlive(true, 30)
-            .WithLatencySampleWindowSize(20)
             .Build();
 
         var logger = new ConsoleLogger("GameClient");
@@ -335,16 +334,16 @@ internal static class Program
             }
             case "connect":
             {
-// #if DEBUG
-//                 var info = new ServerConnectInfo("1", "Game", "kr", "127.0.0.1", 10001, ServerStatus.Online);
-//                 ConnectTo(info);
-// #else
+#if DEBUG
+                var info = new ServerConnectInfo("1", "Game", "kr", "127.0.0.1", 10001, ServerStatus.Online);
+                ConnectTo(info);
+#else
                 var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
                 Task.Run(async () =>
                 {
                     await CheckResourceServer(_storeType, _buildVersion, cts.Token);
                 }, cts.Token);
-// #endif
+#endif
 
                 break;
             }

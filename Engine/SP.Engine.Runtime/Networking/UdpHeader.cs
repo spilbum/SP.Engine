@@ -62,8 +62,8 @@ namespace SP.Engine.Runtime.Networking
         private HeaderFlags _flags;
         private byte _fragmented;
         private ushort _msgId;
-        private int _payloadLength;
         private uint _peerId;
+        private int _payloadLength;
 
         public UdpHeaderBuilder From(UdpHeader header)
         {

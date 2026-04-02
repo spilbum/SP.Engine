@@ -57,7 +57,6 @@ namespace SP.Engine.Runtime.Networking
                 }
                 
                 if (hasFailure) continue;
-
                 
                 var rtoMs = rto.GetRtoMs();
                 state.IncrementRetry(rtoMs);
@@ -114,12 +113,22 @@ namespace SP.Engine.Runtime.Networking
 
     public sealed class RtoEstimator
     {
-        private const int RtoClockGranularityMs = 10;
-        private const int MinRtoMs = 200;
-        private const int MaxRtoMs = 5000;
+        private readonly int _minRtoMs;
+        private readonly int _maxRtoMs;
+        private readonly int _minRtoVarianceMs;
         
-        private readonly EwmaFilter _rttVar = new EwmaFilter(0.25);
-        private readonly EwmaFilter _smoothedRtt = new EwmaFilter(0.125);
+        private EwmaFilter _rttVar = new EwmaFilter(0.25);
+        private EwmaFilter _smoothedRtt = new EwmaFilter(0.125);
+
+        public RtoEstimator(int minRtoMs = 200, int maxRtoMs = 5000, int minRtoVarianceMs = 100)
+        {
+            if (minRtoMs < 10) throw new ArgumentException("RTO estimator minRtoMs must be >= 50");
+            if (maxRtoMs < minRtoMs) throw new ArgumentException("RTO estimator maxRtoMs must be >= minRtoMs");
+            
+            _minRtoMs = minRtoMs;
+            _maxRtoMs = maxRtoMs;
+            _minRtoVarianceMs = minRtoVarianceMs;
+        }
 
         public void AddSample(double rttMs)
         {
@@ -137,8 +146,8 @@ namespace SP.Engine.Runtime.Networking
 
         public int GetRtoMs()
         {
-            var rto = _smoothedRtt.Value + Math.Max(RtoClockGranularityMs, 4 * _rttVar.Value);
-            return (int)Math.Clamp(rto, MinRtoMs, MaxRtoMs);
+            var rto = _smoothedRtt.Value + Math.Max(_minRtoVarianceMs, 4 * _rttVar.Value); // 변동폭 반영
+            return (int)Math.Clamp(rto, _minRtoMs, _maxRtoMs);
         }
 
         public void Reset()
@@ -159,8 +168,7 @@ namespace SP.Engine.Runtime.Networking
         // 최근 처리한 시퀀스 기록 (중복 패킷 방어)
         private readonly HashSet<long> _recentSeqs = new HashSet<long>();
         private readonly Queue<long> _recentSeqQueue = new Queue<long>();
-        
-        private long _nextExpectedSeq = 1;
+        private uint _lastProcessedSeq;
 
         public List<TcpMessage> Process(TcpMessage message)
         {
@@ -180,7 +188,8 @@ namespace SP.Engine.Runtime.Networking
                     return list;
 
                 // 정순서 도착
-                if (message.SequenceNumber == _nextExpectedSeq)
+                var nextExpectSeq = _lastProcessedSeq + 1;
+                if (message.SequenceNumber == nextExpectSeq)
                 {
                     list.AddRange(EmitInOrder(message));
                 }
@@ -199,7 +208,7 @@ namespace SP.Engine.Runtime.Networking
             lock (_lock)
             {
                 _outOfOrder.Clear();
-                _nextExpectedSeq = 1;
+                _lastProcessedSeq = 0;
                 _recentSeqs.Clear();
                 _recentSeqQueue.Clear();
             }
@@ -207,8 +216,8 @@ namespace SP.Engine.Runtime.Networking
 
         private bool TryAcceptSequence(long sequenceNumber)
         {
-            // 이미 지난간 번호는 무시
-            if (sequenceNumber < _nextExpectedSeq) return false;
+            // 이미 처리한 번호는 무시
+            if (sequenceNumber <= _lastProcessedSeq) return false;
             
             // 중복 체크
             if (!_recentSeqs.Add(sequenceNumber)) return false;
@@ -227,10 +236,12 @@ namespace SP.Engine.Runtime.Networking
         private List<TcpMessage> EmitInOrder(TcpMessage first)
         {
             var list = new List<TcpMessage> { first };
+            _lastProcessedSeq = first.SequenceNumber;
             
-            // _nextExpectedSeq를 증가시키며 연속된 패킷이 버퍼에 있는지 확인
-            while (_outOfOrder.TryRemove(++_nextExpectedSeq, out var next))
+            var nextSeq = first.SequenceNumber + 1;
+            while (_outOfOrder.TryRemove(nextSeq, out var next))
             {
+                _lastProcessedSeq = next.SequenceNumber;
                 list.Add(next);
             }
             return list;
@@ -247,7 +258,7 @@ namespace SP.Engine.Runtime.Networking
         private readonly RtoEstimator _rto;
         
         private readonly List<TcpMessage> _dequeuedCache = new List<TcpMessage>();
-        private long _nextReliableSeq;
+        private int _nextReliableSeq;
         
         public int SendTimeoutMs { get; private set; } = 500;
         public int MaxRetryCount { get; private set; } = 5;
@@ -264,7 +275,7 @@ namespace SP.Engine.Runtime.Networking
 
         public void SetSendTimeoutMs(int ms) => SendTimeoutMs = ms;
         public void SetMaxRetryCount(int count) => MaxRetryCount = count;
-        public long GetNextReliableSeq() => Interlocked.Increment(ref _nextReliableSeq);
+        public uint GetNextReliableSeq() => (uint)Interlocked.Increment(ref _nextReliableSeq);
         public bool EnqueuePendingMessage(TcpMessage message) => _pendingQueue.TryEnqueue(message);
 
         public List<TcpMessage> DequeuePendingMessages()
