@@ -91,11 +91,11 @@ namespace SP.Engine.Runtime.Networking
             return result;
         }
 
-        protected override UdpHeader CreateHeader(HeaderFlags flags, ushort id, int payloadLength)
+        protected override UdpHeader CreateHeader(HeaderFlags flags, ushort msgId, int payloadLength)
         {
             return new UdpHeaderBuilder()
                 .From(Header)
-                .WithId(id)
+                .WithId(msgId)
                 .WithPayloadLength(payloadLength)
                 .AddFlag(flags)
                 .Build();

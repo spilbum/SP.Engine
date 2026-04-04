@@ -143,6 +143,8 @@ public sealed class Session : BaseSession, ISession
                 ack.MaxFrameBytes = network.MaxFrameBytes;
                 ack.SendTimeoutMs = network.SendTimeoutMs;
                 ack.MaxRetryCount = network.MaxRetryCount;
+                ack.MaxAckDelayMs = network.MaxAckDelayMs;
+                ack.AckStepThreshold = network.AckStepThreshold;
                 ack.UdpOpenPort = engine.GetOpenPort(SocketMode.Udp);
 
                 if (peer != null)
@@ -233,7 +235,6 @@ public sealed class Session : BaseSession, ISession
             case ChannelKind.Reliable:
             {
                 var tcp = new TcpMessage();
-                tcp.SetSequenceNumber(0);
                 tcp.Serialize(data, policy, encryptor, compressor);
                 return TrySend(channel, tcp);
             }
@@ -273,9 +274,9 @@ public sealed class Session : BaseSession, ISession
         InternalSend(close);
     }
 
-    internal void SendMessageAck(long sequenceNumber)
+    internal void SendMessageAck(uint ackNumber)
     {
-        var messageAck = new S2CEngineProtocolData.MessageAck { SequenceNumber = sequenceNumber };
+        var messageAck = new S2CEngineProtocolData.MessageAck { AckNumber = ackNumber };
         InternalSend(messageAck);
     }
 

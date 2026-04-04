@@ -38,7 +38,7 @@ namespace SP.Engine.Protocol
         [Protocol(C2SEngineProtocolId.MessageAck)]
         public class MessageAck : BaseProtocolData
         {
-            public long SequenceNumber;
+            public uint AckNumber;
         }
 
         [Protocol(C2SEngineProtocolId.Ping)]
@@ -91,6 +91,8 @@ namespace SP.Engine.Protocol
             public int UdpOpenPort;
             public bool UseCompress;
             public bool UseEncrypt;
+            public int MaxAckDelayMs;
+            public int AckStepThreshold;
         }
 
         [Protocol(S2CEngineProtocolId.Pong)]
@@ -105,7 +107,7 @@ namespace SP.Engine.Protocol
         [Protocol(S2CEngineProtocolId.MessageAck)]
         public class MessageAck : BaseProtocolData
         {
-            public long SequenceNumber;
+            public uint AckNumber;
         }
 
         [Protocol(S2CEngineProtocolId.Close)]

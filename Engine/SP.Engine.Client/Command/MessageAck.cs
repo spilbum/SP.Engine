@@ -10,7 +10,7 @@ namespace SP.Engine.Client.Command
     {
         protected override void ExecuteCommand(BaseNetPeer context, S2CEngineProtocolData.MessageAck protocol)
         {
-            context.OnMessageAck(protocol.SequenceNumber);
+            context.OnMessageAck(protocol.AckNumber);
         }
     }
 }

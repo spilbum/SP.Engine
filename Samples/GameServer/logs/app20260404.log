@@ -1,0 +1,1299 @@
+[15:03:01.698 INF] [T:1] [Game] Logger setup was successful: Game
+[15:03:01.840 DBG] [T:1] [Game] [Engine] Discovered '12' commands: [19999, 10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[15:03:01.842 INF] [T:1] [Game] The server Game is initialized.
+[15:03:07.526 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[15:03:07.528 INF] [T:1] [Game] The server instance Game was been started!
+[15:03:07.529 INF] [T:1] [Game] Group=Dev, Name=Game, Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.191, DnsName=
+[15:03:12.711 INF] [T:1] [Game] Logger setup was successful: Game
+[15:03:12.852 DBG] [T:1] [Game] [Engine] Discovered '12' commands: [19999, 10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[15:03:12.853 INF] [T:1] [Game] The server Game is initialized.
+[15:03:12.859 INF] [T:7] [PerfMonitor] Time:2026-04-04 06:03:12.856Z CPU=0.6% WS=60.86MB Managed=784.13KB Threads=17
+[15:03:13.519 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[15:03:13.522 INF] [T:1] [Game] The server instance Game was been started!
+[15:03:13.523 INF] [T:1] [Game] Group=Dev, Name=Game, Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.191, DnsName=
+[15:03:24.820 DBG] [T:8] [Game] A new session connected. sessionId=f5477b6f-7c99-4003-bbe7-0d3efd8d247a, remoteEndPoint=127.0.0.1:54679
+[15:03:24.888 DBG] [T:55] [Game] Session authentication succeeded. sessionId=f5477b6f-7c99-4003-bbe7-0d3efd8d247a, peerId=1
+[15:03:24.925 DBG] [T:45] [Game] Avg: 0, Jitter: 0, LossRate: 0
+[15:03:34.974 DBG] [T:45] [Game] Avg: 7, Jitter: 6, LossRate: 0
+[15:03:35.040 DBG] [T:57] [Game] Bind peer: uid=1000001, peerId=1
+[15:03:35.063 DBG] [T:8] [Game] [OnMessageAck] Ack:1
+[15:03:44.974 DBG] [T:45] [Game] Avg: 4, Jitter: 3, LossRate: 0
+[15:03:55.024 DBG] [T:45] [Game] Avg: 2, Jitter: 2, LossRate: 0
+[15:04:05.025 DBG] [T:45] [Game] Avg: 2, Jitter: 1, LossRate: 0
+[15:04:12.855 INF] [T:7] [PerfMonitor] Time:2026-04-04 06:04:11.856Z CPU=0.0% WS=121.27MB Managed=201.87MB Threads=63
+[15:04:15.074 DBG] [T:45] [Game] Avg: 1, Jitter: 0, LossRate: 0
+[15:49:29.974 INF] [T:1] [Game] Logger setup was successful: Game
+[15:49:30.113 DBG] [T:1] [Game] [Engine] Discovered '12' commands: [19999, 10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[15:49:30.115 INF] [T:1] [Game] The server Game is initialized.
+[15:49:35.791 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[15:49:35.794 INF] [T:1] [Game] The server instance Game was been started!
+[15:49:35.795 INF] [T:1] [Game] Group=Dev, Name=Game, Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.191, DnsName=
+[15:49:42.982 DBG] [T:58] [Game] A new session connected. sessionId=bd1cd79f-4723-4b89-842c-f66791790414, remoteEndPoint=127.0.0.1:55221
+[15:49:43.051 DBG] [T:56] [Game] Session authentication succeeded. sessionId=bd1cd79f-4723-4b89-842c-f66791790414, peerId=1
+[15:49:43.096 DBG] [T:45] [Game] Avg: 0, Jitter: 0, LossRate: 0
+[15:49:47.607 DBG] [T:44] [Game] Bind peer: uid=1000001, peerId=1
+[15:49:47.672 DBG] [T:11] [Game] [OnMessageAck] Ack:1
+[15:49:53.145 DBG] [T:45] [Game] Avg: 48, Jitter: 94, LossRate: 0
+[15:50:03.195 DBG] [T:45] [Game] Avg: 25, Jitter: 48, LossRate: 0
+[15:50:13.196 DBG] [T:45] [Game] Avg: 13, Jitter: 25, LossRate: 0
+[15:50:16.853 DBG] [T:56] [Game] Received a termination request from the client. isClosing=false
+[15:50:16.855 DBG] [T:56] [Game] The session bd1cd79f-4723-4b89-842c-f66791790414 has been closed. reason="ClientClosing"
+[15:50:16.857 DBG] [T:56] [Game] Unbind peer: uid=1000001, peerId=1
+[15:50:16.857 DBG] [T:56] [Game] Peer leaved. uid=1000001, reason="ClientClosing"
+[19:02:30.953 INF] [T:1] [Game] Logger setup was successful: Game
+[19:02:31.095 DBG] [T:1] [Game] [Engine] Discovered '12' commands: [19999, 10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[19:02:31.096 INF] [T:1] [Game] The server Game is initialized.
+[19:02:31.101 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:02:31.098Z CPU=0.5% WS=60.58MB Managed=779.81KB Threads=17
+[19:02:36.818 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[19:02:36.821 INF] [T:1] [Game] The server instance Game was been started!
+[19:02:36.822 INF] [T:1] [Game] Group=Dev, Name=Game, Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.191, DnsName=
+[19:02:41.550 DBG] [T:10] [Game] A new session connected. sessionId=502f1a62-8d21-4b40-a32a-429af5074d0a, remoteEndPoint=127.0.0.1:56049
+[19:02:41.619 DBG] [T:10] [Game] Session authentication succeeded. sessionId=502f1a62-8d21-4b40-a32a-429af5074d0a, peerId=1
+[19:02:41.624 DBG] [T:45] [Game] Avg: 0, Jitter: 0, LossRate: 0
+[19:02:51.673 DBG] [T:45] [Game] Avg: 6, Jitter: 6, LossRate: 0
+[19:03:01.723 DBG] [T:45] [Game] Avg: 4, Jitter: 4, LossRate: 0
+[19:03:11.773 DBG] [T:45] [Game] Avg: 3, Jitter: 2, LossRate: 0
+[19:03:21.773 DBG] [T:45] [Game] Avg: 1, Jitter: 1, LossRate: 0
+[19:03:31.097 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:03:30.098Z CPU=0.0% WS=73.97MB Managed=200.13MB Threads=64
+[19:03:31.822 DBG] [T:45] [Game] Avg: 1, Jitter: 1, LossRate: 0
+[19:03:41.872 DBG] [T:45] [Game] Avg: 1, Jitter: 1, LossRate: 0
+[19:03:51.872 DBG] [T:45] [Game] Avg: 1, Jitter: 0, LossRate: 0
+[19:04:01.873 DBG] [T:45] [Game] Avg: 1, Jitter: 0, LossRate: 0
+[19:04:11.873 DBG] [T:45] [Game] Avg: 1, Jitter: 1, LossRate: 0
+[19:04:21.923 DBG] [T:45] [Game] Avg: 1, Jitter: 0, LossRate: 0
+[19:04:31.097 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:04:30.098Z CPU=0.0% WS=75.55MB Managed=201.81MB Threads=64
+[19:04:31.976 DBG] [T:45] [Game] Avg: 1, Jitter: 1, LossRate: 0
+[19:04:42.023 DBG] [T:45] [Game] Avg: 1, Jitter: 1, LossRate: 0
+[19:04:52.073 DBG] [T:45] [Game] Avg: 1, Jitter: 1, LossRate: 0
+[19:05:02.073 DBG] [T:45] [Game] Avg: 1, Jitter: 1, LossRate: 0
+[19:05:12.074 DBG] [T:45] [Game] Avg: 1, Jitter: 0, LossRate: 0
+[19:05:22.123 DBG] [T:45] [Game] Avg: 1, Jitter: 2, LossRate: 0
+[19:05:31.098 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:05:30.097Z CPU=0.0% WS=73.53MB Managed=203.46MB Threads=63
+[19:05:32.173 DBG] [T:45] [Game] Avg: 1, Jitter: 1, LossRate: 0
+[19:05:42.173 DBG] [T:45] [Game] Avg: 1, Jitter: 0, LossRate: 0
+[19:05:52.173 DBG] [T:45] [Game] Avg: 0, Jitter: 0, LossRate: 0
+[19:06:02.223 DBG] [T:45] [Game] Avg: 0, Jitter: 0, LossRate: 0
+[19:06:12.224 DBG] [T:45] [Game] Avg: 0, Jitter: 0, LossRate: 0
+[19:06:22.273 DBG] [T:45] [Game] Avg: 0, Jitter: 0, LossRate: 0
+[19:06:31.097 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:06:30.098Z CPU=0.0% WS=78.30MB Managed=205.06MB Threads=63
+[19:06:32.323 DBG] [T:45] [Game] Avg: 0, Jitter: 0, LossRate: 0
+[19:06:42.373 DBG] [T:45] [Game] Avg: 0, Jitter: 0, LossRate: 0
+[19:06:52.423 DBG] [T:45] [Game] Avg: 0, Jitter: 0, LossRate: 0
+[19:07:02.424 DBG] [T:45] [Game] Avg: 0, Jitter: 0, LossRate: 0
+[19:07:12.473 DBG] [T:45] [Game] Avg: 0, Jitter: 0, LossRate: 0
+[19:07:22.473 DBG] [T:45] [Game] Avg: 0, Jitter: 0, LossRate: 0
+[19:07:31.097 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:07:30.098Z CPU=0.0% WS=79.95MB Managed=206.68MB Threads=63
+[19:07:32.523 DBG] [T:45] [Game] Avg: 0, Jitter: 0, LossRate: 0
+[19:07:42.523 DBG] [T:45] [Game] Avg: 1, Jitter: 0, LossRate: 0
+[19:07:52.573 DBG] [T:45] [Game] Avg: 1, Jitter: 0, LossRate: 0
+[19:08:02.623 DBG] [T:45] [Game] Avg: 0, Jitter: 1, LossRate: 0
+[19:08:12.624 DBG] [T:45] [Game] Avg: 0, Jitter: 0, LossRate: 0
+[19:08:22.673 DBG] [T:45] [Game] Avg: 1, Jitter: 0, LossRate: 0
+[19:08:31.099 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:08:31.098Z CPU=0.0% WS=83.03MB Managed=197.82MB Threads=64
+[19:08:32.673 DBG] [T:45] [Game] Avg: 1, Jitter: 0, LossRate: 0
+[19:08:42.723 DBG] [T:45] [Game] Avg: 0, Jitter: 0, LossRate: 0
+[19:08:52.773 DBG] [T:45] [Game] Avg: 0, Jitter: 0, LossRate: 0
+[19:09:02.774 DBG] [T:45] [Game] Avg: 0, Jitter: 0, LossRate: 0
+[19:09:12.824 DBG] [T:45] [Game] Avg: 0, Jitter: 0, LossRate: 0
+[19:09:22.873 DBG] [T:45] [Game] Avg: 0, Jitter: 0, LossRate: 0
+[19:09:31.097 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:09:30.097Z CPU=0.0% WS=83.52MB Managed=199.41MB Threads=63
+[19:09:32.874 DBG] [T:45] [Game] Avg: 0, Jitter: 0, LossRate: 0
+[19:09:42.924 DBG] [T:45] [Game] Avg: 0, Jitter: 0, LossRate: 0
+[19:09:52.974 DBG] [T:45] [Game] Avg: 0, Jitter: 1, LossRate: 0
+[19:10:03.023 DBG] [T:45] [Game] Avg: 0, Jitter: 0, LossRate: 0
+[19:10:13.024 DBG] [T:45] [Game] Avg: 1, Jitter: 1, LossRate: 0
+[19:10:23.048 DBG] [T:45] [Game] Avg: 1, Jitter: 0, LossRate: 0
+[19:10:32.845 INF] [T:1] [Game] Logger setup was successful: Game
+[19:10:32.982 DBG] [T:1] [Game] [Engine] Discovered '12' commands: [19999, 10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[19:10:32.983 INF] [T:1] [Game] The server Game is initialized.
+[19:10:32.987 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:10:32.985Z CPU=0.6% WS=60.47MB Managed=785.13KB Threads=17
+[19:10:38.675 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[19:10:38.678 INF] [T:1] [Game] The server instance Game was been started!
+[19:10:38.679 INF] [T:1] [Game] Group=Dev, Name=Game, Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.191, DnsName=
+[19:10:43.471 DBG] [T:11] [Game] A new session connected. sessionId=a5ac2273-1f75-472c-800a-01e2b7f8573f, remoteEndPoint=127.0.0.1:56258
+[19:10:43.539 DBG] [T:10] [Game] Session authentication succeeded. sessionId=a5ac2273-1f75-472c-800a-01e2b7f8573f, peerId=1
+[19:10:43.581 DBG] [T:45] [Game] Avg: 0, Jitter: 0, LossRate: 0
+[19:10:53.629 DBG] [T:45] [Game] Avg: 6, Jitter: 5, LossRate: 0
+[19:11:03.630 DBG] [T:45] [Game] Avg: 5, Jitter: 4, LossRate: 0
+[19:11:08.876 DBG] [T:58] [Game] [OnMessageAck] Ack:1
+[19:11:13.680 DBG] [T:45] [Game] Avg: 3, Jitter: 3, LossRate: 0
+[19:11:23.239 DBG] [T:10] [Game] [OnMessageAck] Ack:101
+[19:11:23.729 DBG] [T:45] [Game] Avg: 3, Jitter: 2, LossRate: 0
+[19:11:24.193 DBG] [T:11] [Game] The session a5ac2273-1f75-472c-800a-01e2b7f8573f has been closed. reason="ClientClosing"
+[19:11:24.194 DBG] [T:11] [Game] Peer waiting reconnect registered. peerId=1
+[19:11:24.252 DBG] [T:11] [Game] A new session connected. sessionId=48068aec-2a3f-4ddf-9ad9-ed0b538590b1, remoteEndPoint=127.0.0.1:56277
+[19:11:24.255 DBG] [T:56] [Game] Session authentication succeeded. sessionId=48068aec-2a3f-4ddf-9ad9-ed0b538590b1, peerId=1
+[19:11:30.007 DBG] [T:56] [Game] The session 48068aec-2a3f-4ddf-9ad9-ed0b538590b1 has been closed. reason="ClientClosing"
+[19:11:30.007 DBG] [T:56] [Game] Peer waiting reconnect registered. peerId=1
+[19:11:30.061 DBG] [T:11] [Game] A new session connected. sessionId=1cbce498-6f27-4185-a5a3-58339ef8ad98, remoteEndPoint=127.0.0.1:56278
+[19:11:30.062 DBG] [T:8] [Game] Session authentication succeeded. sessionId=1cbce498-6f27-4185-a5a3-58339ef8ad98, peerId=1
+[19:11:30.170 DBG] [T:11] [Game] The session 1cbce498-6f27-4185-a5a3-58339ef8ad98 has been closed. reason="ClientClosing"
+[19:11:30.170 DBG] [T:11] [Game] Peer waiting reconnect registered. peerId=1
+[19:11:30.221 DBG] [T:58] [Game] A new session connected. sessionId=6d32a80d-ba68-4f1c-931d-b8866b76fced, remoteEndPoint=127.0.0.1:56279
+[19:11:30.221 DBG] [T:11] [Game] Session authentication succeeded. sessionId=6d32a80d-ba68-4f1c-931d-b8866b76fced, peerId=1
+[19:11:30.275 DBG] [T:56] [Game] The session 6d32a80d-ba68-4f1c-931d-b8866b76fced has been closed. reason="ClientClosing"
+[19:11:30.275 DBG] [T:56] [Game] Peer waiting reconnect registered. peerId=1
+[19:11:30.331 DBG] [T:8] [Game] A new session connected. sessionId=6ac44082-fbca-42e5-8dd1-1e56db33d7e7, remoteEndPoint=127.0.0.1:56280
+[19:11:30.331 DBG] [T:8] [Game] Session authentication succeeded. sessionId=6ac44082-fbca-42e5-8dd1-1e56db33d7e7, peerId=1
+[19:11:30.386 DBG] [T:8] [Game] The session 6ac44082-fbca-42e5-8dd1-1e56db33d7e7 has been closed. reason="ClientClosing"
+[19:11:30.386 DBG] [T:8] [Game] Peer waiting reconnect registered. peerId=1
+[19:11:30.441 DBG] [T:44] [Game] A new session connected. sessionId=eee5e1e9-7510-4d21-8224-44bec5448592, remoteEndPoint=127.0.0.1:56281
+[19:11:30.441 DBG] [T:44] [Game] Session authentication succeeded. sessionId=eee5e1e9-7510-4d21-8224-44bec5448592, peerId=1
+[19:11:30.496 DBG] [T:44] [Game] The session eee5e1e9-7510-4d21-8224-44bec5448592 has been closed. reason="ClientClosing"
+[19:11:30.496 DBG] [T:44] [Game] Peer waiting reconnect registered. peerId=1
+[19:11:30.550 DBG] [T:11] [Game] A new session connected. sessionId=41c28ad0-765f-4a69-aad0-c99af4f7d734, remoteEndPoint=127.0.0.1:56282
+[19:11:30.550 DBG] [T:11] [Game] Session authentication succeeded. sessionId=41c28ad0-765f-4a69-aad0-c99af4f7d734, peerId=1
+[19:11:30.605 DBG] [T:8] [Game] The session 41c28ad0-765f-4a69-aad0-c99af4f7d734 has been closed. reason="ClientClosing"
+[19:11:30.605 DBG] [T:8] [Game] Peer waiting reconnect registered. peerId=1
+[19:11:30.660 DBG] [T:56] [Game] A new session connected. sessionId=c73df97f-b8b2-4184-8d26-acdaa1d4cd6d, remoteEndPoint=127.0.0.1:56283
+[19:11:30.660 DBG] [T:8] [Game] Session authentication succeeded. sessionId=c73df97f-b8b2-4184-8d26-acdaa1d4cd6d, peerId=1
+[19:11:30.715 DBG] [T:8] [Game] The session c73df97f-b8b2-4184-8d26-acdaa1d4cd6d has been closed. reason="ClientClosing"
+[19:11:30.715 DBG] [T:8] [Game] Peer waiting reconnect registered. peerId=1
+[19:11:30.771 DBG] [T:56] [Game] A new session connected. sessionId=5b667811-c5bf-4ffd-8dc4-39242b6d0b9e, remoteEndPoint=127.0.0.1:56284
+[19:11:30.771 DBG] [T:44] [Game] Session authentication succeeded. sessionId=5b667811-c5bf-4ffd-8dc4-39242b6d0b9e, peerId=1
+[19:11:30.825 DBG] [T:44] [Game] The session 5b667811-c5bf-4ffd-8dc4-39242b6d0b9e has been closed. reason="ClientClosing"
+[19:11:30.825 DBG] [T:44] [Game] Peer waiting reconnect registered. peerId=1
+[19:11:30.876 DBG] [T:44] [Game] A new session connected. sessionId=c2f93ce4-8fa4-40e4-a2cd-cb740a5c8906, remoteEndPoint=127.0.0.1:56285
+[19:11:30.876 DBG] [T:56] [Game] Session authentication succeeded. sessionId=c2f93ce4-8fa4-40e4-a2cd-cb740a5c8906, peerId=1
+[19:11:30.931 DBG] [T:44] [Game] The session c2f93ce4-8fa4-40e4-a2cd-cb740a5c8906 has been closed. reason="ClientClosing"
+[19:11:30.931 DBG] [T:44] [Game] Peer waiting reconnect registered. peerId=1
+[19:11:30.982 DBG] [T:56] [Game] A new session connected. sessionId=0ea964d9-ba8e-4e06-a7d0-cbafbc3f9163, remoteEndPoint=127.0.0.1:56286
+[19:11:30.982 DBG] [T:8] [Game] Session authentication succeeded. sessionId=0ea964d9-ba8e-4e06-a7d0-cbafbc3f9163, peerId=1
+[19:11:31.033 DBG] [T:58] [Game] The session 0ea964d9-ba8e-4e06-a7d0-cbafbc3f9163 has been closed. reason="ClientClosing"
+[19:11:31.033 DBG] [T:58] [Game] Peer waiting reconnect registered. peerId=1
+[19:11:31.088 DBG] [T:8] [Game] A new session connected. sessionId=018a0e18-e843-43b2-a021-296e6e2b9ff7, remoteEndPoint=127.0.0.1:56287
+[19:11:31.088 DBG] [T:58] [Game] Session authentication succeeded. sessionId=018a0e18-e843-43b2-a021-296e6e2b9ff7, peerId=1
+[19:11:31.140 DBG] [T:58] [Game] The session 018a0e18-e843-43b2-a021-296e6e2b9ff7 has been closed. reason="ClientClosing"
+[19:11:31.140 DBG] [T:58] [Game] Peer waiting reconnect registered. peerId=1
+[19:11:31.195 DBG] [T:11] [Game] A new session connected. sessionId=d27007fc-68ba-497d-872f-1b181a93c0de, remoteEndPoint=127.0.0.1:56288
+[19:11:31.196 DBG] [T:8] [Game] Session authentication succeeded. sessionId=d27007fc-68ba-497d-872f-1b181a93c0de, peerId=1
+[19:11:31.250 DBG] [T:44] [Game] The session d27007fc-68ba-497d-872f-1b181a93c0de has been closed. reason="ClientClosing"
+[19:11:31.250 DBG] [T:44] [Game] Peer waiting reconnect registered. peerId=1
+[19:11:31.305 DBG] [T:44] [Game] A new session connected. sessionId=9b7676df-96f3-4f3b-8efa-41fe97dfd417, remoteEndPoint=127.0.0.1:56289
+[19:11:31.306 DBG] [T:11] [Game] Session authentication succeeded. sessionId=9b7676df-96f3-4f3b-8efa-41fe97dfd417, peerId=1
+[19:11:31.361 DBG] [T:11] [Game] The session 9b7676df-96f3-4f3b-8efa-41fe97dfd417 has been closed. reason="ClientClosing"
+[19:11:31.361 DBG] [T:11] [Game] Peer waiting reconnect registered. peerId=1
+[19:11:31.416 DBG] [T:8] [Game] A new session connected. sessionId=0177f368-88ff-4d5b-8fd6-a901d20bc021, remoteEndPoint=127.0.0.1:56290
+[19:11:31.416 DBG] [T:8] [Game] Session authentication succeeded. sessionId=0177f368-88ff-4d5b-8fd6-a901d20bc021, peerId=1
+[19:11:31.471 DBG] [T:11] [Game] The session 0177f368-88ff-4d5b-8fd6-a901d20bc021 has been closed. reason="ClientClosing"
+[19:11:31.471 DBG] [T:11] [Game] Peer waiting reconnect registered. peerId=1
+[19:11:31.526 DBG] [T:11] [Game] A new session connected. sessionId=4e716bb4-324b-4740-87db-4ff2266c286b, remoteEndPoint=127.0.0.1:56291
+[19:11:31.526 DBG] [T:11] [Game] Session authentication succeeded. sessionId=4e716bb4-324b-4740-87db-4ff2266c286b, peerId=1
+[19:11:31.581 DBG] [T:11] [Game] The session 4e716bb4-324b-4740-87db-4ff2266c286b has been closed. reason="ClientClosing"
+[19:11:31.581 DBG] [T:11] [Game] Peer waiting reconnect registered. peerId=1
+[19:11:31.637 DBG] [T:11] [Game] A new session connected. sessionId=5c0867f1-1d8c-4059-9061-37609a6eb80f, remoteEndPoint=127.0.0.1:56292
+[19:11:31.637 DBG] [T:44] [Game] Session authentication succeeded. sessionId=5c0867f1-1d8c-4059-9061-37609a6eb80f, peerId=1
+[19:11:31.692 DBG] [T:58] [Game] The session 5c0867f1-1d8c-4059-9061-37609a6eb80f has been closed. reason="ClientClosing"
+[19:11:31.692 DBG] [T:58] [Game] Peer waiting reconnect registered. peerId=1
+[19:11:31.747 DBG] [T:44] [Game] A new session connected. sessionId=46d80719-c8a4-4e71-991b-170843f6e78b, remoteEndPoint=127.0.0.1:56293
+[19:11:31.747 DBG] [T:44] [Game] Session authentication succeeded. sessionId=46d80719-c8a4-4e71-991b-170843f6e78b, peerId=1
+[19:11:32.889 DBG] [T:44] [Game] Received a termination request from the client. isClosing=false
+[19:11:32.890 DBG] [T:44] [Game] The session 46d80719-c8a4-4e71-991b-170843f6e78b has been closed. reason="ClientClosing"
+[19:11:32.892 DBG] [T:44] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[19:11:32.984 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:11:31.984Z CPU=0.0% WS=82.72MB Managed=201.78MB Threads=66
+[19:12:32.984 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:12:31.985Z CPU=0.0% WS=84.42MB Managed=203.26MB Threads=62
+[19:13:32.985 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:13:31.984Z CPU=0.0% WS=86.30MB Managed=204.64MB Threads=63
+[19:14:32.984 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:14:31.985Z CPU=0.0% WS=87.80MB Managed=206.05MB Threads=63
+[19:15:32.985 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:15:31.984Z CPU=0.0% WS=89.39MB Managed=207.50MB Threads=64
+[19:16:32.985 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:16:31.984Z CPU=0.0% WS=90.39MB Managed=200.68MB Threads=64
+[19:17:32.985 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:17:31.985Z CPU=0.0% WS=87.25MB Managed=202.10MB Threads=63
+[19:18:32.985 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:18:31.985Z CPU=0.0% WS=87.27MB Managed=203.55MB Threads=63
+[19:19:32.986 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:19:31.985Z CPU=0.0% WS=87.25MB Managed=204.98MB Threads=63
+[19:20:32.986 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:20:31.985Z CPU=0.0% WS=87.28MB Managed=206.39MB Threads=63
+[19:21:32.987 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:21:31.986Z CPU=0.0% WS=88.19MB Managed=200.33MB Threads=63
+[19:22:32.986 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:22:31.986Z CPU=0.0% WS=88.17MB Managed=201.72MB Threads=62
+[19:23:32.987 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:23:31.985Z CPU=0.0% WS=88.17MB Managed=203.12MB Threads=62
+[19:24:32.986 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:24:31.986Z CPU=0.0% WS=88.17MB Managed=204.51MB Threads=62
+[19:25:32.986 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:25:31.985Z CPU=0.0% WS=88.20MB Managed=205.91MB Threads=63
+[19:26:32.987 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:26:31.986Z CPU=0.0% WS=88.62MB Managed=199.86MB Threads=65
+[19:27:32.987 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:27:31.986Z CPU=0.0% WS=88.58MB Managed=201.27MB Threads=62
+[19:28:32.968 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:28:31.969Z CPU=0.0% WS=88.58MB Managed=202.67MB Threads=62
+[19:29:32.960 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:29:31.969Z CPU=0.0% WS=88.59MB Managed=204.07MB Threads=63
+[19:30:32.959 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:30:31.959Z CPU=0.0% WS=88.61MB Managed=205.48MB Threads=63
+[19:31:32.958 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:31:31.958Z CPU=0.0% WS=88.62MB Managed=206.88MB Threads=62
+[19:32:32.958 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:32:31.957Z CPU=0.0% WS=88.66MB Managed=200.82MB Threads=63
+[19:33:32.957 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:33:31.957Z CPU=0.0% WS=88.66MB Managed=202.21MB Threads=63
+[19:34:32.957 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:34:31.957Z CPU=0.0% WS=88.66MB Managed=203.61MB Threads=63
+[19:35:32.956 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:35:31.955Z CPU=0.0% WS=88.64MB Managed=205.01MB Threads=62
+[19:36:32.955 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:36:31.955Z CPU=0.0% WS=88.66MB Managed=206.41MB Threads=63
+[19:37:32.955 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:37:31.954Z CPU=0.0% WS=88.67MB Managed=200.31MB Threads=63
+[19:38:32.954 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:38:31.953Z CPU=0.0% WS=88.64MB Managed=201.70MB Threads=62
+[19:39:32.953 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:39:31.953Z CPU=0.0% WS=88.64MB Managed=203.08MB Threads=62
+[19:40:32.953 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:40:31.953Z CPU=0.0% WS=84.14MB Managed=204.46MB Threads=64
+[19:41:32.952 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:41:31.952Z CPU=0.0% WS=84.67MB Managed=205.87MB Threads=64
+[19:42:32.951 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:42:31.952Z CPU=0.0% WS=84.66MB Managed=199.79MB Threads=62
+[19:43:11.086 INF] [T:1] [Game] Logger setup was successful: Game
+[19:43:11.223 DBG] [T:1] [Game] [Engine] Discovered '12' commands: [19999, 10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[19:43:11.224 INF] [T:1] [Game] The server Game is initialized.
+[19:43:11.228 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:43:11.226Z CPU=0.5% WS=60.11MB Managed=784.30KB Threads=17
+[19:43:16.913 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[19:43:16.915 INF] [T:1] [Game] The server instance Game was been started!
+[19:43:16.916 INF] [T:1] [Game] Group=Dev, Name=Game, Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.191, DnsName=
+[19:43:22.495 DBG] [T:55] [Game] A new session connected. sessionId=6430faf8-3b0b-43d9-816b-75b399085c87, remoteEndPoint=127.0.0.1:56910
+[19:43:22.561 DBG] [T:44] [Game] Session authentication succeeded. sessionId=6430faf8-3b0b-43d9-816b-75b399085c87, peerId=1
+[19:43:22.567 DBG] [T:45] [Game] Avg: 0, Jitter: 0, LossRate: 0
+[19:43:32.616 DBG] [T:45] [Game] Avg: 9, Jitter: 0, LossRate: 0
+[19:43:42.616 DBG] [T:45] [Game] Avg: 9, Jitter: 0, LossRate: 0
+[19:43:50.266 DBG] [T:8] [Game] Received a termination request from the client. isClosing=false
+[19:43:50.269 DBG] [T:8] [Game] The session 6430faf8-3b0b-43d9-816b-75b399085c87 has been closed. reason="ClientClosing"
+[19:43:50.271 DBG] [T:8] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[19:46:31.179 INF] [T:1] [Game] Logger setup was successful: Game
+[19:46:31.324 DBG] [T:1] [Game] [Engine] Discovered '12' commands: [19999, 10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[19:46:31.326 INF] [T:1] [Game] The server Game is initialized.
+[19:46:31.330 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:46:31.327Z CPU=0.4% WS=60.97MB Managed=783.16KB Threads=17
+[19:46:37.004 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[19:46:37.007 INF] [T:1] [Game] The server instance Game was been started!
+[19:46:37.008 INF] [T:1] [Game] Group=Dev, Name=Game, Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.191, DnsName=
+[19:46:38.293 DBG] [T:11] [Game] A new session connected. sessionId=a24d5b66-7981-4973-8d95-48a92e100ad8, remoteEndPoint=127.0.0.1:56998
+[19:46:38.358 DBG] [T:10] [Game] Session authentication succeeded. sessionId=a24d5b66-7981-4973-8d95-48a92e100ad8, peerId=1
+[19:46:38.410 DBG] [T:45] [Game] Avg: 0, Jitter: 0, LossRate: 0
+[19:46:48.287 DBG] [T:55] [Game] [Ack] Remote acknowledged up to: 3
+[19:46:48.300 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 3
+[19:46:48.315 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 3
+[19:46:48.332 DBG] [T:55] [Game] [Ack] Remote acknowledged up to: 6
+[19:46:48.348 DBG] [T:55] [Game] [Ack] Remote acknowledged up to: 6
+[19:46:48.364 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 6
+[19:46:48.380 DBG] [T:55] [Game] [Ack] Remote acknowledged up to: 6
+[19:46:48.425 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 10
+[19:46:48.458 DBG] [T:45] [Game] Avg: 8, Jitter: 9, LossRate: 0
+[19:46:58.458 DBG] [T:45] [Game] Avg: 5, Jitter: 5, LossRate: 0
+[19:47:08.507 DBG] [T:45] [Game] Avg: 3, Jitter: 3, LossRate: 0
+[19:47:18.558 DBG] [T:45] [Game] Avg: 2, Jitter: 1, LossRate: 0
+[19:47:28.606 DBG] [T:45] [Game] Avg: 1, Jitter: 1, LossRate: 0
+[19:47:31.325 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:47:30.327Z CPU=0.0% WS=98.31MB Managed=200.24MB Threads=64
+[19:47:38.608 DBG] [T:45] [Game] Avg: 1, Jitter: 0, LossRate: 0
+[19:47:48.657 DBG] [T:45] [Game] Avg: 1, Jitter: 0, LossRate: 0
+[19:54:04.000 INF] [T:1] [Game] Logger setup was successful: Game
+[19:54:04.135 DBG] [T:1] [Game] [Engine] Discovered '12' commands: [19999, 10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[19:54:04.137 INF] [T:1] [Game] The server Game is initialized.
+[19:54:04.141 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:54:04.139Z CPU=0.6% WS=60.45MB Managed=785.17KB Threads=17
+[19:54:09.773 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[19:54:09.775 INF] [T:1] [Game] The server instance Game was been started!
+[19:54:09.777 INF] [T:1] [Game] Group=Dev, Name=Game, Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.191, DnsName=
+[19:54:17.171 DBG] [T:55] [Game] A new session connected. sessionId=e34c5f4e-71ba-49cf-b9b2-160edfea5704, remoteEndPoint=127.0.0.1:57126
+[19:54:17.240 DBG] [T:10] [Game] Session authentication succeeded. sessionId=e34c5f4e-71ba-49cf-b9b2-160edfea5704, peerId=1
+[19:54:17.278 DBG] [T:45] [Game] Avg: 0, Jitter: 0, LossRate: 0
+[19:54:20.379 DBG] [T:45] [Game] [Ack] Send message ack: 1
+[19:54:20.608 DBG] [T:10] [Game] Bind peer: uid=1000001, peerId=1
+[19:54:20.645 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 1
+[19:54:27.326 DBG] [T:45] [Game] Avg: 6, Jitter: 6, LossRate: 0
+[19:54:37.327 DBG] [T:45] [Game] Avg: 3, Jitter: 3, LossRate: 0
+[19:54:47.377 DBG] [T:45] [Game] Avg: 2, Jitter: 1, LossRate: 0
+[19:54:57.377 DBG] [T:45] [Game] Avg: 1, Jitter: 1, LossRate: 0
+[19:55:04.137 INF] [T:7] [PerfMonitor] Time:2026-04-04 10:55:03.137Z CPU=0.0% WS=117.42MB Managed=201.90MB Threads=65
+[19:55:07.427 DBG] [T:45] [Game] Avg: 1, Jitter: 0, LossRate: 0
+[19:55:17.477 DBG] [T:45] [Game] Avg: 1, Jitter: 0, LossRate: 0
+[19:55:27.526 DBG] [T:45] [Game] Avg: 1, Jitter: 0, LossRate: 0
+[19:55:37.576 DBG] [T:45] [Game] Avg: 1, Jitter: 0, LossRate: 0
+[19:55:47.626 DBG] [T:45] [Game] Avg: 0, Jitter: 0, LossRate: 0
+[19:56:41.675 INF] [T:1] [Game] Logger setup was successful: Game
+[19:56:41.810 DBG] [T:1] [Game] [Engine] Discovered '12' commands: [19999, 10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[19:56:41.811 INF] [T:1] [Game] The server Game is initialized.
+[19:56:47.455 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[19:56:47.457 INF] [T:1] [Game] The server instance Game was been started!
+[19:56:47.458 INF] [T:1] [Game] Group=Dev, Name=Game, Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.191, DnsName=
+[19:56:51.374 DBG] [T:11] [Game] A new session connected. sessionId=bf602320-37df-4ec7-b443-ec0118076895, remoteEndPoint=127.0.0.1:57139
+[19:56:51.432 DBG] [T:11] [Game] Session authentication succeeded. sessionId=bf602320-37df-4ec7-b443-ec0118076895, peerId=1
+[19:56:51.461 DBG] [T:45] [Game] Avg: 0, Jitter: 0, LossRate: 0
+[19:56:56.856 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 3
+[19:56:56.868 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 3
+[19:56:56.885 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 3
+[19:56:56.901 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 6
+[19:56:56.917 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 6
+[19:56:56.932 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 6
+[19:56:56.948 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 6
+[19:56:56.965 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 10
+[19:56:56.980 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 10
+[19:56:56.996 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 10
+[19:56:57.012 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 13
+[19:56:57.028 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 13
+[19:56:57.044 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 13
+[19:56:57.060 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 14
+[19:56:57.077 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 16
+[19:56:57.092 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 16
+[19:56:57.109 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 16
+[19:56:57.124 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 20
+[19:56:57.139 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 20
+[19:56:57.156 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 20
+[19:56:57.172 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 23
+[19:56:57.188 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 23
+[19:56:57.205 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 23
+[19:56:57.220 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 23
+[19:56:57.236 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 27
+[19:56:57.253 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 27
+[19:56:57.268 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 27
+[19:56:57.285 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 30
+[19:56:57.300 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 30
+[19:56:57.316 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 30
+[19:56:57.332 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 30
+[19:56:57.348 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 34
+[19:56:57.364 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 34
+[19:56:57.381 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 34
+[19:56:57.396 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 37
+[19:56:57.412 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 37
+[19:56:57.428 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 37
+[19:56:57.444 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 40
+[19:56:57.460 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 40
+[19:56:57.476 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 40
+[19:56:57.492 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 40
+[19:56:57.508 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 44
+[19:56:57.524 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 44
+[19:56:57.541 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 44
+[19:56:57.556 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 47
+[19:56:57.573 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 47
+[19:56:57.588 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 47
+[19:56:57.604 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 47
+[19:56:57.620 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 51
+[19:56:57.637 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 51
+[19:56:57.653 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 51
+[19:56:57.669 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 54
+[19:56:57.684 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 54
+[19:56:57.700 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 54
+[19:56:57.716 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 54
+[19:56:57.732 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 58
+[19:56:57.748 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 58
+[19:56:57.764 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 58
+[19:56:57.781 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 61
+[19:56:57.797 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 61
+[19:56:57.811 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 61
+[19:56:57.827 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 61
+[19:56:57.844 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 65
+[19:56:57.860 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 65
+[19:56:57.877 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 65
+[19:56:57.893 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 68
+[19:56:57.909 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 68
+[19:56:57.924 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 68
+[19:56:57.940 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 71
+[19:56:57.956 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 71
+[19:56:57.972 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 71
+[19:56:57.988 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 71
+[19:56:58.004 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 75
+[19:56:58.020 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 75
+[19:56:58.036 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 75
+[19:56:58.052 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 78
+[19:56:58.069 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 78
+[19:56:58.084 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 78
+[19:56:58.100 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 81
+[19:56:58.117 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 81
+[19:56:58.133 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 81
+[19:56:58.148 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 81
+[19:56:58.164 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 85
+[19:56:58.181 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 85
+[19:56:58.197 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 85
+[19:56:58.213 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 88
+[19:56:58.229 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 88
+[19:56:58.245 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 88
+[19:56:58.260 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 88
+[19:56:58.276 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 92
+[19:56:58.292 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 92
+[19:56:58.308 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 92
+[19:56:58.324 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 95
+[19:56:58.340 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 95
+[19:56:58.356 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 95
+[19:56:58.373 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 95
+[19:56:58.389 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 99
+[19:56:58.404 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 99
+[19:56:58.420 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 99
+[19:56:58.436 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 102
+[19:56:58.452 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 102
+[19:56:58.468 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 102
+[19:56:58.484 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 105
+[19:56:58.499 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 105
+[19:56:58.516 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 105
+[19:56:58.532 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 105
+[19:56:58.549 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 109
+[19:56:58.564 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 109
+[19:56:58.580 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 109
+[19:56:58.596 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 112
+[19:56:58.612 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 112
+[19:56:58.628 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 112
+[19:56:58.645 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 112
+[19:56:58.661 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 116
+[19:56:58.677 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 116
+[19:56:58.692 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 116
+[19:56:58.708 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 119
+[19:56:58.724 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 119
+[19:56:58.741 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 119
+[19:56:58.756 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 120
+[19:56:58.773 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 122
+[19:56:58.789 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 122
+[19:56:58.804 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 122
+[19:56:58.820 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 126
+[19:56:58.836 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 126
+[19:56:58.853 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 126
+[19:56:58.869 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 129
+[19:56:58.885 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 129
+[19:56:58.901 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 129
+[19:56:58.917 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 129
+[19:56:58.932 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 133
+[19:56:58.948 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 133
+[19:56:58.964 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 133
+[19:56:58.980 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 136
+[19:56:58.996 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 136
+[19:56:59.012 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 136
+[19:56:59.028 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 139
+[19:56:59.044 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 139
+[19:56:59.060 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 139
+[19:56:59.076 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 139
+[19:56:59.092 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 143
+[19:56:59.108 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 143
+[19:56:59.124 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 143
+[19:56:59.140 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 146
+[19:56:59.157 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 146
+[19:56:59.172 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 146
+[19:56:59.189 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 149
+[19:56:59.205 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 149
+[19:56:59.221 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 149
+[19:56:59.236 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 149
+[19:56:59.253 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 153
+[19:56:59.268 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 153
+[19:56:59.284 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 153
+[19:56:59.300 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 156
+[19:56:59.316 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 156
+[19:56:59.332 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 156
+[19:56:59.349 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 156
+[19:56:59.365 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 160
+[19:56:59.381 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 160
+[19:56:59.397 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 160
+[19:56:59.413 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 163
+[19:56:59.429 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 163
+[19:56:59.445 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 163
+[19:56:59.461 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 166
+[19:56:59.477 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 166
+[19:56:59.492 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 166
+[19:56:59.508 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 166
+[19:56:59.524 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 170
+[19:56:59.540 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 170
+[19:56:59.556 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 170
+[19:56:59.573 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 173
+[19:56:59.589 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 173
+[19:56:59.605 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 173
+[19:56:59.620 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 176
+[19:56:59.636 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 176
+[19:56:59.653 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 176
+[19:56:59.669 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 177
+[19:56:59.685 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 179
+[19:56:59.700 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 179
+[19:56:59.716 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 179
+[19:56:59.733 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 183
+[19:56:59.749 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 183
+[19:56:59.765 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 183
+[19:56:59.781 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 186
+[19:56:59.796 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 186
+[19:56:59.813 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 186
+[19:56:59.828 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 187
+[19:56:59.844 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 189
+[19:56:59.861 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 189
+[19:56:59.877 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 189
+[19:56:59.893 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 193
+[19:56:59.909 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 193
+[19:56:59.915 DBG] [T:45] [Game] [Ack] Send message ack: 195
+[19:56:59.924 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 193
+[19:56:59.941 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 196
+[19:56:59.957 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 196
+[19:56:59.972 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 196
+[19:56:59.989 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 196
+[19:57:00.004 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 200
+[19:57:00.020 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 200
+[19:57:00.036 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 200
+[19:57:00.052 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 203
+[19:57:00.068 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 203
+[19:57:00.084 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 203
+[19:57:00.100 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 203
+[19:57:00.116 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 207
+[19:57:00.132 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 207
+[19:57:00.149 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 207
+[19:57:00.164 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 210
+[19:57:00.180 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 210
+[19:57:00.196 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 210
+[19:57:00.212 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 213
+[19:57:00.229 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 213
+[19:57:00.244 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 213
+[19:57:00.261 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 213
+[19:57:00.276 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 217
+[19:57:00.292 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 217
+[19:57:00.308 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 217
+[19:57:00.324 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 220
+[19:57:00.340 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 220
+[19:57:00.357 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 220
+[19:57:00.372 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 220
+[19:57:00.388 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 224
+[19:57:00.404 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 224
+[19:57:00.420 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 224
+[19:57:00.436 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 227
+[19:57:00.452 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 227
+[19:57:00.468 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 227
+[19:57:00.484 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 230
+[19:57:00.500 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 230
+[19:57:00.517 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 230
+[19:57:00.533 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 230
+[19:57:00.549 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 234
+[19:57:00.565 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 234
+[19:57:00.581 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 234
+[19:57:00.597 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 237
+[19:57:00.612 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 237
+[19:57:00.628 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 237
+[19:57:00.644 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 237
+[19:57:00.660 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 241
+[19:57:00.676 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 241
+[19:57:00.692 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 241
+[19:57:00.708 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 244
+[19:57:00.724 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 244
+[19:57:00.740 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 244
+[19:57:00.756 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 245
+[19:57:00.772 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 247
+[19:57:00.788 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 247
+[19:57:00.804 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 247
+[19:57:00.819 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 251
+[19:57:00.836 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 251
+[19:57:00.853 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 251
+[19:57:00.869 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 254
+[19:57:00.885 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 254
+[19:57:00.901 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 254
+[19:57:00.917 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 254
+[19:57:00.933 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 257
+[19:57:00.948 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 257
+[19:57:00.964 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 257
+[19:57:00.980 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 261
+[19:57:00.996 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 261
+[19:57:01.012 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 261
+[19:57:01.028 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 264
+[19:57:01.044 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 264
+[19:57:01.060 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 264
+[19:57:01.076 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 267
+[19:57:01.092 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 267
+[19:57:01.109 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 267
+[19:57:01.125 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 267
+[19:57:01.140 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 271
+[19:57:01.156 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 271
+[19:57:01.172 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 271
+[19:57:01.188 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 274
+[19:57:01.205 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 274
+[19:57:01.221 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 274
+[19:57:01.237 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 274
+[19:57:01.252 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 278
+[19:57:01.269 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 278
+[19:57:01.285 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 278
+[19:57:01.301 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 281
+[19:57:01.316 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 281
+[19:57:01.331 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 281
+[19:57:01.348 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 284
+[19:57:01.364 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 284
+[19:57:01.380 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 284
+[19:57:01.396 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 284
+[19:57:01.412 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 288
+[19:57:01.428 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 288
+[19:57:01.444 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 288
+[19:57:01.460 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 291
+[19:57:01.476 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 291
+[19:57:01.492 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 291
+[19:57:01.508 DBG] [T:45] [Game] Avg: 7, Jitter: 8, LossRate: 0
+[19:57:01.513 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 291
+[19:57:01.524 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 294
+[19:57:01.540 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 294
+[19:57:01.556 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 294
+[19:57:01.572 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 298
+[19:57:01.588 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 298
+[19:57:01.604 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 298
+[19:57:01.621 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 298
+[19:57:01.636 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 302
+[19:57:01.652 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 302
+[19:57:01.668 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 302
+[19:57:01.684 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 305
+[19:57:01.700 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 305
+[19:57:01.716 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 305
+[19:57:01.732 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 306
+[19:57:01.748 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 308
+[19:57:01.763 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 308
+[19:57:01.780 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 308
+[19:57:01.796 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 312
+[19:57:01.812 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 312
+[19:57:01.827 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 312
+[19:57:01.844 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 315
+[19:57:01.861 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 315
+[19:57:01.877 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 315
+[19:57:01.893 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 316
+[19:57:01.909 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 318
+[19:57:01.925 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 318
+[19:57:01.940 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 318
+[19:57:01.956 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 322
+[19:57:01.972 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 322
+[19:57:01.988 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 322
+[19:57:02.005 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 325
+[19:57:02.021 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 325
+[19:57:02.037 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 325
+[19:57:02.052 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 325
+[19:57:02.068 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 329
+[19:57:02.084 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 329
+[19:57:02.100 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 329
+[19:57:02.117 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 332
+[19:57:02.133 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 332
+[19:57:02.149 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 332
+[19:57:02.164 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 332
+[19:57:02.179 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 336
+[19:57:02.196 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 336
+[19:57:02.212 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 336
+[19:57:02.228 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 339
+[19:57:02.244 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 339
+[19:57:02.261 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 339
+[19:57:02.276 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 342
+[19:57:02.292 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 342
+[19:57:02.308 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 342
+[19:57:02.324 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 342
+[19:57:02.340 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 346
+[19:57:02.356 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 346
+[19:57:02.372 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 346
+[19:57:02.389 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 349
+[19:57:02.405 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 349
+[19:57:02.420 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 349
+[19:57:02.437 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 352
+[19:57:02.453 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 352
+[19:57:02.468 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 352
+[19:57:02.485 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 352
+[19:57:02.500 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 356
+[19:57:02.516 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 356
+[19:57:02.533 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 356
+[19:57:02.548 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 359
+[19:57:02.564 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 359
+[19:57:02.581 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 359
+[19:57:02.595 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 359
+[19:57:02.612 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 363
+[19:57:02.628 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 363
+[19:57:02.645 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 363
+[19:57:02.661 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 366
+[19:57:02.677 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 366
+[19:57:02.693 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 366
+[19:57:02.709 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 369
+[19:57:02.725 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 369
+[19:57:02.740 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 369
+[19:57:02.757 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 369
+[19:57:02.773 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 373
+[19:57:02.788 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 373
+[19:57:02.804 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 373
+[19:57:02.820 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 376
+[19:57:02.836 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 376
+[19:57:02.852 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 376
+[19:57:02.869 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 379
+[19:57:02.885 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 379
+[19:57:02.901 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 379
+[19:57:02.916 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 379
+[19:57:02.932 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 383
+[19:57:02.948 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 383
+[19:57:02.964 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 383
+[19:57:02.980 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 386
+[19:57:02.995 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 386
+[19:57:03.012 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 386
+[19:57:03.028 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 389
+[19:57:03.044 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 389
+[19:57:03.060 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 389
+[19:57:03.076 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 389
+[19:57:03.092 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 393
+[19:57:03.108 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 393
+[19:57:03.124 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 393
+[19:57:03.140 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 396
+[19:57:03.156 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 396
+[19:57:03.172 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 396
+[19:57:03.187 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 397
+[19:57:03.205 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 399
+[19:57:03.220 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 399
+[19:57:03.236 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 399
+[19:57:03.252 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 403
+[19:57:03.268 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 403
+[19:57:03.284 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 403
+[19:57:03.300 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 406
+[19:57:03.316 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 406
+[19:57:03.332 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 406
+[19:57:03.348 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 406
+[19:57:03.364 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 410
+[19:57:03.380 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 410
+[19:57:03.396 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 410
+[19:57:03.412 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 413
+[19:57:03.429 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 413
+[19:57:03.445 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 413
+[19:57:03.461 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 416
+[19:57:03.477 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 416
+[19:57:03.493 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 416
+[19:57:03.508 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 416
+[19:57:03.524 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 420
+[19:57:03.540 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 420
+[19:57:03.557 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 420
+[19:57:03.573 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 423
+[19:57:03.588 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 423
+[19:57:03.604 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 423
+[19:57:03.620 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 423
+[19:57:03.637 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 427
+[19:57:03.652 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 427
+[19:57:03.668 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 427
+[19:57:03.684 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 430
+[19:57:03.700 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 430
+[19:57:03.716 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 430
+[19:57:03.732 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 433
+[19:57:03.748 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 433
+[19:57:03.764 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 433
+[19:57:03.780 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 434
+[19:57:03.797 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 436
+[19:57:03.812 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 436
+[19:57:03.829 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 436
+[19:57:03.844 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 440
+[19:57:03.860 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 440
+[19:57:03.876 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 440
+[19:57:03.892 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 443
+[19:57:03.908 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 443
+[19:57:03.924 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 443
+[19:57:03.940 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 446
+[19:57:03.956 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 446
+[19:57:03.972 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 446
+[19:57:03.988 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 446
+[19:57:04.005 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 450
+[19:57:04.021 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 450
+[19:57:04.037 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 450
+[19:57:04.052 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 453
+[19:57:04.068 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 453
+[19:57:04.084 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 453
+[19:57:04.100 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 453
+[19:57:04.116 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 457
+[19:57:04.132 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 457
+[19:57:04.148 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 457
+[19:57:04.164 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 460
+[19:57:04.180 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 460
+[19:57:04.197 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 460
+[19:57:04.212 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 463
+[19:57:04.228 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 463
+[19:57:04.244 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 463
+[19:57:04.260 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 463
+[19:57:04.276 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 467
+[19:57:04.292 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 467
+[19:57:04.308 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 467
+[19:57:04.324 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 470
+[19:57:04.341 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 470
+[19:57:04.356 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 470
+[19:57:04.373 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 470
+[19:57:04.387 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 474
+[19:57:04.405 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 474
+[19:57:04.420 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 474
+[19:57:04.436 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 477
+[19:57:04.452 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 477
+[19:57:04.468 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 477
+[19:57:04.484 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 480
+[19:57:04.499 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 480
+[19:57:04.516 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 480
+[19:57:04.533 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 480
+[19:57:04.549 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 484
+[19:57:04.564 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 484
+[19:57:04.581 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 484
+[19:57:04.596 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 487
+[19:57:04.612 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 487
+[19:57:04.628 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 487
+[19:57:04.644 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 488
+[19:57:04.660 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 490
+[19:57:04.676 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 490
+[19:57:04.692 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 490
+[19:57:04.708 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 494
+[19:57:04.724 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 494
+[19:57:04.740 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 494
+[19:57:04.756 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 497
+[19:57:04.772 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 497
+[19:57:04.788 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 497
+[19:57:04.804 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 498
+[19:57:04.820 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 500
+[19:57:04.835 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 500
+[19:57:04.853 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 500
+[19:57:04.869 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 504
+[19:57:04.885 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 504
+[19:57:04.901 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 504
+[19:57:04.917 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 507
+[19:57:04.932 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 507
+[19:57:04.948 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 507
+[19:57:04.964 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 510
+[19:57:04.980 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 510
+[19:57:04.996 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 510
+[19:57:05.012 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 510
+[19:57:05.028 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 514
+[19:57:05.044 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 514
+[19:57:05.060 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 514
+[19:57:05.076 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 517
+[19:57:05.092 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 517
+[19:57:05.109 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 517
+[19:57:05.125 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 520
+[19:57:05.141 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 520
+[19:57:05.157 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 520
+[19:57:05.172 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 521
+[19:57:05.188 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 523
+[19:57:05.204 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 523
+[19:57:05.221 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 523
+[19:57:05.236 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 527
+[19:57:05.252 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 527
+[19:57:05.268 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 527
+[19:57:05.284 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 530
+[19:57:05.300 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 530
+[19:57:05.316 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 530
+[19:57:05.332 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 530
+[19:57:05.348 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 534
+[19:57:05.364 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 534
+[19:57:05.381 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 534
+[19:57:05.396 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 537
+[19:57:05.413 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 537
+[19:57:05.428 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 537
+[19:57:05.444 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 540
+[19:57:05.460 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 540
+[19:57:05.476 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 540
+[19:57:05.492 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 540
+[19:57:05.507 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 544
+[19:57:05.524 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 544
+[19:57:05.540 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 544
+[19:57:05.556 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 547
+[19:57:05.572 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 547
+[19:57:05.588 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 547
+[19:57:05.604 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 547
+[19:57:05.620 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 551
+[19:57:05.636 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 551
+[19:57:05.652 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 551
+[19:57:05.668 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 554
+[19:57:05.684 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 554
+[19:57:05.700 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 554
+[19:57:05.716 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 555
+[19:57:05.732 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 557
+[19:57:05.749 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 557
+[19:57:05.764 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 557
+[19:57:05.781 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 561
+[19:57:05.796 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 561
+[19:57:05.812 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 561
+[19:57:05.828 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 564
+[19:57:05.843 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 564
+[19:57:05.860 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 564
+[19:57:05.876 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 567
+[19:57:05.892 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 567
+[19:57:05.908 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 567
+[19:57:05.924 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 567
+[19:57:05.940 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 571
+[19:57:05.956 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 571
+[19:57:05.972 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 571
+[19:57:05.988 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 574
+[19:57:06.005 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 574
+[19:57:06.020 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 574
+[19:57:06.036 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 574
+[19:57:06.052 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 578
+[19:57:06.068 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 578
+[19:57:06.084 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 578
+[19:57:06.100 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 581
+[19:57:06.116 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 581
+[19:57:06.132 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 581
+[19:57:06.148 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 583
+[19:57:06.164 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 584
+[19:57:06.180 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 584
+[19:57:06.196 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 584
+[19:57:06.212 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 588
+[19:57:06.228 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 588
+[19:57:06.244 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 588
+[19:57:06.260 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 591
+[19:57:06.276 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 591
+[19:57:06.292 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 591
+[19:57:06.308 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 592
+[19:57:06.324 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 594
+[19:57:06.340 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 594
+[19:57:06.356 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 594
+[19:57:06.372 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 598
+[19:57:06.388 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 598
+[19:57:06.404 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 598
+[19:57:06.420 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 601
+[19:57:06.436 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 601
+[19:57:06.452 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 601
+[19:57:06.468 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 601
+[19:57:06.484 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 604
+[19:57:06.501 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 604
+[19:57:06.516 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 604
+[19:57:06.532 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 608
+[19:57:06.549 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 608
+[19:57:06.564 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 608
+[19:57:06.580 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 611
+[19:57:06.596 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 611
+[19:57:06.612 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 611
+[19:57:06.628 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 611
+[19:57:06.644 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 615
+[19:57:06.660 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 615
+[19:57:06.676 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 615
+[19:57:06.692 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 618
+[19:57:06.708 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 618
+[19:57:06.724 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 618
+[19:57:06.741 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 619
+[19:57:06.756 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 621
+[19:57:06.773 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 621
+[19:57:06.788 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 621
+[19:57:06.804 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 625
+[19:57:06.820 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 625
+[19:57:06.836 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 625
+[19:57:06.852 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 628
+[19:57:06.867 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 628
+[19:57:06.884 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 628
+[19:57:06.900 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 628
+[19:57:06.916 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 632
+[19:57:06.932 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 632
+[19:57:06.948 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 632
+[19:57:06.964 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 635
+[19:57:06.980 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 635
+[19:57:06.996 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 635
+[19:57:07.012 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 635
+[19:57:07.028 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 638
+[19:57:07.044 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 638
+[19:57:07.060 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 638
+[19:57:07.077 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 642
+[19:57:07.093 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 642
+[19:57:07.108 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 642
+[19:57:07.124 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 645
+[19:57:07.140 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 645
+[19:57:07.156 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 645
+[19:57:07.171 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 648
+[19:57:07.188 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 648
+[19:57:07.204 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 648
+[19:57:07.221 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 648
+[19:57:07.237 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 652
+[19:57:07.253 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 652
+[19:57:07.268 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 652
+[19:57:07.284 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 655
+[19:57:07.300 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 655
+[19:57:07.317 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 655
+[19:57:07.332 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 655
+[19:57:07.348 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 659
+[19:57:07.364 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 659
+[19:57:07.380 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 659
+[19:57:07.396 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 662
+[19:57:07.413 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 662
+[19:57:07.428 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 662
+[19:57:07.445 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 665
+[19:57:07.460 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 665
+[19:57:07.476 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 665
+[19:57:07.493 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 665
+[19:57:07.509 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 669
+[19:57:07.524 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 669
+[19:57:07.540 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 669
+[19:57:07.556 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 672
+[19:57:07.572 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 672
+[19:57:07.587 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 672
+[19:57:07.604 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 672
+[19:57:07.621 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 676
+[19:57:07.637 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 676
+[19:57:07.653 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 676
+[19:57:07.668 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 679
+[19:57:07.684 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 679
+[19:57:07.700 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 679
+[19:57:07.716 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 679
+[19:57:07.732 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 683
+[19:57:07.748 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 683
+[19:57:07.764 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 683
+[19:57:07.780 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 686
+[19:57:07.796 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 686
+[19:57:07.812 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 686
+[19:57:07.828 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 689
+[19:57:07.845 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 689
+[19:57:07.860 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 689
+[19:57:07.876 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 690
+[19:57:07.893 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 692
+[19:57:07.909 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 692
+[19:57:07.925 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 692
+[19:57:07.941 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 696
+[19:57:07.957 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 696
+[19:57:07.972 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 696
+[19:57:07.989 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 699
+[19:57:08.004 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 699
+[19:57:08.020 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 699
+[19:57:08.036 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 699
+[19:57:08.052 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 703
+[19:57:08.068 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 703
+[19:57:08.084 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 703
+[19:57:08.100 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 706
+[19:57:08.116 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 706
+[19:57:08.133 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 706
+[19:57:08.147 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 709
+[19:57:08.164 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 709
+[19:57:08.180 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 709
+[19:57:08.196 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 711
+[19:57:08.212 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 712
+[19:57:08.229 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 712
+[19:57:08.245 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 712
+[19:57:08.261 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 716
+[19:57:08.276 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 716
+[19:57:08.292 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 716
+[19:57:08.308 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 719
+[19:57:08.324 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 719
+[19:57:08.340 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 719
+[19:57:08.356 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 719
+[19:57:08.371 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 722
+[19:57:08.388 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 722
+[19:57:08.405 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 722
+[19:57:08.420 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 726
+[19:57:08.437 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 726
+[19:57:08.453 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 726
+[19:57:08.468 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 729
+[19:57:08.485 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 729
+[19:57:08.500 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 729
+[19:57:08.516 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 729
+[19:57:08.532 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 733
+[19:57:08.548 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 733
+[19:57:08.564 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 733
+[19:57:08.580 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 736
+[19:57:08.597 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 736
+[19:57:08.612 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 736
+[19:57:08.629 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 736
+[19:57:08.644 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 740
+[19:57:08.660 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 740
+[19:57:08.676 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 740
+[19:57:08.692 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 743
+[19:57:08.708 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 743
+[19:57:08.724 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 743
+[19:57:08.740 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 744
+[19:57:08.756 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 746
+[19:57:08.772 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 746
+[19:57:08.788 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 746
+[19:57:08.804 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 750
+[19:57:08.820 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 750
+[19:57:08.836 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 750
+[19:57:08.851 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 753
+[19:57:08.868 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 753
+[19:57:08.885 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 753
+[19:57:08.899 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 753
+[19:57:08.916 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 757
+[19:57:08.933 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 757
+[19:57:08.948 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 757
+[19:57:08.965 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 760
+[19:57:08.980 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 760
+[19:57:08.997 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 760
+[19:57:09.012 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 760
+[19:57:09.028 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 763
+[19:57:09.044 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 763
+[19:57:09.060 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 763
+[19:57:09.076 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 767
+[19:57:09.092 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 767
+[19:57:09.108 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 767
+[19:57:09.124 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 770
+[19:57:09.141 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 770
+[19:57:09.157 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 770
+[19:57:09.173 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 771
+[19:57:09.188 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 773
+[19:57:09.204 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 773
+[19:57:09.220 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 773
+[19:57:09.236 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 777
+[19:57:09.252 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 777
+[19:57:09.268 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 777
+[19:57:09.284 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 780
+[19:57:09.300 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 780
+[19:57:09.316 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 780
+[19:57:09.333 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 780
+[19:57:09.349 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 784
+[19:57:09.365 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 784
+[19:57:09.381 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 784
+[19:57:09.396 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 787
+[19:57:09.412 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 787
+[19:57:09.428 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 787
+[19:57:09.444 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 787
+[19:57:09.460 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 791
+[19:57:09.476 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 791
+[19:57:09.493 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 791
+[19:57:09.509 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 794
+[19:57:09.524 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 794
+[19:57:09.541 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 794
+[19:57:09.556 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 797
+[19:57:09.572 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 797
+[19:57:09.588 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 797
+[19:57:09.604 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 797
+[19:57:09.620 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 801
+[19:57:09.636 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 801
+[19:57:09.652 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 801
+[19:57:09.668 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 804
+[19:57:09.684 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 804
+[19:57:09.701 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 804
+[19:57:09.717 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 804
+[19:57:09.733 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 808
+[19:57:09.748 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 808
+[19:57:09.764 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 808
+[19:57:09.780 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 811
+[19:57:09.796 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 811
+[19:57:09.812 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 811
+[19:57:09.828 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 811
+[19:57:09.844 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 815
+[19:57:09.859 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 815
+[19:57:09.876 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 815
+[19:57:09.893 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 818
+[19:57:09.909 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 818
+[19:57:09.924 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 818
+[19:57:09.941 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 821
+[19:57:09.956 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 821
+[19:57:09.972 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 821
+[19:57:09.988 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 821
+[19:57:10.004 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 825
+[19:57:10.020 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 825
+[19:57:10.036 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 825
+[19:57:10.052 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 828
+[19:57:10.068 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 828
+[19:57:10.084 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 828
+[19:57:10.100 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 828
+[19:57:10.116 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 832
+[19:57:10.132 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 832
+[19:57:10.148 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 832
+[19:57:10.164 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 835
+[19:57:10.180 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 835
+[19:57:10.196 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 835
+[19:57:10.212 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 838
+[19:57:10.228 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 838
+[19:57:10.244 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 838
+[19:57:10.260 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 838
+[19:57:10.276 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 842
+[19:57:10.292 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 842
+[19:57:10.308 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 842
+[19:57:10.324 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 845
+[19:57:10.340 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 845
+[19:57:10.356 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 845
+[19:57:10.372 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 848
+[19:57:10.388 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 848
+[19:57:10.404 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 848
+[19:57:10.420 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 849
+[19:57:10.436 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 851
+[19:57:10.452 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 851
+[19:57:10.468 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 851
+[19:57:10.484 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 855
+[19:57:10.501 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 855
+[19:57:10.517 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 855
+[19:57:10.533 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 858
+[19:57:10.548 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 858
+[19:57:10.564 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 858
+[19:57:10.580 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 861
+[19:57:10.596 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 861
+[19:57:10.612 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 861
+[19:57:10.628 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 861
+[19:57:10.644 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 865
+[19:57:10.660 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 865
+[19:57:10.676 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 865
+[19:57:10.692 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 868
+[19:57:10.708 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 868
+[19:57:10.725 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 868
+[19:57:10.740 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 868
+[19:57:10.756 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 872
+[19:57:10.772 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 872
+[19:57:10.789 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 872
+[19:57:10.804 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 875
+[19:57:10.820 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 875
+[19:57:10.836 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 875
+[19:57:10.852 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 875
+[19:57:10.868 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 879
+[19:57:10.883 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 879
+[19:57:10.900 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 879
+[19:57:10.916 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 882
+[19:57:10.932 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 882
+[19:57:10.948 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 882
+[19:57:10.963 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 882
+[19:57:10.980 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 886
+[19:57:10.996 DBG] [T:58] [Game] [Ack] Remote acknowledged up to: 886
+[19:57:11.012 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 886
+[19:57:11.027 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 889
+[19:57:11.044 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 889
+[19:57:11.060 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 889
+[19:57:11.076 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 892
+[19:57:11.091 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 892
+[19:57:11.108 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 892
+[19:57:11.125 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 895
+[19:57:11.141 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 895
+[19:57:11.157 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 895
+[19:57:11.172 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 895
+[19:57:11.188 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 899
+[19:57:11.204 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 899
+[19:57:11.219 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 899
+[19:57:11.237 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 902
+[19:57:11.252 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 902
+[19:57:11.268 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 902
+[19:57:11.284 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 905
+[19:57:11.300 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 905
+[19:57:11.317 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 905
+[19:57:11.333 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 906
+[19:57:11.349 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 908
+[19:57:11.365 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 908
+[19:57:11.380 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 908
+[19:57:11.396 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 912
+[19:57:11.412 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 912
+[19:57:11.428 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 912
+[19:57:11.444 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 915
+[19:57:11.460 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 915
+[19:57:11.476 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 915
+[19:57:11.492 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 915
+[19:57:11.508 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 919
+[19:57:11.524 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 919
+[19:57:11.540 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 919
+[19:57:11.555 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 922
+[19:57:11.558 DBG] [T:45] [Game] Avg: 3, Jitter: 4, LossRate: 0
+[19:57:11.572 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 922
+[19:57:11.588 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 922
+[19:57:11.604 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 923
+[19:57:11.620 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 925
+[19:57:11.636 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 925
+[19:57:11.652 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 925
+[19:57:11.668 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 929
+[19:57:11.684 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 929
+[19:57:11.700 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 929
+[19:57:11.716 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 932
+[19:57:11.732 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 932
+[19:57:11.748 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 932
+[19:57:11.764 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 932
+[19:57:11.780 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 936
+[19:57:11.797 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 936
+[19:57:11.811 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 936
+[19:57:11.829 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 939
+[19:57:11.844 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 939
+[19:57:11.860 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 939
+[19:57:11.876 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 942
+[19:57:11.892 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 942
+[19:57:11.909 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 942
+[19:57:11.924 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 942
+[19:57:11.941 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 946
+[19:57:11.956 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 946
+[19:57:11.972 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 946
+[19:57:11.989 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 949
+[19:57:12.005 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 949
+[19:57:12.020 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 949
+[19:57:12.036 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 950
+[19:57:12.053 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 952
+[19:57:12.069 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 952
+[19:57:12.084 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 952
+[19:57:12.100 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 956
+[19:57:12.116 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 956
+[19:57:12.132 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 956
+[19:57:12.148 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 959
+[19:57:12.164 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 959
+[19:57:12.180 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 959
+[19:57:12.196 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 960
+[19:57:12.212 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 962
+[19:57:12.228 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 962
+[19:57:12.244 DBG] [T:10] [Game] [Ack] Remote acknowledged up to: 962
+[19:57:12.260 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 966
+[19:57:12.276 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 966
+[19:57:12.292 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 966
+[19:57:12.308 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 969
+[19:57:12.324 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 969
+[19:57:12.340 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 969
+[19:57:12.356 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 972
+[19:57:12.372 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 972
+[19:57:12.388 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 972
+[19:57:12.405 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 972
+[19:57:12.419 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 976
+[19:57:12.437 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 976
+[19:57:12.452 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 976
+[19:57:12.468 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 979
+[19:57:12.484 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 979
+[19:57:12.500 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 979
+[19:57:12.516 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 979
+[19:57:12.532 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 983
+[19:57:12.548 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 983
+[19:57:12.564 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 983
+[19:57:12.580 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 986
+[19:57:12.596 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 986
+[19:57:12.612 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 986
+[19:57:12.628 DBG] [T:44] [Game] [Ack] Remote acknowledged up to: 986
+[19:57:12.644 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 990
+[19:57:12.660 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 990
+[19:57:12.677 DBG] [T:11] [Game] [Ack] Remote acknowledged up to: 990
+[19:57:12.693 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 993
+[19:57:12.709 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 993
+[19:57:12.724 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 993
+[19:57:12.740 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 996
+[19:57:12.756 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 996
+[19:57:12.772 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 996
+[19:57:12.788 DBG] [T:56] [Game] [Ack] Remote acknowledged up to: 996
+[19:57:12.835 DBG] [T:57] [Game] [Ack] Remote acknowledged up to: 1000
+[19:57:21.559 DBG] [T:45] [Game] Avg: 2, Jitter: 2, LossRate: 0

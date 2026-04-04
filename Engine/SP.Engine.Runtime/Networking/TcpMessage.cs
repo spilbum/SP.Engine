@@ -13,12 +13,21 @@ namespace SP.Engine.Runtime.Networking
         }
 
         public uint SequenceNumber => Header.SequenceNumber;
+        public uint AckNumber => Header.AckNumber;
 
         public void SetSequenceNumber(uint sequenceNumber)
         {
             Header = new TcpHeaderBuilder()
                 .From(Header)
                 .WithSequenceNumber(sequenceNumber)
+                .Build();
+        }
+
+        public void SetAckNumber(uint ackNumber)
+        {
+            Header = new TcpHeaderBuilder()
+                .From(Header)
+                .WithAckNumber(ackNumber)
                 .Build();
         }
 
@@ -36,12 +45,12 @@ namespace SP.Engine.Runtime.Networking
             return new ArraySegment<byte>(buf, 0, buf.Length);
         }
 
-        protected override TcpHeader CreateHeader(HeaderFlags flags, ushort id, int payloadLength)
+        protected override TcpHeader CreateHeader(HeaderFlags flags, ushort msgId, int payloadLength)
         {
             return new TcpHeaderBuilder()
                 .From(Header)
                 .AddFlag(flags)
-                .WithId(id)
+                .WithId(msgId)
                 .WithPayloadLength(payloadLength)
                 .Build();
         }

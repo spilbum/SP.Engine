@@ -124,6 +124,6 @@ namespace SP.Engine.Runtime.Networking
         }
 
         private bool HasFlag(HeaderFlags flag) => Header != null && Header.HasFlag(flag);
-        protected abstract THeader CreateHeader(HeaderFlags flags, ushort id, int payloadLength);
+        protected abstract THeader CreateHeader(HeaderFlags flags, ushort msgId, int payloadLength);
     }
 }

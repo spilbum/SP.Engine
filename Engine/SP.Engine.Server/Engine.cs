@@ -340,9 +340,6 @@ public abstract class Engine : BaseEngine, IEngine
         command = GetUserCommand(message.Id);
         if (command == null)
         {
-            if (message is TcpMessage tcp)
-                session.SendMessageAck(tcp.SequenceNumber);
-            
             Logger.Error("Unknown command: msgId={0}, session={1}/{2}",
                 message.Id, session.Id, session.RemoteEndPoint);
             return;
@@ -359,12 +356,19 @@ public abstract class Engine : BaseEngine, IEngine
         switch (message)
         {
             case TcpMessage tcp:
-                session.SendMessageAck(tcp.SequenceNumber);
-                foreach (var msg in peer.ProcessMessageInOrder(tcp))
+                // 피기배킹 처리
+                peer.HandleRemoteAck(tcp.AckNumber);
+                
+                var messages = peer.ProcessMessageInOrder(tcp);
+                if (messages != null)
                 {
-                    var cmd = GetUserCommand(msg.Id);
-                    cmd?.Execute(peer, msg);
+                    foreach (var msg in messages)
+                    {
+                        var cmd = GetUserCommand(msg.Id);
+                        cmd?.Execute(peer, msg);
+                    }
                 }
+
                 break;
             case UdpMessage udp:
                 command.Execute(peer, udp);
