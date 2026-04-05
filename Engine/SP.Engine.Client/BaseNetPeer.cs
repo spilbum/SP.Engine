@@ -88,7 +88,8 @@ namespace SP.Engine.Client
         private UdpSocket _udpSocket;
         
         private Timer _ackTimer;
-        private uint _lastSentAck;
+        private volatile uint _lastSentAck;
+        private long _lastAckTimerResetTicks;
         private readonly object _ackLock = new object();
 
         public int ConnectTryCount { get; private set; }
@@ -556,14 +557,15 @@ namespace SP.Engine.Client
             if (!IsConnected || _disposed) return;
             var currAckNumber = _messageProcessor.LastSequenceNumber;
 
+            if (currAckNumber <= _lastSentAck) return;
+            
             lock (_ackLock)
             {
-                // 이미 피기배킹으로 보냈거나, 새로 수신한 패킷이 없다면 보낼 필요 없음
                 if (currAckNumber <= _lastSentAck) return;
+                
+                //Logger.Debug("[OnAckTimerTick] Timer expired. Sending ACK: {0}", currAckNumber);
                 SendMessageAck(currAckNumber);
             }
-            
-            Logger.Debug("[OnAckTimerTick] Send message ack: {0}", currAckNumber);
         }
 
         private void SendMessageAck(uint ackNumber)
@@ -663,21 +665,21 @@ namespace SP.Engine.Client
                         break;
 
                     _receiveBuffer.Consume(consumed);
+                    
+                    // ACK 처리
+                    ProcessAckStatus(header.AckNumber);
 
                     if (bodyLen > 0)
                     {
                         var payload = new byte[bodyLen];
-                        
                         _receiveBuffer.Peek(payload);
-                        _receiveBuffer.Consume((int)bodyLen);
+                        _receiveBuffer.Consume(bodyLen);
 
-                        var message = new TcpMessage(header, payload);
-                        OnReceivedMessage(message);
+                        OnReceivedMessage(new TcpMessage(header, payload));
                     }
                     else
                     {
-                        var message = new TcpMessage(header, ReadOnlyMemory<byte>.Empty);
-                        OnReceivedMessage(message);
+                        OnReceivedMessage(new TcpMessage(header, ReadOnlyMemory<byte>.Empty));
                     }
                 }
             }
@@ -688,32 +690,29 @@ namespace SP.Engine.Client
             }
         }
 
+        private void ProcessAckStatus(uint receivedAckNumber)
+        {
+            // 피기배킹 처리
+            HandleRemoteAck(receivedAckNumber);
+                    
+            var currAckNumber = _messageProcessor.LastSequenceNumber;
+            if (currAckNumber - _lastSentAck < _messageProcessor.AckStepThreshold)
+                return;
+            
+            lock (_ackLock)
+            {
+                if (currAckNumber - _lastSentAck < _messageProcessor.AckStepThreshold)
+                    return;
+                
+                //Logger.Debug("[Ack] Threshold ({0}). Sending immediate ACK: {1}", currAckNumber - _lastSentAck, currAckNumber);
+                
+                SendMessageAck(currAckNumber);
+                RestartAckTimer();
+            }
+        }
+
         private void OnReceivedMessage(IMessage message)
         {
-            switch (message)
-            {
-                case TcpMessage tcp:
-                {
-                    HandleRemoteAck(tcp.AckNumber);
-                    
-                    var currAckNumber = _messageProcessor.LastSequenceNumber;
-                    if (currAckNumber - _lastSentAck >= _messageProcessor.AckStepThreshold)
-                    {
-                        lock (_ackLock)
-                        {
-                            if (currAckNumber - _lastSentAck >= _messageProcessor.AckStepThreshold)
-                            {
-                                Logger.Debug("[OnReceivedMessage] Send message ack: {0}", currAckNumber);
-                                SendMessageAck(currAckNumber);
-                                RestartAckTimer();
-                            }
-                        }
-                    }
-
-                    break;
-                }
-            }
-            
             var command = GetInternalCommand(message.Id);
             if (command != null)
             {
@@ -977,7 +976,13 @@ namespace SP.Engine.Client
 
         private void RestartAckTimer()
         {
-            _ackTimer?.Change(_messageProcessor.MaxAckDelayMs, _messageProcessor.MaxAckDelayMs);
+            var now = DateTime.UtcNow.Ticks;
+            var maxAckDelayMs = _messageProcessor.MaxAckDelayMs;
+            if (now - _lastAckTimerResetTicks < TimeSpan.TicksPerMillisecond * (maxAckDelayMs / 4))
+                return;
+            
+            _lastAckTimerResetTicks = now;
+            _ackTimer?.Change(maxAckDelayMs, maxAckDelayMs);
         }
 
         private void StopAckTimer()
@@ -1043,7 +1048,7 @@ namespace SP.Engine.Client
         {
             if (ackNumber <= 0) return;
             _messageProcessor.RemoveMessageStates(ackNumber);
-            Logger.Debug("[Ack] Remote acknowledged up to: {0}", ackNumber);
+            //Logger.Debug("[Ack] Remote acknowledged up to: {0}", ackNumber);
         }
 
         protected virtual void Dispose(bool disposing)

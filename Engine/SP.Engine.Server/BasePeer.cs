@@ -59,9 +59,10 @@ public abstract class BasePeer : IPeer, IDisposable
     private AesGcmEncryptor _encryptor;
     private IPolicyView _networkPolicy = new NetworkPolicyView(in PolicyDefaults.Globals);
     private int _stateCode = PeerStateConst.NotAuthenticated;
+    private Session _session;
     private uint _lastSentAck;
     private DateTime _lastAckTime;
-    private Session _session;
+    private readonly object _ackLock = new();
 
     protected BasePeer(PeerKind kind, ISession session)
     {
@@ -150,7 +151,7 @@ public abstract class BasePeer : IPeer, IDisposable
 
                 _messageProcessor.RegisterMessageState(tcp);
                 if (!_session.TrySend(channel, tcp)) return false;
-                _lastSentAck = tcp.AckNumber;
+                lock (_ackLock) _lastSentAck = tcp.AckNumber;
                 return true;
             }
             case ChannelKind.Unreliable:
@@ -192,9 +193,14 @@ public abstract class BasePeer : IPeer, IDisposable
 
     public virtual void Tick()
     {
-        if (!IsConnected)
-            return;
+        if (!IsConnected) return;
+        
+        ProcessRetries();
+        MaintainAckStatus();
+    }
 
+    private void ProcessRetries()
+    {
         var (retries, failed) = _messageProcessor.ExtractRetryMessages();
         if (failed.Count > 0)
         {
@@ -207,25 +213,33 @@ public abstract class BasePeer : IPeer, IDisposable
         
         foreach (var message in retries)
         {
-            Session.TrySend(ChannelKind.Reliable, message);
+            _session.TrySend(ChannelKind.Reliable, message);
         }
-
-        CheckSendMessageAck();
     }
 
-    private void CheckSendMessageAck()
+    private void MaintainAckStatus()
     {
         var ackNumber = _messageProcessor.LastSequenceNumber;
         if (ackNumber <= _lastSentAck) return;
         
         var now = DateTime.UtcNow;
-        if ((now - _lastAckTime).TotalMilliseconds >= _messageProcessor.MaxAckDelayMs 
-            || ackNumber - _lastSentAck > _messageProcessor.AckStepThreshold)
+        var elapsedMs = (now - _lastAckTime).TotalMilliseconds;
+        var pendingCount = ackNumber - _lastSentAck;
+
+        if (elapsedMs < _messageProcessor.MaxAckDelayMs && pendingCount < _messageProcessor.AckStepThreshold)
+            return;
+
+        lock (_ackLock)
         {
-            _session.SendMessageAck(ackNumber);
-            _lastAckTime = now;
+            if (ackNumber <= _lastSentAck) return;
+            if (elapsedMs < _messageProcessor.MaxAckDelayMs && pendingCount < _messageProcessor.AckStepThreshold)
+                return;
+
+            _lastAckTime = DateTime.UtcNow;
             _lastSentAck = ackNumber;
-            Logger.Debug("[Ack] Send message ack: {0}", ackNumber);
+            _session.SendMessageAck(ackNumber);
+            
+            //Logger.Debug("[Ack] MaintainAckStatus sent: {0}", ackNumber);
         }
     }
 
@@ -246,7 +260,7 @@ public abstract class BasePeer : IPeer, IDisposable
     {
         if (ackNumber <= 0) return;
         _messageProcessor.RemoveMessageStates(ackNumber);
-        Logger.Debug("[Ack] Remote acknowledged up to: {0}", ackNumber);
+        //Logger.Debug("[Ack] Remote acknowledged up to: {0}", ackNumber);
     }
 
     internal List<TcpMessage> ProcessMessageInOrder(TcpMessage message)
