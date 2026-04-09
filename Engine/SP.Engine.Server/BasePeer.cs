@@ -130,19 +130,37 @@ public abstract class BasePeer : IPeer, IDisposable
 
     public bool Send(IProtocolData data)
     {
-        var channel = data.Channel;
         var policy = _policySnapshot.Resolve(data.Id);
         var encryptor = policy.UseEncrypt ? Encryptor : null;
         var compressor = policy.UseCompress ? Compressor : null;
-        switch (channel)
+        var originalChannel = data.Channel;
+        
+        var sequenceNumber = originalChannel == ChannelKind.Reliable
+            ? _messageProcessor.GetNextReliableSeq()
+            : 0;
+
+        var ackNumber = originalChannel == ChannelKind.Reliable
+            ? _messageProcessor.LastSequenceNumber
+            : 0;
+
+        var targetChannel = originalChannel == ChannelKind.Unreliable && !_session.IsUdpAvailable
+            ? ChannelKind.Reliable
+            : originalChannel;
+        
+        switch (targetChannel)
         {
             case ChannelKind.Reliable:
             {
                 var tcp = new TcpMessage();
-                var seq = _messageProcessor.GetNextReliableSeq();
-                tcp.SetSequenceNumber(seq);
-                tcp.SetAckNumber(_messageProcessor.LastSequenceNumber);
+                tcp.SetSequenceNumber(sequenceNumber);
+                tcp.SetAckNumber(ackNumber);
                 tcp.Serialize(data, policy, encryptor, compressor);
+
+                if (tcp.SequenceNumber == 0)
+                {
+                    // 즉시 전송 (Internal/Fallback)
+                    return _session.TrySend(targetChannel, tcp);
+                }
 
                 if (!IsConnected)
                 {
@@ -151,8 +169,15 @@ public abstract class BasePeer : IPeer, IDisposable
                 }
 
                 _messageProcessor.RegisterMessageState(tcp);
-                if (!_session.TrySend(channel, tcp)) return false;
-                lock (_ackLock) _lastSentAck = tcp.AckNumber;
+                
+                if (!_session.TrySend(targetChannel, tcp)) 
+                    return false;
+
+                lock (_ackLock)
+                {
+                    _lastSentAck = tcp.AckNumber;
+                }
+                
                 return true;
             }
             case ChannelKind.Unreliable:
@@ -160,10 +185,10 @@ public abstract class BasePeer : IPeer, IDisposable
                 var udp = new UdpMessage();
                 udp.SetSessionId(_session.SessionId);
                 udp.Serialize(data, policy, encryptor, compressor);
-                return _session.TrySend(channel, udp);
+                return _session.TrySend(targetChannel, udp);
             }
             default:
-                throw new Exception($"Unknown channel: {channel}");
+                throw new Exception($"Unknown channel: {targetChannel}");
         }
     }
 

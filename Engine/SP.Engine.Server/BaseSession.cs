@@ -64,6 +64,8 @@ public abstract class BaseSession : IBaseSession
     
     protected void DisableUdp()
         => _channelRouter.SetUdpAvailable(false);
+    
+    public bool IsUdpAvailable => _channelRouter.IsUdpAvailable;
 
     public virtual void Close(CloseReason reason)
     {

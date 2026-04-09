@@ -13,19 +13,22 @@ namespace SP.Engine.Runtime.Networking
         private readonly object _lock = new object();
         private readonly SortedDictionary<uint, MessageState> _states = new SortedDictionary<uint, MessageState>();
         
-        public bool Register(TcpMessage message, int initialRtoMs, int maxRetryCount)
+        public void Register(TcpMessage message, int initialRtoMs, int maxRetryCount)
         {
-            if (message.SequenceNumber == 0) return false;
+            if (message.SequenceNumber == 0) return;
 
             lock (_lock)
             {
+                if (_states.ContainsKey(message.SequenceNumber)) return;
                 var state = new MessageState(message, initialRtoMs, maxRetryCount);
-                return _states.TryAdd(message.SequenceNumber, state);   
+                _states.TryAdd(message.SequenceNumber, state);   
             }
         }
 
         public void RemoveUntil(uint ackNumber)
         {
+            if (ackNumber == 0) return;
+            
             lock (_lock)
             {
                 var keysToRemove = _states
@@ -226,7 +229,6 @@ namespace SP.Engine.Runtime.Networking
         private readonly ReliableSender _sender = new ReliableSender();
         private readonly ReliableReceiver _receiver = new ReliableReceiver();
         private readonly RtoEstimator _rtoEstimator = new RtoEstimator();
-        
         private readonly List<TcpMessage> _dequeuedCache = new List<TcpMessage>();
         private int _nextReliableSeq;
         
@@ -235,7 +237,6 @@ namespace SP.Engine.Runtime.Networking
         public int MaxAckDelayMs { get; private set; } = 30;
         public int AckStepThreshold { get; private set; } = 10;
         public uint LastSequenceNumber => _receiver.LastProcessedSequence;
-        public int PendingCount => _pendingQueue.Count;
 
         public void SetSendTimeoutMs(int ms) => SendTimeoutMs = ms;
         public void SetMaxRetryCount(int count) => MaxRetryCount = count;
@@ -251,11 +252,17 @@ namespace SP.Engine.Runtime.Networking
             return _dequeuedCache.ToList();
         }
 
-        public bool RegisterMessageState(TcpMessage message)
-            => _sender.Register(message, SendTimeoutMs, MaxRetryCount);
+        public void RegisterMessageState(TcpMessage message)
+        {
+            if (message.SequenceNumber == 0) return;
+            _sender.Register(message, SendTimeoutMs, MaxRetryCount);
+        }
 
         public void RemoveMessageStates(uint ackNumber)
-            => _sender.RemoveUntil(ackNumber);
+        {
+            if (ackNumber == 0) return;
+            _sender.RemoveUntil(ackNumber);
+        }
         
         public (List<TcpMessage> Retries, List<TcpMessage> Failed) ExtractRetryMessages()
             => _sender.UpdateAndExtract(_rtoEstimator);

@@ -231,10 +231,12 @@ public sealed class Session : BaseSession, ISession
 
     internal void OnUdpHealthCheckReq()
     {
-        if (++_udpHealthFailCount > Config.Network.MaxUdpHealthFail)
+        _udpHealthFailCount++;
+        if (_udpHealthFailCount > Config.Network.MaxUdpHealthFail)
         {
+            _udpHealthFailCount = 0;
             DisableUdp();
-            return;
+            Logger.Warn("UDP disabled for session {0} due to health check failure.", SessionId);
         }
 
         InternalSend(new S2CEngineProtocolData.UdpHealthCheckAck());
@@ -243,7 +245,9 @@ public sealed class Session : BaseSession, ISession
     internal void OnUdpHealthCheckConfirm()
     {
         _udpHealthFailCount = 0;
+        if (IsUdpAvailable) return;
         EnableUdp();
+        Logger.Info("UDP restored for session {0}.", SessionId);
     }
 
     private bool InternalSend(IProtocolData data)

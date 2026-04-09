@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Reflection;
 using System.Threading;
@@ -294,7 +295,14 @@ namespace SP.Engine.Client
                 _messageProcessor.RegisterMessageState(message);
                     
                 // 전송
-                TrySend(ChannelKind.Reliable, message);
+                if (!TrySend(ChannelKind.Reliable, message)) 
+                    continue;
+                
+                lock (_ackLock)
+                {
+                    _lastSentAck = message.AckNumber;
+                    RestartAckTimer();
+                }
             }
         }
         
@@ -316,9 +324,13 @@ namespace SP.Engine.Client
                 return;
             }
             
-            foreach (var message in retries)
+            foreach (var message in retries.Where(message => TrySend(ChannelKind.Reliable, message)))
             {
-                TrySend(ChannelKind.Reliable, message);
+                lock (_ackLock)
+                {
+                    _lastSentAck = message.AckNumber;
+                    RestartAckTimer();
+                }
             }
         }
 
@@ -327,11 +339,14 @@ namespace SP.Engine.Client
             var sequenceNumber = data.Channel == ChannelKind.Reliable
                 ? _messageProcessor.GetNextReliableSeq()
                 : 0;
-            var ackNumber = _messageProcessor.LastSequenceNumber;
-            var policy = _policySnapshot.Resolve(data.Id);
-            return TrySend(sequenceNumber, ackNumber, data, policy);
+            
+            var ackNumber = data.Channel == ChannelKind.Reliable
+                ? _messageProcessor.LastSequenceNumber
+                : 0;
+            
+            return TrySend(sequenceNumber, ackNumber, data, _policySnapshot.Resolve(data.Id));
         }
-
+        
         private bool InternalSend(IProtocolData data)
             => TrySend(0, 0, data, PolicyDefaults.InternalPolicy);
 
@@ -339,7 +354,6 @@ namespace SP.Engine.Client
         {
             var encryptor = policy.UseEncrypt ? Encryptor : null;
             var compressor = policy.UseCompress ? Compressor : null;
-
             var channel = data.Channel == ChannelKind.Unreliable && !_channelRouter.IsUdpAvailable
                 ? ChannelKind.Reliable
                 : data.Channel;
@@ -354,30 +368,34 @@ namespace SP.Engine.Client
                         tcp.SetSequenceNumber(sequenceNumber);
                         tcp.SetAckNumber(ackNumber);
                         tcp.Serialize(data, policy, encryptor, compressor);
-                            
-                        if (sequenceNumber > 0 && !IsConnected)
+
+                        if (tcp.SequenceNumber == 0)
                         {
-                            // 연결 끊김
-                            if (_messageProcessor.EnqueuePendingMessage(tcp)) return true;
+                            // 즉시 전송 (Internal/Fallback)
+                            return TrySend(channel, tcp);
+                        }
                             
+                        if (!IsConnected)
+                        {
+                            // 메시지 팬딩 처리
+                            if (_messageProcessor.EnqueuePendingMessage(tcp)) return true;
                             Logger.Error("Pending queue is full! Message dropped. Seq={0}", tcp.SequenceNumber);
                             return false;
                         }
 
-                        // 재 전송을 위해 메시지 등록
-                        if (sequenceNumber > 0)
-                            _messageProcessor.RegisterMessageState(tcp);
-
-                        if (!TrySend(channel, tcp)) return false;
-
+                        // 전송 메시지 등록
+                        _messageProcessor.RegisterMessageState(tcp);
+                        
+                        if (!TrySend(channel, tcp)) 
+                            return false;
+                        
                         lock (_ackLock)
                         {
                             _lastSentAck = tcp.AckNumber;   
                             RestartAckTimer();
                         }
-                        
-                        return true;
 
+                        return true;
                     }
                     case ChannelKind.Unreliable:
                     {

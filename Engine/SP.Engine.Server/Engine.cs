@@ -357,7 +357,7 @@ public abstract class Engine : BaseEngine, IEngine
 
                 if (tcp.SequenceNumber == 0)
                 {
-                    // 즉시 처리
+                    // 즉시 처리 (Internal/Fallback)
                     GetUserCommand(tcp.Id)?.Execute(peer, tcp);
                     break;
                 }

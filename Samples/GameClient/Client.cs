@@ -19,19 +19,6 @@ public class Client : BaseNetPeer
         Error += OnError;
     }
 
-    private DateTime? _monitorTimer;
-
-    public override void Tick()
-    {
-        base.Tick();
-
-        if (_monitorTimer == null || _monitorTimer <= DateTime.Now.AddSeconds(-10))
-        {
-            _monitorTimer = DateTime.Now;
-            Logger.Debug("ServerTime: {0:yyyy-MM-dd hh:mm:ss.fff}", GetServerTime());
-        }
-    }
-
     private void OnStateChanged(object? sender, StateChangedEventArgs e)
     {
         Logger.Debug("State changed: {0} -> {1}", e.OldState, e.NewState);
