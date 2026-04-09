@@ -57,7 +57,7 @@ public abstract class BasePeer : IPeer, IDisposable
     private DiffieHellman _diffieHellman;
     private bool _disposed;
     private AesGcmEncryptor _encryptor;
-    private IPolicyView _networkPolicy = new NetworkPolicyView(in PolicyDefaults.Globals);
+    private IProtocolPolicySnapshot _policySnapshot;
     private int _stateCode = PeerStateConst.NotAuthenticated;
     private Session _session;
     private uint _lastSentAck;
@@ -75,6 +75,7 @@ public abstract class BasePeer : IPeer, IDisposable
         _messageProcessor.SetMaxRetryCount(session.Config.Network.MaxRetryCount);
         _messageProcessor.SetMaxAckDelayMs(session.Config.Network.MaxAckDelayMs);
         _messageProcessor.SetAckStepThreshold(session.Config.Network.AckStepThreshold);
+        _policySnapshot = ProtocolPolicyRegistry.CreateSnapshot(PolicyDefaults.FallbackGlobals);
     }
 
     protected BasePeer(BasePeer other)
@@ -88,8 +89,8 @@ public abstract class BasePeer : IPeer, IDisposable
         _diffieHellman = other._diffieHellman;
         _encryptor = other._encryptor;
         _compressor = other._compressor;
-        _networkPolicy = other._networkPolicy;
         _messageProcessor = other._messageProcessor;
+        _policySnapshot = other._policySnapshot;
     }
 
     public double LatencyAvgMs { get; private set; }
@@ -130,7 +131,7 @@ public abstract class BasePeer : IPeer, IDisposable
     public bool Send(IProtocolData data)
     {
         var channel = data.Channel;
-        var policy = GetNetworkPolicy(data.GetType());
+        var policy = _policySnapshot.Resolve(data.Id);
         var encryptor = policy.UseEncrypt ? Encryptor : null;
         var compressor = policy.UseCompress ? Compressor : null;
         switch (channel)
@@ -157,7 +158,7 @@ public abstract class BasePeer : IPeer, IDisposable
             case ChannelKind.Unreliable:
             {
                 var udp = new UdpMessage();
-                udp.SetPeerId(PeerId);
+                udp.SetSessionId(_session.SessionId);
                 udp.Serialize(data, policy, encryptor, compressor);
                 return _session.TrySend(channel, udp);
             }
@@ -205,7 +206,7 @@ public abstract class BasePeer : IPeer, IDisposable
         if (failed.Count > 0)
         {
             Logger.Warn("Connection terminated due to message delivery failure. sessionId: {0}, peerId: {1}, first seq: {2}",
-                _session.Id, PeerId, failed[0].SequenceNumber);
+                _session.SessionId, PeerId, failed[0].SequenceNumber);
             
             Close(CloseReason.LimitExceededRetry);
             return;
@@ -268,11 +269,6 @@ public abstract class BasePeer : IPeer, IDisposable
         return _messageProcessor.ProcessMessageInOrder(message);
     }
 
-    public IPolicy GetNetworkPolicy(Type protocolType)
-    {
-        return _networkPolicy.Resolve(protocolType);
-    }
-
     internal void SetFiber(PeerFiber fiber)
     {
         Fiber = fiber;
@@ -290,13 +286,13 @@ public abstract class BasePeer : IPeer, IDisposable
         OnJoinServer();
     }
 
-    internal void OnSessionAuthenticated()
+    internal void OnSessionAuthCompleted()
     {
-        // 정책 생성
-        var n = Session.Config.Network;
+        // 정책 적용
+        var n = _session.Config.Network;
         var g = new PolicyGlobals(n.UseEncrypt, n.UseCompress, n.CompressionThreshold);
-        var newView = new NetworkPolicyView(g);
-        Interlocked.Exchange(ref _networkPolicy, newView);
+        var snapshot = ProtocolPolicyRegistry.CreateSnapshot(g);
+        Interlocked.Exchange(ref _policySnapshot, snapshot);
     }
 
     internal void Online(ISession session)
@@ -319,7 +315,6 @@ public abstract class BasePeer : IPeer, IDisposable
     internal void Offline(CloseReason reason)
     {
         Interlocked.Exchange(ref _stateCode, PeerStateConst.Offline);
-        _networkPolicy = new NetworkPolicyView(PolicyDefaults.Globals);
         OnOffline(reason);
     }
 
@@ -389,7 +384,7 @@ public abstract class BasePeer : IPeer, IDisposable
 
     public override string ToString()
     {
-        return $"sessionId={Session.Id}, peerId={PeerId}, peerType={Kind}, remoteEndPoint={RemoteEndPoint}";
+        return $"sessionId={Session.SessionId}, peerId={PeerId}, peerType={Kind}, remoteEndPoint={RemoteEndPoint}";
     }
 
     private static class PeerIdGenerator

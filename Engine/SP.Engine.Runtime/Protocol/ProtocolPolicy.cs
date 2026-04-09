@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace SP.Engine.Runtime.Protocol
 {
@@ -49,34 +50,35 @@ namespace SP.Engine.Runtime.Protocol
         }
     }
 
-    public interface IPolicyView
+    public interface IProtocolPolicySnapshot
     {
-        ProtocolPolicy Resolve<TProtocol>() where TProtocol : IProtocolData;
-        ProtocolPolicy Resolve(Type protocolType);
+        ProtocolPolicy Resolve(ushort protocolId);
     }
 
-    public sealed class NetworkPolicyView : IPolicyView
+    public sealed class PolicySnapshot : IProtocolPolicySnapshot
     {
-        private readonly PolicyGlobals _globals;
+        private readonly ProtocolPolicy[] _cache = new ProtocolPolicy[ushort.MaxValue];
+        private readonly ProtocolPolicy _fallbackPolicy;
 
-        public NetworkPolicyView(in PolicyGlobals globals)
+        public PolicySnapshot(PolicyGlobals globals, Dictionary<ushort, ProtocolOverrides> overrides)
         {
-            _globals = globals;
+            _fallbackPolicy = new ProtocolPolicy(globals.UseEncrypt, globals.UseCompress, globals.CompressionThreshold);
+            
+            foreach (var (id, ov) in overrides)
+            {
+                _cache[id] = ProtocolPolicyRegistry.ComputePolicy(ov, globals);
+            }
         }
-
-        public ProtocolPolicy Resolve<TProtocol>() where TProtocol : IProtocolData
-        {
-            return ProtocolPolicyResolver.Resolve<TProtocol>(_globals);
-        }
-
-        public ProtocolPolicy Resolve(Type protocolType)
-        {
-            return ProtocolPolicyResolver.Resolve(protocolType, _globals);
-        }
+        
+        public ProtocolPolicy Resolve(ushort protocolId)
+            => _cache[protocolId] ?? _fallbackPolicy;
     }
 
     public static class PolicyDefaults
     {
-        public static readonly PolicyGlobals Globals = new PolicyGlobals(false, false, 0);
+        // 내부 프로토콜용 정책
+        public static readonly ProtocolPolicy InternalPolicy = new ProtocolPolicy(false, false, 0);
+        // 설정된 정책이 없을때 적용되는 기본 정책
+        public static readonly PolicyGlobals FallbackGlobals = new PolicyGlobals(true, false, 0);
     }
 }

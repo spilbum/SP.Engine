@@ -2,7 +2,7 @@ namespace SP.Engine.Runtime.Networking
 {
     public interface IHeader
     {
-        ushort MsdId { get; }
+        ushort ProtocolId { get; }
         bool HasFlag(HeaderFlags flags);
     }
 }

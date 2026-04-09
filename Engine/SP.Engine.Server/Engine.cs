@@ -36,7 +36,7 @@ public abstract class Engine : BaseEngine, IEngine
     private ILogger _perfLogger;
     private IDisposable _waitingReconnectCheckingTimer;
 
-    public override bool Initialize(string name, EngineConfig config)
+    protected override bool Initialize(string name, EngineConfig config)
     {
         if (!base.Initialize(name, config))
             return false;
@@ -63,7 +63,7 @@ public abstract class Engine : BaseEngine, IEngine
         var connectorUpdatePeriod = TimeSpan.FromMilliseconds(Config.Session.ConnectorUpdateIntervalMs);
         Scheduler.Schedule(Fiber, ScheduleUpdateConnectors, connectorUpdatePeriod, connectorUpdatePeriod);
 
-        var fiberCnt = Math.Max(Config.Network.LimitConnectionCount / 300, 10);
+        var fiberCnt = Math.Max(Config.Session.MaxConnections / 300, 10);
         var tickInterval = TimeSpan.FromMilliseconds(Config.Session.PeerUpdateIntervalMs);
         
         for (var i = 0; i < fiberCnt; i++)
@@ -96,10 +96,7 @@ public abstract class Engine : BaseEngine, IEngine
     }
     
     protected TPeer GetPeer<TPeer>(uint peerId) where TPeer : BasePeer
-        => GetBasePeer(peerId) as TPeer;
-
-    protected override BasePeer GetBasePeer(uint peerId)
-        => _peerManager.GetPeer(peerId);
+        => _peerManager.GetPeer(peerId) as TPeer;
 
     protected bool ChangeServerPeer(BasePeer newPeer)
         => _peerManager.ChangeServerPeer(newPeer);
@@ -272,7 +269,8 @@ public abstract class Engine : BaseEngine, IEngine
             RegisterInternalCommand<Ping>(C2SEngineProtocolId.Ping);
             RegisterInternalCommand<MessageAck>(C2SEngineProtocolId.MessageAck);
             RegisterInternalCommand<UdpHelloReq>(C2SEngineProtocolId.UdpHelloReq);
-            RegisterInternalCommand<UdpKeepAlive>(C2SEngineProtocolId.UdpKeepAlive);
+            RegisterInternalCommand<UdpHealthCheckReq>(C2SEngineProtocolId.UdpHealthCheckReq);
+            RegisterInternalCommand<UdpHealthCheckConfirm>(C2SEngineProtocolId.UdpHealthCheckConfirm);
 
             var assembly = GetType().Assembly;
             DiscoverUserCommands(assembly);
@@ -341,14 +339,14 @@ public abstract class Engine : BaseEngine, IEngine
         if (command == null)
         {
             Logger.Error("Unknown command: msgId={0}, session={1}/{2}",
-                message.Id, session.Id, session.RemoteEndPoint);
+                message.Id, session.SessionId, session.RemoteEndPoint);
             return;
         }
         
         var peer = session.Peer;
         if (peer == null)
         {
-            Logger.Warn("Peer not authenticated. sessionId={0}", session.Id);
+            Logger.Warn("Peer not authenticated. sessionId={0}", session.SessionId);
             session.Close();
             return;
         }
@@ -356,6 +354,14 @@ public abstract class Engine : BaseEngine, IEngine
         switch (message)
         {
             case TcpMessage tcp:
+
+                if (tcp.SequenceNumber == 0)
+                {
+                    // 즉시 처리
+                    GetUserCommand(tcp.Id)?.Execute(peer, tcp);
+                    break;
+                }
+                
                 // 피기배킹 처리
                 peer.HandleRemoteAck(tcp.AckNumber);
                 

@@ -116,7 +116,7 @@ internal static class Program
             .WithReconnectAttempt(5, 30)
             .WithUdpMtu(1200)
             .WithKeepAlive(true, 30, 2)
-            .WithUdpKeepAlive(true, 30)
+            .WithUdpHealthCheck(10, 3)
             .Build();
 
         var logger = new ConsoleLogger("GameClient");

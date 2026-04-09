@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Net;
 using System.Net.Sockets;
-using SP.Core;
-using SP.Core.Fiber;
+using System.Threading;
 using SP.Core.Logging;
+using SP.Engine.Protocol;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Channel;
 using SP.Engine.Runtime.Networking;
@@ -13,7 +13,7 @@ namespace SP.Engine.Server;
 
 public interface IBaseSession : ILogContext
 {
-    string Id { get; }
+    long SessionId { get; }
     IBaseEngine Engine { get; }
     INetworkSession NetworkSession { get; }
     IEngineConfig Config { get; }
@@ -29,6 +29,13 @@ public abstract class BaseSession : IBaseSession
     private IDisposable _assemblerCleanupTimer;
     private BaseEngine _engine;
     private PooledReceiveBuffer _receiveBuffer;
+    private long _sessionId;
+    
+    public long SessionId
+    {
+        get => Interlocked.Read(ref _sessionId);
+        internal set => Interlocked.Exchange(ref _sessionId, value);
+    }
 
     protected BaseSession()
     {
@@ -45,64 +52,37 @@ public abstract class BaseSession : IBaseSession
     public CloseReason CloseReason { get; private set; }
     public bool IsConnected { get; internal set; }
     public bool IsClosed { get; internal set; }
-
+    public int Index { get; internal set; }
     IBaseEngine IBaseSession.Engine => _engine;
     public IEngineConfig Config => _engine.Config;
     public ILogger Logger => _engine.Logger;
     public DateTime LastActiveTime { get; private set; }
-    public string Id { get; private set; }
     public INetworkSession NetworkSession { get; private set; }
 
-    void IBaseSession.ProcessUdpBuffer(ArraySegment<byte> segment, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint)
-    {
-        EnsureUdpSocket(socket, remoteEndPoint);
-
-        var bodyOffset = header.Size;
-        
-        if (header.Fragmented == 0x01)
-        {
-            var bodySpan = segment.AsSpan(bodyOffset, header.PayloadLength);
-            if (!FragmentHeader.TryParse(bodySpan, out var fragHeader, out var consumed))
-                return;
-
-            var fragSegment = new ArraySegment<byte>(segment.Array!, bodyOffset + consumed, fragHeader.FragLength);
-            if (!UdpSocket.Assembler.TryAssemble(fragHeader, fragSegment, out var assembled))
-                return;
-
-            var normalizedHeader = new UdpHeaderBuilder()
-                .From(header)
-                .WithPayloadLength(assembled.Count)
-                .Build();
-
-            var message = new UdpMessage(normalizedHeader, assembled);
-            OnReceivedMessage(message);
-        }
-        else
-        {
-            var payload = segment.AsSpan(bodyOffset, header.PayloadLength).ToArray();
-            var message = new UdpMessage(header, payload);
-            OnReceivedMessage(message);
-        }
-    }
+    protected void EnableUdp()
+        => _channelRouter.SetUdpAvailable(true);
+    
+    protected void DisableUdp()
+        => _channelRouter.SetUdpAvailable(false);
 
     public virtual void Close(CloseReason reason)
     {
         _channelRouter.Unbind(ChannelKind.Reliable);
         _channelRouter.Unbind(ChannelKind.Unreliable);
-        
         _receiveBuffer?.Dispose();
-        
         NetworkSession.Close(reason);
         UdpSocket?.Close(reason);
         StopFragmentAssemblerCleanupScheduler();
         CloseReason = reason;
     }
 
-    public virtual void Initialize(IBaseEngine engine, TcpNetworkSession networkSession)
+    public virtual void Initialize(long sessionId, int sessionIndex, IBaseEngine engine,
+        TcpNetworkSession networkSession)
     {
-        _engine = (BaseEngine)engine;
+        SessionId = sessionId;
+        Index = sessionIndex;
         NetworkSession = networkSession;
-        Id = networkSession.SessionId;
+        _engine = (BaseEngine)engine;
         _receiveBuffer = new PooledReceiveBuffer(engine.Config.Network.ReceiveBufferSize);
         networkSession.Attach(this);
         _channelRouter.Bind(new ReliableChannel(networkSession));
@@ -154,19 +134,81 @@ public abstract class BaseSession : IBaseSession
 
     private void EnsureUdpSocket(Socket socket, IPEndPoint remoteEndPoint)
     {
+        if (UdpSocket == null)
+        {
+            lock (this)
+            {
+                if (UdpSocket == null)
+                {
+                    UdpSocket = new UdpSocket(socket, remoteEndPoint);
+                    UdpSocket.Attach(this);
+                    _channelRouter.Bind(new UnreliableChannel(UdpSocket));
+                    StartFragmentAssemblerCleanupScheduler();
+                    Logger.Info("Session {0} UDP Socket Created: {1}", SessionId, remoteEndPoint);
+                    return;
+                }
+            }
+        }
+
+        if (UdpSocket.RemoteEndPoint.Equals(remoteEndPoint))
+            return;
+
         lock (this)
         {
-            if (UdpSocket == null)
+            if (UdpSocket.RemoteEndPoint.Equals(remoteEndPoint))
+                return;
+
+            Logger.Info("Session {0} UDP EndPoint Changed: {1} -> {2}",
+                SessionId, UdpSocket.RemoteEndPoint, remoteEndPoint);
+            UdpSocket.UpdateRemoteEndPoint(remoteEndPoint);
+        }
+    }
+
+    public void ProcessUdpBuffer(ArraySegment<byte> segment, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint)
+    {
+        if (header.ProtocolId is C2SEngineProtocolId.UdpHelloReq 
+            or C2SEngineProtocolId.UdpHealthCheckReq 
+            or C2SEngineProtocolId.UdpHealthCheckConfirm)
+        {
+            EnsureUdpSocket(socket, remoteEndPoint);
+        }
+        else
+        {
+            if (UdpSocket != null && !UdpSocket.RemoteEndPoint.Equals(remoteEndPoint))
             {
-                UdpSocket = new UdpSocket(socket, remoteEndPoint);
-                UdpSocket.Attach(this);
-                _channelRouter.Bind(new UnreliableChannel(UdpSocket));
-                StartFragmentAssemblerCleanupScheduler();
+                // 일반 데이터 패킷인데 주소가 다르다면 무시.
+                return;
             }
-            else
-            {
-                UdpSocket.UpdateRemoteEndPoint(remoteEndPoint);
-            }
+        }
+
+        if (UdpSocket == null)
+            return;
+
+        var bodyOffset = header.Size;
+        
+        if (header.Fragmented == 0x01)
+        {
+            var bodySpan = segment.AsSpan(bodyOffset, header.PayloadLength);
+            if (!FragmentHeader.TryParse(bodySpan, out var fragHeader, out var consumed))
+                return;
+
+            var fragSegment = new ArraySegment<byte>(segment.Array!, bodyOffset + consumed, fragHeader.FragLength);
+            if (!UdpSocket.Assembler.TryAssemble(fragHeader, fragSegment, out var assembled))
+                return;
+
+            var normalizedHeader = new UdpHeaderBuilder()
+                .From(header)
+                .WithPayloadLength(assembled.Count)
+                .Build();
+
+            var message = new UdpMessage(normalizedHeader, assembled);
+            OnReceivedMessage(message);
+        }
+        else
+        {
+            var payload = segment.AsSpan(bodyOffset, header.PayloadLength).ToArray();
+            var message = new UdpMessage(header, payload);
+            OnReceivedMessage(message);
         }
     }
     
@@ -198,7 +240,7 @@ public abstract class BaseSession : IBaseSession
                 if (bodyLen < 0 || bodyLen > Config.Network.MaxFrameBytes)
                 {
                     Logger.Warn("Invalid payload length. id={0}, max={1}, len={2}",
-                        header.MsdId, Config.Network.MaxFrameBytes, bodyLen);
+                        header.ProtocolId, Config.Network.MaxFrameBytes, bodyLen);
                     Close(CloseReason.ProtocolError);
                     break;
                 }

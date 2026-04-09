@@ -44,8 +44,8 @@ internal sealed class SocketServer(IBaseEngine engine, ListenerInfo[] listenerIn
         var logger = Engine.Logger;
 
         var sendingQueuePool = new ExpandablePool<SegmentQueue>();
-        sendingQueuePool.Initialize(Math.Max(config.Network.LimitConnectionCount / 6, 256)
-            , Math.Max(config.Network.LimitConnectionCount * 2, 256)
+        sendingQueuePool.Initialize(Math.Max(config.Session.MaxConnections / 6, 256)
+            , Math.Max(config.Session.MaxConnections * 2, 256)
             , new SendingQueueSegmentCreator(config.Network.SendingQueueSize));
 
         SendingQueuePool = sendingQueuePool;
@@ -130,13 +130,13 @@ internal sealed class SocketServer(IBaseEngine engine, ListenerInfo[] listenerIn
     private bool SetupSocketEventArgsPool(IEngineConfig config)
     {
         var bufferSize = config.Network.ReceiveBufferSize;
-        var limitCount = config.Network.LimitConnectionCount;
-        var totalBytes = bufferSize * limitCount;
+        var count = config.Session.MaxConnections;
+        var totalBytes = bufferSize * count;
         var buffer = new byte[totalBytes];
 
         var currentOffset = 0;
-        var contexts = new List<SocketReceiveContext>(limitCount);
-        for (var i = 0; i < limitCount; i++)
+        var contexts = new List<SocketReceiveContext>(count);
+        for (var i = 0; i < count; i++)
         {
             var socketEventArgs = new SocketAsyncEventArgs();
             if (totalBytes - bufferSize < currentOffset)
@@ -191,7 +191,7 @@ internal sealed class SocketServer(IBaseEngine engine, ListenerInfo[] listenerIn
         if (!_socketReceiveContextPool.TryPop(out var context))
         {
             Engine.AsyncRun(client.SafeClose);
-            Engine.Logger.Error("Limit connection count {0} was reached.", Engine.Config.Network.LimitConnectionCount);
+            Engine.Logger.Error("Limit connection count {0} was reached.", Engine.Config.Session.MaxConnections);
             return;
         }
 
@@ -199,7 +199,7 @@ internal sealed class SocketServer(IBaseEngine engine, ListenerInfo[] listenerIn
         ns.Closed += OnSessionClosed;
 
         var session = CreateSession(client, ns);
-        if (RegisterSession(session))
+        if (session != null)
             Engine.AsyncRun(ns.Start);
         else
             ns.Close(CloseReason.ApplicationError);
@@ -242,14 +242,5 @@ internal sealed class SocketServer(IBaseEngine engine, ListenerInfo[] listenerIn
         client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Linger, lingerOption);
         client.NoDelay = true;
         return Engine.CreateSession(networkSession);
-    }
-
-    private bool RegisterSession(IBaseSession session)
-    {
-        if (Engine.RegisterSession(session))
-            return true;
-
-        session.NetworkSession.Close(CloseReason.InternalError);
-        return false;
     }
 }

@@ -15,11 +15,11 @@ namespace SP.Engine.Runtime.Networking
 
         public int FrameLength => Header.Size + Body.Length + 1;
 
-        public void SetPeerId(uint peerId)
+        public void SetSessionId(long sessionId)
         {
             Header = new UdpHeaderBuilder()
                 .From(Header)
-                .WithPeerId(peerId)
+                .WithSessionId(sessionId)
                 .Build();
         }
 
@@ -95,7 +95,7 @@ namespace SP.Engine.Runtime.Networking
         {
             return new UdpHeaderBuilder()
                 .From(Header)
-                .WithId(msgId)
+                .WithMsgId(msgId)
                 .WithPayloadLength(payloadLength)
                 .AddFlag(flags)
                 .Build();

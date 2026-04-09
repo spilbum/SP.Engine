@@ -4,7 +4,7 @@ namespace SP.Engine.Runtime.Protocol
 {
     public interface IProtocolData
     {
-        ushort ProtocolId { get; }
+        ushort Id { get; }
         ChannelKind Channel { get; }
     }
 }

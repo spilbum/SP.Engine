@@ -9,16 +9,16 @@ namespace SP.Engine.Runtime.Networking
         public HeaderFlags Flags { get; }
         public uint SequenceNumber { get; }
         public uint AckNumber { get; }
-        public ushort MsdId { get; }
+        public ushort ProtocolId { get; }
         public int PayloadLength { get; }
         public int Size { get; }
 
-        public TcpHeader(HeaderFlags flags, uint sequenceNumber, uint ackNumber, ushort msdId, int payloadLength)
+        public TcpHeader(HeaderFlags flags, uint sequenceNumber, uint ackNumber, ushort protocolId, int payloadLength)
         {
             Flags = flags;
             SequenceNumber = sequenceNumber;
             AckNumber = ackNumber;
-            MsdId = msdId;
+            ProtocolId = protocolId;
             PayloadLength = payloadLength;
             Size = ByteSize;
         }
@@ -33,7 +33,7 @@ namespace SP.Engine.Runtime.Networking
             destination[0] = (byte)Flags;
             destination.WriteUInt32(1, SequenceNumber);
             destination.WriteUInt32(5, AckNumber);
-            destination.WriteUInt16(9, MsdId);
+            destination.WriteUInt16(9, ProtocolId);
             destination.WriteInt32(11, PayloadLength);
         }
 
@@ -70,7 +70,7 @@ namespace SP.Engine.Runtime.Networking
             _flags = header.Flags;
             _sequenceNumber = header.SequenceNumber;
             _ackNumber = header.AckNumber;
-            _id = header.MsdId;
+            _id = header.ProtocolId;
             _payloadLength = header.PayloadLength;
             return this;
         }

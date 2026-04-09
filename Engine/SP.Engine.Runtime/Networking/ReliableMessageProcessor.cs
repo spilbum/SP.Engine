@@ -172,9 +172,8 @@ namespace SP.Engine.Runtime.Networking
 
         public List<TcpMessage> Process(TcpMessage message)
         {
-            // 시퀀스가 없는 경우 (0) 즉시 처리
-            if (message.SequenceNumber == 0) return null;
-
+            if (message.SequenceNumber == 0) return new List<TcpMessage> { message };
+            
             lock (_lock)
             {
                 // 중복/오래된 패킷 체크

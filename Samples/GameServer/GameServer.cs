@@ -59,6 +59,7 @@ public class GameServer : Engine
             })
             .WithSession(s => s with
             {
+                IdleSessionTimeoutSec = 10
             })
             .WithPerf(r => r with
             {
@@ -67,7 +68,8 @@ public class GameServer : Engine
                 LoggerEnabled = true,
                 LoggingPeriod = TimeSpan.FromMinutes(1),
             })
-            .AddListener(new ListenerConfig { Ip = "Any", Port = appConfig.Server.Port });
+            .AddListener(new ListenerConfig { Ip = "Any", Port = appConfig.Server.Port, Mode = SocketMode.Tcp })
+            .AddListener(new ListenerConfig { Ip = "Any", Port = appConfig.Server.Port + 1, Mode = SocketMode.Udp });
 
         foreach (var connector in appConfig.Connector)
         {

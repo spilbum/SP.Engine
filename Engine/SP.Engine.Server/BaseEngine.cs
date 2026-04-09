@@ -10,6 +10,7 @@ using SP.Core.Fiber;
 using SP.Core.Logging;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Networking;
+using SP.Engine.Runtime.Protocol;
 using SP.Engine.Server.Configuration;
 using SP.Engine.Server.Logging;
 
@@ -19,7 +20,6 @@ public interface IBaseEngine : ILogContext
 {
     IEngineConfig Config { get; }
     IBaseSession CreateSession(TcpNetworkSession networkSession);
-    bool RegisterSession(IBaseSession session);
     void ProcessUdpClient(ArraySegment<byte> segment, Socket socket, IPEndPoint remoteEndPoint);
 }
 
@@ -52,22 +52,21 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
 {
     private readonly ConcurrentQueue<BaseSession> _authHandshakePendingQueue = new();
     private readonly ConcurrentQueue<BaseSession> _closeHandshakePendingQueue = new();
-    private readonly ConcurrentDictionary<string, BaseSession> _sessions = new(Environment.ProcessorCount, 3000,
-        StringComparer.OrdinalIgnoreCase);
     private IDisposable _clearIdleSessionTimer;
     private IDisposable _handshakePendingTimer;
     private IDisposable _sessionSnapshotTimer;
     private ListenerInfo[] _listenerInfos;
     private SocketServer _socketServer;
-    private KeyValuePair<string, BaseSession>[] _sessionSnapshot;
+    private BaseSession[] _sessionSnapshot;
     private int _stateCode = ServerStateConst.NotInitialized;
     private bool _disposed;
     private ThreadFiber _fiber;
     private readonly Scheduler _globalScheduler = new();
+    private SessionManager _sessionManager;
     
     public string Name { get; private set; }
 
-    protected KeyValuePair<string, BaseSession>[] SessionsSource
+    protected BaseSession[] SessionsSource
     {
         get
         {
@@ -81,31 +80,21 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
     public IEngineConfig Config { get; private set; }
     public IFiber Fiber => _fiber;
     public IScheduler Scheduler => _globalScheduler;
+    ISocketServer ISocketServerAccessor.SocketServer => _socketServer;
+
 
     IBaseSession IBaseEngine.CreateSession(TcpNetworkSession networkSession)
     {
-        var session = new Session();
-        session.Initialize(this, networkSession);
-        return session;
-    }
-
-    bool IBaseEngine.RegisterSession(IBaseSession session)
-    {
-        if (session is not BaseSession s)
-            return false;
-
-        if (!_sessions.TryAdd(s.Id, s))
-        {
-            Logger.Error("The session is refused because the it's ID already exists. sessionId={0}", s.Id);
-            return false;
-        }
+        var session = _sessionManager.CreateSession(this, networkSession);
+        if (session == null)
+            return null;
         
         session.NetworkSession.Closed += OnNetworkSessionClosed;
-
+        
         // 인증 해드쉐이크 대기 등록
-        EnqueueAuthHandshakePending(s);
-        Logger.Debug("A new session connected. sessionId={0}, remoteEndPoint={1}", s.Id, s.RemoteEndPoint);
-        return true;
+        EnqueueAuthHandshakePending(session);
+        Logger.Debug("A new session connected. sessionId={0}, remoteEndPoint={1}", session.SessionId, session.RemoteEndPoint);
+        return session;
     }
 
     void IBaseEngine.ProcessUdpClient(ArraySegment<byte> segment, Socket socket, IPEndPoint remoteEndPoint)
@@ -122,9 +111,13 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
             return;
         }
 
-        var peer = GetBasePeer(header.PeerId);
-        if (peer?.Session is not IBaseSession session) return;
-
+        var session = _sessionManager.GetSession(header.SessionId);
+        if (session == null)
+        {
+            Logger.Debug("Not found session: {0}", header.SessionId);
+            return;
+        }
+        
         session.ProcessUdpBuffer(segment, header, socket, remoteEndPoint);
     }
 
@@ -134,20 +127,20 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
         GC.SuppressFinalize(this);
     }
 
-    ISocketServer ISocketServerAccessor.SocketServer => _socketServer;
 
-    protected abstract BasePeer GetBasePeer(uint peerId);
-
-    public virtual bool Initialize(string name, EngineConfig config)
+    protected virtual bool Initialize(string name, EngineConfig config)
     {
         if (Interlocked.CompareExchange(ref _stateCode, ServerStateConst.Initializing, ServerStateConst.NotInitialized)
             != ServerStateConst.NotInitialized)
             throw new InvalidOperationException(
                 "The server has been initialized already, you cannot initialize it again!");
 
+        // 프로토콜 별 정책 초기화
+        ProtocolPolicyRegistry.Initialize();
+        
         Name = !string.IsNullOrEmpty(name) ? name : $"{GetType().Name}-{Math.Abs(GetHashCode())}";
         Config = config ?? throw new ArgumentNullException(nameof(config));
-
+        
         if (!SetupLogger())
             return false;
 
@@ -157,6 +150,7 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
         if (!SetupSocketServer())
             return false;
 
+        _sessionManager = new SessionManager(config.Session.MaxConnections);
         _fiber = new ThreadFiber("EngineFiber", maxBatchSize: 1024, capacity: 4096,
             onError: ex =>
             {
@@ -221,20 +215,20 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
         StopClearIdleSessionTimer();
         StopHandshakePendingTimer();
         LogManager.Dispose();
-        
-        var sessions = _sessions.ToArray();
-        if (sessions.Length > 0)
+
+        var snapshot = _sessionManager.GetActiveSnapshot();
+        if (snapshot.Length > 0)
         {
             var options = new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount * 2 };
-            Parallel.ForEach(sessions, options, s =>
+            Parallel.ForEach(snapshot, options, s =>
             {
                 try
                 {
-                    s.Value.Close(CloseReason.ServerShutdown);
+                    s.Close(CloseReason.ServerShutdown);
                 }
                 catch (Exception ex)
                 {
-                    Logger.Error(ex, "Error closing session {0} during shutdown", s.Key);
+                    Logger.Error(ex, "Error closing session {0} during shutdown", s.SessionId);
                 }
             });
         }
@@ -253,16 +247,13 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
         return -1;
     }
 
-    public IBaseSession GetSession(string sessionId)
-    {
-        _sessions.TryGetValue(sessionId, out var session);
-        return session;
-    }
+    public IBaseSession GetSession(long sessionId)
+        => _sessionManager.GetSession(sessionId);
 
     public IEnumerable<IBaseSession> GetAllSessions()
     {
         var sessions = SessionsSource;
-        return sessions.Select(x => x.Value);
+        return sessions;
     }
 
     protected virtual void OnStarted()
@@ -334,18 +325,13 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
 
         session.IsConnected = false;
         session.IsClosed = true;
+        _sessionManager.RemoveSession(session.Index);
+        Logger.Debug("The session {0} has been closed. reason={1}", session.SessionId, reason);
         OnSessionClosed(session, reason);
     }
 
     internal virtual void OnSessionClosed(Session session, CloseReason reason)
     {
-        if (!_sessions.TryRemove(session.Id, out var removed))
-        {
-            Logger.Error("Failed to remove this session, because it hasn't been in session container.");
-            return;
-        }
-
-        Logger.Debug("The session {0} has been closed. reason={1}", removed.Id, reason);
     }
 
     private void StartClearIdleSessionTimer()
@@ -370,20 +356,23 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
 
             // 비활성된 시간 체크
             var sessions = source
-                .Where(x => x.Value.LastActiveTime <= now.AddSeconds(-config.Session.IdleSessionTimeoutSec))
-                .Select(x => x.Value);
+                .Where(x => x.LastActiveTime <= now.AddSeconds(-config.Session.IdleSessionTimeoutSec))
+                .ToList();
+
+            if (sessions.Count == 0)
+                return;
 
             var options = new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount };
-            Parallel.ForEach(sessions, options, session =>
+            Parallel.ForEach(sessions, options, s =>
             {
                 Logger.Debug(
                     "The session {0} will be closed for {1} timeout, the session start time: {2}, last active time: {3}",
-                    session.Id,
-                    now.Subtract(session.LastActiveTime).TotalSeconds,
-                    session.StartTime,
-                    session.LastActiveTime);
+                    s.SessionId,
+                    now.Subtract(s.LastActiveTime).TotalSeconds,
+                    s.StartTime,
+                    s.LastActiveTime);
 
-                session.Close(CloseReason.TimeOut);
+                s.Close(CloseReason.TimeOut);
             });
         }
         catch (Exception ex)
@@ -406,7 +395,9 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
 
     private void TakeSessionSnapshot()
     {
-        Interlocked.Exchange(ref _sessionSnapshot, _sessions.ToArray());
+        var snapshot = _sessionManager.GetActiveSnapshot();
+        Interlocked.Exchange(ref _sessionSnapshot, snapshot);
+        //Logger.Debug("Session snapshot has been taken. count={0}", snapshot.Length);
     }
 
     protected virtual void Dispose(bool disposing)
@@ -476,7 +467,7 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
                 if (DateTime.UtcNow < session.StartClosingTime.AddSeconds(Config.Session.CloseHandshakeTimeoutSec))
                     continue;
 
-                Logger.Debug("Client terminated due to timeout. sessionId={0}", session.Id);
+                Logger.Debug("Client terminated due to timeout. sessionId={0}", session.SessionId);
 
                 // 종료 타임아웃
                 _closeHandshakePendingQueue.TryDequeue(out _);

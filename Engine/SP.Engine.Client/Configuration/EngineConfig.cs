@@ -21,16 +21,12 @@ namespace SP.Engine.Client.Configuration
         ///     Mtu 값 (기본값: 1200)
         /// </summary>
         public ushort UdpMtu { get; set; } = 1200;
-
-        /// <summary>
-        ///     Udp KeepAlive 활성화 여부 (기본값: true)
-        /// </summary>
-        public bool EnableUdpKeepAlive { get; set; } = true;
-
-        /// <summary>
-        ///     Udp KeepAlive 주기 (기본값: 30초)
-        /// </summary>
-        public int UdpKeepAliveIntervalSec { get; set; } = 30;
+        // Udp HealthCheck 최대 실패 횟수 (기본값: 3회)
+        public int MaxUdpHealthFail { get; set; } = 3;
+        // UDP HealthCheck 주기 (기본값: 10초)
+        public int UdpHealthCheckIntervalSec { get; set; } = 10;
+        // UDP 핸드쉐이크 시간 제한 (기본값: 5초)
+        public int UdpHandshakeTimeSec { get; set; } = 5;
 
         /// <summary>
         ///     전송 큐 사이즈 (기본값: 512개)
@@ -111,14 +107,14 @@ namespace SP.Engine.Client.Configuration
         {
             _config.EnableKeepAlive = enable;
             _config.KeepAliveTimeSec = timeSec;
-            _config.KeepAliveIntervalSec = timeSec;
+            _config.KeepAliveIntervalSec = intervalSec;
             return this;
         }
 
-        public EngineConfigBuilder WithUdpKeepAlive(bool enable, int intervalSec)
+        public EngineConfigBuilder WithUdpHealthCheck(int intervalSec, int maxFailCount)
         {
-            _config.EnableUdpKeepAlive = enable;
-            _config.UdpKeepAliveIntervalSec = intervalSec;
+            _config.UdpHealthCheckIntervalSec = intervalSec;
+            _config.MaxUdpHealthFail = maxFailCount;
             return this;
         }
 

@@ -104,10 +104,10 @@ public class RankServer : Engine
         var config = EngineConfigBuilder.Create()
             .WithNetwork(n => n with
             {
-                LimitConnectionCount = 100
             })
             .WithSession(s => s with
             {
+                MaxConnections = 100
             })
             .WithPerf(r => r with
             {

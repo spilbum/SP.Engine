@@ -1,6 +1,6 @@
 namespace SP.Engine.Runtime
 {
-    public enum SessionHandshakeResult
+    public enum SessionAuthResult
     {
         None = 0,
         Ok,

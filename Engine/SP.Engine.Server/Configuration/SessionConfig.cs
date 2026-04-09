@@ -2,6 +2,7 @@ namespace SP.Engine.Server.Configuration;
 
 public sealed record SessionConfig
 {
+    public int MaxConnections { get; init; } = 3_000;
     public bool EnableClearIdleSession { get; init; } = true;
     public int ClearIdleSessionIntervalSec { get; init; } = 120;
     public int IdleSessionTimeoutSec { get; init; } = 300;

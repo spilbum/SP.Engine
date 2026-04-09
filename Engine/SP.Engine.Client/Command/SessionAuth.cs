@@ -9,7 +9,7 @@ namespace SP.Engine.Client.Command
     {
         protected override void ExecuteCommand(BaseNetPeer context, S2CEngineProtocolData.SessionAuthAck protocol)
         {
-            context.OnAuthHandshake(protocol);
+            context.OnSessionAuth(protocol);
         }
     }
 }

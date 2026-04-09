@@ -23,7 +23,7 @@ namespace SP.Engine.Runtime.Networking
         protected THeader Header { get; set; }
         protected ReadOnlyMemory<byte> Body { get; private set; }
 
-        public ushort Id => Header.MsdId;
+        public ushort Id => Header.ProtocolId;
         
         public void Serialize(IProtocolData protocol, IPolicy policy, IEncryptor encryptor, ICompressor compressor)
         {
@@ -41,7 +41,7 @@ namespace SP.Engine.Runtime.Networking
             if (!useComp && !useEncrypt)
             {
                 var bodyBytes = dataSpan.ToArray();
-                Header = CreateHeader(flags, protocol.ProtocolId, bodyBytes.Length);
+                Header = CreateHeader(flags, protocol.Id, bodyBytes.Length);
                 Body = new ReadOnlyMemory<byte>(bodyBytes);
                 return;
             }
@@ -75,7 +75,7 @@ namespace SP.Engine.Runtime.Networking
 
                 var bodyBytes = dataSpan.ToArray();
 
-                Header = CreateHeader(flags, protocol.ProtocolId, bodyBytes.Length);
+                Header = CreateHeader(flags, protocol.Id, bodyBytes.Length);
                 Body = new ReadOnlyMemory<byte>(bodyBytes);
             }
             finally

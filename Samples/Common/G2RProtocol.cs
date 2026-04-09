@@ -24,13 +24,13 @@ namespace Common
     public static class G2RProtocolData
     {
         [Protocol(G2RProtocol.ServerSyncNtf)]
-        public class ServerSyncNtf : BaseProtocolData
+        public class ServerSyncNtf : BaseProtocolData<ServerSyncNtf>
         {
             public int UserCount;
         }
         
         [Protocol(G2RProtocol.RankUpdateReq)]
-        public class RankUpdateReq : BaseProtocolData
+        public class RankUpdateReq : BaseProtocolData<RankUpdateReq>
         {
             public int? AbsoluteScore;
             public int DeltaScore;
@@ -40,7 +40,7 @@ namespace Common
         }
 
         [Protocol(G2RProtocol.RankTopReq)]
-        public class RankTopReq : BaseProtocolData
+        public class RankTopReq : BaseProtocolData<RankTopReq>
         {
             public int Count;
             public SeasonKind SeasonKind;
@@ -48,7 +48,7 @@ namespace Common
         }
 
         [Protocol(G2RProtocol.RankRangeReq)]
-        public class RankRangeReq : BaseProtocolData
+        public class RankRangeReq : BaseProtocolData<RankRangeReq>
         {
             public int Count;
             public SeasonKind SeasonKind;
@@ -57,7 +57,7 @@ namespace Common
         }
 
         [Protocol(G2RProtocol.RankMyReq)]
-        public class RankMyReq : BaseProtocolData
+        public class RankMyReq : BaseProtocolData<RankMyReq>
         {
             public SeasonKind SeasonKind;
             public long Uid;
@@ -67,7 +67,7 @@ namespace Common
     public static class R2GProtocolData
     {
         [Protocol(R2GProtocol.RankUpdateAck)]
-        public class RankUpdateAck : BaseProtocolData
+        public class RankUpdateAck : BaseProtocolData<RankUpdateAck>
         {
             public ErrorCode Result;
             public SeasonKind SeasonKind;
@@ -75,7 +75,7 @@ namespace Common
         }
 
         [Protocol(R2GProtocol.RankTopAck, compress: Toggle.On)]
-        public class RankTopAck : BaseProtocolData
+        public class RankTopAck : BaseProtocolData<RankTopAck>
         {
             public List<PlayerRankInfo>? Infos;
             public ErrorCode Result;
@@ -84,7 +84,7 @@ namespace Common
         }
 
         [Protocol(R2GProtocol.RankRangeAck, compress: Toggle.On)]
-        public class RankRangeAck : BaseProtocolData
+        public class RankRangeAck : BaseProtocolData<RankRangeAck>
         {
             public List<PlayerRankInfo>? Infos;
             public ErrorCode Result;
@@ -93,7 +93,7 @@ namespace Common
         }
 
         [Protocol(R2GProtocol.RankMyAck)]
-        public class RankMyAck : BaseProtocolData
+        public class RankMyAck : BaseProtocolData<RankMyAck>
         {
             public PlayerRankInfo? Info;
             public int Rank;

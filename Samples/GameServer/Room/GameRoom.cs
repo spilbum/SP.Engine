@@ -249,7 +249,7 @@ public class GameRoom : BaseRoom
                     break;
 
                 default:
-                    LogManager.Debug("Unknown protocol: {0}", protocol.ProtocolId);
+                    LogManager.Debug("Unknown protocol: {0}", protocol.Id);
                     break;
             }
 
@@ -258,7 +258,7 @@ public class GameRoom : BaseRoom
         catch (Exception e)
         {
             LogManager.Error(e, "Room execute protocol failed. protocolId={0}. uid={1}",
-                protocol.ProtocolId, peer.Uid);
+                protocol.Id, peer.Uid);
         }
     }
 

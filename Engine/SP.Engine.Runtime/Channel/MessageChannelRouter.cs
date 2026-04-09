@@ -4,26 +4,31 @@ using SP.Engine.Runtime.Networking;
 
 namespace SP.Engine.Runtime.Channel
 {
-    public interface IMessageChannelRouter
-    {
-        bool TrySend(ChannelKind kind, IMessage message);
-        void Bind(IMessageChannel channel);
-        void Unbind(ChannelKind kind);
-    }
-
-    public sealed class MessageChannelRouter : IMessageChannelRouter
+    public sealed class MessageChannelRouter
     {
         private readonly IMessageChannel[] _channels = new IMessageChannel[byte.MaxValue + 1];
+        public bool IsUdpAvailable { get; private set; }
 
         public void Bind(IMessageChannel channel)
         {
             if (channel == null) throw new ArgumentNullException(nameof(channel));
             Volatile.Write(ref _channels[(int)channel.Kind], channel);
+
+            if (channel.Kind == ChannelKind.Unreliable)
+                SetUdpAvailable(true);
         }
 
         public void Unbind(ChannelKind kind)
         {
+            if (kind == ChannelKind.Unreliable)
+                SetUdpAvailable(false);
+            
             Volatile.Write(ref _channels[(int)kind], null);
+        }
+
+        public void SetUdpAvailable(bool onOff)
+        {
+            IsUdpAvailable = onOff;
         }
 
         public bool TrySend(ChannelKind kind, IMessage message)
