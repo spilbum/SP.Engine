@@ -1,11 +1,12 @@
-﻿using System.Diagnostics;
+﻿using System.Collections.Concurrent;
+using System.Diagnostics;
 using Common;
 using SP.Core.Logging;
 using SP.Engine.Client.Configuration;
+using SP.Engine.Protocol;
 using SP.Shared.Resource;
 using SP.Shared.Resource.Refs;
 using SP.Shared.Resource.Schs;
-using SP.Shared.Resource.Table;
 
 namespace GameClient;
 
@@ -14,7 +15,7 @@ internal static class Program
     private static Client? _client;
     private static ResourceManager? _resourceManager;
     private static int _resourceVersion = -1;
-    
+
     private static async Task CheckResourceServer(
         StoreType storeType, 
         BuildVersion buildVersion,
@@ -347,39 +348,53 @@ internal static class Program
 
                 break;
             }
-            case "send":
+            case "start_test":
             {
-                if (_running)
+                if (_running || _client == null)
                     break;
-                
-                _sendCount = Convert.ToInt32(args[0]);
-                var period = Convert.ToInt32(args[1]);
 
-                Console.WriteLine("Sending... count {0}, period {1}", _sendCount, period);
-                
-                if (_sendCount > 0)
+                if (args.Length == 0 || !int.TryParse(args[0], out var period))
                 {
-                    _running = true;
-                    _timer = new Timer(
-                        TimerCallback, 
-                        null, 
-                        TimeSpan.FromMilliseconds(period), 
-                        TimeSpan.FromMilliseconds(period));
+                    Console.WriteLine("Usage: start_test [period_ms]");
+                    break;
                 }
+                
+                _running = true;
+                _cts = new CancellationTokenSource();
+                
+                Console.WriteLine("UDP Test Started: Period {0}ms", period);
+
+                _ = Task.Run(() => _client.RunSender(period, _cts.Token))
+                    .ContinueWith(t =>
+                    {
+                        if (t.IsFaulted) Console.WriteLine($"Test Error: {t.Exception?.InnerException?.Message}");
+                        _running = false;
+                    });
+                
+                _ = Task.Run(async () => {
+                    while (!_cts.Token.IsCancellationRequested)
+                    {
+                        await Task.Delay(1000); // 1초 주기
+                        var report = _client.Tracker.GetReport();
+                        Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] {report}");
+            
+                        if (report.LossRate > 5.0f) 
+                        {
+                            Console.ForegroundColor = ConsoleColor.Red;
+                            Console.WriteLine(" >> Warning: High Packet Loss!");
+                            Console.ResetColor();
+                        }
+                    }
+                }, _cts.Token);
                 
                 break;
-
-                static void TimerCallback(object? state)
-                {
-                    var p = new C2GProtocolData.EchoReq { Message = "Hi" };
-                    _client?.Send(p);
-
-                    if (--_sendCount != 0) return;
-                    _timer?.Change(Timeout.Infinite, Timeout.Infinite);
-                    _running = false;
-                    
-                    Console.WriteLine("Sending completed");
-                }
+            }
+            case "stop_test":
+            {
+                Console.WriteLine("Stopping UDP Test...");
+                _cts?.Cancel();
+                _running = false;
+                break;
             }
             case "quit":
             case "exit":
@@ -389,7 +404,6 @@ internal static class Program
         }
     }
 
+    private static CancellationTokenSource? _cts;
     private static bool _running;
-    private static int _sendCount;
-    private static Timer? _timer;
 }

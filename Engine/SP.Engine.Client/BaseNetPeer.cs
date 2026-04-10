@@ -435,7 +435,7 @@ namespace SP.Engine.Client
                 RawRttMs = LatencyStats.LastRttMs,
                 AvgRttMs = LatencyStats.AvgRttMs,
                 JitterMs = LatencyStats.JitterMs,
-                PacketLossRate = LatencyStats.PacketLossRate
+                PacketLossRate = 0
             };
 
             try

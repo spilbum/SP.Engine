@@ -124,7 +124,8 @@ namespace Common
         [Protocol(C2GProtocol.EchoReq, channel: ChannelKind.Unreliable)]
         public class EchoReq : BaseProtocolData<EchoReq>
         {
-            public string? Message;
+            public uint Seq;
+            public long SentTicks;
         }
     }
 
@@ -248,7 +249,8 @@ namespace Common
         [Protocol(G2CProtocol.EchoAck, channel: ChannelKind.Unreliable)]
         public class EchoAck : BaseProtocolData<EchoAck>
         {
-            public string? Message;
+            public uint Seq;
+            public long SentTicks;
         }
     }
 }

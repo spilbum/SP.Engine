@@ -19,7 +19,6 @@ namespace SP.Engine.Client
         public ushort LastRttMs { get; private set; }
         public ushort AvgRttMs => (ushort)_estimator.SmoothedRtt;
         public ushort JitterMs => (ushort)_estimator.Jitter;
-        public byte PacketLossRate => CalculateLossRate();
 
         public void OnSent()
         {
@@ -34,13 +33,6 @@ namespace SP.Engine.Client
             _estimator.AddSample(rawRtt);
         }
 
-        private byte CalculateLossRate()
-        {
-            if (_sentCount == 0) return 0;
-            var loss = (1f - (float)_receivedCount / _sentCount) * 100f;
-            return (byte)Math.Clamp(loss, 0, 100);
-        }
-        
         private void Reset()
         {
             _sentCount = 0;

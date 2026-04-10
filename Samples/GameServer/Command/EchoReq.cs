@@ -10,8 +10,6 @@ public class EchoReq : BaseCommand<GamePeer, C2GProtocolData.EchoReq>
 {
     protected override void ExecuteCommand(GamePeer context, C2GProtocolData.EchoReq protocol)
     {
-        //context.Logger.Debug($"EchoReq: {protocol.Message}");
-
-        context.Send(new G2CProtocolData.EchoAck { Message = protocol.Message });
+        context.Send(new G2CProtocolData.EchoAck { Seq = protocol.Seq, SentTicks = protocol.SentTicks });
     }
 }

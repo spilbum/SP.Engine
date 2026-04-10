@@ -188,4 +188,24 @@ public class Client : BaseNetPeer
     {
         _seqNo = 1;
     }
+
+    public UdpQualityTracker Tracker { get; } = new();
+
+    public async Task RunSender(int periodMs, CancellationToken ct)
+    {
+        while (true)
+        {
+            var seq = Tracker.RecordSend();
+            var packet = new C2GProtocolData.EchoReq { Seq = seq, SentTicks = DateTime.UtcNow.Ticks };
+            Send(packet);
+
+            await Task.Delay(periodMs, ct);
+        }
+    }
+    
+    public void OnEchoAck(G2CProtocolData.EchoAck ack)
+    {
+        Tracker.RecordReceive(ack.Seq);
+    }
+    
 }
