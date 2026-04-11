@@ -20,7 +20,8 @@ namespace Common
         public const ushort RankTopReq = 10009;
         public const ushort RankRangeReq = 10010;
         
-        public const ushort EchoReq = 19999;
+        public const ushort EchoReq = 19998;
+        public const ushort UdpEchoReq = 19999;
     }
 
     public static class G2CProtocol
@@ -43,7 +44,8 @@ namespace Common
         public const ushort RankTopAck = 20012;
         public const ushort RankRangeAck = 20013;
         
-        public const ushort EchoAck = 29999;
+        public const ushort EchoAck = 29998;
+        public const ushort UdpEchoAck = 29999;
     }
 
     public static class C2GProtocolData
@@ -123,6 +125,13 @@ namespace Common
 
         [Protocol(C2GProtocol.EchoReq, channel: ChannelKind.Unreliable)]
         public class EchoReq : BaseProtocolData<EchoReq>
+        {
+            public uint Seq;
+            public long SentTicks;
+        }
+        
+        [Protocol(C2GProtocol.UdpEchoReq, channel: ChannelKind.Unreliable)]
+        public class UdpEchoReq : BaseProtocolData<UdpEchoReq>
         {
             public uint Seq;
             public long SentTicks;
@@ -248,6 +257,13 @@ namespace Common
 
         [Protocol(G2CProtocol.EchoAck, channel: ChannelKind.Unreliable)]
         public class EchoAck : BaseProtocolData<EchoAck>
+        {
+            public uint Seq;
+            public long SentTicks;
+        }
+        
+        [Protocol(G2CProtocol.UdpEchoAck, channel: ChannelKind.Unreliable)]
+        public class UdpEchoAck : BaseProtocolData<UdpEchoAck>
         {
             public uint Seq;
             public long SentTicks;

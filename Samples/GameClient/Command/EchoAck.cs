@@ -9,6 +9,6 @@ public class EchoAck : BaseCommand<Client, G2CProtocolData.EchoAck>
 {
     protected override void ExecuteCommand(Client context, G2CProtocolData.EchoAck protocol)
     {
-        context.OnEchoAck(protocol);
+        context.OnEchoAck(protocol.Seq, protocol.SentTicks);
     }
 }

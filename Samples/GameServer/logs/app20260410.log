@@ -462,3 +462,227 @@
 [16:19:56.351 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:19:56.267Z CPU=0.1% WS=39.56MB Managed=201.39MB Threads=64
 [16:20:56.351 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:20:56.266Z CPU=0.1% WS=33.66MB Managed=204.50MB Threads=63
 [16:21:56.351 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:21:56.266Z CPU=0.1% WS=46.66MB Managed=199.69MB Threads=64
+[16:22:56.351 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:22:56.266Z CPU=0.1% WS=46.30MB Managed=202.71MB Threads=64
+[16:23:56.351 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:23:56.266Z CPU=0.1% WS=39.11MB Managed=198.12MB Threads=63
+[16:24:56.351 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:24:56.266Z CPU=0.1% WS=39.11MB Managed=201.19MB Threads=63
+[16:25:56.351 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:25:56.267Z CPU=0.1% WS=39.02MB Managed=204.20MB Threads=62
+[16:26:56.351 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:26:56.266Z CPU=0.1% WS=39.03MB Managed=199.59MB Threads=63
+[16:27:56.351 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:27:56.267Z CPU=0.0% WS=39.78MB Managed=202.57MB Threads=65
+[16:28:56.353 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:28:56.284Z CPU=0.1% WS=43.25MB Managed=204.35MB Threads=63
+[16:29:56.351 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:29:56.268Z CPU=0.0% WS=46.20MB Managed=199.05MB Threads=63
+[16:30:56.350 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:30:56.266Z CPU=0.0% WS=48.95MB Managed=201.51MB Threads=64
+[16:31:56.358 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:31:56.277Z CPU=0.0% WS=49.14MB Managed=203.49MB Threads=63
+[16:32:56.361 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:32:56.279Z CPU=0.0% WS=49.28MB Managed=205.16MB Threads=64
+[16:40:51.901 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:40:51.816Z CPU=0.0% WS=37.91MB Managed=199.31MB Threads=63
+[16:41:51.899 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:41:51.815Z CPU=0.1% WS=38.97MB Managed=202.33MB Threads=63
+[16:42:51.899 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:42:51.819Z CPU=0.1% WS=39.66MB Managed=205.44MB Threads=64
+[16:43:51.900 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:43:51.815Z CPU=0.1% WS=39.75MB Managed=200.86MB Threads=63
+[16:44:25.275 DBG] [T:65] [Game] Received a termination request from the client. isClosing=false
+[16:44:25.282 DBG] [T:65] [Game] The session 0 has been closed. reason="ClientClosing"
+[16:44:25.285 DBG] [T:65] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[16:44:51.899 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:44:51.815Z CPU=0.0% WS=55.28MB Managed=199.92MB Threads=62
+[16:45:51.899 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:45:51.815Z CPU=0.0% WS=53.28MB Managed=201.32MB Threads=63
+[16:46:51.899 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:46:51.814Z CPU=0.0% WS=53.62MB Managed=202.72MB Threads=64
+[16:47:51.899 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:47:51.814Z CPU=0.0% WS=53.81MB Managed=204.11MB Threads=64
+[16:48:51.898 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:48:51.813Z CPU=0.0% WS=40.69MB Managed=198.05MB Threads=62
+[16:49:51.898 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:49:51.815Z CPU=0.0% WS=38.86MB Managed=199.46MB Threads=63
+[16:50:51.897 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:50:51.813Z CPU=0.0% WS=39.50MB Managed=200.85MB Threads=63
+[16:51:51.898 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:51:51.813Z CPU=0.0% WS=38.95MB Managed=202.23MB Threads=63
+[16:52:51.898 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:52:51.813Z CPU=0.0% WS=33.56MB Managed=203.65MB Threads=62
+[16:53:51.898 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:53:51.813Z CPU=0.0% WS=34.59MB Managed=205.02MB Threads=62
+[16:54:51.898 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:54:51.813Z CPU=0.0% WS=40.41MB Managed=198.93MB Threads=62
+[16:54:53.464 DBG] [T:85] [Game] A new session connected. sessionId=6061097765541249024, remoteEndPoint=192.168.0.125:56153
+[16:54:53.535 DBG] [T:87] [Game] Session authentication succeeded. sessionId=6061097765541249024, peerId=1
+[16:54:53.584 INF] [T:85] [Game] Session 6061097765541249024 UDP Socket Created: 192.168.0.125:59442
+[16:54:53.584 DBG] [T:85] [Game] UDP hello OK - pid=1, sid=6061097765541249024, mtu=1200
+[16:54:56.571 DBG] [T:85] [Game] Received a termination request from the client. isClosing=false
+[16:54:56.571 DBG] [T:85] [Game] The session 0 has been closed. reason="ClientClosing"
+[16:54:56.571 DBG] [T:85] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[16:55:51.897 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:55:51.812Z CPU=0.0% WS=51.88MB Managed=201.58MB Threads=63
+[16:56:51.897 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:56:51.813Z CPU=0.0% WS=49.89MB Managed=202.97MB Threads=62
+[16:57:51.896 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:57:51.812Z CPU=0.0% WS=46.75MB Managed=204.37MB Threads=63
+[16:58:51.897 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:58:51.812Z CPU=0.0% WS=47.98MB Managed=205.78MB Threads=63
+[16:59:51.897 INF] [T:7] [PerfMonitor] Time:2026-04-10 07:59:51.812Z CPU=0.0% WS=38.06MB Managed=199.43MB Threads=62
+[17:00:51.897 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:00:51.812Z CPU=0.0% WS=38.62MB Managed=200.85MB Threads=63
+[17:01:51.896 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:01:51.812Z CPU=0.0% WS=38.95MB Managed=202.26MB Threads=65
+[17:02:51.897 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:02:51.812Z CPU=0.0% WS=38.94MB Managed=203.66MB Threads=62
+[17:03:51.897 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:03:51.811Z CPU=0.0% WS=35.50MB Managed=205.05MB Threads=62
+[17:04:51.896 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:04:51.811Z CPU=0.0% WS=36.44MB Managed=199.09MB Threads=63
+[17:05:51.896 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:05:51.811Z CPU=0.0% WS=36.77MB Managed=200.49MB Threads=64
+[17:06:51.896 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:06:51.811Z CPU=0.0% WS=37.25MB Managed=201.88MB Threads=63
+[17:07:51.896 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:07:51.811Z CPU=0.0% WS=33.92MB Managed=203.28MB Threads=62
+[17:08:51.896 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:08:51.811Z CPU=0.0% WS=29.98MB Managed=204.68MB Threads=62
+[17:09:51.896 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:09:51.810Z CPU=0.0% WS=30.16MB Managed=206.06MB Threads=62
+[17:10:51.894 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:10:51.810Z CPU=0.0% WS=35.89MB Managed=200.03MB Threads=62
+[17:11:18.936 DBG] [T:87] [Game] A new session connected. sessionId=6449759943250673664, remoteEndPoint=192.168.0.125:56198
+[17:11:27.477 DBG] [T:89] [Game] The session 0 has been closed. reason="ClientClosing"
+[17:11:51.895 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:11:51.810Z CPU=0.0% WS=42.11MB Managed=201.49MB Threads=62
+[17:12:51.893 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:12:51.809Z CPU=0.0% WS=40.19MB Managed=202.87MB Threads=63
+[17:13:51.891 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:13:51.805Z CPU=0.0% WS=41.00MB Managed=204.27MB Threads=63
+[17:14:51.890 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:14:51.805Z CPU=0.0% WS=42.42MB Managed=205.67MB Threads=62
+[17:15:51.890 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:15:51.805Z CPU=0.0% WS=42.67MB Managed=199.80MB Threads=64
+[17:16:01.302 DBG] [T:69] [Game] A new session connected. sessionId=1980651033570836480, remoteEndPoint=192.168.0.125:56234
+[17:16:01.367 DBG] [T:55] [Game] Session authentication succeeded. sessionId=1980651033570836480, peerId=1
+[17:16:01.415 INF] [T:69] [Game] Session 1980651033570836480 UDP Socket Created: 192.168.0.125:56500
+[17:16:01.415 DBG] [T:69] [Game] UDP hello OK - pid=1, sid=1980651033570836480, mtu=1200
+[17:16:51.889 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:16:51.805Z CPU=0.0% WS=43.16MB Managed=201.31MB Threads=63
+[17:17:51.890 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:17:51.804Z CPU=0.0% WS=34.53MB Managed=204.31MB Threads=64
+[17:18:51.889 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:18:51.804Z CPU=0.1% WS=38.16MB Managed=207.33MB Threads=63
+[17:19:51.889 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:19:51.804Z CPU=0.0% WS=38.94MB Managed=202.51MB Threads=64
+[17:20:51.889 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:20:51.804Z CPU=0.0% WS=38.95MB Managed=205.56MB Threads=64
+[17:21:51.889 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:21:51.804Z CPU=0.1% WS=37.50MB Managed=200.70MB Threads=64
+[17:22:51.888 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:22:51.804Z CPU=0.0% WS=38.38MB Managed=203.34MB Threads=64
+[17:23:51.887 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:23:51.803Z CPU=0.0% WS=38.31MB Managed=205.98MB Threads=63
+[17:24:51.888 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:24:51.803Z CPU=0.0% WS=37.14MB Managed=200.99MB Threads=63
+[17:25:51.887 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:25:51.804Z CPU=0.0% WS=37.64MB Managed=203.64MB Threads=62
+[17:26:51.887 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:26:51.802Z CPU=0.0% WS=38.22MB Managed=206.30MB Threads=62
+[17:27:37.632 DBG] [T:60] [Game] Received a termination request from the client. isClosing=false
+[17:27:37.633 DBG] [T:60] [Game] The session 0 has been closed. reason="ClientClosing"
+[17:27:37.634 DBG] [T:60] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[17:27:51.887 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:27:51.802Z CPU=0.0% WS=47.34MB Managed=205.62MB Threads=63
+[17:28:51.886 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:28:51.801Z CPU=0.0% WS=47.36MB Managed=199.45MB Threads=62
+[17:29:51.887 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:29:51.801Z CPU=0.0% WS=46.94MB Managed=200.85MB Threads=62
+[17:30:51.886 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:30:51.802Z CPU=0.0% WS=44.88MB Managed=202.25MB Threads=63
+[17:31:51.888 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:31:51.801Z CPU=0.0% WS=25.03MB Managed=203.62MB Threads=62
+[17:32:51.885 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:32:51.801Z CPU=0.0% WS=27.80MB Managed=205.04MB Threads=62
+[17:33:51.886 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:33:51.800Z CPU=0.0% WS=29.33MB Managed=206.41MB Threads=63
+[17:34:51.885 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:34:51.800Z CPU=0.0% WS=34.61MB Managed=200.32MB Threads=62
+[17:35:51.886 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:35:51.800Z CPU=0.0% WS=34.25MB Managed=201.72MB Threads=63
+[17:36:51.886 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:36:51.801Z CPU=0.0% WS=34.08MB Managed=203.14MB Threads=64
+[17:36:59.594 DBG] [T:60] [Game] A new session connected. sessionId=6829504149650931712, remoteEndPoint=192.168.0.125:56245
+[17:36:59.649 DBG] [T:69] [Game] Session authentication succeeded. sessionId=6829504149650931712, peerId=1
+[17:36:59.698 INF] [T:69] [Game] Session 6829504149650931712 UDP Socket Created: 192.168.0.125:57348
+[17:36:59.698 DBG] [T:69] [Game] UDP hello OK - pid=1, sid=6829504149650931712, mtu=1200
+[17:37:51.884 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:37:51.800Z CPU=0.0% WS=48.08MB Managed=205.52MB Threads=63
+[17:38:51.884 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:38:51.800Z CPU=0.0% WS=49.53MB Managed=200.93MB Threads=63
+[17:39:51.884 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:39:51.799Z CPU=0.0% WS=38.73MB Managed=203.97MB Threads=64
+[17:40:51.884 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:40:51.799Z CPU=0.0% WS=33.58MB Managed=207.00MB Threads=64
+[17:41:51.884 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:41:51.798Z CPU=0.0% WS=34.34MB Managed=202.37MB Threads=63
+[17:42:51.883 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:42:51.800Z CPU=0.0% WS=34.22MB Managed=205.38MB Threads=63
+[17:43:51.883 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:43:51.799Z CPU=0.0% WS=44.62MB Managed=199.69MB Threads=64
+[17:44:51.882 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:44:51.798Z CPU=0.0% WS=44.22MB Managed=202.74MB Threads=62
+[17:45:51.882 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:45:51.798Z CPU=0.0% WS=44.11MB Managed=205.71MB Threads=65
+[17:46:51.883 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:46:51.798Z CPU=0.0% WS=33.81MB Managed=200.69MB Threads=63
+[17:47:51.882 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:47:51.798Z CPU=0.0% WS=35.14MB Managed=203.37MB Threads=64
+[17:48:51.882 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:48:51.797Z CPU=0.0% WS=31.12MB Managed=206.06MB Threads=63
+[17:49:51.882 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:49:51.797Z CPU=0.0% WS=34.98MB Managed=201.13MB Threads=65
+[17:50:51.885 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:50:51.796Z CPU=0.0% WS=32.89MB Managed=203.84MB Threads=64
+[17:51:51.881 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:51:51.796Z CPU=0.0% WS=34.39MB Managed=206.50MB Threads=66
+[17:52:51.886 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:52:51.796Z CPU=0.0% WS=34.59MB Managed=201.27MB Threads=63
+[17:53:51.880 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:53:51.800Z CPU=0.0% WS=34.56MB Managed=203.94MB Threads=63
+[17:54:51.881 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:54:51.802Z CPU=0.0% WS=34.31MB Managed=206.60MB Threads=63
+[17:55:51.880 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:55:51.796Z CPU=0.0% WS=34.00MB Managed=201.64MB Threads=63
+[17:56:51.880 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:56:51.795Z CPU=0.0% WS=30.98MB Managed=204.35MB Threads=64
+[17:57:51.879 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:57:51.795Z CPU=0.0% WS=31.56MB Managed=207.04MB Threads=64
+[17:58:51.880 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:58:51.794Z CPU=0.0% WS=34.45MB Managed=202.03MB Threads=64
+[17:59:51.879 INF] [T:7] [PerfMonitor] Time:2026-04-10 08:59:51.795Z CPU=0.0% WS=34.39MB Managed=204.69MB Threads=63
+[18:00:51.878 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:00:51.794Z CPU=0.0% WS=34.53MB Managed=199.75MB Threads=64
+[18:01:51.879 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:01:51.794Z CPU=0.0% WS=34.58MB Managed=202.15MB Threads=63
+[18:02:51.878 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:02:51.794Z CPU=0.0% WS=34.44MB Managed=204.82MB Threads=65
+[18:03:51.878 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:03:51.793Z CPU=0.0% WS=34.34MB Managed=199.83MB Threads=64
+[18:04:51.878 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:04:51.794Z CPU=0.0% WS=34.36MB Managed=202.50MB Threads=64
+[18:05:51.877 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:05:51.793Z CPU=0.0% WS=34.30MB Managed=205.14MB Threads=64
+[18:06:51.877 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:06:51.793Z CPU=0.0% WS=34.33MB Managed=200.07MB Threads=63
+[18:07:51.882 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:07:51.796Z CPU=0.0% WS=34.36MB Managed=202.79MB Threads=63
+[18:08:51.892 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:08:51.806Z CPU=0.0% WS=34.33MB Managed=205.50MB Threads=64
+[18:09:51.891 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:09:51.808Z CPU=0.0% WS=34.34MB Managed=200.61MB Threads=64
+[18:10:51.891 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:10:51.807Z CPU=0.0% WS=34.34MB Managed=203.06MB Threads=62
+[18:11:51.892 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:11:51.807Z CPU=0.0% WS=33.69MB Managed=205.81MB Threads=64
+[18:12:51.892 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:12:51.807Z CPU=0.0% WS=34.33MB Managed=200.88MB Threads=63
+[18:13:51.893 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:13:51.807Z CPU=0.0% WS=34.19MB Managed=203.57MB Threads=63
+[18:14:51.892 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:14:51.807Z CPU=0.0% WS=33.73MB Managed=206.33MB Threads=64
+[18:15:51.892 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:15:51.808Z CPU=0.0% WS=33.70MB Managed=201.43MB Threads=63
+[18:16:51.893 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:16:51.808Z CPU=0.0% WS=33.02MB Managed=204.16MB Threads=63
+[18:17:51.893 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:17:51.808Z CPU=0.1% WS=33.64MB Managed=206.88MB Threads=63
+[18:18:51.892 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:18:51.810Z CPU=0.1% WS=36.95MB Managed=201.96MB Threads=64
+[18:19:51.892 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:19:51.807Z CPU=0.0% WS=27.83MB Managed=204.44MB Threads=63
+[18:20:51.909 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:20:51.818Z CPU=0.0% WS=30.84MB Managed=199.56MB Threads=64
+[18:21:51.892 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:21:51.815Z CPU=0.0% WS=21.69MB Managed=202.28MB Threads=63
+[18:22:51.892 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:22:51.808Z CPU=0.0% WS=32.16MB Managed=204.96MB Threads=62
+[18:23:51.892 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:23:51.808Z CPU=0.0% WS=32.48MB Managed=200.04MB Threads=63
+[18:24:51.892 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:24:51.808Z CPU=0.0% WS=32.62MB Managed=202.77MB Threads=63
+[18:25:51.892 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:25:51.809Z CPU=0.0% WS=32.72MB Managed=205.53MB Threads=65
+[18:26:51.893 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:26:51.808Z CPU=0.0% WS=31.61MB Managed=200.62MB Threads=63
+[18:27:51.892 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:27:51.808Z CPU=0.0% WS=32.38MB Managed=203.35MB Threads=63
+[18:28:51.892 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:28:51.808Z CPU=0.0% WS=32.61MB Managed=205.78MB Threads=63
+[18:29:51.892 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:29:51.809Z CPU=0.0% WS=32.62MB Managed=200.89MB Threads=63
+[18:30:51.892 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:30:51.809Z CPU=0.0% WS=33.78MB Managed=203.61MB Threads=63
+[18:31:51.893 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:31:51.808Z CPU=0.0% WS=33.81MB Managed=206.37MB Threads=65
+[18:32:51.893 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:32:51.809Z CPU=0.0% WS=33.88MB Managed=201.48MB Threads=63
+[18:33:51.892 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:33:51.809Z CPU=0.0% WS=33.84MB Managed=204.20MB Threads=62
+[18:34:51.893 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:34:51.809Z CPU=0.0% WS=33.88MB Managed=206.98MB Threads=65
+[18:35:51.893 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:35:51.809Z CPU=0.0% WS=33.91MB Managed=202.08MB Threads=62
+[18:36:51.893 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:36:51.809Z CPU=0.0% WS=30.55MB Managed=204.81MB Threads=62
+[18:37:51.893 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:37:51.818Z CPU=0.0% WS=32.81MB Managed=199.75MB Threads=64
+[18:38:51.894 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:38:51.809Z CPU=0.0% WS=33.91MB Managed=202.71MB Threads=63
+[18:39:51.894 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:39:51.809Z CPU=0.0% WS=33.84MB Managed=205.67MB Threads=63
+[18:40:51.894 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:40:51.809Z CPU=0.0% WS=33.84MB Managed=201.02MB Threads=62
+[18:41:51.894 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:41:51.809Z CPU=0.0% WS=33.88MB Managed=204.03MB Threads=63
+[18:42:51.895 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:42:51.810Z CPU=0.0% WS=33.86MB Managed=207.00MB Threads=63
+[18:43:18.298 DBG] [T:3] [Game] Received a termination request from the client. isClosing=false
+[18:43:18.299 DBG] [T:3] [Game] The session 0 has been closed. reason="ClientClosing"
+[18:43:18.300 DBG] [T:3] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[18:43:18.306 DBG] [T:3] [Game] Not found session: 6829504149650931712
+[18:43:18.323 DBG] [T:73] [Game] Not found session: 6829504149650931712
+[18:43:18.339 DBG] [T:67] [Game] Not found session: 6829504149650931712
+[18:43:18.356 DBG] [T:67] [Game] Not found session: 6829504149650931712
+[18:43:18.374 DBG] [T:82] [Game] Not found session: 6829504149650931712
+[18:43:51.894 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:43:51.809Z CPU=0.0% WS=43.77MB Managed=204.91MB Threads=63
+[18:44:10.123 DBG] [T:56] [Game] A new session connected. sessionId=5134019763210551296, remoteEndPoint=192.168.0.125:56375
+[18:44:10.199 DBG] [T:56] [Game] Session authentication succeeded. sessionId=5134019763210551296, peerId=1
+[18:44:10.368 INF] [T:82] [Game] Session 5134019763210551296 UDP Socket Created: 192.168.0.125:65332
+[18:44:10.369 DBG] [T:82] [Game] UDP hello OK - pid=1, sid=5134019763210551296, mtu=1200
+[18:44:51.893 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:44:51.810Z CPU=0.0% WS=48.48MB Managed=204.75MB Threads=63
+[18:45:51.895 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:45:51.809Z CPU=0.0% WS=48.53MB Managed=207.84MB Threads=63
+[18:46:51.894 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:46:51.810Z CPU=0.0% WS=48.59MB Managed=202.94MB Threads=63
+[18:47:49.838 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:47:49.754Z CPU=0.0% WS=48.47MB Managed=205.97MB Threads=62
+[18:48:49.840 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:48:49.753Z CPU=0.0% WS=48.53MB Managed=201.30MB Threads=62
+[18:49:49.837 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:49:49.754Z CPU=0.0% WS=48.48MB Managed=204.34MB Threads=66
+[18:50:49.839 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:50:49.754Z CPU=0.0% WS=48.42MB Managed=207.41MB Threads=63
+[18:51:49.840 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:51:49.759Z CPU=0.0% WS=48.53MB Managed=202.85MB Threads=67
+[18:52:49.847 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:52:49.756Z CPU=0.0% WS=48.48MB Managed=205.91MB Threads=63
+[18:53:49.843 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:53:49.762Z CPU=0.0% WS=48.58MB Managed=201.14MB Threads=64
+[18:54:49.839 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:54:49.754Z CPU=0.0% WS=36.72MB Managed=203.82MB Threads=63
+[18:55:02.498 DBG] [T:72] [Game] Received a termination request from the client. isClosing=false
+[18:55:02.498 DBG] [T:72] [Game] The session 0 has been closed. reason="ClientClosing"
+[18:55:02.499 DBG] [T:72] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[18:55:02.513 DBG] [T:72] [Game] Not found session: 5134019763210551296
+[18:55:02.530 DBG] [T:10] [Game] Not found session: 5134019763210551296
+[18:55:02.547 DBG] [T:75] [Game] Not found session: 5134019763210551296
+[18:55:02.564 DBG] [T:71] [Game] Not found session: 5134019763210551296
+[18:55:02.581 DBG] [T:71] [Game] Not found session: 5134019763210551296
+[18:55:02.598 DBG] [T:71] [Game] Not found session: 5134019763210551296
+[18:55:15.837 DBG] [T:55] [Game] A new session connected. sessionId=308329143764779008, remoteEndPoint=192.168.0.125:56406
+[18:55:15.910 DBG] [T:55] [Game] Session authentication succeeded. sessionId=308329143764779008, peerId=1
+[18:55:16.167 INF] [T:78] [Game] Session 308329143764779008 UDP Socket Created: 192.168.0.125:50201
+[18:55:16.167 DBG] [T:78] [Game] UDP hello OK - pid=1, sid=308329143764779008, mtu=1200
+[18:55:49.848 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:55:49.753Z CPU=0.0% WS=45.58MB Managed=204.79MB Threads=63
+[18:56:49.838 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:56:49.754Z CPU=0.0% WS=39.92MB Managed=207.92MB Threads=63
+[18:57:49.839 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:57:49.754Z CPU=0.0% WS=43.89MB Managed=203.35MB Threads=63
+[18:58:47.596 DBG] [T:75] [Game] Received a termination request from the client. isClosing=false
+[18:58:47.598 DBG] [T:75] [Game] The session 0 has been closed. reason="ClientClosing"
+[18:58:47.598 DBG] [T:75] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[18:58:47.604 DBG] [T:70] [Game] Not found session: 308329143764779008
+[18:58:47.621 DBG] [T:57] [Game] Not found session: 308329143764779008
+[18:58:47.638 DBG] [T:70] [Game] Not found session: 308329143764779008
+[18:58:47.655 DBG] [T:70] [Game] Not found session: 308329143764779008
+[18:58:47.672 DBG] [T:3] [Game] Not found session: 308329143764779008
+[18:58:47.691 DBG] [T:3] [Game] Not found session: 308329143764779008
+[18:58:49.839 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:58:49.754Z CPU=0.0% WS=43.19MB Managed=206.09MB Threads=64
+[18:59:49.839 INF] [T:7] [PerfMonitor] Time:2026-04-10 09:59:49.754Z CPU=0.0% WS=33.69MB Managed=207.51MB Threads=62
+[19:00:17.959 INF] [T:1] [Game] Logger setup was successful: Game
+[19:00:18.104 DBG] [T:1] [Game] [Engine] Discovered '12' commands: [19999, 10007, 10006, 10000, 10008, 10010, 10009, 10001, 10004, 10005, 10003, 10002]
+[19:00:18.106 INF] [T:1] [Game] The server Game is initialized.
+[19:00:18.110 INF] [T:7] [PerfMonitor] Time:2026-04-10 10:00:18.107Z CPU=0.5% WS=61.38MB Managed=796.05KB Threads=17
+[19:00:18.888 INF] [T:1] [Game] Listener (0.0.0.0:10001:"Tcp") was started.
+[19:00:18.889 INF] [T:1] [Game] Listener (0.0.0.0:10002:"Udp") was started.
+[19:00:18.891 INF] [T:1] [Game] The server instance Game was been started!
+[19:00:18.892 INF] [T:1] [Game] Group=Dev, Name=Game, Env="Local", Region=Local, Public=121.135.249.98, Private=192.168.0.191, DnsName=
+[19:00:42.032 DBG] [T:57] [Game] A new session connected. sessionId=4395664328968110080, remoteEndPoint=192.168.0.125:56413
+[19:00:42.148 DBG] [T:57] [Game] Session authentication succeeded. sessionId=4395664328968110080, peerId=1
+[19:00:42.433 INF] [T:8] [Game] Session 4395664328968110080 UDP Socket Created: 192.168.0.125:62570
+[19:00:42.436 DBG] [T:8] [Game] UDP hello OK - pid=1, sid=4395664328968110080, mtu=1200
+[19:01:18.108 INF] [T:7] [PerfMonitor] Time:2026-04-10 10:01:18.108Z CPU=0.0% WS=77.14MB Managed=203.69MB Threads=63
+[19:01:48.276 DBG] [T:10] [Game] Received a termination request from the client. isClosing=false
+[19:01:48.281 DBG] [T:10] [Game] The session 0 has been closed. reason="ClientClosing"
+[19:01:48.283 DBG] [T:10] [Game] Peer leaved. uid=0, reason="ClientClosing"

@@ -2,6 +2,7 @@ using Common;
 using SP.Core.Logging;
 using SP.Engine.Client;
 using SP.Engine.Client.Configuration;
+using SP.Engine.Runtime.Protocol;
 
 namespace GameClient;
 
@@ -191,21 +192,33 @@ public class Client : BaseNetPeer
 
     public UdpQualityTracker Tracker { get; } = new();
 
-    public async Task RunSender(int periodMs, CancellationToken ct)
+    public async Task RunSender(SendType sendType, int period, int batchCount, CancellationToken ct)
     {
-        while (true)
+        while (!ct.IsCancellationRequested)
         {
-            var seq = Tracker.RecordSend();
-            var packet = new C2GProtocolData.EchoReq { Seq = seq, SentTicks = DateTime.UtcNow.Ticks };
-            Send(packet);
-
-            await Task.Delay(periodMs, ct);
+            for (var i = 0; i < batchCount; i++)
+            {
+                var seq = Tracker.RecordSend();
+                IProtocolData packet = sendType == SendType.Tcp
+                    ? new C2GProtocolData.EchoReq { Seq = seq, SentTicks = DateTime.UtcNow.Ticks }
+                    : new C2GProtocolData.UdpEchoReq { Seq = seq, SentTicks = DateTime.UtcNow.Ticks };
+                
+                Send(packet);
+            }
+            
+            if (period > 0) await Task.Delay(period, ct);
         }
     }
     
-    public void OnEchoAck(G2CProtocolData.EchoAck ack)
+    public void OnEchoAck(uint seq, long sentTicks)
     {
-        Tracker.RecordReceive(ack.Seq);
+        Tracker.RecordReceive(seq);
     }
     
+}
+
+public enum SendType
+{
+    Tcp,
+    Udp
 }

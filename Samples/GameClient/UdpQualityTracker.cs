@@ -47,9 +47,6 @@ public sealed class UdpQualityTracker
         return seq;
     }
 
-    /// <summary>
-    /// 에코되어 돌아온 패킷을 수신했을 때 호출합니다.
-    /// </summary>
     public void RecordReceive(uint seq)
     {
         if (!_samples.TryRemove(seq, out var sample)) return;

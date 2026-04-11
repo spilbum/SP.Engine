@@ -353,18 +353,21 @@ internal static class Program
                 if (_running || _client == null)
                     break;
 
-                if (args.Length == 0 || !int.TryParse(args[0], out var period))
+                if (args.Length == 0 
+                    || Enum.TryParse(args[0], out SendType sendType)
+                    || !int.TryParse(args[1], out var period)
+                    || !int.TryParse(args[2], out var batchCount))
                 {
-                    Console.WriteLine("Usage: start_test [period_ms]");
+                    Console.WriteLine("Usage: start_test [tcp/udp] [period_ms] [batch_count]");
                     break;
                 }
                 
                 _running = true;
                 _cts = new CancellationTokenSource();
-                
-                Console.WriteLine("UDP Test Started: Period {0}ms", period);
 
-                _ = Task.Run(() => _client.RunSender(period, _cts.Token))
+                Console.WriteLine("UDP Test Started: SendType {0}, Period {1}ms, BatchCount {2}", sendType, period, batchCount);
+
+                _ = Task.Run(() => _client.RunSender(sendType, period, batchCount, _cts.Token))
                     .ContinueWith(t =>
                     {
                         if (t.IsFaulted) Console.WriteLine($"Test Error: {t.Exception?.InnerException?.Message}");
