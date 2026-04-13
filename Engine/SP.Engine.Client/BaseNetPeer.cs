@@ -107,6 +107,11 @@ namespace SP.Engine.Client
         public LatencyStats LatencyStats { get; private set; }
         public NetPeerState State => (NetPeerState)_stateCode;
         public bool IsConnected => State == NetPeerState.Open;
+        
+        public int InFlightCount => _messageProcessor.InFlightCount;
+        public int OutOfOrderCount => _messageProcessor.OutOfOrderCount;
+        public int PendingCount => _messageProcessor.PendingCount;
+        public double SRttMs => _messageProcessor.SRttMs;
 
         protected IEncryptor Encryptor => _encryptor;
         protected ICompressor Compressor => _compressor;

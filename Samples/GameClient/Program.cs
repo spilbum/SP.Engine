@@ -354,14 +354,15 @@ internal static class Program
                     break;
 
                 if (args.Length == 0 
-                    || Enum.TryParse(args[0], out SendType sendType)
+                    || args[0].ToLower() is not ("tcp" or "udp")
                     || !int.TryParse(args[1], out var period)
                     || !int.TryParse(args[2], out var batchCount))
                 {
                     Console.WriteLine("Usage: start_test [tcp/udp] [period_ms] [batch_count]");
                     break;
                 }
-                
+
+                var sendType = args[0].ToLower();
                 _running = true;
                 _cts = new CancellationTokenSource();
 
@@ -375,11 +376,12 @@ internal static class Program
                     });
                 
                 _ = Task.Run(async () => {
-                    while (!_cts.Token.IsCancellationRequested)
+                    while (!_cts.IsCancellationRequested)
                     {
                         await Task.Delay(1000); // 1초 주기
                         var report = _client.Tracker.GetReport();
                         Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] {report}");
+                        Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] IF={_client.InFlightCount}, OOO={_client.OutOfOrderCount}, P={_client.PendingCount}, SR={_client.SRttMs:N2}");
             
                         if (report.LossRate > 5.0f) 
                         {

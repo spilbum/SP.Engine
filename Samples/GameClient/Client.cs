@@ -192,14 +192,14 @@ public class Client : BaseNetPeer
 
     public UdpQualityTracker Tracker { get; } = new();
 
-    public async Task RunSender(SendType sendType, int period, int batchCount, CancellationToken ct)
+    public async Task RunSender(string sendType, int period, int batchCount, CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
         {
             for (var i = 0; i < batchCount; i++)
             {
                 var seq = Tracker.RecordSend();
-                IProtocolData packet = sendType == SendType.Tcp
+                IProtocolData packet = sendType == "tcp"
                     ? new C2GProtocolData.EchoReq { Seq = seq, SentTicks = DateTime.UtcNow.Ticks }
                     : new C2GProtocolData.UdpEchoReq { Seq = seq, SentTicks = DateTime.UtcNow.Ticks };
                 

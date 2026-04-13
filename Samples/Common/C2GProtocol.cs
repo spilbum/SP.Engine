@@ -123,7 +123,7 @@ namespace Common
             public int StartRank;
         }
 
-        [Protocol(C2GProtocol.EchoReq, channel: ChannelKind.Unreliable)]
+        [Protocol(C2GProtocol.EchoReq, channel: ChannelKind.Reliable)]
         public class EchoReq : BaseProtocolData<EchoReq>
         {
             public uint Seq;
@@ -255,7 +255,7 @@ namespace Common
         }
 
 
-        [Protocol(G2CProtocol.EchoAck, channel: ChannelKind.Unreliable)]
+        [Protocol(G2CProtocol.EchoAck, channel: ChannelKind.Reliable)]
         public class EchoAck : BaseProtocolData<EchoAck>
         {
             public uint Seq;

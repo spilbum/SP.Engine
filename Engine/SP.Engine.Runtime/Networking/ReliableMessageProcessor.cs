@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using SP.Core;
-using SP.Core.Logging;
 
 namespace SP.Engine.Runtime.Networking
 {
@@ -12,6 +11,14 @@ namespace SP.Engine.Runtime.Networking
     {
         private readonly object _lock = new object();
         private readonly SortedDictionary<uint, MessageState> _states = new SortedDictionary<uint, MessageState>();
+
+        public int MessageCount
+        {
+            get
+            { 
+                lock (_lock) return _states.Count;
+            }
+        }
         
         public void Register(TcpMessage message, int initialRtoMs, int maxRetryCount)
         {
@@ -128,6 +135,8 @@ namespace SP.Engine.Runtime.Networking
         private EwmaFilter _rttVar = new EwmaFilter(0.25);
         private EwmaFilter _smoothedRtt = new EwmaFilter(0.125);
 
+        public double SRttMs => _smoothedRtt.Value;
+
         public RtoEstimator(int minRtoMs = 200, int maxRtoMs = 5000, int minRtoVarianceMs = 100)
         {
             if (minRtoMs < 10) throw new ArgumentException("RTO estimator minRtoMs must be >= 50");
@@ -170,6 +179,14 @@ namespace SP.Engine.Runtime.Networking
     {
         private readonly object _lock = new object();
         private readonly Dictionary<long, TcpMessage> _outOfOrder = new Dictionary<long, TcpMessage>();
+
+        public int OutOfOrderCount
+        {
+            get
+            {
+                lock (_lock) return _outOfOrder.Count;
+            }
+        }
         
         public uint LastProcessedSequence { get; private set; }
 
@@ -231,6 +248,11 @@ namespace SP.Engine.Runtime.Networking
         private readonly RtoEstimator _rtoEstimator = new RtoEstimator();
         private readonly List<TcpMessage> _dequeuedCache = new List<TcpMessage>();
         private int _nextReliableSeq;
+
+        public int InFlightCount => _sender.MessageCount;
+        public int OutOfOrderCount => _receiver.OutOfOrderCount;
+        public int PendingCount => _pendingQueue.Count;
+        public double SRttMs => _rtoEstimator.SRttMs;
         
         public int SendTimeoutMs { get; private set; } = 500;
         public int MaxRetryCount { get; private set; } = 5;

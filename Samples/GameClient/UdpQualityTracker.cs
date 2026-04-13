@@ -4,7 +4,7 @@ namespace GameClient;
 
 public sealed class UdpQualityTracker
 {
-    private struct UdpSample
+    private struct Sample
     {
         public uint Seq;
         public long SentTicks;
@@ -12,7 +12,7 @@ public sealed class UdpQualityTracker
         public double RttMs => ReceivedTicks > 0 ? (ReceivedTicks - SentTicks) / (double)TimeSpan.TicksPerMillisecond : 0;
     }
 
-    private readonly ConcurrentDictionary<uint, UdpSample> _samples = new();
+    private readonly ConcurrentDictionary<uint, Sample> _samples = new();
     private readonly object _jitterLock = new();
     
     // 통계 카운터
@@ -38,12 +38,9 @@ public sealed class UdpQualityTracker
         var seq = Interlocked.Increment(ref _nextSeq) - 1;
         var now = DateTime.UtcNow.Ticks;
 
-        var sample = new UdpSample { Seq = seq, SentTicks = now };
+        var sample = new Sample { Seq = seq, SentTicks = now };
         _samples.TryAdd(seq, sample);
         Interlocked.Increment(ref _totalSent);
-
-        if (seq % 1000 == 0) CleanupOldSamples(now);
-
         return seq;
     }
 
