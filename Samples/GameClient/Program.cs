@@ -381,7 +381,12 @@ internal static class Program
                         await Task.Delay(1000); // 1초 주기
                         var report = _client.Tracker.GetReport();
                         Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] {report}");
-                        Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] IF={_client.InFlightCount}, OOO={_client.OutOfOrderCount}, P={_client.PendingCount}, SR={_client.SRttMs:N2}");
+                        Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] " +
+                                          $"IF={_client.InFlightCount}, " +
+                                          $"OOO={_client.OutOfOrderCount}, " +
+                                          $"P={_client.PendingCount}, " +
+                                          $"SR={_client.SRttMs:N2}, " +
+                                          $"J={_client.JitterMs:N2}");
             
                         if (report.LossRate > 5.0f) 
                         {

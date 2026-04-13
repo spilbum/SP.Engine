@@ -131,11 +131,13 @@ namespace SP.Engine.Runtime.Networking
         private readonly int _minRtoMs;
         private readonly int _maxRtoMs;
         private readonly int _minRtoVarianceMs;
+        private double _lastRtt;
         
         private EwmaFilter _rttVar = new EwmaFilter(0.25);
-        private EwmaFilter _smoothedRtt = new EwmaFilter(0.125);
+        private EwmaFilter _rttFilter = new EwmaFilter(0.125);
 
-        public double SRttMs => _smoothedRtt.Value;
+        public double SRttMs => _rttFilter.Value;
+        public double JitterMs => _rttVar.Value;
 
         public RtoEstimator(int minRtoMs = 200, int maxRtoMs = 5000, int minRtoVarianceMs = 100)
         {
@@ -149,28 +151,28 @@ namespace SP.Engine.Runtime.Networking
 
         public void AddSample(double rttMs)
         {
-            if (!_smoothedRtt.IsInitialized)
+            var wasInitialized = _rttFilter.IsInitialized;
+            _rttFilter.Update(rttMs);
+            
+            if (wasInitialized)
             {
-                _smoothedRtt.Update(rttMs);
-                _rttVar.Update(rttMs / 2.0);
-                return;
+                var delta = Math.Abs(rttMs - _lastRtt);
+                _rttVar.Update(delta);
             }
-
-            var delta = Math.Abs(_smoothedRtt.Value - rttMs);
-            _rttVar.Update(delta);
-            _smoothedRtt.Update(rttMs);
+            
+            _lastRtt = rttMs;
         }
 
         public int GetRtoMs(int retryCount)
         {
-            var rto = _smoothedRtt.Value + Math.Max(_minRtoVarianceMs, 4 * _rttVar.Value); // 변동폭 반영
+            var rto = _rttFilter.Value + Math.Max(_minRtoVarianceMs, 4 * _rttVar.Value); // 변동폭 반영
             rto *= Math.Pow(2, retryCount); 
             return (int)Math.Clamp(rto, _minRtoMs, _maxRtoMs);
         }
 
         public void Reset()
         {
-            _smoothedRtt.Reset();
+            _rttFilter.Reset();
             _rttVar.Reset();
         }
     }
@@ -253,6 +255,7 @@ namespace SP.Engine.Runtime.Networking
         public int OutOfOrderCount => _receiver.OutOfOrderCount;
         public int PendingCount => _pendingQueue.Count;
         public double SRttMs => _rtoEstimator.SRttMs;
+        public double JitterMs => _rtoEstimator.JitterMs;
         
         public int SendTimeoutMs { get; private set; } = 500;
         public int MaxRetryCount { get; private set; } = 5;

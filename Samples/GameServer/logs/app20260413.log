@@ -562,3 +562,296 @@
 [12:26:49.092 DBG] [T:91] [Game] Peer leaved. uid=0, reason="ClientClosing"
 [12:27:00.274 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:26:59.274Z CPU=0.0% WS=61.98MB Managed=206.71MB Threads=72
 [12:27:00.989 DBG] [T:7] [Game] Client terminated due to timeout. peerId=2
+[12:28:00.274 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:27:59.274Z CPU=0.0% WS=40.86MB Managed=208.14MB Threads=63
+[12:28:00.989 DBG] [T:7] [Game] Client terminated due to timeout. peerId=3
+[12:29:00.275 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:28:59.275Z CPU=0.0% WS=34.30MB Managed=209.53MB Threads=62
+[12:29:32.641 DBG] [T:78] [Game] A new session connected. sessionId=4954099722005512192, remoteEndPoint=192.168.0.125:62298
+[12:29:32.718 DBG] [T:76] [Game] Session authentication succeeded. sessionId=4954099722005512192, peerId=1
+[12:29:32.766 INF] [T:78] [Game] Session 4954099722005512192 UDP Socket Created: 192.168.0.125:61334
+[12:29:32.766 DBG] [T:78] [Game] UDP hello OK - pid=1, sid=4954099722005512192, mtu=1200
+[12:29:50.588 WRN] [T:45] [Game] Connection terminated due to message delivery failure. sessionId: 4954099722005512192, peerId: 1, first seq: 5385
+[12:29:50.589 DBG] [T:76] [Game] The session 0 has been closed. reason="LimitExceededRetry"
+[12:29:50.589 DBG] [T:76] [Game] Peer waiting reconnect registered. peerId=1
+[12:29:50.663 DBG] [T:10] [Game] A new session connected. sessionId=1473941799989936128, remoteEndPoint=192.168.0.125:62302
+[12:29:50.667 DBG] [T:10] [Game] Session authentication succeeded. sessionId=1473941799989936128, peerId=1
+[12:29:50.702 INF] [T:8] [Game] Session 1473941799989936128 UDP Socket Created: 192.168.0.125:53084
+[12:29:50.702 DBG] [T:8] [Game] UDP hello OK - pid=1, sid=1473941799989936128, mtu=1200
+[12:29:54.788 WRN] [T:45] [Game] Connection terminated due to message delivery failure. sessionId: 1473941799989936128, peerId: 1, first seq: 5387
+[12:29:54.789 DBG] [T:10] [Game] The session 0 has been closed. reason="LimitExceededRetry"
+[12:29:54.789 DBG] [T:10] [Game] Peer waiting reconnect registered. peerId=1
+[12:29:54.827 DBG] [T:8] [Game] A new session connected. sessionId=602028915954810880, remoteEndPoint=192.168.0.125:62303
+[12:29:54.828 DBG] [T:78] [Game] Session authentication succeeded. sessionId=602028915954810880, peerId=1
+[12:29:54.839 WRN] [T:45] [Game] Connection terminated due to message delivery failure. sessionId: 602028915954810880, peerId: 1, first seq: 6059
+[12:29:54.839 DBG] [T:8] [Game] The session 0 has been closed. reason="LimitExceededRetry"
+[12:29:54.839 DBG] [T:8] [Game] Peer waiting reconnect registered. peerId=1
+[12:29:54.941 DBG] [T:8] [Game] Not found session: 602028915954810880
+[12:29:55.039 DBG] [T:78] [Game] A new session connected. sessionId=6849639136723206144, remoteEndPoint=192.168.0.125:62304
+[12:29:55.040 DBG] [T:78] [Game] Session authentication succeeded. sessionId=6849639136723206144, peerId=1
+[12:29:55.062 INF] [T:3] [Game] Session 6849639136723206144 UDP Socket Created: 192.168.0.125:53745
+[12:29:55.062 DBG] [T:3] [Game] UDP hello OK - pid=1, sid=6849639136723206144, mtu=1200
+[12:29:55.089 WRN] [T:45] [Game] Connection terminated due to message delivery failure. sessionId: 6849639136723206144, peerId: 1, first seq: 10064
+[12:29:55.089 DBG] [T:45] [Game] The session 0 has been closed. reason="LimitExceededRetry"
+[12:29:55.089 DBG] [T:45] [Game] Peer waiting reconnect registered. peerId=1
+[12:29:55.091 ERR] [T:78] [Game] Cannot access a disposed object.
+Object name: 'PooledReceiveBuffer'.
+System.ObjectDisposedException: Cannot access a disposed object.
+Object name: 'PooledReceiveBuffer'.
+   at SP.Engine.Runtime.PooledReceiveBuffer.Peek(Span`1 destination) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/PooledReceiveBuffer.cs:line 53
+   at SP.Engine.Server.BaseSession.SP.Engine.Server.IBaseSession.ProcessTcpBuffer(Byte[] buffer, Int32 offset, Int32 length) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Server/BaseSession.cs:line 234
+[12:29:55.101 DBG] [T:8] [Game] A new session connected. sessionId=88753347393224704, remoteEndPoint=192.168.0.125:62305
+[12:29:55.101 DBG] [T:8] [Game] Session authentication succeeded. sessionId=88753347393224704, peerId=1
+[12:29:55.122 INF] [T:8] [Game] Session 88753347393224704 UDP Socket Created: 192.168.0.125:54522
+[12:29:55.122 DBG] [T:8] [Game] UDP hello OK - pid=1, sid=88753347393224704, mtu=1200
+[12:29:56.389 WRN] [T:45] [Game] Connection terminated due to message delivery failure. sessionId: 88753347393224704, peerId: 1, first seq: 13687
+[12:29:56.389 DBG] [T:45] [Game] The session 0 has been closed. reason="LimitExceededRetry"
+[12:29:56.389 DBG] [T:45] [Game] Peer waiting reconnect registered. peerId=1
+[12:29:56.389 ERR] [T:10] [Game] Cannot access a disposed object.
+Object name: 'PooledReceiveBuffer'.
+System.ObjectDisposedException: Cannot access a disposed object.
+Object name: 'PooledReceiveBuffer'.
+   at SP.Engine.Runtime.PooledReceiveBuffer.Peek(Span`1 destination) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/PooledReceiveBuffer.cs:line 53
+   at SP.Engine.Server.BaseSession.SP.Engine.Server.IBaseSession.ProcessTcpBuffer(Byte[] buffer, Int32 offset, Int32 length) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Server/BaseSession.cs:line 234
+[12:29:56.442 DBG] [T:10] [Game] A new session connected. sessionId=5391679129085018112, remoteEndPoint=192.168.0.125:62306
+[12:29:56.442 DBG] [T:10] [Game] Session authentication succeeded. sessionId=5391679129085018112, peerId=1
+[12:29:56.462 INF] [T:72] [Game] Session 5391679129085018112 UDP Socket Created: 192.168.0.125:60322
+[12:29:56.463 DBG] [T:72] [Game] UDP hello OK - pid=1, sid=5391679129085018112, mtu=1200
+[12:29:56.491 WRN] [T:45] [Game] Connection terminated due to message delivery failure. sessionId: 5391679129085018112, peerId: 1, first seq: 14397
+[12:29:56.491 DBG] [T:45] [Game] The session 0 has been closed. reason="LimitExceededRetry"
+[12:29:56.491 DBG] [T:45] [Game] Peer waiting reconnect registered. peerId=1
+[12:29:56.491 ERR] [T:10] [Game] There is no data to be sent in the queue.
+[12:29:56.491 ERR] [T:10] [Game] Cannot access a disposed object.
+Object name: 'PooledReceiveBuffer'.
+System.ObjectDisposedException: Cannot access a disposed object.
+Object name: 'PooledReceiveBuffer'.
+   at SP.Engine.Runtime.PooledReceiveBuffer.Peek(Span`1 destination) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Runtime/PooledReceiveBuffer.cs:line 53
+   at SP.Engine.Server.BaseSession.SP.Engine.Server.IBaseSession.ProcessTcpBuffer(Byte[] buffer, Int32 offset, Int32 length) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Server/BaseSession.cs:line 234
+[12:29:56.495 DBG] [T:10] [Game] Not found session: 5391679129085018112
+[12:29:56.552 DBG] [T:3] [Game] A new session connected. sessionId=281023579942813696, remoteEndPoint=192.168.0.125:62307
+[12:29:56.552 DBG] [T:3] [Game] Session authentication succeeded. sessionId=281023579942813696, peerId=1
+[12:29:56.575 INF] [T:10] [Game] Session 281023579942813696 UDP Socket Created: 192.168.0.125:55437
+[12:29:56.575 DBG] [T:10] [Game] UDP hello OK - pid=1, sid=281023579942813696, mtu=1200
+[12:29:57.389 WRN] [T:45] [Game] Connection terminated due to message delivery failure. sessionId: 281023579942813696, peerId: 1, first seq: 19187
+[12:29:57.389 DBG] [T:78] [Game] The session 0 has been closed. reason="LimitExceededRetry"
+[12:29:57.389 DBG] [T:78] [Game] Peer waiting reconnect registered. peerId=1
+[12:29:57.407 DBG] [T:8] [Game] A new session connected. sessionId=2575537775394684928, remoteEndPoint=192.168.0.125:62308
+[12:29:57.408 DBG] [T:76] [Game] Session authentication succeeded. sessionId=2575537775394684928, peerId=1
+[12:29:57.437 INF] [T:76] [Game] Session 2575537775394684928 UDP Socket Created: 192.168.0.125:50643
+[12:29:57.437 DBG] [T:76] [Game] UDP hello OK - pid=1, sid=2575537775394684928, mtu=1200
+[12:29:57.439 WRN] [T:45] [Game] Connection terminated due to message delivery failure. sessionId: 2575537775394684928, peerId: 1, first seq: 20794
+[12:29:57.439 DBG] [T:76] [Game] The session 0 has been closed. reason="LimitExceededRetry"
+[12:29:57.439 DBG] [T:76] [Game] Peer waiting reconnect registered. peerId=1
+[12:29:57.459 DBG] [T:78] [Game] A new session connected. sessionId=7754766858284171264, remoteEndPoint=192.168.0.125:62309
+[12:29:57.460 DBG] [T:76] [Game] Session authentication succeeded. sessionId=7754766858284171264, peerId=1
+[12:29:57.482 INF] [T:76] [Game] Session 7754766858284171264 UDP Socket Created: 192.168.0.125:54977
+[12:29:57.482 DBG] [T:76] [Game] UDP hello OK - pid=1, sid=7754766858284171264, mtu=1200
+[12:29:57.490 WRN] [T:45] [Game] Connection terminated due to message delivery failure. sessionId: 7754766858284171264, peerId: 1, first seq: 25679
+[12:29:57.490 DBG] [T:78] [Game] The session 0 has been closed. reason="LimitExceededRetry"
+[12:29:57.490 DBG] [T:78] [Game] Peer waiting reconnect registered. peerId=1
+[12:29:57.515 DBG] [T:78] [Game] A new session connected. sessionId=3000647101412540416, remoteEndPoint=192.168.0.125:62310
+[12:29:57.516 DBG] [T:78] [Game] Session authentication succeeded. sessionId=3000647101412540416, peerId=1
+[12:29:57.538 WRN] [T:45] [Game] Connection terminated due to message delivery failure. sessionId: 3000647101412540416, peerId: 1, first seq: 35157
+[12:29:57.538 DBG] [T:10] [Game] The session 0 has been closed. reason="LimitExceededRetry"
+[12:29:57.538 INF] [T:78] [Game] Session 3000647101412540416 UDP Socket Created: 192.168.0.125:58468
+[12:29:57.538 DBG] [T:10] [Game] Peer waiting reconnect registered. peerId=1
+[12:29:57.538 WRN] [T:78] [Game] UDP Hello: SessionId mismatch. Expected=0, Received=3000647101412540416
+[12:29:57.564 DBG] [T:78] [Game] A new session connected. sessionId=8930524549385027584, remoteEndPoint=192.168.0.125:62311
+[12:29:57.565 DBG] [T:78] [Game] Session authentication succeeded. sessionId=8930524549385027584, peerId=1
+[12:29:57.583 WRN] [T:45] [Game] Connection terminated due to message delivery failure. sessionId: 8930524549385027584, peerId: 1, first seq: 44819
+[12:29:57.584 DBG] [T:8] [Game] The session 0 has been closed. reason="LimitExceededRetry"
+[12:29:57.584 DBG] [T:8] [Game] Peer waiting reconnect registered. peerId=1
+[12:29:57.586 DBG] [T:8] [Game] Not found session: 8930524549385027584
+[12:29:57.621 DBG] [T:10] [Game] A new session connected. sessionId=2212729720259215360, remoteEndPoint=192.168.0.125:62312
+[12:29:57.621 DBG] [T:10] [Game] Session authentication succeeded. sessionId=2212729720259215360, peerId=1
+[12:29:57.634 WRN] [T:45] [Game] Connection terminated due to message delivery failure. sessionId: 2212729720259215360, peerId: 1, first seq: 45900
+[12:29:57.634 DBG] [T:8] [Game] The session 0 has been closed. reason="LimitExceededRetry"
+[12:29:57.634 DBG] [T:8] [Game] Peer waiting reconnect registered. peerId=1
+[12:29:57.642 DBG] [T:8] [Game] Not found session: 2212729720259215360
+[12:29:57.675 DBG] [T:78] [Game] A new session connected. sessionId=9192260255835226112, remoteEndPoint=192.168.0.125:62313
+[12:29:57.675 DBG] [T:10] [Game] Session authentication succeeded. sessionId=9192260255835226112, peerId=1
+[12:29:57.698 INF] [T:10] [Game] Session 9192260255835226112 UDP Socket Created: 192.168.0.125:65256
+[12:29:57.698 DBG] [T:10] [Game] UDP hello OK - pid=1, sid=9192260255835226112, mtu=1200
+[12:29:57.883 WRN] [T:45] [Game] Connection terminated due to message delivery failure. sessionId: 9192260255835226112, peerId: 1, first seq: 46301
+[12:29:57.883 DBG] [T:76] [Game] The session 0 has been closed. reason="LimitExceededRetry"
+[12:29:57.883 DBG] [T:76] [Game] Peer waiting reconnect registered. peerId=1
+[12:29:57.896 DBG] [T:78] [Game] A new session connected. sessionId=1621433755778416640, remoteEndPoint=192.168.0.125:62314
+[12:29:57.896 DBG] [T:76] [Game] Session authentication succeeded. sessionId=1621433755778416640, peerId=1
+[12:29:57.924 INF] [T:10] [Game] Session 1621433755778416640 UDP Socket Created: 192.168.0.125:63273
+[12:29:57.924 DBG] [T:10] [Game] UDP hello OK - pid=1, sid=1621433755778416640, mtu=1200
+[12:29:57.933 WRN] [T:45] [Game] Connection terminated due to message delivery failure. sessionId: 1621433755778416640, peerId: 1, first seq: 47669
+[12:29:57.933 DBG] [T:72] [Game] The session 0 has been closed. reason="LimitExceededRetry"
+[12:29:57.933 DBG] [T:72] [Game] Peer waiting reconnect registered. peerId=1
+[12:29:57.950 DBG] [T:78] [Game] A new session connected. sessionId=7864654726128730112, remoteEndPoint=192.168.0.125:62315
+[12:29:57.951 DBG] [T:72] [Game] Session authentication succeeded. sessionId=7864654726128730112, peerId=1
+[12:29:57.973 INF] [T:72] [Game] Session 7864654726128730112 UDP Socket Created: 192.168.0.125:62311
+[12:29:57.973 DBG] [T:72] [Game] UDP hello OK - pid=1, sid=7864654726128730112, mtu=1200
+[12:29:57.983 WRN] [T:45] [Game] Connection terminated due to message delivery failure. sessionId: 7864654726128730112, peerId: 1, first seq: 47901
+[12:29:57.983 DBG] [T:78] [Game] The session 0 has been closed. reason="LimitExceededRetry"
+[12:29:57.983 DBG] [T:78] [Game] Peer waiting reconnect registered. peerId=1
+[12:29:58.003 DBG] [T:72] [Game] A new session connected. sessionId=9057357643760271360, remoteEndPoint=192.168.0.125:62316
+[12:29:58.003 DBG] [T:72] [Game] Session authentication succeeded. sessionId=9057357643760271360, peerId=1
+[12:29:58.025 INF] [T:72] [Game] Session 9057357643760271360 UDP Socket Created: 192.168.0.125:54866
+[12:29:58.025 DBG] [T:72] [Game] UDP hello OK - pid=1, sid=9057357643760271360, mtu=1200
+[12:29:58.082 WRN] [T:45] [Game] Connection terminated due to message delivery failure. sessionId: 9057357643760271360, peerId: 1, first seq: 48201
+[12:29:58.082 DBG] [T:8] [Game] The session 0 has been closed. reason="LimitExceededRetry"
+[12:29:58.082 DBG] [T:8] [Game] Peer waiting reconnect registered. peerId=1
+[12:29:58.115 DBG] [T:8] [Game] A new session connected. sessionId=1395072585389047808, remoteEndPoint=192.168.0.125:62317
+[12:29:58.115 DBG] [T:8] [Game] Session authentication succeeded. sessionId=1395072585389047808, peerId=1
+[12:29:58.137 INF] [T:10] [Game] Session 1395072585389047808 UDP Socket Created: 192.168.0.125:60906
+[12:29:58.137 DBG] [T:10] [Game] UDP hello OK - pid=1, sid=1395072585389047808, mtu=1200
+[12:29:59.552 DBG] [T:10] [Game] The session 0 has been closed. reason="ClientClosing"
+[12:29:59.552 DBG] [T:10] [Game] Peer waiting reconnect registered. peerId=1
+[12:29:59.612 DBG] [T:8] [Game] A new session connected. sessionId=6125269370126991360, remoteEndPoint=192.168.0.125:62318
+[12:29:59.612 DBG] [T:10] [Game] Session authentication succeeded. sessionId=6125269370126991360, peerId=1
+[12:29:59.635 INF] [T:8] [Game] Session 6125269370126991360 UDP Socket Created: 192.168.0.125:51101
+[12:29:59.635 DBG] [T:8] [Game] UDP hello OK - pid=1, sid=6125269370126991360, mtu=1200
+[12:29:59.664 DBG] [T:78] [Game] The session 0 has been closed. reason="ClientClosing"
+[12:29:59.664 DBG] [T:78] [Game] Peer waiting reconnect registered. peerId=1
+[12:29:59.723 DBG] [T:8] [Game] A new session connected. sessionId=7080308524382683136, remoteEndPoint=192.168.0.125:62319
+[12:29:59.723 DBG] [T:8] [Game] Session authentication succeeded. sessionId=7080308524382683136, peerId=1
+[12:29:59.748 INF] [T:10] [Game] Session 7080308524382683136 UDP Socket Created: 192.168.0.125:55134
+[12:29:59.748 DBG] [T:10] [Game] UDP hello OK - pid=1, sid=7080308524382683136, mtu=1200
+[12:29:59.942 DBG] [T:3] [Game] A new session connected. sessionId=8712230109261594625, remoteEndPoint=192.168.0.125:62320
+[12:29:59.943 WRN] [T:3] [Game] Reconnection rejected: Peer timed out. peerId=1
+[12:29:59.944 ERR] [T:3] [Game] Session authentication failed ("SessionNotFound"). Reconnection filed. The session has timed out.
+stackTrace=   at SP.Engine.Server.Session.OnSessionHandshake(SessionAuthReq req) in /Users/sangpil/GitHub/SP.Engine/Engine/SP.Engine.Server/Session.cs:line 108
+[12:30:00.121 DBG] [T:78] [Game] The session 0 has been closed. reason="ClientClosing"
+[12:30:00.275 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:29:59.274Z CPU=0.1% WS=98.36MB Managed=226.71MB Threads=65
+[12:30:02.986 WRN] [T:45] [Game] Connection terminated due to message delivery failure. sessionId: 0, peerId: 1, first seq: 48787
+[12:30:04.232 WRN] [T:45] [Game] Connection terminated due to message delivery failure. sessionId: 0, peerId: 1, first seq: 55301
+[12:30:06.017 DBG] [T:3] [Game] The session 0 has been closed. reason="ClientClosing"
+[12:31:00.276 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:30:59.276Z CPU=0.0% WS=91.14MB Managed=227.83MB Threads=64
+[12:32:00.276 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:31:59.275Z CPU=0.1% WS=37.11MB Managed=223.03MB Threads=63
+[12:32:36.993 DBG] [T:74] [Game] A new session connected. sessionId=5408104913680990209, remoteEndPoint=192.168.0.125:62328
+[12:32:37.053 DBG] [T:8] [Game] Session authentication succeeded. sessionId=5408104913680990209, peerId=4
+[12:32:37.099 INF] [T:89] [Game] Session 5408104913680990209 UDP Socket Created: 192.168.0.125:58131
+[12:32:37.099 DBG] [T:89] [Game] UDP hello OK - pid=4, sid=5408104913680990209, mtu=1200
+[12:33:00.276 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:32:59.275Z CPU=0.1% WS=71.39MB Managed=229.58MB Threads=63
+[12:34:00.276 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:33:59.276Z CPU=0.1% WS=72.05MB Managed=221.52MB Threads=63
+[12:34:07.536 DBG] [T:74] [Game] Received a termination request from the client. isClosing=false
+[12:34:07.536 DBG] [T:74] [Game] The session 0 has been closed. reason="ClientClosing"
+[12:34:07.537 DBG] [T:74] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[12:34:13.062 DBG] [T:3] [Game] A new session connected. sessionId=1616164200273412097, remoteEndPoint=192.168.0.125:62332
+[12:34:13.123 DBG] [T:3] [Game] Session authentication succeeded. sessionId=1616164200273412097, peerId=2
+[12:34:13.169 INF] [T:8] [Game] Session 1616164200273412097 UDP Socket Created: 192.168.0.125:51779
+[12:34:13.169 DBG] [T:8] [Game] UDP hello OK - pid=2, sid=1616164200273412097, mtu=1200
+[12:34:48.545 DBG] [T:8] [Game] Received a termination request from the client. isClosing=false
+[12:34:48.545 DBG] [T:8] [Game] The session 0 has been closed. reason="ClientClosing"
+[12:34:48.545 DBG] [T:8] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[12:35:00.277 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:34:59.276Z CPU=0.0% WS=71.42MB Managed=224.53MB Threads=66
+[12:36:00.277 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:35:59.276Z CPU=0.0% WS=70.48MB Managed=226.05MB Threads=62
+[12:37:00.276 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:36:59.277Z CPU=0.0% WS=42.33MB Managed=219.80MB Threads=62
+[12:38:00.277 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:37:59.277Z CPU=0.0% WS=42.59MB Managed=221.33MB Threads=63
+[12:39:00.278 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:38:59.278Z CPU=0.0% WS=32.88MB Managed=222.85MB Threads=62
+[12:40:00.276 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:39:59.278Z CPU=0.0% WS=34.08MB Managed=224.35MB Threads=62
+[12:41:00.237 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:40:59.236Z CPU=0.0% WS=41.47MB Managed=218.64MB Threads=63
+[12:42:00.232 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:41:59.232Z CPU=0.0% WS=41.38MB Managed=220.15MB Threads=62
+[12:43:00.230 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:42:59.231Z CPU=0.0% WS=33.59MB Managed=221.68MB Threads=64
+[12:44:00.230 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:43:59.229Z CPU=0.0% WS=34.09MB Managed=223.20MB Threads=62
+[12:45:00.229 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:44:59.229Z CPU=0.0% WS=32.95MB Managed=224.75MB Threads=62
+[12:46:00.229 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:45:59.227Z CPU=0.0% WS=40.00MB Managed=218.99MB Threads=62
+[12:47:00.227 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:46:59.227Z CPU=0.0% WS=28.69MB Managed=220.54MB Threads=62
+[12:48:00.227 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:47:59.227Z CPU=0.0% WS=31.02MB Managed=222.08MB Threads=62
+[12:49:00.225 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:48:59.225Z CPU=0.0% WS=34.45MB Managed=223.59MB Threads=62
+[12:50:00.224 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:49:59.224Z CPU=0.0% WS=36.77MB Managed=225.13MB Threads=63
+[12:51:00.223 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:50:59.224Z CPU=0.0% WS=42.03MB Managed=219.38MB Threads=62
+[12:52:00.221 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:51:59.222Z CPU=0.0% WS=42.50MB Managed=220.91MB Threads=62
+[12:53:00.222 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:52:59.222Z CPU=0.0% WS=42.06MB Managed=222.45MB Threads=63
+[12:54:00.220 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:53:59.221Z CPU=0.0% WS=42.30MB Managed=223.99MB Threads=63
+[12:55:00.219 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:54:59.220Z CPU=0.0% WS=42.92MB Managed=225.53MB Threads=63
+[12:56:00.218 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:55:59.219Z CPU=0.0% WS=42.97MB Managed=219.74MB Threads=61
+[12:57:00.218 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:56:59.218Z CPU=0.0% WS=43.47MB Managed=221.27MB Threads=62
+[12:58:00.218 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:57:59.217Z CPU=0.0% WS=38.53MB Managed=222.81MB Threads=62
+[12:59:00.217 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:58:59.216Z CPU=0.1% WS=35.75MB Managed=224.33MB Threads=62
+[13:00:00.216 INF] [T:7] [PerfMonitor] Time:2026-04-13 03:59:59.214Z CPU=0.1% WS=40.39MB Managed=218.62MB Threads=63
+[13:01:00.216 INF] [T:7] [PerfMonitor] Time:2026-04-13 04:00:59.214Z CPU=0.0% WS=33.47MB Managed=220.17MB Threads=63
+[13:02:00.214 INF] [T:7] [PerfMonitor] Time:2026-04-13 04:01:59.213Z CPU=0.0% WS=31.89MB Managed=221.68MB Threads=63
+[13:03:00.213 INF] [T:7] [PerfMonitor] Time:2026-04-13 04:03:00.213Z CPU=0.0% WS=29.34MB Managed=223.25MB Threads=63
+[13:21:18.077 INF] [T:7] [PerfMonitor] Time:2026-04-13 04:21:17.078Z CPU=0.0% WS=24.44MB Managed=224.75MB Threads=62
+[13:37:44.316 INF] [T:7] [PerfMonitor] Time:2026-04-13 04:37:43.317Z CPU=0.1% WS=30.12MB Managed=219.04MB Threads=63
+[13:38:44.317 INF] [T:7] [PerfMonitor] Time:2026-04-13 04:38:43.317Z CPU=0.1% WS=30.92MB Managed=220.57MB Threads=62
+[13:39:44.317 INF] [T:7] [PerfMonitor] Time:2026-04-13 04:39:43.318Z CPU=0.1% WS=31.48MB Managed=222.09MB Threads=62
+[13:40:44.318 INF] [T:7] [PerfMonitor] Time:2026-04-13 04:40:44.318Z CPU=0.1% WS=31.98MB Managed=223.64MB Threads=62
+[13:41:44.316 INF] [T:7] [PerfMonitor] Time:2026-04-13 04:41:43.317Z CPU=0.1% WS=32.17MB Managed=225.14MB Threads=62
+[13:42:44.318 INF] [T:7] [PerfMonitor] Time:2026-04-13 04:42:43.317Z CPU=0.0% WS=31.97MB Managed=219.33MB Threads=62
+[13:43:44.318 INF] [T:7] [PerfMonitor] Time:2026-04-13 04:43:43.317Z CPU=0.0% WS=32.12MB Managed=220.85MB Threads=62
+[13:44:44.317 INF] [T:7] [PerfMonitor] Time:2026-04-13 04:44:43.317Z CPU=0.0% WS=27.73MB Managed=222.40MB Threads=62
+[13:45:44.317 INF] [T:7] [PerfMonitor] Time:2026-04-13 04:45:43.317Z CPU=0.0% WS=28.75MB Managed=223.91MB Threads=62
+[13:46:44.317 INF] [T:7] [PerfMonitor] Time:2026-04-13 04:46:43.318Z CPU=0.0% WS=28.88MB Managed=225.45MB Threads=63
+[13:47:44.319 INF] [T:7] [PerfMonitor] Time:2026-04-13 04:47:43.318Z CPU=0.0% WS=32.58MB Managed=219.38MB Threads=62
+[13:48:44.319 INF] [T:7] [PerfMonitor] Time:2026-04-13 04:48:43.319Z CPU=0.0% WS=32.45MB Managed=220.92MB Threads=63
+[13:49:44.318 INF] [T:7] [PerfMonitor] Time:2026-04-13 04:49:43.319Z CPU=0.0% WS=31.94MB Managed=222.46MB Threads=63
+[14:07:29.150 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:07:28.584Z CPU=0.1% WS=20.48MB Managed=223.96MB Threads=62
+[14:08:29.155 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:08:28.590Z CPU=0.0% WS=22.20MB Managed=225.48MB Threads=62
+[14:09:29.155 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:09:28.590Z CPU=0.0% WS=30.67MB Managed=219.68MB Threads=62
+[14:10:29.156 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:10:28.589Z CPU=0.0% WS=31.27MB Managed=221.21MB Threads=63
+[14:11:29.157 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:11:28.591Z CPU=0.0% WS=31.70MB Managed=222.74MB Threads=62
+[14:12:29.157 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:12:28.590Z CPU=0.0% WS=18.61MB Managed=224.27MB Threads=62
+[14:13:29.156 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:13:28.590Z CPU=0.1% WS=29.27MB Managed=218.53MB Threads=62
+[14:14:29.156 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:14:28.590Z CPU=0.0% WS=29.89MB Managed=220.08MB Threads=62
+[14:15:29.157 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:15:28.591Z CPU=0.0% WS=30.34MB Managed=221.59MB Threads=62
+[14:16:29.157 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:16:28.591Z CPU=0.0% WS=30.73MB Managed=223.12MB Threads=62
+[14:17:29.158 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:17:28.592Z CPU=0.0% WS=30.72MB Managed=224.62MB Threads=62
+[14:18:29.159 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:18:28.592Z CPU=0.0% WS=30.78MB Managed=218.86MB Threads=62
+[14:19:29.158 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:19:28.593Z CPU=0.0% WS=34.92MB Managed=220.40MB Threads=62
+[14:20:29.159 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:20:28.593Z CPU=0.0% WS=33.72MB Managed=221.93MB Threads=62
+[14:21:29.159 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:21:28.593Z CPU=0.0% WS=33.53MB Managed=223.46MB Threads=63
+[14:22:29.160 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:22:28.594Z CPU=0.0% WS=34.70MB Managed=225.00MB Threads=63
+[14:23:29.160 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:23:28.594Z CPU=0.0% WS=38.58MB Managed=219.27MB Threads=63
+[14:24:29.160 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:24:28.594Z CPU=0.0% WS=38.72MB Managed=220.84MB Threads=63
+[14:25:29.160 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:25:28.594Z CPU=0.0% WS=28.94MB Managed=222.37MB Threads=63
+[14:26:29.161 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:26:28.595Z CPU=0.0% WS=25.48MB Managed=223.90MB Threads=63
+[14:27:29.162 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:27:28.595Z CPU=0.0% WS=26.69MB Managed=225.42MB Threads=62
+[14:28:29.162 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:28:28.595Z CPU=0.1% WS=33.81MB Managed=219.68MB Threads=63
+[14:29:29.162 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:29:28.597Z CPU=0.0% WS=34.20MB Managed=221.21MB Threads=63
+[14:30:29.163 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:30:28.597Z CPU=0.0% WS=34.62MB Managed=222.73MB Threads=62
+[14:30:56.825 DBG] [T:65] [Game] A new session connected. sessionId=8487572237002473473, remoteEndPoint=127.0.0.1:62408
+[14:30:56.873 DBG] [T:65] [Game] Session authentication succeeded. sessionId=8487572237002473473, peerId=3
+[14:30:56.904 INF] [T:71] [Game] Session 8487572237002473473 UDP Socket Created: 127.0.0.1:60229
+[14:30:56.904 DBG] [T:71] [Game] UDP hello OK - pid=3, sid=8487572237002473473, mtu=1200
+[14:31:29.162 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:31:28.596Z CPU=0.2% WS=72.20MB Managed=223.83MB Threads=79
+[14:31:32.422 DBG] [T:61] [Game] Received a termination request from the client. isClosing=false
+[14:31:32.422 DBG] [T:61] [Game] The session 0 has been closed. reason="ClientClosing"
+[14:31:32.424 DBG] [T:61] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[14:32:29.164 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:32:28.597Z CPU=0.0% WS=26.55MB Managed=217.71MB Threads=62
+[14:33:04.166 DBG] [T:64] [Game] A new session connected. sessionId=8142876402551619585, remoteEndPoint=127.0.0.1:62539
+[14:33:04.203 DBG] [T:67] [Game] Session authentication succeeded. sessionId=8142876402551619585, peerId=4
+[14:33:04.233 INF] [T:89] [Game] Session 8142876402551619585 UDP Socket Created: 127.0.0.1:64779
+[14:33:04.233 DBG] [T:89] [Game] UDP hello OK - pid=4, sid=8142876402551619585, mtu=1200
+[14:33:29.163 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:33:28.598Z CPU=0.2% WS=64.59MB Managed=223.28MB Threads=75
+[14:34:24.466 DBG] [T:66] [Game] Received a termination request from the client. isClosing=false
+[14:34:24.466 DBG] [T:66] [Game] The session 0 has been closed. reason="ClientClosing"
+[14:34:24.466 DBG] [T:66] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[14:34:29.039 DBG] [T:66] [Game] A new session connected. sessionId=4563883917186170881, remoteEndPoint=127.0.0.1:62544
+[14:34:29.074 DBG] [T:68] [Game] Session authentication succeeded. sessionId=4563883917186170881, peerId=2
+[14:34:29.105 INF] [T:68] [Game] Session 4563883917186170881 UDP Socket Created: 127.0.0.1:56987
+[14:34:29.105 DBG] [T:68] [Game] UDP hello OK - pid=2, sid=4563883917186170881, mtu=1200
+[14:34:29.164 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:34:28.597Z CPU=0.1% WS=66.23MB Managed=224.02MB Threads=74
+[14:35:06.124 DBG] [T:8] [Game] Received a termination request from the client. isClosing=false
+[14:35:06.124 DBG] [T:8] [Game] The session 0 has been closed. reason="ClientClosing"
+[14:35:06.124 DBG] [T:8] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[14:35:18.894 DBG] [T:67] [Game] A new session connected. sessionId=4422886252596953089, remoteEndPoint=127.0.0.1:62545
+[14:35:18.927 DBG] [T:67] [Game] Session authentication succeeded. sessionId=4422886252596953089, peerId=3
+[14:35:18.957 INF] [T:67] [Game] Session 4422886252596953089 UDP Socket Created: 127.0.0.1:59699
+[14:35:18.957 DBG] [T:67] [Game] UDP hello OK - pid=3, sid=4422886252596953089, mtu=1200
+[14:35:29.164 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:35:28.598Z CPU=0.2% WS=65.38MB Managed=227.31MB Threads=75
+[14:35:48.505 DBG] [T:62] [Game] Received a termination request from the client. isClosing=false
+[14:35:48.505 DBG] [T:62] [Game] The session 0 has been closed. reason="ClientClosing"
+[14:35:48.505 DBG] [T:62] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[14:36:29.165 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:36:28.599Z CPU=0.0% WS=77.69MB Managed=241.77MB Threads=64
+[14:37:29.165 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:37:28.599Z CPU=0.1% WS=30.36MB Managed=243.33MB Threads=63
+[14:37:37.284 DBG] [T:88] [Game] A new session connected. sessionId=3228090290027888641, remoteEndPoint=127.0.0.1:62614
+[14:37:37.319 DBG] [T:88] [Game] Session authentication succeeded. sessionId=3228090290027888641, peerId=4
+[14:37:37.349 INF] [T:57] [Game] Session 3228090290027888641 UDP Socket Created: 127.0.0.1:63198
+[14:37:37.349 DBG] [T:57] [Game] UDP hello OK - pid=4, sid=3228090290027888641, mtu=1200
+[14:38:29.166 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:38:28.599Z CPU=0.2% WS=80.20MB Managed=238.07MB Threads=74
+[14:38:33.146 DBG] [T:8] [Game] Received a termination request from the client. isClosing=false
+[14:38:33.146 DBG] [T:8] [Game] The session 0 has been closed. reason="ClientClosing"
+[14:38:33.146 DBG] [T:8] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[14:38:39.298 DBG] [T:57] [Game] A new session connected. sessionId=5493015012668604417, remoteEndPoint=127.0.0.1:62632
+[14:38:39.332 DBG] [T:56] [Game] Session authentication succeeded. sessionId=5493015012668604417, peerId=2
+[14:38:39.363 INF] [T:56] [Game] Session 5493015012668604417 UDP Socket Created: 127.0.0.1:61287
+[14:38:39.363 DBG] [T:56] [Game] UDP hello OK - pid=2, sid=5493015012668604417, mtu=1200
+[14:38:43.530 DBG] [T:66] [Game] Received a termination request from the client. isClosing=false
+[14:38:43.530 DBG] [T:66] [Game] The session 0 has been closed. reason="ClientClosing"
+[14:38:43.530 DBG] [T:66] [Game] Peer leaved. uid=0, reason="ClientClosing"
+[14:39:29.166 INF] [T:7] [PerfMonitor] Time:2026-04-13 05:39:28.600Z CPU=0.1% WS=24.64MB Managed=245.45MB Threads=62

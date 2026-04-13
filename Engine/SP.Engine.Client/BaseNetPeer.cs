@@ -112,6 +112,7 @@ namespace SP.Engine.Client
         public int OutOfOrderCount => _messageProcessor.OutOfOrderCount;
         public int PendingCount => _messageProcessor.PendingCount;
         public double SRttMs => _messageProcessor.SRttMs;
+        public double JitterMs => _messageProcessor.JitterMs;
 
         protected IEncryptor Encryptor => _encryptor;
         protected ICompressor Compressor => _compressor;
