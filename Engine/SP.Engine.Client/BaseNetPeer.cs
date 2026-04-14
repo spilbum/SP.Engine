@@ -614,7 +614,7 @@ namespace SP.Engine.Client
         private void SendMessageAck(uint ackNumber)
         {
             if (!InternalSend(new C2SEngineProtocolData.MessageAck { AckNumber = ackNumber }))
-                throw new Exception("Failed to send MessageAck");
+                return;
             
             _lastSentAck = ackNumber;
         }

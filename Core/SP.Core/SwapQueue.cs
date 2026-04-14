@@ -78,7 +78,9 @@ namespace SP.Core
 
                 for (var i = 0; i < count; i++)
                 {
-                    destination.Add(nodeToProcess.Array[i]);
+                    var item = nodeToProcess.Array[i];
+                    if (item == null) continue;
+                    destination.Add(item);
                     nodeToProcess.Array[i] = default;
                 }
             }
@@ -97,7 +99,9 @@ namespace SP.Core
             lock (_syncLock)
             {
                 _active.Clear();
+                _active = null;
                 _standby.Clear();
+                _standby = null;
             }
         }
         
