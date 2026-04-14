@@ -254,13 +254,14 @@ public abstract class BaseNetworkSession(SocketMode mode) : INetworkSession
 
     protected void OnSendCompleted(SegmentQueue queue)
     {
+        // 사용한 큐 반환
         queue.Clear();
         _sendingQueuePool.Return(queue);
 
         var newQueue = _sendingQueue;
         if (IsInClosingOrClosed)
         {
-            if (newQueue is { Count: 0 } && !TryValidateClosedBySocket(out _))
+            if (newQueue is not { Count: 0 } && !TryValidateClosedBySocket(out _))
             {
                 StartSend(newQueue, newQueue.TrackId, false);
                 return;
@@ -302,8 +303,7 @@ public abstract class BaseNetworkSession(SocketMode mode) : INetworkSession
 
     protected virtual bool IsIgnoreSocketError(int socketErrorCode)
     {
-        return socketErrorCode == 10004 || socketErrorCode == 10053 || socketErrorCode == 10054 ||
-               socketErrorCode == 10058 || socketErrorCode == 10060 || socketErrorCode == 995;
+        return socketErrorCode is 10004 or 10053 or 10054 or 10058 or 10060 or 995;
     }
 
     protected virtual bool IsIgnoreException(Exception e, out int errorCode)
@@ -311,8 +311,8 @@ public abstract class BaseNetworkSession(SocketMode mode) : INetworkSession
         errorCode = 0;
         switch (e)
         {
-            case ObjectDisposedException _:
-            case NullReferenceException _:
+            case ObjectDisposedException:
+            case NullReferenceException:
                 return true;
             case SocketException socketEx:
                 errorCode = socketEx.ErrorCode;

@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 
 namespace SP.Core
@@ -91,12 +92,12 @@ namespace SP.Core
             }
         }
 
-        public void Reset()
+        public void Clear()
         {
             lock (_syncLock)
             {
-                _active.Reset();
-                _standby.Reset();
+                _active.Clear();
+                _standby.Clear();
             }
         }
         
@@ -105,11 +106,17 @@ namespace SP.Core
             public readonly T[] Array;
             public int Count;
             
-            public Node(int capacity) => Array = new T[capacity];
+            public Node(int capacity) => Array = ArrayPool<T>.Shared.Rent(capacity);
 
             public void Reset()
             {
                 Count = 0;
+            }
+
+            public void Clear()
+            {
+                Count = 0;
+                ArrayPool<T>.Shared.Return(Array);
             }
         }
     }

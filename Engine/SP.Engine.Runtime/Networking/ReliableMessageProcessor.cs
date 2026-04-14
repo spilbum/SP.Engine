@@ -71,27 +71,34 @@ namespace SP.Engine.Runtime.Networking
                     }
                 
                     var nextRto = rto.GetRtoMs(state.RetryCount);
-                    state.IncrementRetry(nextRto);
+                    state.Retry(nextRto);
                     retries.Add(state.Message);
                 }
-                
-                foreach (var msg in failed)
-                {
-                    _states.Remove(msg.SequenceNumber);
-                }
             }
+            
+            // 실패된 메시지가 있는 경우, 연결이 끊기기(오프라인) 때문에 횟수를 초기화 시킴
+            if (failed.Count > 0)
+                ResetAll();
             
             return (retries, failed);
         }
 
-        public void Reset()
+        public void ResetAll()
         {
             lock (_lock)
             {
-                _states.Clear();
+                foreach (var state in _states.Values)
+                {
+                    state.Reset();
+                }
             }
         }
 
+        public void Clear()
+        {
+            lock (_lock) _states.Clear();
+        }
+        
         private class MessageState
         {
             public TcpMessage Message { get; }
@@ -112,7 +119,7 @@ namespace SP.Engine.Runtime.Networking
             public bool HasExpired(DateTime now) => now >= _expiresAtUtc;
             public bool HasReachedRetryLimit => RetryCount >= MaxRetryCount;
 
-            public void IncrementRetry(int rtoMs)
+            public void Retry(int rtoMs)
             {
                 RetryCount++;
                 RtoMs = rtoMs;
@@ -122,6 +129,12 @@ namespace SP.Engine.Runtime.Networking
             private void UpdateExpiration()
             {
                 _expiresAtUtc = DateTime.UtcNow.AddMilliseconds(RtoMs);
+            }
+
+            public void Reset()
+            {
+                RetryCount = 0;
+                UpdateExpiration();
             }
         }
     }
@@ -217,7 +230,7 @@ namespace SP.Engine.Runtime.Networking
             }
         }
 
-        public void Reset()
+        public void Clear()
         {
             lock (_lock)
             {
@@ -242,9 +255,7 @@ namespace SP.Engine.Runtime.Networking
 
     public class ReliableMessageProcessor
     {
-        private const int PendingBufferWindow = 128;
-        
-        private readonly SwapQueue<TcpMessage> _pendingQueue = new SwapQueue<TcpMessage>(PendingBufferWindow);
+        private readonly SwapQueue<TcpMessage> _pendingQueue = new SwapQueue<TcpMessage>(4096);
         private readonly ReliableSender _sender = new ReliableSender();
         private readonly ReliableReceiver _receiver = new ReliableReceiver();
         private readonly RtoEstimator _rtoEstimator = new RtoEstimator();
@@ -297,12 +308,11 @@ namespace SP.Engine.Runtime.Networking
         
         public void AddRtoSample(double rttMs) => _rtoEstimator.AddSample(rttMs);
 
-        public void Reset()
+        public void Clear()
         {
-            _pendingQueue.Reset();
-            _sender.Reset();
-            _receiver.Reset();
-            _rtoEstimator.Reset();
+            _pendingQueue.Clear();
+            _sender.Clear();
+            _receiver.Clear();
             _dequeuedCache.Clear();
             _nextReliableSeq = 0;
         }

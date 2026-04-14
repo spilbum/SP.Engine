@@ -343,7 +343,7 @@ namespace SP.Engine.Client
             catch (Exception ex)
             {
                 OnError(new Exception(
-                    $"Failed to send. Error: {ex.Message}, BufferList Count: {_sendEventArgs.BufferList?.Count ?? 0}",
+                    $"Failed to send. Error: {ex.Message}, BufferList Count: {_sendEventArgs?.BufferList?.Count ?? 0}",
                     ex));
 
                 if (EnsureSocketClosed() && !IsIgnorableException(ex))

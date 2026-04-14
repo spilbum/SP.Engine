@@ -56,6 +56,7 @@ public class GameServer : Engine
         var builder = EngineConfigBuilder.Create()
             .WithNetwork(n => n with
             {
+                SendingQueueSize = 128
             })
             .WithSession(s => s with
             {

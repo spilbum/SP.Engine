@@ -11,7 +11,7 @@ public sealed class SegmentQueue(ArraySegment<byte>[] globalQueue, int offset, i
     private static readonly ArraySegment<byte> Null = default;
     private int _currentCount;
     private int _innerOffset;
-    private bool _isEnqueueBlocked;
+    private bool _enqueueBlocked;
     private int _updatingCount;
 
     public ushort TrackId { get; private set; } = 1;
@@ -100,7 +100,7 @@ public sealed class SegmentQueue(ArraySegment<byte>[] globalQueue, int offset, i
         conflict = false;
         var oldCount = _currentCount;
 
-        if (oldCount >= capacity || _isEnqueueBlocked || trackId != TrackId)
+        if (oldCount >= capacity || _enqueueBlocked || trackId != TrackId)
             return false;
 
         var updatedCount = Interlocked.CompareExchange(ref _currentCount, oldCount + 1, oldCount);
@@ -116,12 +116,11 @@ public sealed class SegmentQueue(ArraySegment<byte>[] globalQueue, int offset, i
 
     public bool Enqueue(ArraySegment<byte> item, ushort trackId)
     {
-        if (_isEnqueueBlocked)
-            return false;
+        if (_enqueueBlocked)
+            return false;   
 
         Interlocked.Increment(ref _updatingCount);
-
-        while (!_isEnqueueBlocked)
+        while (!_enqueueBlocked)
         {
             if (TryEnqueue(item, out var conflict, trackId))
             {
@@ -139,7 +138,7 @@ public sealed class SegmentQueue(ArraySegment<byte>[] globalQueue, int offset, i
 
     public void StopEnqueue()
     {
-        _isEnqueueBlocked = true;
+        _enqueueBlocked = true;
         var spinWait = new SpinWait();
         while (_updatingCount > 0)
             spinWait.SpinOnce();
@@ -147,7 +146,7 @@ public sealed class SegmentQueue(ArraySegment<byte>[] globalQueue, int offset, i
 
     public void StartEnqueue()
     {
-        _isEnqueueBlocked = false;
+        _enqueueBlocked = false;
     }
 
 
@@ -156,18 +155,18 @@ public sealed class SegmentQueue(ArraySegment<byte>[] globalQueue, int offset, i
         if (sentByteCount <= 0 || _currentCount <= _innerOffset)
             return;
 
-        var accumlated = 0;
+        var accumulated = 0;
 
         for (var i = _innerOffset; i < _currentCount; i++)
         {
             var segment = globalQueue[offset + i];
-            accumlated += segment.Count;
+            accumulated += segment.Count;
 
-            if (accumlated <= sentByteCount)
+            if (accumulated <= sentByteCount)
                 continue;
 
             // Adjust the segment with remaining data
-            var excess = accumlated - sentByteCount;
+            var excess = accumulated - sentByteCount;
             _innerOffset = i;
 
             // Update the current segment with the leftover data

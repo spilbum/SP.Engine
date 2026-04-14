@@ -22,8 +22,7 @@ namespace SP.Engine.Runtime
 
         public void Write(ReadOnlySpan<byte> data)
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(PooledReceiveBuffer));
-
+            if (_disposed) return;
             if (WriteableBytes < data.Length)
             {
                 var newSize = Math.Max(_buffer.Length * 2, _count + data.Length);
@@ -50,8 +49,7 @@ namespace SP.Engine.Runtime
 
         public void Peek(Span<byte> destination)
         {
-            ThrowIfDisposed();
-            
+            if (_disposed) return;
             if (ReadableBytes < destination.Length)
                 throw new ArgumentOutOfRangeException(nameof(destination), "Not enough data to peek");
 
@@ -71,8 +69,7 @@ namespace SP.Engine.Runtime
         
         public void Consume(int length)
         {
-            ThrowIfDisposed();
-            
+            if (_disposed) return;
             if (length > _count)
                 throw new ArgumentOutOfRangeException(nameof(length), "Cannot consume more than available");
             
@@ -82,6 +79,7 @@ namespace SP.Engine.Runtime
 
         private void Resize(int newSize)
         {
+            if (_disposed) return;
             var newBuffer = ArrayPool<byte>.Shared.Rent(newSize);
 
             if (_count > 0)
@@ -108,7 +106,6 @@ namespace SP.Engine.Runtime
         public void Dispose()
         {
             if (_disposed) return;
-
             if (_buffer != null)
             {
                 ArrayPool<byte>.Shared.Return(_buffer);
@@ -116,11 +113,6 @@ namespace SP.Engine.Runtime
             }
             
             _disposed = true;
-        }
-
-        private void ThrowIfDisposed()
-        {
-            if (_disposed) throw new ObjectDisposedException(nameof(PooledReceiveBuffer));
         }
     }
 }

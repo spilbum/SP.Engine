@@ -813,7 +813,7 @@ namespace SP.Engine.Client
                 case NetPeerState.Handshake:
                 case NetPeerState.Closing:
                 {
-                    _messageProcessor.Reset();
+                    _messageProcessor.Clear();
                     CancelTimer();
 
                     StopUdpHealthCheckTimer();
@@ -1167,7 +1167,7 @@ namespace SP.Engine.Client
                 
                 _diffieHellman.Dispose();
                 _sessionId = 0;
-                _messageProcessor.Reset();
+                _messageProcessor.Clear();
                 _receiveBuffer?.Dispose();
                 _receiveBuffer = null;
                 

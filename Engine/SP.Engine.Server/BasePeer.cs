@@ -173,11 +173,7 @@ public abstract class BasePeer : IPeer, IDisposable
                 if (!_session.TrySend(targetChannel, tcp)) 
                     return false;
 
-                lock (_ackLock)
-                {
-                    _lastSentAck = tcp.AckNumber;
-                }
-                
+                Interlocked.Exchange(ref _lastSentAck, tcp.AckNumber);
                 return true;
             }
             case ChannelKind.Unreliable:
@@ -211,7 +207,7 @@ public abstract class BasePeer : IPeer, IDisposable
             _diffieHellman?.Dispose();
             _diffieHellman = null;
             _encryptor = null;
-            _messageProcessor.Reset();
+            _messageProcessor.Clear();
         }
 
         _disposed = true;
@@ -230,8 +226,8 @@ public abstract class BasePeer : IPeer, IDisposable
         var (retries, failed) = _messageProcessor.ExtractRetryMessages();
         if (failed.Count > 0)
         {
-            Logger.Warn("Connection terminated due to message delivery failure. sessionId: {0}, peerId: {1}, first seq: {2}",
-                _session.SessionId, PeerId, failed[0].SequenceNumber);
+            Logger.Warn("Connection terminated due to message delivery failure. sessionId: {0}, peerId: {1}, first seq: {2}, count: {3}",
+                _session.SessionId, PeerId, failed[0].SequenceNumber, failed.Count);
             
             Close(CloseReason.LimitExceededRetry);
             return;
@@ -348,7 +344,7 @@ public abstract class BasePeer : IPeer, IDisposable
         Interlocked.Exchange(ref _stateCode, PeerStateConst.Closed);
         PeerIdGenerator.Free(PeerId);
         PeerId = 0;
-        _messageProcessor.Reset();
+        _messageProcessor.Clear();
         OnLeaveServer(reason);
     }
 
