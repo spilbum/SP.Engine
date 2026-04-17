@@ -135,6 +135,7 @@ namespace Common
         {
             public uint Seq;
             public long SentTicks;
+            public byte[]? Data;
         }
     }
 
@@ -267,6 +268,7 @@ namespace Common
         {
             public uint Seq;
             public long SentTicks;
+            public byte[]? Data;
         }
     }
 }

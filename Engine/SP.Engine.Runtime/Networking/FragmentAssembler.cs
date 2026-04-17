@@ -4,101 +4,117 @@ using System.Collections.Concurrent;
 
 namespace SP.Engine.Runtime.Networking
 {
-    internal sealed class ReassemblyState
+    internal sealed class FragmentReassembly : IDisposable
     {
-        public readonly byte[][] Parts;
-        public readonly DateTime CreatedAtUtc = DateTime.UtcNow;
-        public readonly byte TotalCount;
-        public int ReceivedCount;
-        public int TotalLength;
+        private readonly byte[][] _fragments;
+        private readonly int[] _lengths;
+        private int _totalSize;
+        
+        public readonly long CreateAt = DateTime.UtcNow.Ticks;
+        public int ReceivedCount { get; private set; }
+        public byte ExpectedCount { get; }
 
-        public ReassemblyState(byte totalCount)
+        public FragmentReassembly(byte count)
         {
-            TotalCount = totalCount;
-            Parts = new byte[totalCount][];
+            ExpectedCount = count;
+            _fragments = ArrayPool<byte[]>.Shared.Rent(count);
+            _lengths = ArrayPool<int>.Shared.Rent(count);
+            Array.Clear(_fragments, 0, count);
         }
-    }
 
-    public interface IFragmentAssembler
-    {
-        bool TryAssemble(FragmentHeader fragHeader, ArraySegment<byte> fragSegment, out byte[] assembled, out int length);
-        void Cleanup(TimeSpan timeout);
-    }
-
-    public sealed class FragmentAssembler : IFragmentAssembler
-    {
-        private readonly ConcurrentDictionary<uint, ReassemblyState> _states =
-            new ConcurrentDictionary<uint, ReassemblyState>();
-
-        public bool TryAssemble(FragmentHeader fragHeader, ArraySegment<byte> fragSegment, out byte[] assembled, out int length)
+        public bool Add(byte index, ArraySegment<byte> segment)
         {
-            assembled = null;
-            length = 0;
-
-            if (fragHeader.Index >= fragHeader.TotalCount)
+            if (index >= ExpectedCount || _fragments[index] != null)
                 return false;
 
-            var key = fragHeader.FragId;
-            
-            if (!_states.TryGetValue(key, out var state))
+            var buffer = ArrayPool<byte>.Shared.Rent(segment.Count);
+            segment.AsSpan().CopyTo(buffer);
+
+            _fragments[index] = buffer;
+            _lengths[index] = segment.Count;
+            _totalSize += segment.Count;
+            return ++ReceivedCount == ExpectedCount;
+        }
+
+        public (byte[] buffer, int length) Combine()
+        {
+            var combined = ArrayPool<byte>.Shared.Rent(_totalSize);
+            for (int i = 0, offset = 0; i < ExpectedCount; i++)
             {
-                state = new ReassemblyState(fragHeader.TotalCount);
-                if (!_states.TryAdd(key, state))
-                {
-                    if (!_states.TryGetValue(key, out state))
-                        return false;
-                }
+                Buffer.BlockCopy(_fragments[i], 0, combined, offset, _lengths[i]);
+                offset += _lengths[i];
             }
+
+            return (combined, _totalSize);
+        }
+
+        public void Dispose()
+        {
+            for (var i = 0; i < ExpectedCount; i++)
+            {
+                if (_fragments[i] == null) continue;
+                ArrayPool<byte>.Shared.Return(_fragments[i]);
+            }
+
+            ArrayPool<byte[]>.Shared.Return(_fragments);
+            ArrayPool<int>.Shared.Return(_lengths);
+        }
+    }
+    
+    public sealed class MessageAssembler : IDisposable
+    {
+        private readonly ConcurrentDictionary<uint, FragmentReassembly> _states =
+            new ConcurrentDictionary<uint, FragmentReassembly>();
+
+        public bool TryAssemble(FragmentHeader header, ArraySegment<byte> segment, out byte[] buffer, out int length)
+        {
+            buffer = null;
+            length = 0;
+
+            var state = _states.GetOrAdd(header.FragId, _ => new FragmentReassembly(header.TotalCount));
 
             lock (state)
             {
-                const int MaxReassemblySize = 1024 * 1024;
-                if (state.TotalLength + fragSegment.Count > MaxReassemblySize)
+                if (!state.Add(header.Index, segment))
                 {
-                    _states.TryRemove(key, out _);
+                    if (state.ReceivedCount == 0) Discard(header.FragId);
                     return false;
                 }
-                 
-                state.Parts[fragHeader.Index] = fragSegment.ToArray();
-                state.ReceivedCount++;
-                state.TotalLength += fragSegment.Count;
 
-                if (state.ReceivedCount != state.TotalCount)
-                    return false;
+                if (state.ReceivedCount < state.ExpectedCount) return false;
 
-                var bytes = ArrayPool<byte>.Shared.Rent(state.TotalLength);
-                var offset = 0;
+                _states.TryRemove(header.FragId, out _);
 
-                for (var i = 0; i < state.TotalCount; i++)
-                {
-                    var part = state.Parts[i];
-                    if (part == null)
-                    {
-                        _states.TryRemove(key, out _);
-                        return false;
-                    }
-                    
-                    Buffer.BlockCopy(part, 0, bytes, offset, part.Length);
-                    offset += part.Length;
-                }
-
-                _states.TryRemove(key, out _);
-
-                assembled = bytes;
-                length = state.TotalLength;
+                var result = state.Combine();
+                buffer = result.buffer;
+                length = result.length;
+                
+                state.Dispose();
                 return true;
             }
         }
 
+        private void Discard(uint id)
+        {
+            if (_states.TryGetValue(id, out var s))
+                s.Dispose();
+        }
+
         public void Cleanup(TimeSpan timeout)
         {
-            var now = DateTime.UtcNow;
-
+            var limit = DateTime.UtcNow.Ticks - timeout.Ticks;
             foreach (var (key, state) in _states)
             {
-                if (now - state.CreatedAtUtc < timeout) continue;
-                _states.TryRemove(key, out _);
+                if (state.CreateAt < limit)
+                    Discard(key);
             }
+        }
+
+        public void Dispose()
+        {
+            foreach (var key in _states.Keys)
+                Discard(key);
         }
     }
 }
+    

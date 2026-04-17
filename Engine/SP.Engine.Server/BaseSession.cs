@@ -191,11 +191,12 @@ public abstract class BaseSession : IBaseSession
         if (header.Fragmented == 0x01)
         {
             var bodySpan = segment.AsSpan(hSize, header.BodyLength);
-            if (!FragmentHeader.TryParse(bodySpan, out var fragHeader, out var consumed))
+            if (!FragmentHeader.TryParse(bodySpan, out var fHeader, out var consumed))
                 return;
 
-            var fragSegment = new ArraySegment<byte>(segment.Array!, hSize + consumed, fragHeader.FragLength);
-            if (!UdpSocket.Assembler.TryAssemble(fragHeader, fragSegment, out var assembled, out var length))
+            var fSegment = new ArraySegment<byte>(segment.Array!, hSize + consumed, fHeader.FragLength);
+            
+            if (!UdpSocket.Assembler.TryAssemble(fHeader, fSegment, out var bodyBytes, out var length))
                 return;
 
             var normalizedHeader = new UdpHeaderBuilder()
@@ -203,7 +204,7 @@ public abstract class BaseSession : IBaseSession
                 .WithBodyLength(length)
                 .Build();
 
-            var message = new UdpMessage(normalizedHeader, assembled, length);
+            var message = new UdpMessage(normalizedHeader, bodyBytes, length);
             OnReceivedMessage(message);
         }
         else

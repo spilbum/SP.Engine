@@ -10,6 +10,6 @@ public class UdpEchoReq : BaseCommand<GamePeer, C2GProtocolData.UdpEchoReq>
 {
     protected override void ExecuteCommand(GamePeer context, C2GProtocolData.UdpEchoReq protocol)
     {
-        context.Send(new G2CProtocolData.UdpEchoAck { Seq = protocol.Seq, SentTicks = protocol.SentTicks });
+        context.Send(new G2CProtocolData.UdpEchoAck { Seq = protocol.Seq, SentTicks = protocol.SentTicks, Data = protocol.Data });
     }
 }

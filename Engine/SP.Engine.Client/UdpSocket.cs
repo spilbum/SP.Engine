@@ -1,5 +1,4 @@
 using System;
-using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
@@ -19,7 +18,6 @@ namespace SP.Engine.Client
     public class UdpSocket : IUnreliableSender
     {
         private const int AssemblerCleanupIntervalSec = 15;
-        private readonly FragmentAssembler _assembler = new FragmentAssembler();
         private readonly PostList<ArraySegment<byte>> _itemsToSend = new PostList<ArraySegment<byte>>();
         private readonly byte[] _receiveBuffer;
         private readonly SocketAsyncEventArgs _receiveEventArgs = new SocketAsyncEventArgs();
@@ -41,10 +39,9 @@ namespace SP.Engine.Client
             _receiveBuffer = new byte[config.ReceiveBufferSize];
         }
 
-        public IFragmentAssembler Assembler => _assembler;
-
         public bool IsRunning { get; private set; }
-        
+        public MessageAssembler Assembler { get; } = new MessageAssembler();
+
         public bool TrySend(UdpMessage message)
         {
             if (!IsRunning)
@@ -126,7 +123,7 @@ namespace SP.Engine.Client
                 _socket.ReceiveFromAsync(_receiveEventArgs);
 
                 _cleanupTimer =
-                    new TickTimer(_ => _assembler.Cleanup(TimeSpan.FromSeconds(AssemblerCleanupIntervalSec)), null, 0,
+                    new TickTimer(_ => Assembler.Cleanup(TimeSpan.FromSeconds(AssemblerCleanupIntervalSec)), null, 0,
                         AssemblerCleanupIntervalSec / 2);
 
                 IsRunning = true;

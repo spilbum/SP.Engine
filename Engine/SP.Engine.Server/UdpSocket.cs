@@ -9,7 +9,6 @@ namespace SP.Engine.Server;
 
 public class UdpSocket : BaseNetworkSession, IUnreliableSender
 {
-    private readonly FragmentAssembler _assembler = new();
     private uint _fragSeq;
     private ushort _maxDataSize = 512;
     private readonly SocketSendBuffer _sendBuffer = new(1024 * 16);
@@ -21,7 +20,7 @@ public class UdpSocket : BaseNetworkSession, IUnreliableSender
         LocalEndPoint = (IPEndPoint)client.LocalEndPoint;
     }
 
-    public IFragmentAssembler Assembler => _assembler;
+    public MessageAssembler Assembler { get; } = new();
 
     public bool TrySend(UdpMessage message)
     {

@@ -912,12 +912,12 @@ namespace SP.Engine.Client
             if (header.Fragmented == 0x01)
             {
                 var bodySpan = segment.AsSpan(bodyOffset, header.BodyLength);
-                if (!FragmentHeader.TryParse(bodySpan, out var fragHeader, out consumed))
+                if (!FragmentHeader.TryParse(bodySpan, out var fHeader, out consumed))
                     return;
                 
-                var fragSegment = new ArraySegment<byte>(segment.Array, bodyOffset + consumed, fragHeader.FragLength);
+                var fSegment = new ArraySegment<byte>(segment.Array, bodyOffset + consumed, fHeader.FragLength);
                     
-                if (!_udpSocket.Assembler.TryAssemble(fragHeader, fragSegment, out var assembled, out var length))
+                if (!_udpSocket.Assembler.TryAssemble(fHeader, fSegment, out var bodyBytes, out var length))
                     return;
 
                 var normalizedHeader = new UdpHeaderBuilder()
@@ -925,7 +925,7 @@ namespace SP.Engine.Client
                     .WithBodyLength(length)
                     .Build();
 
-                var message = new UdpMessage(normalizedHeader, assembled, length);
+                var message = new UdpMessage(normalizedHeader, bodyBytes, length);
                 OnReceivedMessage(message);
             }
             else

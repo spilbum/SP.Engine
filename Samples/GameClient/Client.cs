@@ -201,13 +201,23 @@ public class Client : BaseNetPeer
                 var seq = Tracker.RecordSend();
                 IProtocolData packet = sendType == "tcp"
                     ? new C2GProtocolData.EchoReq { Seq = seq, SentTicks = DateTime.UtcNow.Ticks }
-                    : new C2GProtocolData.UdpEchoReq { Seq = seq, SentTicks = DateTime.UtcNow.Ticks };
+                    : new C2GProtocolData.UdpEchoReq { Seq = seq, SentTicks = DateTime.UtcNow.Ticks, Data = GetRandomBytes(5000)};
                 
                 Send(packet);
             }
             
             if (period > 0) await Task.Delay(period, ct);
         }
+    }
+
+    private static byte[] GetRandomBytes(int count)
+    {
+        var bytes = new byte[count];
+        for (var i = 0; i < bytes.Length; i++)
+        {
+            bytes[i] = (byte)(i % 256);
+        }
+        return bytes;
     }
     
     public void OnEchoAck(uint seq, long sentTicks)
