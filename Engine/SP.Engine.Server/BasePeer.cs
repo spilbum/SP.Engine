@@ -134,46 +134,36 @@ public abstract class BasePeer : IPeer, IDisposable
         var encryptor = policy.UseEncrypt ? Encryptor : null;
         var compressor = policy.UseCompress ? Compressor : null;
         var originalChannel = data.Channel;
-        
-        var sequenceNumber = originalChannel == ChannelKind.Reliable
-            ? _messageProcessor.GetNextReliableSeq()
-            : 0;
-
-        var ackNumber = originalChannel == ChannelKind.Reliable
-            ? _messageProcessor.LastSequenceNumber
-            : 0;
-
-        var targetChannel = originalChannel == ChannelKind.Unreliable && !_session.IsUdpAvailable
+        var channel = originalChannel == ChannelKind.Unreliable && !_session.IsUdpAvailable
             ? ChannelKind.Reliable
             : originalChannel;
         
-        switch (targetChannel)
+        switch (channel)
         {
             case ChannelKind.Reliable:
             {
                 var tcp = new TcpMessage();
-                tcp.SetSequenceNumber(sequenceNumber);
-                tcp.SetAckNumber(ackNumber);
                 tcp.Serialize(data, policy, encryptor, compressor);
 
-                if (tcp.SequenceNumber == 0)
+                if (originalChannel == ChannelKind.Unreliable)
                 {
-                    // 즉시 전송 (Internal/Fallback)
-                    return _session.TrySend(targetChannel, tcp);
+                    // Fallback 메시지
+                    return _session.TrySend(channel, tcp);
                 }
 
-                if (!IsConnected)
+                if (IsConnected)
+                {
+                    _messageProcessor.RegisterMessageState(tcp);
+                    if (!_session.TrySend(channel, tcp)) 
+                        return false;
+
+                    Interlocked.Exchange(ref _lastSentAck, tcp.AckNumber);
+                }
+                else
                 {
                     _messageProcessor.EnqueuePendingMessage(tcp);
-                    return true;
                 }
 
-                _messageProcessor.RegisterMessageState(tcp);
-                
-                if (!_session.TrySend(targetChannel, tcp)) 
-                    return false;
-
-                Interlocked.Exchange(ref _lastSentAck, tcp.AckNumber);
                 return true;
             }
             case ChannelKind.Unreliable:
@@ -181,10 +171,10 @@ public abstract class BasePeer : IPeer, IDisposable
                 var udp = new UdpMessage();
                 udp.SetSessionId(_session.SessionId);
                 udp.Serialize(data, policy, encryptor, compressor);
-                return _session.TrySend(targetChannel, udp);
+                return _session.TrySend(channel, udp);
             }
             default:
-                throw new Exception($"Unknown channel: {targetChannel}");
+                throw new Exception($"Unknown channel: {channel}");
         }
     }
 
@@ -207,7 +197,7 @@ public abstract class BasePeer : IPeer, IDisposable
             _diffieHellman?.Dispose();
             _diffieHellman = null;
             _encryptor = null;
-            _messageProcessor.Clear();
+            _messageProcessor.Dispose();
         }
 
         _disposed = true;
@@ -229,19 +219,21 @@ public abstract class BasePeer : IPeer, IDisposable
             Logger.Warn("Connection terminated due to message delivery failure. sessionId: {0}, peerId: {1}, first seq: {2}, count: {3}",
                 _session.SessionId, PeerId, failed[0].SequenceNumber, failed.Count);
             
+            _messageProcessor.ResetMessageStates();
             Close(CloseReason.LimitExceededRetry);
             return;
         }
         
         foreach (var message in retries)
         {
-            _session.TrySend(ChannelKind.Reliable, message);
+            if (!_session.TrySend(ChannelKind.Reliable, message)) continue;
+            Interlocked.Exchange(ref _lastSentAck, message.AckNumber);
         }
     }
 
     private void MaintainAckStatus()
     {
-        var ackNumber = _messageProcessor.LastSequenceNumber;
+        var ackNumber = _messageProcessor.LastReceivedSeq;
         if (ackNumber <= _lastSentAck) return;
         
         var now = DateTime.UtcNow;
@@ -321,15 +313,19 @@ public abstract class BasePeer : IPeer, IDisposable
         Interlocked.Exchange(ref _stateCode, PeerStateConst.Online);
         _session = (Session)session;
 
-        foreach (var message in _messageProcessor.DequeuePendingMessages())
+        var pendingMessages = _messageProcessor.DequeuePendingMessages();
+        foreach (var message in pendingMessages)
         {
-            // 재전송 트래커에 등록
             _messageProcessor.RegisterMessageState(message);
-                
-            // 전송
-            session.TrySend(ChannelKind.Reliable, message);
+            if (!session.TrySend(ChannelKind.Reliable, message))
+            {
+                Logger.Warn("Failed to send pending message. Seq: {0}. Will be handled by retransmission.", message.SequenceNumber);
+                break;
+            }
+            
+            Interlocked.Exchange(ref _lastSentAck, message.AckNumber);
         }
-
+        
         OnOnline();
     }
 

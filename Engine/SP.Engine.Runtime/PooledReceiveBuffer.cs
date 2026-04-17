@@ -47,20 +47,20 @@ namespace SP.Engine.Runtime
             _count += data.Length;
         }
 
-        public void Peek(Span<byte> destination)
+        public void Peek(Span<byte> destination, int length)
         {
             if (_disposed) return;
-            if (ReadableBytes < destination.Length)
+            if (_count < length)
                 throw new ArgumentOutOfRangeException(nameof(destination), "Not enough data to peek");
 
             var rightSpace = _buffer.Length - _readHead;
-            if (rightSpace >= destination.Length)
+            if (rightSpace >= length)
             {
-                _buffer.AsSpan(_readHead, destination.Length).CopyTo(destination);
+                _buffer.AsSpan(_readHead, length).CopyTo(destination);
             }
             else
             {
-                var secondLen = destination.Length - rightSpace;
+                var secondLen = length - rightSpace;
                 
                 _buffer.AsSpan(_readHead, rightSpace).CopyTo(destination[..rightSpace]);
                 _buffer.AsSpan(0, secondLen).CopyTo(destination.Slice(rightSpace, secondLen));

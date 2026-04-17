@@ -19,28 +19,28 @@ public class RankConnector : BaseConnector
 
     private void OnStateChanged(object? sender, StateChangedEventArgs e)
     {
-        Logger.Info("[{0}] State changed: {1} -> {2}", Name, e.OldState, e.NewState);
+        Logger.Info("Connector '{0}' state changed: {1} -> {2}", Name, e.OldState, e.NewState);
     }
 
     private void OnError(object? sender, ErrorEventArgs e)
     {
         var ex = e.GetException();
-        Logger.Error("[{0}] An error occurred: {1}\r\n{2}", Name, ex.Message, ex.StackTrace);
+        Logger.Error("Connector '{0}' error occurred: {1}\r\n{2}", Name, ex.Message, ex.StackTrace);
     }
 
     private void OnOffline(object? sender, EventArgs e)
     {
-        Logger.Info("[{0}] Offline...", Name);
+        Logger.Info("Connector '{0}' offline...", Name);
     }
 
     private void OnDisconnected(object? sender, EventArgs e)
     {
-        Logger.Info("[{0}] Disconnected", Name);
+        Logger.Info("Connector '{0}' disconnected: {1}:{2}", Name, Host, Port);
     }
 
     private void OnConnected(object? sender, EventArgs e)
     {
-        Logger.Debug("[{0}] Connected", Name);
+        Logger.Debug("Connector '{0}' connected: {1}:{2}", Name, Host, Port);
 
         var req = new S2SProtocolData.RegisterReq
         {

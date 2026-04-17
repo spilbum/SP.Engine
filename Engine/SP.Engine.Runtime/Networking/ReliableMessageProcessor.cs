@@ -11,7 +11,7 @@ namespace SP.Engine.Runtime.Networking
     {
         private readonly object _lock = new object();
         private readonly SortedDictionary<uint, MessageState> _states = new SortedDictionary<uint, MessageState>();
-
+        
         public int MessageCount
         {
             get
@@ -19,23 +19,18 @@ namespace SP.Engine.Runtime.Networking
                 lock (_lock) return _states.Count;
             }
         }
-        
+
         public void Register(TcpMessage message, int initialRtoMs, int maxRetryCount)
         {
-            if (message.SequenceNumber == 0) return;
-
             lock (_lock)
             {
-                if (_states.ContainsKey(message.SequenceNumber)) return;
                 var state = new MessageState(message, initialRtoMs, maxRetryCount);
-                _states.TryAdd(message.SequenceNumber, state);   
+                _states.Add(message.SequenceNumber, state);   
             }
         }
 
         public void RemoveUntil(uint ackNumber)
         {
-            if (ackNumber == 0) return;
-            
             lock (_lock)
             {
                 var keysToRemove = _states
@@ -45,6 +40,8 @@ namespace SP.Engine.Runtime.Networking
 
                 foreach (var key in keysToRemove)
                 {
+                    if (!_states.TryGetValue(key, out var state)) continue;
+                    state.Message.Dispose();
                     _states.Remove(key);
                 }
             }
@@ -76,10 +73,6 @@ namespace SP.Engine.Runtime.Networking
                 }
             }
             
-            // 실패된 메시지가 있는 경우, 연결이 끊기기(오프라인) 때문에 횟수를 초기화 시킴
-            if (failed.Count > 0)
-                ResetAll();
-            
             return (retries, failed);
         }
 
@@ -96,7 +89,13 @@ namespace SP.Engine.Runtime.Networking
 
         public void Clear()
         {
-            lock (_lock) _states.Clear();
+            lock (_lock)
+            {
+                foreach (var state in _states.Values)
+                    state.Message.Dispose();
+                
+                _states.Clear();
+            }
         }
         
         private class MessageState
@@ -193,6 +192,7 @@ namespace SP.Engine.Runtime.Networking
     public sealed class ReliableReceiver
     {
         private readonly object _lock = new object();
+        private uint _lastReceivedSeq;
         private readonly Dictionary<long, TcpMessage> _outOfOrder = new Dictionary<long, TcpMessage>();
 
         public int OutOfOrderCount
@@ -202,8 +202,14 @@ namespace SP.Engine.Runtime.Networking
                 lock (_lock) return _outOfOrder.Count;
             }
         }
-        
-        public uint LastProcessedSequence { get; private set; }
+
+        public uint LastReceivedSeq
+        {
+            get
+            {
+                lock (_lock) return _lastReceivedSeq;
+            }
+        }
 
         public List<TcpMessage> Process(TcpMessage message)
         {
@@ -212,14 +218,14 @@ namespace SP.Engine.Runtime.Networking
             lock (_lock)
             {
                 // 중복/오래된 패킷 체크
-                if (message.SequenceNumber <= LastProcessedSequence)
+                if (message.SequenceNumber <= _lastReceivedSeq)
                     return null;
 
                 if (_outOfOrder.ContainsKey(message.SequenceNumber))
                     return null;
 
                 // 정순서 도착
-                if (message.SequenceNumber == LastProcessedSequence + 1)
+                if (message.SequenceNumber == _lastReceivedSeq + 1)
                 {
                     return EmitInOrder(message);
                 }
@@ -234,28 +240,31 @@ namespace SP.Engine.Runtime.Networking
         {
             lock (_lock)
             {
+                foreach (var message in _outOfOrder.Values)
+                    message.Dispose();
+                
                 _outOfOrder.Clear();
-                LastProcessedSequence = 0;
+                _lastReceivedSeq = 0;
             }
         }
 
         private List<TcpMessage> EmitInOrder(TcpMessage first)
         {
             var list = new List<TcpMessage> { first };
-            LastProcessedSequence = first.SequenceNumber;
+            _lastReceivedSeq = first.SequenceNumber;
             
-            while (_outOfOrder.Remove(LastProcessedSequence + 1, out var next))
+            while (_outOfOrder.Remove(_lastReceivedSeq + 1, out var next))
             {
-                LastProcessedSequence = next.SequenceNumber;
+                _lastReceivedSeq = next.SequenceNumber;
                 list.Add(next);
             }
             return list;
         }
     }
 
-    public class ReliableMessageProcessor
+    public class ReliableMessageProcessor : IDisposable
     {
-        private readonly SwapQueue<TcpMessage> _pendingQueue = new SwapQueue<TcpMessage>(4096);
+        private readonly SwapQueue<TcpMessage> _pendingQueue = new SwapQueue<TcpMessage>(1024);
         private readonly ReliableSender _sender = new ReliableSender();
         private readonly ReliableReceiver _receiver = new ReliableReceiver();
         private readonly RtoEstimator _rtoEstimator = new RtoEstimator();
@@ -272,25 +281,39 @@ namespace SP.Engine.Runtime.Networking
         public int MaxRetryCount { get; private set; } = 5;
         public int MaxAckDelayMs { get; private set; } = 30;
         public int AckStepThreshold { get; private set; } = 10;
-        public uint LastSequenceNumber => _receiver.LastProcessedSequence;
+        public uint LastReceivedSeq => _receiver.LastReceivedSeq;
 
         public void SetSendTimeoutMs(int ms) => SendTimeoutMs = ms;
         public void SetMaxRetryCount(int count) => MaxRetryCount = count;
         public void SetMaxAckDelayMs(int ms) => MaxAckDelayMs = ms;
         public void SetAckStepThreshold(int count) => AckStepThreshold = count;
-        public uint GetNextReliableSeq() => (uint)Interlocked.Increment(ref _nextReliableSeq);
-        public bool EnqueuePendingMessage(TcpMessage message) => _pendingQueue.TryEnqueue(message);
+        
+        public void EnqueuePendingMessage(TcpMessage message)
+        {
+            if (!_pendingQueue.TryEnqueue(message)) return;
+
+            var seqNum = (uint)Interlocked.Increment(ref _nextReliableSeq);
+            var ackNum = _receiver.LastReceivedSeq;
+            
+            message.SetSequenceNumber(seqNum);
+            message.SetAckNumber(ackNum);
+        }
 
         public List<TcpMessage> DequeuePendingMessages()
         {
             _dequeuedCache.Clear();
             _pendingQueue.Exchange(_dequeuedCache);
-            return _dequeuedCache.ToList();
+            return _dequeuedCache;
         }
 
         public void RegisterMessageState(TcpMessage message)
         {
-            if (message.SequenceNumber == 0) return;
+            var seqNum = (uint)Interlocked.Increment(ref _nextReliableSeq);
+            var ackNum = _receiver.LastReceivedSeq;
+            
+            message.SetSequenceNumber(seqNum);
+            message.SetAckNumber(ackNum);
+            
             _sender.Register(message, SendTimeoutMs, MaxRetryCount);
         }
 
@@ -302,6 +325,9 @@ namespace SP.Engine.Runtime.Networking
         
         public (List<TcpMessage> Retries, List<TcpMessage> Failed) ExtractRetryMessages()
             => _sender.UpdateAndExtract(_rtoEstimator);
+
+        public void ResetMessageStates()
+            => _sender.ResetAll();
 
         public List<TcpMessage> ProcessMessageInOrder(TcpMessage message)
             => _receiver.Process(message);
@@ -315,6 +341,11 @@ namespace SP.Engine.Runtime.Networking
             _receiver.Clear();
             _dequeuedCache.Clear();
             _nextReliableSeq = 0;
+        }
+
+        public void Dispose()
+        {
+            _pendingQueue.Dispose();
         }
     }
 }

@@ -1,5 +1,4 @@
 using System;
-using System.Threading.Tasks;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
 
@@ -16,8 +15,11 @@ namespace SP.Engine.Runtime.Command
             if (!(context is TContext ctx))
                 return;
 
-            var protocol = context.Deserialize<TProtocol>(message);
-            ExecuteCommand(ctx, protocol);
+            using (message)
+            {
+                var protocol = context.Deserialize<TProtocol>(message);
+                ExecuteCommand(ctx, protocol);
+            }
         }
 
         protected abstract void ExecuteCommand(TContext context, TProtocol protocol);

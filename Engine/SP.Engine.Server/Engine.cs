@@ -29,7 +29,7 @@ public abstract class Engine : BaseEngine, IEngine
 {
     private readonly Dictionary<ushort, ICommand> _userCommands = new();
     private readonly Dictionary<ushort, ICommand> _internalCommands = new();
-    private readonly List<BaseConnector> _connectors = [];
+    private readonly List<ConnectorFiber> _connectorFibers = [];
     private readonly List<PeerFiber> _peerFibers = [];
     private PeerManager _peerManager;
     private PerfMonitor _perfMonitor;
@@ -46,9 +46,10 @@ public abstract class Engine : BaseEngine, IEngine
         if (!SetupCommand())
             return false;
 
-        if (!SetupConnector(config.Connectors))
+        if (!SetupConnectorFiber(config.Connectors))
             return false;
 
+        SetupPeerFiber();
         SetupPerfMonitor(config.Perf);
         
         Logger.Info("The server {0} is initialized.", name);
@@ -59,27 +60,9 @@ public abstract class Engine : BaseEngine, IEngine
     {
         if (!base.Start())
             return false;
-
-        var connectorUpdatePeriod = TimeSpan.FromMilliseconds(Config.Session.ConnectorUpdateIntervalMs);
-        Scheduler.Schedule(Fiber, ScheduleUpdateConnectors, connectorUpdatePeriod, connectorUpdatePeriod);
-
-        var fiberCnt = Math.Max(Config.Session.MaxConnections / 300, 10);
-        var tickInterval = TimeSpan.FromMilliseconds(Config.Session.PeerUpdateIntervalMs);
         
-        for (var i = 0; i < fiberCnt; i++)
-        {
-            var fiber = new ThreadFiber($"PeerFiber_{i:D2}", maxBatchSize: 1024, capacity: 4096,
-                onError: ex =>
-                {
-                    Logger.Error(ex);
-                });
-            
-            var peerFiber = new PeerFiber(fiber, Scheduler, Logger, tickInterval);
-            _peerFibers.Add(peerFiber);
-        }
-        
-        foreach (var connector in _connectors) 
-            connector.Connect();
+        foreach (var fiber in _connectorFibers)
+            fiber.Start();
         
         StartReconnectTimer();
         return true;
@@ -89,7 +72,7 @@ public abstract class Engine : BaseEngine, IEngine
     {
         _perfMonitor?.Dispose();
         foreach (var fiber in _peerFibers) fiber.Dispose();
-        foreach (var connector in _connectors) connector.Close();
+        foreach (var fiber in _connectorFibers) fiber.Dispose();
         StopReconnectTimer();
 
         base.Stop();
@@ -193,6 +176,24 @@ public abstract class Engine : BaseEngine, IEngine
         }
     }
     
+    private void SetupPeerFiber()
+    {
+        var fiberCnt = Math.Max(Config.Session.MaxConnections / 300, 10);
+        var tickInterval = TimeSpan.FromMilliseconds(Config.Session.PeerUpdateIntervalMs);
+        
+        for (var i = 0; i < fiberCnt; i++)
+        {
+            var fiber = new ThreadFiber($"PeerFiber_{i:D2}", maxBatchSize: 1024, capacity: 4096,
+                onError: ex =>
+                {
+                    Logger.Error(ex);
+                });
+            
+            var peerFiber = new PeerFiber(fiber, Scheduler, Logger, tickInterval);
+            _peerFibers.Add(peerFiber);
+        }
+    }
+    
     private void SetupPerfMonitor(PerfConfig config)
     {
         if (!config.MonitorEnabled)
@@ -212,50 +213,27 @@ public abstract class Engine : BaseEngine, IEngine
         }, TimeSpan.Zero, config.LoggingPeriod);
     }
 
-    private bool SetupConnector(List<ConnectorConfig> connectors)
+    private bool SetupConnectorFiber(List<ConnectorConfig> configs)
     {
-        foreach (var config in connectors)
+        foreach (var config in configs)
         {
-            try
-            {
-                if (CreateConnector(config.Name) is not BaseConnector connector)
+            var fiber = new ThreadFiber($"ConnectorFiber_{config.Name}",
+                onError: ex =>
                 {
-                    Logger.Info("Failed to create connector. name={0}.", config.Name);
-                    return false;
-                }
+                    Logger.Error(ex.Message);
+                });
 
-                var fiber = new ThreadFiber($"ConnectorFiber_{config.Name}",
-                    onError: ex =>
-                    {
-                        Logger.Error(ex.Message);
-                    });
-                
-                if (!connector.Initialize(config, fiber, Scheduler, Logger))
-                    throw new InvalidOperationException($"Failed to initialize connector. name={connector.Name}.");
+            var cf = new ConnectorFiber(
+                fiber, Scheduler, Logger,
+                TimeSpan.FromMilliseconds(Config.Session.ConnectorTickPeriodMs));
 
-                _connectors.Add(connector);
-            }
-            catch (Exception e)
-            {
-                Logger.Error(e);
+            if (!cf.RegisterConnector(config, CreateConnector(config.Name)))
                 return false;
-            }
+            
+            _connectorFibers.Add(cf);
         }
 
         return true;
-    }
-    
-    private void ScheduleUpdateConnectors()
-    {
-        try
-        {
-            foreach (var connector in _connectors)
-                connector.Update();
-        }
-        catch (Exception e)
-        {
-            Logger.Error(e);
-        }
     }
     
     protected abstract IConnector CreateConnector(string name);
@@ -385,8 +363,22 @@ public abstract class Engine : BaseEngine, IEngine
     private static readonly long _baseUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     public static long UtcNowMs => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     internal static uint NetworkTimeMs => (uint)(UtcNowMs - _baseUnixMs);
-    
-    public IEnumerable<IConnector> GetAllConnectors() => _connectors;
-    public IEnumerable<IConnector> GetConnectors(string name) => _connectors.Where(c => c.Name == name); 
-    public IConnector GetConnector(string name, string host, int port) => _connectors.FirstOrDefault(x => x.Name == name && x.Host == host && x.Port == port);
+
+    public IEnumerable<IConnector> GetAllConnectors()
+    {
+        return _connectorFibers.Select(fiber => fiber.Connector);
+    }
+
+    public IEnumerable<IConnector> GetConnectors(string name)
+    {
+        return _connectorFibers.Where(c => c.Name.Equals(name)).Select(c => c.Connector);
+    }
+
+    public IConnector GetConnector(string name, string host, int port)
+    {
+        return _connectorFibers
+            .Where(c => c.Name.Equals(name) && c.Host.Equals(host) && c.Port.Equals(port))
+            .Select(c => c.Connector)
+            .FirstOrDefault();
+    }
 }

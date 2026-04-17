@@ -4,10 +4,11 @@ using System.Collections.Generic;
 
 namespace SP.Core
 {
-    public sealed class SwapQueue<T>
+    public sealed class SwapQueue<T> : IDisposable
     {
         private readonly int _capacity;
         private readonly object _syncLock = new object();
+        private bool _disposed;
         
         private Node _active;
         private Node _standby;
@@ -29,6 +30,7 @@ namespace SP.Core
 
         public bool TryEnqueue(T item)
         {
+            if (_disposed) return false;
             lock (_syncLock)
             {
                 if (_active.Count >= _capacity)
@@ -42,6 +44,7 @@ namespace SP.Core
 
         public bool TryEnqueue(List<T> items)
         {
+            if (_disposed) return false;
             var count = items.Count;
             if (count == 0) return false;
 
@@ -58,6 +61,7 @@ namespace SP.Core
 
         public void Exchange(List<T> destination)
         {
+            if (_disposed) return;
             Node nodeToProcess;
 
             lock (_syncLock)
@@ -98,14 +102,24 @@ namespace SP.Core
         {
             lock (_syncLock)
             {
-                _active.Clear();
-                _active = null;
-                _standby.Clear();
-                _standby = null;
+                _active.Reset();
+                _standby.Reset();
+            }
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            
+            lock (_syncLock)
+            {
+                _active.Dispose();
+                _standby.Dispose();
             }
         }
         
-        private class Node
+        private class Node : IDisposable
         {
             public readonly T[] Array;
             public int Count;
@@ -117,10 +131,11 @@ namespace SP.Core
                 Count = 0;
             }
 
-            public void Clear()
+            public void Dispose()
             {
                 Count = 0;
-                ArrayPool<T>.Shared.Return(Array);
+                if (Array != null)
+                    ArrayPool<T>.Shared.Return(Array);
             }
         }
     }

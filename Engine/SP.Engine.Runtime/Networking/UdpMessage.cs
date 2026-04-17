@@ -9,11 +9,11 @@ namespace SP.Engine.Runtime.Networking
         {
         }
         
-        public UdpMessage(UdpHeader header, ReadOnlyMemory<byte> payload) : base(header, payload)
+        public UdpMessage(UdpHeader header, byte[] body, int bodyLength) : base(header, body, bodyLength)
         {
         }
 
-        public int FrameLength => Header.Size + Body.Length + 1;
+        public int Size => UdpHeader.ByteSize + BodyLength;
 
         public void SetSessionId(long sessionId)
         {
@@ -23,80 +23,51 @@ namespace SP.Engine.Runtime.Networking
                 .Build();
         }
 
-        public ArraySegment<byte> ToArraySegment()
+        public void WriteTo(Span<byte> destination)
         {
-            var body = Body;
+            const int hSize = UdpHeader.ByteSize;
+            var bLen = BodyLength;
+
             var header = new UdpHeaderBuilder()
                 .From(Header)
                 .WithFragmented(0)
-                .WithPayloadLength((ushort)body.Length)
+                .WithBodyLength(bLen)
                 .Build();
+            
+            header.WriteTo(destination[..hSize]);
 
-            var buf = new byte[FrameLength];
-            var span = buf.AsSpan();
-            var offset = 0;
-
-            header.WriteTo(span.Slice(offset, header.Size));
-            offset += header.Size;
-
-            if (body.Length > 0)
-                body.Span.CopyTo(span.Slice(offset, body.Length));
-
-            return new ArraySegment<byte>(buf, 0, buf.Length);
-        }
-
-        public List<ArraySegment<byte>> Split(uint fragId, ushort maxFragBodyLen)
-        {
-            if (maxFragBodyLen <= 0) throw new ArgumentOutOfRangeException(nameof(maxFragBodyLen));
-
-            var headerSize = Header.Size;
-            const int fragHeaderSize = FragmentHeader.ByteSize;
-            var bodyLen = Body.Length;
-            var totalCount = (int)Math.Ceiling((double)bodyLen / maxFragBodyLen);
-            if (totalCount > byte.MaxValue)
-                throw new ArgumentOutOfRangeException(nameof(maxFragBodyLen), "Total count is too big (>255)");
-
-            var result = new List<ArraySegment<byte>>(totalCount);
-            var bodySpan = Body.Span;
-
-            for (byte index = 0; index < totalCount; index++)
+            if (bLen > 0)
             {
-                var offsetInBody = index * maxFragBodyLen;
-                var remaining = bodyLen - offsetInBody;
-                var fragLen = (ushort)Math.Min(remaining, maxFragBodyLen);
-
-                var header = new UdpHeaderBuilder()
-                    .From(Header)
-                    .WithFragmented(1)
-                    .WithPayloadLength(fragHeaderSize + fragLen)
-                    .Build();
-
-                var frameSize = headerSize + fragHeaderSize + fragLen + 1;
-                var buf = new byte[frameSize];
-                var span = buf.AsSpan();
-                var offset = 0;
-
-                header.WriteTo(span.Slice(offset, headerSize));
-                offset += headerSize;
-
-                var fh = new FragmentHeader(fragId, index, (byte)totalCount, fragLen);
-                fh.WriteTo(span.Slice(offset, fragHeaderSize));
-                offset += fragHeaderSize;
-
-                bodySpan.Slice(offsetInBody, fragLen).CopyTo(span.Slice(offset, fragLen));
-
-                result.Add(new ArraySegment<byte>(buf, 0, frameSize));
+                BodySpan.CopyTo(destination.Slice(hSize, bLen));
             }
-
-            return result;
         }
 
-        protected override UdpHeader CreateHeader(HeaderFlags flags, ushort msgId, int payloadLength)
+        public void WriteFragmentTo(Span<byte> destination, 
+            uint fragId, byte index, byte totalCount, int bodyOffset, ushort fragLen)
+        {
+            const int hSize = UdpHeader.ByteSize;
+            const int fHeaderSize = FragmentHeader.ByteSize;
+            
+            var nHeader = new UdpHeaderBuilder()
+                .From(Header)
+                .WithFragmented(1)
+                .WithBodyLength(fHeaderSize + fragLen)
+                .Build();
+            
+            nHeader.WriteTo(destination[..hSize]);
+
+            var fh = new FragmentHeader(fragId, index, totalCount, fragLen);
+            fh.WriteTo(destination.Slice(hSize, fHeaderSize));
+            
+            BodySpan.Slice(bodyOffset, fragLen).CopyTo(destination.Slice(hSize + fHeaderSize, fragLen));
+        }
+
+        protected override UdpHeader CreateHeader(HeaderFlags flags, ushort protocolId, int bodyLength)
         {
             return new UdpHeaderBuilder()
                 .From(Header)
-                .WithMsgId(msgId)
-                .WithPayloadLength(payloadLength)
+                .WithProtocolId(protocolId)
+                .WithBodyLength(bodyLength)
                 .AddFlag(flags)
                 .Build();
         }

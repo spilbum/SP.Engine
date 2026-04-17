@@ -7,3 +7,5 @@ bin/
 .user
 *.dev.json
 .log
+logs
+patch

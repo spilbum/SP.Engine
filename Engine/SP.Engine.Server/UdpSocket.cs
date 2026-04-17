@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -13,8 +11,9 @@ public class UdpSocket : BaseNetworkSession, IUnreliableSender
 {
     private readonly FragmentAssembler _assembler = new();
     private uint _fragSeq;
-    private ushort _maxFrameSize = 512;
-
+    private ushort _maxDataSize = 512;
+    private readonly SocketSendBuffer _sendBuffer = new(1024 * 16);
+    
     public UdpSocket(Socket client, IPEndPoint remoteEndPoint)
         : base(SocketMode.Udp, client)
     {
@@ -26,19 +25,35 @@ public class UdpSocket : BaseNetworkSession, IUnreliableSender
 
     public bool TrySend(UdpMessage message)
     {
-        var items = new List<ArraySegment<byte>>();
-        if (message.FrameLength <= _maxFrameSize)
+        using (message)
         {
-            items.Add(message.ToArraySegment());
-        }
-        else
-        {
+            if (message.Size <= _maxDataSize)
+            {
+                if (!_sendBuffer.TryReserve(message.Size, out var segment, out var span)) return false;
+                message.WriteTo(span);
+                return TrySend(segment);
+            }
+            
+            const int hSize = UdpHeader.ByteSize;
+            const int fHeaderSize = FragmentHeader.ByteSize;
             var fragId = AllocateFragId();
-            var maxFragBodyLen = (ushort)(_maxFrameSize - UdpHeader.ByteSize - FragmentHeader.ByteSize);
-            items.AddRange(message.Split(fragId, maxFragBodyLen));
-        }
+            var maxBodyPerFrag = _maxDataSize - hSize - fHeaderSize;
+            var totalCount = (byte)Math.Ceiling((double)message.BodyLength / maxBodyPerFrag);
 
-        return items.All(TrySend);
+            for (byte index = 0; index < totalCount; index++)
+            {
+                var bodyOffset = index * maxBodyPerFrag;
+                var fragLen = (ushort)Math.Min(message.BodyLength - bodyOffset, maxBodyPerFrag);
+                var totalSize = hSize + fHeaderSize + fragLen;
+
+                if (!_sendBuffer.TryReserve(totalSize, out var segment, out var span)) return false;
+
+                message.WriteFragmentTo(span, fragId, index, totalCount, bodyOffset, fragLen);
+                if (!TrySend(segment)) return false;
+            }
+        }
+        
+        return true;
     }
 
     private uint AllocateFragId()
@@ -48,8 +63,7 @@ public class UdpSocket : BaseNetworkSession, IUnreliableSender
 
     public void SetMaxFrameSize(ushort mtu)
     {
-        _maxFrameSize = (ushort)(mtu - 20 /* IP header size */ - 8 /* UDP header size*/);
-        ;
+        _maxDataSize = (ushort)(mtu - 20 /* IP header size */ - 8 /* UDP header size*/);
     }
 
     public void UpdateRemoteEndPoint(IPEndPoint remoteEndPoint)
@@ -100,6 +114,8 @@ public class UdpSocket : BaseNetworkSession, IUnreliableSender
             OnSendError(queue, CloseReason.SocketError);
             return;
         }
+        
+        _sendBuffer.Release(e.BytesTransferred);
 
         ClearSocketAsyncEventArgs(e);
 
@@ -118,5 +134,11 @@ public class UdpSocket : BaseNetworkSession, IUnreliableSender
     {
         client = null;
         return false;
+    }
+
+    protected override void OnClosed(CloseReason reason)
+    {
+        _sendBuffer.Dispose();
+        base.OnClosed(reason);
     }
 }

@@ -1,9 +1,6 @@
 using System;
+using System.Buffers;
 using System.Collections.Concurrent;
-using System.Diagnostics;
-using System.IO.Enumeration;
-using System.Linq;
-using SP.Core;
 
 namespace SP.Engine.Runtime.Networking
 {
@@ -24,7 +21,7 @@ namespace SP.Engine.Runtime.Networking
 
     public interface IFragmentAssembler
     {
-        bool TryAssemble(FragmentHeader fragHeader, ArraySegment<byte> fragSegment, out ArraySegment<byte> assembled);
+        bool TryAssemble(FragmentHeader fragHeader, ArraySegment<byte> fragSegment, out byte[] assembled, out int length);
         void Cleanup(TimeSpan timeout);
     }
 
@@ -33,14 +30,13 @@ namespace SP.Engine.Runtime.Networking
         private readonly ConcurrentDictionary<uint, ReassemblyState> _states =
             new ConcurrentDictionary<uint, ReassemblyState>();
 
-        public bool TryAssemble(FragmentHeader fragHeader, ArraySegment<byte> fragSegment, out ArraySegment<byte> assembled)
+        public bool TryAssemble(FragmentHeader fragHeader, ArraySegment<byte> fragSegment, out byte[] assembled, out int length)
         {
-            assembled = default;
+            assembled = null;
+            length = 0;
 
             if (fragHeader.Index >= fragHeader.TotalCount)
-            {
                 return false;
-            }
 
             var key = fragHeader.FragId;
             
@@ -50,9 +46,7 @@ namespace SP.Engine.Runtime.Networking
                 if (!_states.TryAdd(key, state))
                 {
                     if (!_states.TryGetValue(key, out state))
-                    {
                         return false;
-                    }
                 }
             }
 
@@ -72,7 +66,7 @@ namespace SP.Engine.Runtime.Networking
                 if (state.ReceivedCount != state.TotalCount)
                     return false;
 
-                var resultData = new byte[state.TotalLength];
+                var bytes = ArrayPool<byte>.Shared.Rent(state.TotalLength);
                 var offset = 0;
 
                 for (var i = 0; i < state.TotalCount; i++)
@@ -84,13 +78,14 @@ namespace SP.Engine.Runtime.Networking
                         return false;
                     }
                     
-                    Buffer.BlockCopy(part, 0, resultData, offset, part.Length);
+                    Buffer.BlockCopy(part, 0, bytes, offset, part.Length);
                     offset += part.Length;
                 }
 
                 _states.TryRemove(key, out _);
-                
-                assembled = new ArraySegment<byte>(resultData);
+
+                assembled = bytes;
+                length = state.TotalLength;
                 return true;
             }
         }

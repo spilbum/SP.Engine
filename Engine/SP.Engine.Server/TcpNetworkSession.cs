@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Drawing;
 using System.Linq;
 using System.Net.Sockets;
 using System.Threading;
@@ -16,16 +17,54 @@ public interface ITcpNetworkSession : ILogContext, IReliableSender
 }
 
 public class TcpNetworkSession(Socket client, SocketReceiveContext socketReceiveContext)
-    : BaseNetworkSession(SocketMode.Tcp, client), ITcpNetworkSession, IReliableSender
+    : BaseNetworkSession(SocketMode.Tcp, client), ITcpNetworkSession
 {
     private SocketAsyncEventArgs _sendEventArgs;
-
+    private readonly SocketSendBuffer _sendBuffer = new(1024 * 64);
+    
     ILogger ILogContext.Logger => Session.Logger;
     public SocketReceiveContext ReceiveContext { get; } = socketReceiveContext;
 
     public bool TrySend(TcpMessage message)
     {
-        return TrySend(message.ToArraySegment());
+        if (!_sendBuffer.TryReserve(message.Size, out var segment, out var span)) 
+            return false;
+        
+        message.WriteTo(span);
+        return TrySend(segment);
+    }
+    
+    private void OnSendCompleted(object sender, SocketAsyncEventArgs e)
+    {
+        if (e.UserToken is not SegmentQueue queue)
+        {
+            Session.Logger.Error("SendingQueue is null");
+            return;
+        }
+
+        if (!ProcessCompleted(e))
+        {
+            ClearPrevSendState(e);
+            OnSendError(queue, CloseReason.SocketError);
+            return;
+        }
+
+        _sendBuffer.Release(e.BytesTransferred);
+        
+        var count = queue.Sum(x => x.Count);
+        if (count != e.BytesTransferred)
+        {
+            Session.Logger.Warn("{0} of {1} were transferred, send the rest {2} bytes right now.", e.BytesTransferred,
+                count, queue.Sum(x => x.Count));
+            
+            queue.TrimSentBytes(e.BytesTransferred);
+            ClearPrevSendState(e);
+            Send(queue);
+            return;
+        }
+
+        ClearPrevSendState(e);
+        OnSendCompleted(queue);
     }
 
     public void ProcessReceive(SocketAsyncEventArgs e)
@@ -77,11 +116,8 @@ public class TcpNetworkSession(Socket client, SocketReceiveContext socketReceive
             return;
         }
 
-        // 전송 이벤트 초기화
-        if (Interlocked.CompareExchange(ref _sendEventArgs, null, e) != e)
-            return;
-
-        e.Dispose();
+        if (Interlocked.CompareExchange(ref _sendEventArgs, null, e) == e) e.Dispose();
+        _sendBuffer.Dispose();
         base.OnClosed(reason);
     }
 
@@ -181,36 +217,5 @@ public class TcpNetworkSession(Socket client, SocketReceiveContext socketReceive
             e.SetBuffer(null, 0, 0);
         else if (e.BufferList != null)
             e.BufferList = null;
-    }
-
-
-    private void OnSendCompleted(object sender, SocketAsyncEventArgs e)
-    {
-        if (e.UserToken is not SegmentQueue queue)
-        {
-            Session.Logger.Error("SendingQueue is null");
-            return;
-        }
-
-        if (!ProcessCompleted(e))
-        {
-            ClearPrevSendState(e);
-            OnSendError(queue, CloseReason.SocketError);
-            return;
-        }
-
-        var count = queue.Sum(x => x.Count);
-        if (count != e.BytesTransferred)
-        {
-            queue.TrimSentBytes(e.BytesTransferred);
-            Session.Logger.Warn("{0} of {1} were transferred, send the rest {2} bytes right now.", e.BytesTransferred,
-                count, queue.Sum(x => x.Count));
-            ClearPrevSendState(e);
-            Send(queue);
-            return;
-        }
-
-        ClearPrevSendState(e);
-        OnSendCompleted(queue);
     }
 }

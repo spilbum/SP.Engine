@@ -252,10 +252,13 @@ public sealed class Session : BaseSession, ISession
 
     private bool InternalSend(IProtocolData data)
     {
-        var channel = data.Channel;
         var policy = PolicyDefaults.InternalPolicy;
         var encryptor = policy.UseEncrypt ? Peer?.Encryptor : null;
         var compressor = policy.UseCompress ? Peer?.Compressor : null;
+        var originalChannel = data.Channel;
+        var channel = originalChannel == ChannelKind.Unreliable && !IsUdpAvailable
+            ? ChannelKind.Reliable
+            : originalChannel;
 
         switch (channel)
         {

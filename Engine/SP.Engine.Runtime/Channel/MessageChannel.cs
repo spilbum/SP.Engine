@@ -25,42 +25,30 @@ namespace SP.Engine.Runtime.Channel
         public abstract bool TrySend(T message);
 
         bool IMessageChannel.TrySend(IMessage message)
-        {
-            return message is T typed && TrySend(typed);
-        }
+            => message is T typed && TrySend(typed);
     }
 
     public sealed class ReliableChannel : BaseMessageChannel<TcpMessage>
     {
         private readonly IReliableSender _sender;
 
-        public ReliableChannel(IReliableSender sender)
-        {
-            _sender = sender;
-        }
+        public ReliableChannel(IReliableSender sender) => _sender = sender;
 
         public override ChannelKind Kind => ChannelKind.Reliable;
 
         public override bool TrySend(TcpMessage message)
-        {
-            return _sender.TrySend(message);
-        }
+            => _sender.TrySend(message);
     }
 
     public sealed class UnreliableChannel : BaseMessageChannel<UdpMessage>
     {
         private readonly IUnreliableSender _sender;
 
-        public UnreliableChannel(IUnreliableSender sender)
-        {
-            _sender = sender;
-        }
+        public UnreliableChannel(IUnreliableSender sender) => _sender = sender;
 
         public override ChannelKind Kind => ChannelKind.Unreliable;
 
         public override bool TrySend(UdpMessage message)
-        {
-            return _sender.TrySend(message);
-        }
+            => _sender.TrySend(message);
     }
 }

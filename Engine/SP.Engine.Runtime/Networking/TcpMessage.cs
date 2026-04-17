@@ -8,12 +8,13 @@ namespace SP.Engine.Runtime.Networking
         {
         }
 
-        public TcpMessage(TcpHeader header, ReadOnlyMemory<byte> payload) : base(header, payload)
+        public TcpMessage(TcpHeader header, byte[] body, int bodyLength) : base(header, body, bodyLength)
         {
         }
 
         public uint SequenceNumber => Header.SequenceNumber;
         public uint AckNumber => Header.AckNumber;
+        public int Size => TcpHeader.ByteSize + BodyLength;
 
         public void SetSequenceNumber(uint sequenceNumber)
         {
@@ -31,27 +32,29 @@ namespace SP.Engine.Runtime.Networking
                 .Build();
         }
 
-        public ArraySegment<byte> ToArraySegment()
+        public int WriteTo(Span<byte> destination)
         {
-            var hSize = Header.Size;
-            var bLen = Body.Length;
-            var buf = new byte[hSize + bLen];
-            var span = buf.AsSpan();
+            const int hSize = TcpHeader.ByteSize;
+            var bLen = BodyLength;
+            var total = hSize + bLen;
 
-            Header.WriteTo(span[..hSize]);
+            if (destination.Length < total) return 0;
+            
+            Header.WriteTo(destination[..hSize]);
             if (bLen > 0)
-                Body.Span.CopyTo(span.Slice(hSize, bLen));
-
-            return new ArraySegment<byte>(buf, 0, buf.Length);
+            {
+                BodySpan.CopyTo(destination.Slice(hSize, bLen));
+            }
+            return total;
         }
-
-        protected override TcpHeader CreateHeader(HeaderFlags flags, ushort msgId, int payloadLength)
+        
+        protected override TcpHeader CreateHeader(HeaderFlags flags, ushort protocolId, int bodyLength)
         {
             return new TcpHeaderBuilder()
                 .From(Header)
                 .AddFlag(flags)
-                .WithId(msgId)
-                .WithPayloadLength(payloadLength)
+                .WithProtocolId(protocolId)
+                .WithBodyLength(bodyLength)
                 .Build();
         }
     }

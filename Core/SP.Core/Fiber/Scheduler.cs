@@ -9,30 +9,30 @@ namespace SP.Core.Fiber
             new ConcurrentDictionary<TimerHandleBase, byte>();
         private volatile bool _disposed;
 
-        public IDisposable Schedule(IFiber fiber, Action action, TimeSpan due, TimeSpan period)
+        public IDisposable Schedule(IFiber fiber, Action action, TimeSpan dueTime, TimeSpan period)
         {
             var handle = new TimerHandle(fiber, action);
-            return Track(handle, due, period);
+            return Track(handle, dueTime, period);
         }
 
-        public IDisposable Schedule<T>(IFiber fiber, Action<T> action, T state, TimeSpan due, TimeSpan period)
+        public IDisposable Schedule<T>(IFiber fiber, Action<T> action, T state, TimeSpan dueTime, TimeSpan period)
         {
             var handle = new TimerHandle<T>(fiber, action, state);
-            return Track(handle, due, period);
+            return Track(handle, dueTime, period);
         }
 
         public IDisposable Schedule<T1, T2>(IFiber fiber, Action<T1, T2> action, T1 s1, T2 s2,
-            TimeSpan due, TimeSpan period)
+            TimeSpan dueTime, TimeSpan period)
         {
             var handle = new TimerHandle<T1, T2>(fiber, action, s1, s2);
-            return Track(handle, due, period);
+            return Track(handle, dueTime, period);
         }
 
         public IDisposable Schedule<T1, T2, T3>(IFiber fiber, Action<T1, T2, T3> action, T1 s1, T2 s2, T3 s3,
-            TimeSpan due, TimeSpan period)
+            TimeSpan dueTime, TimeSpan period)
         {
             var handle = new TimerHandle<T1, T2, T3>(fiber, action, s1, s2, s3);
-            return Track(handle, due, period);
+            return Track(handle, dueTime, period);
         }
 
         private IDisposable Track(TimerHandleBase handle, TimeSpan due, TimeSpan period)

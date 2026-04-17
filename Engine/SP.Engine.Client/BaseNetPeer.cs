@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -89,7 +90,7 @@ namespace SP.Engine.Client
         private UdpSocket _udpSocket;
         
         private Timer _ackTimer;
-        private volatile uint _lastSentAck;
+        private uint _lastSentAck;
         private long _lastAckTimerResetTicks;
         private readonly object _ackLock = new object();
 
@@ -295,7 +296,8 @@ namespace SP.Engine.Client
             if (!IsConnected)
                 return;
 
-            foreach (var message in _messageProcessor.DequeuePendingMessages())
+            var pendingMessages = _messageProcessor.DequeuePendingMessages();
+            foreach (var message in pendingMessages)
             {
                 // 재전송 트래커에 등록
                 _messageProcessor.RegisterMessageState(message);
@@ -303,7 +305,7 @@ namespace SP.Engine.Client
                 // 전송
                 if (!TrySend(ChannelKind.Reliable, message)) 
                     continue;
-                
+
                 lock (_ackLock)
                 {
                     _lastSentAck = message.AckNumber;
@@ -326,6 +328,7 @@ namespace SP.Engine.Client
                 // 재전송 횟수 초과로 인해 실패됨
                 Logger.Warn("Connection terminated due to message delivery failure. first seq: {0}", failed[0].SequenceNumber);
                 // 재연결을 위해 종료 처리
+                _messageProcessor.ResetMessageStates();
                 _session?.Close();
                 return;
             }
@@ -342,27 +345,13 @@ namespace SP.Engine.Client
 
         public bool Send(IProtocolData data)
         {
-            var sequenceNumber = data.Channel == ChannelKind.Reliable
-                ? _messageProcessor.GetNextReliableSeq()
-                : 0;
-            
-            var ackNumber = data.Channel == ChannelKind.Reliable
-                ? _messageProcessor.LastSequenceNumber
-                : 0;
-            
-            return TrySend(sequenceNumber, ackNumber, data, _policySnapshot.Resolve(data.Id));
-        }
-        
-        private bool InternalSend(IProtocolData data)
-            => TrySend(0, 0, data, PolicyDefaults.InternalPolicy);
-
-        private bool TrySend(uint sequenceNumber, uint ackNumber, IProtocolData data, IPolicy policy)
-        {
+            var policy = _policySnapshot.Resolve(data.Id);
             var encryptor = policy.UseEncrypt ? Encryptor : null;
             var compressor = policy.UseCompress ? Compressor : null;
-            var channel = data.Channel == ChannelKind.Unreliable && !_channelRouter.IsUdpAvailable
+            var originalChannel = data.Channel;
+            var channel = originalChannel == ChannelKind.Unreliable && !_channelRouter.IsUdpAvailable
                 ? ChannelKind.Reliable
-                : data.Channel;
+                : originalChannel;
             
             try
             {
@@ -371,36 +360,31 @@ namespace SP.Engine.Client
                     case ChannelKind.Reliable:
                     {
                         var tcp = new TcpMessage();
-                        tcp.SetSequenceNumber(sequenceNumber);
-                        tcp.SetAckNumber(ackNumber);
                         tcp.Serialize(data, policy, encryptor, compressor);
 
-                        if (tcp.SequenceNumber == 0)
+                        if (originalChannel == ChannelKind.Unreliable)
                         {
-                            // 즉시 전송 (Internal/Fallback)
+                            // Fallback 메시지
                             return TrySend(channel, tcp);
                         }
+
+                        if (IsConnected)
+                        {
+                            _messageProcessor.RegisterMessageState(tcp);
+                            if (!TrySend(channel, tcp)) 
+                                return false;
+                        
+                            lock (_ackLock)
+                            {
+                                _lastSentAck = tcp.AckNumber;   
+                                RestartAckTimer();
+                            }
+                        }
+                        else
+                        {
+                            _messageProcessor.EnqueuePendingMessage(tcp);
+                        }
                             
-                        if (!IsConnected)
-                        {
-                            // 메시지 팬딩 처리
-                            if (_messageProcessor.EnqueuePendingMessage(tcp)) return true;
-                            Logger.Error("Pending queue is full! Message dropped. Seq={0}", tcp.SequenceNumber);
-                            return false;
-                        }
-
-                        // 전송 메시지 등록
-                        _messageProcessor.RegisterMessageState(tcp);
-                        
-                        if (!TrySend(channel, tcp)) 
-                            return false;
-                        
-                        lock (_ackLock)
-                        {
-                            _lastSentAck = tcp.AckNumber;   
-                            RestartAckTimer();
-                        }
-
                         return true;
                     }
                     case ChannelKind.Unreliable:
@@ -418,6 +402,35 @@ namespace SP.Engine.Client
             {
                 Logger.Error(e);
                 return false;
+            }
+        }
+
+        private bool InternalSend(IProtocolData data)
+        {
+            var policy = PolicyDefaults.InternalPolicy;
+            var encryptor = policy.UseEncrypt ? _encryptor : null;
+            var compressor = policy.UseCompress ? _compressor : null;
+            var channel = data.Channel == ChannelKind.Unreliable && !_channelRouter.IsUdpAvailable
+                ? ChannelKind.Reliable
+                : data.Channel;
+            
+            switch (channel)
+            {
+                case ChannelKind.Reliable:
+                {
+                    var tcp = new TcpMessage();
+                    tcp.Serialize(data, policy, encryptor, compressor);
+                    return TrySend(channel, tcp);
+                }
+                case ChannelKind.Unreliable:
+                {
+                    var udp = new UdpMessage();
+                    udp.SetSessionId(_sessionId);
+                    udp.Serialize(data, policy, encryptor, compressor);
+                    return TrySend(channel, udp);
+                }
+                default:
+                    throw new Exception($"Unknown channel: {channel}");
             }
         }
 
@@ -598,16 +611,16 @@ namespace SP.Engine.Client
         private void OnAckTimerTick(object state)
         {
             if (!IsConnected || _disposed) return;
-            var currAckNumber = _messageProcessor.LastSequenceNumber;
+            var ackNum = _messageProcessor.LastReceivedSeq;
 
-            if (currAckNumber <= _lastSentAck) return;
+            if (ackNum <= _lastSentAck) return;
             
             lock (_ackLock)
             {
-                if (currAckNumber <= _lastSentAck) return;
+                if (ackNum <= _lastSentAck) return;
                 
                 //Logger.Debug("[OnAckTimerTick] Timer expired. Sending ACK: {0}", currAckNumber);
-                SendMessageAck(currAckNumber);
+                SendMessageAck(ackNum);
             }
         }
 
@@ -689,17 +702,17 @@ namespace SP.Engine.Client
                     if (_receiveBuffer == null || _receiveBuffer.ReadableBytes < headerSize)
                         break;
 
-                    _receiveBuffer.Peek(headerSpan);
+                    _receiveBuffer.Peek(headerSpan, headerSize);
                     
                     if (!TcpHeader.TryRead(headerSpan, out var header, out var consumed))
                         break;
 
-                    var bodyLen = header.PayloadLength;
+                    var bodyLen = header.BodyLength;
                     
                     if (bodyLen > MaxFrameBytes)
                     {
                         Logger.Warn("Invalid payload length. id={0}, max={1}, len={2}",
-                            header.ProtocolId, MaxFrameBytes, bodyLen);
+                            header.Id, MaxFrameBytes, bodyLen);
                         Close();
                         break;
                     }
@@ -715,15 +728,14 @@ namespace SP.Engine.Client
 
                     if (bodyLen > 0)
                     {
-                        var payload = new byte[bodyLen];
-                        _receiveBuffer.Peek(payload);
+                        var bodyBytes = ArrayPool<byte>.Shared.Rent(bodyLen);
+                        _receiveBuffer.Peek(bodyBytes, bodyLen);
                         _receiveBuffer.Consume(bodyLen);
-
-                        OnReceivedMessage(new TcpMessage(header, payload));
+                        OnReceivedMessage(new TcpMessage(header, bodyBytes, bodyLen));
                     }
                     else
                     {
-                        OnReceivedMessage(new TcpMessage(header, ReadOnlyMemory<byte>.Empty));
+                        OnReceivedMessage(new TcpMessage(header, Array.Empty<byte>(), 0));
                     }
                 }
             }
@@ -739,7 +751,7 @@ namespace SP.Engine.Client
             // 피기배킹 처리
             HandleRemoteAck(receivedAckNumber);
                     
-            var currAckNumber = _messageProcessor.LastSequenceNumber;
+            var currAckNumber = _messageProcessor.LastReceivedSeq;
             if (currAckNumber - _lastSentAck < _messageProcessor.AckStepThreshold)
                 return;
             
@@ -899,30 +911,39 @@ namespace SP.Engine.Client
 
             if (header.Fragmented == 0x01)
             {
-                var bodySpan = segment.AsSpan(bodyOffset, header.PayloadLength);
+                var bodySpan = segment.AsSpan(bodyOffset, header.BodyLength);
                 if (!FragmentHeader.TryParse(bodySpan, out var fragHeader, out consumed))
                     return;
                 
                 var fragSegment = new ArraySegment<byte>(segment.Array, bodyOffset + consumed, fragHeader.FragLength);
                     
-                if (!_udpSocket.Assembler.TryAssemble(fragHeader, fragSegment, out var assembled))
+                if (!_udpSocket.Assembler.TryAssemble(fragHeader, fragSegment, out var assembled, out var length))
                     return;
 
                 var normalizedHeader = new UdpHeaderBuilder()
                     .From(header)
-                    .WithPayloadLength(assembled.Count)
+                    .WithBodyLength(length)
                     .Build();
 
-                var message = new UdpMessage(normalizedHeader, assembled);
+                var message = new UdpMessage(normalizedHeader, assembled, length);
                 OnReceivedMessage(message);
             }
             else
             {
-                var payload = new byte[header.PayloadLength];
-                segment.AsSpan(bodyOffset, header.PayloadLength).CopyTo(payload);
+                if (header.BodyLength > 0)
+                {
+                    var bLen = header.BodyLength;
+                    var bodyBytes = ArrayPool<byte>.Shared.Rent(bLen);
+                    segment.AsSpan(bodyOffset, bLen).CopyTo(bodyBytes);
                 
-                var message = new UdpMessage(header, payload);
-                OnReceivedMessage(message);
+                    var message = new UdpMessage(header, bodyBytes, bLen);
+                    OnReceivedMessage(message);
+                }
+                else
+                {
+                    var message = new UdpMessage(header, Array.Empty<byte>(), 0);
+                    OnReceivedMessage(message);
+                }
             }
         }
 
@@ -1167,7 +1188,7 @@ namespace SP.Engine.Client
                 
                 _diffieHellman.Dispose();
                 _sessionId = 0;
-                _messageProcessor.Clear();
+                _messageProcessor.Dispose();
                 _receiveBuffer?.Dispose();
                 _receiveBuffer = null;
                 

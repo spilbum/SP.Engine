@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -168,7 +169,7 @@ public abstract class BaseSession : IBaseSession
 
     public void ProcessUdpBuffer(ArraySegment<byte> segment, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint)
     {
-        if (header.ProtocolId is C2SEngineProtocolId.UdpHelloReq 
+        if (header.Id is C2SEngineProtocolId.UdpHelloReq 
             or C2SEngineProtocolId.UdpHealthCheckReq 
             or C2SEngineProtocolId.UdpHealthCheckConfirm)
         {
@@ -186,31 +187,41 @@ public abstract class BaseSession : IBaseSession
         if (UdpSocket == null)
             return;
 
-        var bodyOffset = header.Size;
-        
+        const int hSize = UdpHeader.ByteSize;
         if (header.Fragmented == 0x01)
         {
-            var bodySpan = segment.AsSpan(bodyOffset, header.PayloadLength);
+            var bodySpan = segment.AsSpan(hSize, header.BodyLength);
             if (!FragmentHeader.TryParse(bodySpan, out var fragHeader, out var consumed))
                 return;
 
-            var fragSegment = new ArraySegment<byte>(segment.Array!, bodyOffset + consumed, fragHeader.FragLength);
-            if (!UdpSocket.Assembler.TryAssemble(fragHeader, fragSegment, out var assembled))
+            var fragSegment = new ArraySegment<byte>(segment.Array!, hSize + consumed, fragHeader.FragLength);
+            if (!UdpSocket.Assembler.TryAssemble(fragHeader, fragSegment, out var assembled, out var length))
                 return;
 
             var normalizedHeader = new UdpHeaderBuilder()
                 .From(header)
-                .WithPayloadLength(assembled.Count)
+                .WithBodyLength(length)
                 .Build();
 
-            var message = new UdpMessage(normalizedHeader, assembled);
+            var message = new UdpMessage(normalizedHeader, assembled, length);
             OnReceivedMessage(message);
         }
         else
         {
-            var payload = segment.AsSpan(bodyOffset, header.PayloadLength).ToArray();
-            var message = new UdpMessage(header, payload);
-            OnReceivedMessage(message);
+            if (header.BodyLength > 0)
+            {
+                var bLen = header.BodyLength;
+                var bodyBytes = ArrayPool<byte>.Shared.Rent(bLen);
+                segment.AsSpan(hSize, bLen).CopyTo(bodyBytes);
+            
+                var message = new UdpMessage(header, bodyBytes, bLen);
+                OnReceivedMessage(message);
+            }
+            else
+            {
+                var message = new UdpMessage(header, [], 0);
+                OnReceivedMessage(message);
+            }
         }
     }
     
@@ -231,18 +242,18 @@ public abstract class BaseSession : IBaseSession
                 if (processedCount++ >= maxProcessPerTick)
                     break;
                 
-                _receiveBuffer.Peek(headerSpan);
+                _receiveBuffer.Peek(headerSpan, headerSize);
                 
                 if (!TcpHeader.TryRead(headerSpan, out var header, out var consumed))
                     break;
 
                 // 페이로드 검증
-                var bodyLen = header.PayloadLength;
+                var bodyLen = header.BodyLength;
                 
                 if (bodyLen < 0 || bodyLen > Config.Network.MaxFrameBytes)
                 {
                     Logger.Warn("Invalid payload length. id={0}, max={1}, len={2}",
-                        header.ProtocolId, Config.Network.MaxFrameBytes, bodyLen);
+                        header.Id, Config.Network.MaxFrameBytes, bodyLen);
                     Close(CloseReason.ProtocolError);
                     break;
                 }
@@ -256,16 +267,16 @@ public abstract class BaseSession : IBaseSession
 
                 if (bodyLen > 0)
                 {
-                    var payload = new byte[bodyLen];
-                    _receiveBuffer.Peek(payload);
+                    var bodyBytes = ArrayPool<byte>.Shared.Rent(bodyLen);
+                    _receiveBuffer.Peek(bodyBytes, bodyLen);
                     _receiveBuffer.Consume(bodyLen);
                     
-                    var message = new TcpMessage(header, new ReadOnlyMemory<byte>(payload));
+                    var message = new TcpMessage(header, bodyBytes, bodyLen);
                     OnReceivedMessage(message);
                 }
                 else
                 {
-                    var message = new TcpMessage(header, ReadOnlyMemory<byte>.Empty);
+                    var message = new TcpMessage(header, [], 0);
                     OnReceivedMessage(message);
                 }
             }

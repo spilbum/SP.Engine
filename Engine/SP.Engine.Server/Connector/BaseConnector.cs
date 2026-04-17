@@ -16,7 +16,8 @@ public abstract class BaseConnector : BaseNetPeer, IConnector, ICommandContext
     private IDisposable _reconnectTimer;
     private IFiber _fiber;
     private IScheduler _globalScheduler;
-    
+    private ILogger _logger;
+
     public string Name { get; private set; }
     public string Host { get; private set; }
     public int Port { get; private set; }
@@ -35,6 +36,7 @@ public abstract class BaseConnector : BaseNetPeer, IConnector, ICommandContext
         
         _fiber = fiber;
         _globalScheduler = globalScheduler;
+        _logger = logger;
 
         try
         {
@@ -57,25 +59,21 @@ public abstract class BaseConnector : BaseNetPeer, IConnector, ICommandContext
         }
     }
 
-    public void Connect()
+    public bool Connect()
     {
-        if (Interlocked.Exchange(ref _connecting, 1) == 1) return;
-
+        if (Interlocked.Exchange(ref _connecting, 1) == 1) return false;
         try
         {
             Connect(Host, Port);
+            return true;
         }
         catch (Exception ex)
         {
             Logger.Error(ex);
+            return false;
         }
     }
-
-    public virtual void Update()
-    {
-        Tick();
-    }
-
+    
     private void OnConnected(object sender, EventArgs e)
     {
         Interlocked.Exchange(ref _connecting, 0);
@@ -86,6 +84,7 @@ public abstract class BaseConnector : BaseNetPeer, IConnector, ICommandContext
     {
         Interlocked.Exchange(ref _connecting, 0);
 
+        // 재연결 타이머 등록
         _reconnectTimer ??= _globalScheduler.Schedule(
             _fiber,
             Connect,

@@ -7,23 +7,39 @@ using SP.Engine.Runtime.Security;
 
 namespace SP.Engine.Runtime.Networking
 {
-    public abstract class BaseMessage<THeader> : IMessage
-        where THeader : IHeader
+    public abstract class BaseMessage<THeader> : IMessage where THeader : IHeader
     {
+        protected THeader Header { get; set; }
+        private byte[] Body { get; set; }
+        public int BodyLength { get; private set; }
+        protected ReadOnlySpan<byte> BodySpan => Body == null 
+            ? ReadOnlySpan<byte>.Empty
+            : new ReadOnlySpan<byte>(Body, 0, BodyLength);
+        
+        public ushort Id => Header.Id;
+        
         protected BaseMessage()
         {
         }
 
-        protected BaseMessage(THeader header, ReadOnlyMemory<byte> body)
+        protected BaseMessage(THeader header, byte[] body, int bodyLength)
         {
             Header = header;
             Body = body;
+            BodyLength = bodyLength;
         }
 
-        protected THeader Header { get; set; }
-        protected ReadOnlyMemory<byte> Body { get; private set; }
+        public void Dispose()
+        {
+            if (Body != null)
+            {
+                if (Body.Length > 0)
+                    ArrayPool<byte>.Shared.Return(Body);
+                Body = null;
+            }
 
-        public ushort Id => Header.ProtocolId;
+            Header = default;
+        }
         
         public void Serialize(IProtocolData protocol, IPolicy policy, IEncryptor encryptor, ICompressor compressor)
         {
@@ -32,51 +48,46 @@ namespace SP.Engine.Runtime.Networking
             using var w = new NetWriter();
             NetSerializer.Serialize(w, protocol.GetType(), protocol);
             
-            var dataSpan = w.WrittenSpan;
+            var bodySpan = w.WrittenSpan;
             var flags = HeaderFlags.None;
 
-            var useComp = policy.UseCompress && compressor != null && dataSpan.Length >= policy.CompressionThreshold;
+            var useComp = policy.UseCompress && compressor != null && bodySpan.Length >= policy.CompressionThreshold;
             var useEncrypt = policy.UseEncrypt && encryptor != null;
-
-            if (!useComp && !useEncrypt)
-            {
-                var bodyBytes = dataSpan.ToArray();
-                Header = CreateHeader(flags, protocol.Id, bodyBytes.Length);
-                Body = new ReadOnlyMemory<byte>(bodyBytes);
-                return;
-            }
-
+            
             byte[] rentBuf1 = null;
             byte[] rentBuf2 = null;
-
+            
             try
             {
                 if (useComp)
                 {
-                    var maxLen = compressor.GetMaxCompressedLength(dataSpan.Length);
+                    var maxLen = compressor.GetMaxCompressedLength(bodySpan.Length);
                     rentBuf1 = ArrayPool<byte>.Shared.Rent(maxLen);
+                    // 압축
+                    var count = compressor.Compress(bodySpan, rentBuf1);
 
-                    var written = compressor.Compress(dataSpan, rentBuf1);
-
-                    dataSpan = new ReadOnlySpan<byte>(rentBuf1, 0, written);
+                    bodySpan = new ReadOnlySpan<byte>(rentBuf1, 0, count);
                     flags |= HeaderFlags.Compressed;
                 }
 
                 if (useEncrypt)
                 {
-                    var maxLen = encryptor.GetCiphertextLength(dataSpan.Length);
+                    var maxLen = encryptor.GetCiphertextLength(bodySpan.Length);
                     rentBuf2 = ArrayPool<byte>.Shared.Rent(maxLen);
-
-                    var written = encryptor.Encrypt(dataSpan, rentBuf2);
-
-                    dataSpan = new ReadOnlySpan<byte>(rentBuf2, 0, written);
+                    // 암호화
+                    var count = encryptor.Encrypt(bodySpan, rentBuf2);
+                    
+                    bodySpan = new ReadOnlySpan<byte>(rentBuf2, 0, count);
                     flags |= HeaderFlags.Encrypted;
                 }
+                
+                var bLen = bodySpan.Length;
+                var bodyBytes = ArrayPool<byte>.Shared.Rent(bLen);
+                bodySpan.CopyTo(bodyBytes);
 
-                var bodyBytes = dataSpan.ToArray();
-
-                Header = CreateHeader(flags, protocol.Id, bodyBytes.Length);
-                Body = new ReadOnlyMemory<byte>(bodyBytes);
+                Header = CreateHeader(flags, protocol.Id, bLen);
+                Body = bodyBytes;
+                BodyLength = bLen;
             }
             finally
             {
@@ -88,32 +99,31 @@ namespace SP.Engine.Runtime.Networking
         public TProtocol Deserialize<TProtocol>(IEncryptor encryptor, ICompressor compressor)
             where TProtocol : IProtocolData
         {
-            var dataSpan = Body.Span;
-            
             byte[] rentBuf1 = null;
             byte[] rentBuf2 = null;
 
             try
             {
+                var bodySpan = BodySpan;
                 if (HasFlag(HeaderFlags.Encrypted) && encryptor != null)
                 {
-                    var maxLen = encryptor.GetPlaintextLength(dataSpan.Length);
+                    var maxLen = encryptor.GetPlaintextLength(bodySpan.Length);
                     rentBuf1 = ArrayPool<byte>.Shared.Rent(maxLen);
-                    
-                    var written = encryptor.Decrypt(dataSpan, rentBuf1);
-                    dataSpan = new ReadOnlySpan<byte>(rentBuf1, 0, written);
+                    // 복호화
+                    var count = encryptor.Decrypt(bodySpan, rentBuf1);
+                    bodySpan = new ReadOnlySpan<byte>(rentBuf1, 0, count);
                 }
 
                 if (HasFlag(HeaderFlags.Compressed) && compressor != null)
                 {
-                    var decompressedLength = compressor.GetDecompressedLength(dataSpan);
+                    var decompressedLength = compressor.GetDecompressedLength(bodySpan);
                     rentBuf2 = ArrayPool<byte>.Shared.Rent(decompressedLength);
-                    
-                    var written = compressor.Decompress(dataSpan, rentBuf2);
-                    dataSpan = new ReadOnlySpan<byte>(rentBuf2, 0, written);
+                    // 압축 해제
+                    var count = compressor.Decompress(bodySpan, rentBuf2);
+                    bodySpan = new ReadOnlySpan<byte>(rentBuf2, 0, count);
                 }
                 
-                var reader = new NetReader(dataSpan);
+                var reader = new NetReader(bodySpan);
                 return (TProtocol)NetSerializer.Deserialize(ref reader, typeof(TProtocol));
             }
             finally
@@ -124,6 +134,6 @@ namespace SP.Engine.Runtime.Networking
         }
 
         private bool HasFlag(HeaderFlags flag) => Header != null && Header.HasFlag(flag);
-        protected abstract THeader CreateHeader(HeaderFlags flags, ushort msgId, int payloadLength);
+        protected abstract THeader CreateHeader(HeaderFlags flags, ushort protocolId, int bodyLength);
     }
 }

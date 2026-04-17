@@ -105,7 +105,7 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
             return;
         }
 
-        if (segment.Count < consumed + header.PayloadLength)
+        if (segment.Count < consumed + header.BodyLength)
         {
             // 데이터 부족
             return;
