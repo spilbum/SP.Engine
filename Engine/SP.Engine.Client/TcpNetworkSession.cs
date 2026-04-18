@@ -7,6 +7,7 @@ using System.Net.Sockets;
 using System.Threading;
 using SP.Core;
 using SP.Engine.Client.Configuration;
+using SP.Engine.Runtime;
 using SP.Engine.Runtime.Networking;
 
 namespace SP.Engine.Client

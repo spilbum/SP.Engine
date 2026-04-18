@@ -14,14 +14,9 @@ namespace SP.Engine.Server;
 
 public interface IBaseSession : ILogContext
 {
-    long SessionId { get; }
     IBaseEngine Engine { get; }
-    INetworkSession NetworkSession { get; }
     IEngineConfig Config { get; }
-    DateTime LastActiveTime { get; }
     void ProcessTcpBuffer(byte[] buffer, int offset, int length);
-    void ProcessUdpBuffer(ArraySegment<byte> segment, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint);
-    void Close(CloseReason reason);
 }
 
 public abstract class BaseSession : IBaseSession
@@ -29,7 +24,7 @@ public abstract class BaseSession : IBaseSession
     private readonly MessageChannelRouter _channelRouter = new();
     private IDisposable _assemblerCleanupTimer;
     private BaseEngine _engine;
-    private PooledReceiveBuffer _receiveBuffer;
+    private SocketReceiveBuffer _receiveBuffer;
     private long _sessionId;
     
     public long SessionId
@@ -86,7 +81,7 @@ public abstract class BaseSession : IBaseSession
         Index = sessionIndex;
         NetworkSession = networkSession;
         _engine = (BaseEngine)engine;
-        _receiveBuffer = new PooledReceiveBuffer(engine.Config.Network.ReceiveBufferSize);
+        _receiveBuffer = new SocketReceiveBuffer(engine.Config.Network.ReceiveBufferSize);
         networkSession.Attach(this);
         _channelRouter.Bind(new ReliableChannel(networkSession));
         IsConnected = true;
@@ -167,7 +162,7 @@ public abstract class BaseSession : IBaseSession
         }
     }
 
-    public void ProcessUdpBuffer(ArraySegment<byte> segment, UdpHeader header, Socket socket, IPEndPoint remoteEndPoint)
+    public void ProcessUdpBuffer(UdpHeader header, ArraySegment<byte> segment, Socket socket, IPEndPoint remoteEndPoint)
     {
         if (header.Id is C2SEngineProtocolId.UdpHelloReq 
             or C2SEngineProtocolId.UdpHealthCheckReq 
@@ -184,20 +179,16 @@ public abstract class BaseSession : IBaseSession
             }
         }
 
-        if (UdpSocket == null)
-            return;
+        if (UdpSocket == null) return;
 
-        const int hSize = UdpHeader.ByteSize;
         if (header.Fragmented == 0x01)
         {
-            var bodySpan = segment.AsSpan(hSize, header.BodyLength);
-            if (!FragmentHeader.TryParse(bodySpan, out var fHeader, out var consumed))
-                return;
+            var bodySpan = segment.AsSpan(0, header.BodyLength);
+            if (!FragmentHeader.TryParse(bodySpan, out var fHeader, out var consumed)) return;
 
-            var fSegment = new ArraySegment<byte>(segment.Array!, hSize + consumed, fHeader.FragLength);
+            var fSegment = new ArraySegment<byte>(segment.Array!, consumed, fHeader.FragLength);
             
-            if (!UdpSocket.Assembler.TryAssemble(fHeader, fSegment, out var bodyBytes, out var length))
-                return;
+            if (!UdpSocket.Assembler.TryAssemble(fHeader, fSegment, out var bodyBytes, out var length)) return;
 
             var normalizedHeader = new UdpHeaderBuilder()
                 .From(header)
@@ -213,7 +204,7 @@ public abstract class BaseSession : IBaseSession
             {
                 var bLen = header.BodyLength;
                 var bodyBytes = ArrayPool<byte>.Shared.Rent(bLen);
-                segment.AsSpan(hSize, bLen).CopyTo(bodyBytes);
+                segment.AsSpan(0, bLen).CopyTo(bodyBytes);
             
                 var message = new UdpMessage(header, bodyBytes, bLen);
                 OnReceivedMessage(message);
@@ -228,7 +219,7 @@ public abstract class BaseSession : IBaseSession
     
     void IBaseSession.ProcessTcpBuffer(byte[] buffer, int offset, int length)
     {
-        _receiveBuffer.Write(new ReadOnlySpan<byte>(buffer, offset, length));
+        if (!_receiveBuffer.TryWrite(new ReadOnlySpan<byte>(buffer, offset, length))) return;
 
         try
         {
@@ -238,19 +229,16 @@ public abstract class BaseSession : IBaseSession
             
             Span<byte> headerSpan = stackalloc byte[headerSize];
 
-            while (_receiveBuffer.ReadableBytes >= headerSize)
+            while (_receiveBuffer.Available >= headerSize || ++processedCount <= maxProcessPerTick)
             {
-                if (processedCount++ >= maxProcessPerTick)
+                if (!_receiveBuffer.TryPeek(headerSpan, headerSize) ||
+                    !TcpHeader.TryRead(headerSpan, out var header, out var consumed))
+                {
                     break;
-                
-                _receiveBuffer.Peek(headerSpan, headerSize);
-                
-                if (!TcpHeader.TryRead(headerSpan, out var header, out var consumed))
-                    break;
+                }
 
                 // 페이로드 검증
                 var bodyLen = header.BodyLength;
-                
                 if (bodyLen < 0 || bodyLen > Config.Network.MaxFrameBytes)
                 {
                     Logger.Warn("Invalid payload length. id={0}, max={1}, len={2}",
@@ -260,8 +248,7 @@ public abstract class BaseSession : IBaseSession
                 }
 
                 var totalLen = consumed + bodyLen;
-                if (_receiveBuffer.ReadableBytes < totalLen)
-                    break;
+                if (_receiveBuffer.Available < totalLen) break;
 
                 // 헤더 소비
                 _receiveBuffer.Consume(consumed);
@@ -269,16 +256,13 @@ public abstract class BaseSession : IBaseSession
                 if (bodyLen > 0)
                 {
                     var bodyBytes = ArrayPool<byte>.Shared.Rent(bodyLen);
-                    _receiveBuffer.Peek(bodyBytes, bodyLen);
+                    _receiveBuffer.TryPeek(bodyBytes, bodyLen);
                     _receiveBuffer.Consume(bodyLen);
-                    
-                    var message = new TcpMessage(header, bodyBytes, bodyLen);
-                    OnReceivedMessage(message);
+                    OnReceivedMessage(new TcpMessage(header, bodyBytes, bodyLen));
                 }
                 else
                 {
-                    var message = new TcpMessage(header, [], 0);
-                    OnReceivedMessage(message);
+                    OnReceivedMessage(new TcpMessage(header, [], 0));
                 }
             }
         }

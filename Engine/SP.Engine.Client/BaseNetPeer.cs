@@ -77,7 +77,7 @@ namespace SP.Engine.Client
         private readonly Dictionary<ushort, ICommand> _userCommands = new Dictionary<ushort, ICommand>();
         private readonly ConcurrentQueue<IMessage> _receivedMessageQueue = new ConcurrentQueue<IMessage>();
         private readonly ReliableMessageProcessor _messageProcessor = new ReliableMessageProcessor();
-        private PooledReceiveBuffer _receiveBuffer;
+        private SocketReceiveBuffer _receiveBuffer;
         private Lz4Compressor _compressor;
         private bool _disposed;
         private AesGcmEncryptor _encryptor;
@@ -521,7 +521,7 @@ namespace SP.Engine.Client
             session?.Close();
             
             _receiveBuffer?.Dispose();
-            _receiveBuffer = new PooledReceiveBuffer(Config.ReceiveBufferSize);
+            _receiveBuffer = new SocketReceiveBuffer(Config.ReceiveBufferSize);
 
             session = new TcpNetworkSession(Config);
             session.Opened += OnSessionOpened;
@@ -686,8 +686,7 @@ namespace SP.Engine.Client
         
         private void OnSessionDataReceived(object sender, DataEventArgs e)
         {
-            if (_receiveBuffer == null) return;
-            _receiveBuffer.Write(new ReadOnlySpan<byte>(e.Data, e.Offset, e.Length));
+            if (!_receiveBuffer.TryWrite(new ReadOnlySpan<byte>(e.Data, e.Offset, e.Length))) return;
 
             try
             {
@@ -697,18 +696,15 @@ namespace SP.Engine.Client
 
                 Span<byte> headerSpan = stackalloc byte[headerSize];
                 
-                while (processedCount++ < maxProcessPerTick)
+                while (_receiveBuffer.Available >= headerSize || ++processedCount <= maxProcessPerTick)
                 {
-                    if (_receiveBuffer == null || _receiveBuffer.ReadableBytes < headerSize)
+                    if (!_receiveBuffer.TryPeek(headerSpan, headerSize) ||
+                        !TcpHeader.TryRead(headerSpan, out var header, out var consumed))
+                    {
                         break;
-
-                    _receiveBuffer.Peek(headerSpan, headerSize);
-                    
-                    if (!TcpHeader.TryRead(headerSpan, out var header, out var consumed))
-                        break;
+                    }
 
                     var bodyLen = header.BodyLength;
-                    
                     if (bodyLen > MaxFrameBytes)
                     {
                         Logger.Warn("Invalid payload length. id={0}, max={1}, len={2}",
@@ -718,8 +714,7 @@ namespace SP.Engine.Client
                     }
 
                     var total = consumed + bodyLen;
-                    if (_receiveBuffer.ReadableBytes < total)
-                        break;
+                    if (_receiveBuffer.Available < total) break;
 
                     _receiveBuffer.Consume(consumed);
                     
@@ -729,7 +724,7 @@ namespace SP.Engine.Client
                     if (bodyLen > 0)
                     {
                         var bodyBytes = ArrayPool<byte>.Shared.Rent(bodyLen);
-                        _receiveBuffer.Peek(bodyBytes, bodyLen);
+                        _receiveBuffer.TryPeek(bodyBytes, bodyLen);
                         _receiveBuffer.Consume(bodyLen);
                         OnReceivedMessage(new TcpMessage(header, bodyBytes, bodyLen));
                     }
@@ -833,7 +828,6 @@ namespace SP.Engine.Client
                     StopAckTimer();
                     
                     _receiveBuffer?.Dispose();
-                    _receiveBuffer = null;
                     
                     _udpSocket?.Close();
                     _udpSocket = null;
@@ -901,11 +895,9 @@ namespace SP.Engine.Client
             if (segment.Array == null) return;
             
             var headerSpan = segment.AsSpan(0, UdpHeader.ByteSize);
-            if (!UdpHeader.TryRead(headerSpan, out var header, out var consumed))
-                return;
+            if (!UdpHeader.TryRead(headerSpan, out var header, out var consumed)) return;
 
-            if (_sessionId != header.SessionId)
-                return;
+            if (_sessionId != header.SessionId) return;
 
             var bodyOffset = consumed;
 
@@ -1190,7 +1182,6 @@ namespace SP.Engine.Client
                 _sessionId = 0;
                 _messageProcessor.Dispose();
                 _receiveBuffer?.Dispose();
-                _receiveBuffer = null;
                 
                 PeerId = 0;
                 StopAckTimer();

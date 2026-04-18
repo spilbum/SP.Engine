@@ -99,7 +99,7 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
 
     void IBaseEngine.ProcessUdpClient(ArraySegment<byte> segment, Socket socket, IPEndPoint remoteEndPoint)
     {
-        if (!UdpHeader.TryRead(segment.AsSpan(), out var header, out var consumed))
+        if (!UdpHeader.TryRead(segment, out var header, out var consumed))
         {
             // 헤더 파싱 실패
             return;
@@ -114,11 +114,12 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
         var session = _sessionManager.GetSession(header.SessionId);
         if (session == null)
         {
-            Logger.Debug("Not found session: {0}", header.SessionId);
+            Logger.Debug("[UDP] Not found session: {0}", header.SessionId);
             return;
         }
-        
-        session.ProcessUdpBuffer(segment, header, socket, remoteEndPoint);
+
+        segment = new ArraySegment<byte>(segment.Array!, consumed + segment.Offset, header.BodyLength);
+        session.ProcessUdpBuffer(header, segment, socket, remoteEndPoint);
     }
 
     public void Dispose()

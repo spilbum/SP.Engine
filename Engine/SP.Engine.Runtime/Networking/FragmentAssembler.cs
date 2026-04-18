@@ -8,7 +8,7 @@ namespace SP.Engine.Runtime.Networking
     {
         private readonly byte[][] _fragments;
         private readonly int[] _lengths;
-        private int _totalSize;
+        private int _totalLength;
         
         public readonly long CreateAt = DateTime.UtcNow.Ticks;
         public int ReceivedCount { get; private set; }
@@ -24,28 +24,28 @@ namespace SP.Engine.Runtime.Networking
 
         public bool Add(byte index, ArraySegment<byte> segment)
         {
-            if (index >= ExpectedCount || _fragments[index] != null)
-                return false;
+            if (index >= ExpectedCount || _fragments[index] != null) return false;
 
             var buffer = ArrayPool<byte>.Shared.Rent(segment.Count);
             segment.AsSpan().CopyTo(buffer);
 
             _fragments[index] = buffer;
             _lengths[index] = segment.Count;
-            _totalSize += segment.Count;
-            return ++ReceivedCount == ExpectedCount;
+            _totalLength += segment.Count;
+            ReceivedCount++;
+            return true;
         }
 
         public (byte[] buffer, int length) Combine()
         {
-            var combined = ArrayPool<byte>.Shared.Rent(_totalSize);
+            var buffer = ArrayPool<byte>.Shared.Rent(_totalLength);
             for (int i = 0, offset = 0; i < ExpectedCount; i++)
             {
-                Buffer.BlockCopy(_fragments[i], 0, combined, offset, _lengths[i]);
+                Buffer.BlockCopy(_fragments[i], 0, buffer, offset, _lengths[i]);
                 offset += _lengths[i];
             }
 
-            return (combined, _totalSize);
+            return (buffer, _totalLength);
         }
 
         public void Dispose()
@@ -85,9 +85,9 @@ namespace SP.Engine.Runtime.Networking
 
                 _states.TryRemove(header.FragId, out _);
 
-                var result = state.Combine();
-                buffer = result.buffer;
-                length = result.length;
+                var (buf, len) = state.Combine();
+                buffer = buf;
+                length = len;
                 
                 state.Dispose();
                 return true;
