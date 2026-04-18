@@ -2,7 +2,6 @@
 using System.Buffers;
 using System.Net;
 using System.Net.Sockets;
-using SP.Core;
 using SP.Engine.Runtime;
 
 namespace SP.Engine.Server;
@@ -12,6 +11,7 @@ internal class UdpNetworkListener(ListenerInfo listenerInfo) : BaseNetworkListen
     private readonly object _lock = new();
     private Socket _listenSocket;
     private SocketAsyncEventArgs _receiveEventArgs;
+    private byte[] _receiveBuffer;
 
     public override bool Start()
     {
@@ -38,8 +38,8 @@ internal class UdpNetworkListener(ListenerInfo listenerInfo) : BaseNetworkListen
             eventArgs.Completed += OnReceiveCompleted;
             eventArgs.RemoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
 
-            var buffer = new byte[ushort.MaxValue];
-            eventArgs.SetBuffer(buffer, 0, buffer.Length);
+            _receiveBuffer = ArrayPool<byte>.Shared.Rent(65536);
+            eventArgs.SetBuffer(_receiveBuffer, 0, _receiveBuffer.Length);
 
             _listenSocket.ReceiveFromAsync(eventArgs);
             return true;
@@ -97,19 +97,23 @@ internal class UdpNetworkListener(ListenerInfo listenerInfo) : BaseNetworkListen
 
     public override void Stop()
     {
-        if (null == _listenSocket)
-            return;
+        if (_listenSocket == null) return;
 
         lock (_lock)
         {
-            if (null == _listenSocket)
-                return;
+            if (_listenSocket == null) return;
 
-            if (null != _receiveEventArgs)
+            if (_receiveEventArgs != null)
             {
                 _receiveEventArgs.Completed -= OnReceiveCompleted;
                 _receiveEventArgs.Dispose();
                 _receiveEventArgs = null;
+            }
+
+            if (_receiveBuffer != null)
+            {
+                ArrayPool<byte>.Shared.Return(_receiveBuffer);
+                _receiveBuffer = null;
             }
 
             _listenSocket.SafeClose();

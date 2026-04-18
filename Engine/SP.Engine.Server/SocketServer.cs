@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Net;
@@ -21,6 +22,7 @@ internal sealed class SocketServer(IBaseEngine engine, ListenerInfo[] listenerIn
 {
     private byte[] _keepAliveOptionValues;
     private ConcurrentStack<SocketReceiveContext> _socketReceiveContextPool;
+    
     private IBaseEngine Engine { get; } = engine;
     private List<ISocketListener> Listeners { get; } = new(listenerInfos.Length);
     private ListenerInfo[] ListenerInfos { get; } = listenerInfos;
@@ -97,7 +99,7 @@ internal sealed class SocketServer(IBaseEngine engine, ListenerInfo[] listenerIn
         if (null != _socketReceiveContextPool)
         {
             foreach (var context in _socketReceiveContextPool)
-                context.SocketEventArgs.Dispose();
+                context.Dispose();
 
             _socketReceiveContextPool.Clear();
         }
@@ -131,25 +133,31 @@ internal sealed class SocketServer(IBaseEngine engine, ListenerInfo[] listenerIn
     {
         var bufferSize = config.Network.ReceiveBufferSize;
         var count = config.Session.MaxConnections;
-        var totalBytes = bufferSize * count;
-        var buffer = new byte[totalBytes];
 
-        var currentOffset = 0;
         var contexts = new List<SocketReceiveContext>(count);
-        for (var i = 0; i < count; i++)
+        
+        try
         {
-            var socketEventArgs = new SocketAsyncEventArgs();
-            if (totalBytes - bufferSize < currentOffset)
-                return false;
-
-            socketEventArgs.SetBuffer(buffer, currentOffset, bufferSize);
-            currentOffset += bufferSize;
-
-            contexts.Add(new SocketReceiveContext(socketEventArgs));
+            for (var i = 0; i < count; i++)
+            {
+                var buffer = ArrayPool<byte>.Shared.Rent(bufferSize);
+                
+                var socketEventArgs = new SocketAsyncEventArgs();
+                socketEventArgs.SetBuffer(buffer, 0, bufferSize);
+                
+                contexts.Add(new SocketReceiveContext(socketEventArgs, buffer));
+            }
+            
+            _socketReceiveContextPool = new ConcurrentStack<SocketReceiveContext>(contexts);
+            return true;
         }
-
-        _socketReceiveContextPool = new ConcurrentStack<SocketReceiveContext>(contexts);
-        return true;
+        catch (Exception ex)
+        {
+            foreach (var context in contexts) context.Dispose();
+            
+            Engine.Logger.Fatal("Failed to setup SocketEventArgsPool: {0}", ex.Message);
+            return false;
+        }
     }
 
     private static ISocketListener CreateListener(ListenerInfo listenerInfo)

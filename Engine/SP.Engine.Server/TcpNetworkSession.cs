@@ -1,9 +1,7 @@
 ﻿using System;
-using System.Drawing;
 using System.Linq;
 using System.Net.Sockets;
 using System.Threading;
-using SP.Core;
 using SP.Core.Logging;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Networking;
