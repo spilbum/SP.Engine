@@ -1,15 +1,15 @@
 using System;
-using System.Buffers;
 using System.Net.Sockets;
+using SP.Core;
 
 namespace SP.Engine.Server;
 
 public sealed class SocketReceiveContext : IDisposable
 {
     private bool _disposed;
-    private byte[] _buffer;
+    private RentedBuffer _buffer;
     
-    public SocketReceiveContext(SocketAsyncEventArgs e, byte[] buffer)
+    public SocketReceiveContext(SocketAsyncEventArgs e, RentedBuffer buffer)
     {
         _buffer = buffer;
         SocketEventArgs = e;
@@ -46,11 +46,7 @@ public sealed class SocketReceiveContext : IDisposable
     {
         if (_disposed) return;
 
-        if (_buffer != null)
-        {
-            ArrayPool<byte>.Shared.Return(_buffer);
-            _buffer = null;
-        }
+        _buffer.Dispose();
         
         SocketEventArgs.Completed -= OnReceiveCompleted;
         SocketEventArgs.Dispose();

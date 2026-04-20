@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using SP.Core;
 using SP.Core.Serialization;
 using SP.Engine.Runtime.Compression;
 using SP.Engine.Runtime.Protocol;
@@ -10,11 +11,9 @@ namespace SP.Engine.Runtime.Networking
     public abstract class BaseMessage<THeader> : IMessage where THeader : IHeader
     {
         protected THeader Header { get; set; }
-        private byte[] Body { get; set; }
-        public int BodyLength { get; private set; }
-        protected ReadOnlySpan<byte> BodySpan => Body == null 
-            ? ReadOnlySpan<byte>.Empty
-            : new ReadOnlySpan<byte>(Body, 0, BodyLength);
+        private RentedBuffer _body;
+        public int BodyLength => _body.Length;
+        protected ReadOnlySpan<byte> BodySpan => _body.Span;
         
         public ushort Id => Header.Id;
         
@@ -22,23 +21,16 @@ namespace SP.Engine.Runtime.Networking
         {
         }
 
-        protected BaseMessage(THeader header, byte[] body, int bodyLength)
+        protected BaseMessage(THeader header, RentedBuffer body)
         {
             Header = header;
-            Body = body;
-            BodyLength = bodyLength;
+            _body = body;
         }
 
         public void Dispose()
         {
-            if (Body != null)
-            {
-                if (Body.Length > 0)
-                    ArrayPool<byte>.Shared.Return(Body);
-                Body = null;
-            }
-
             Header = default;
+            _body.Dispose();
         }
         
         public void Serialize(IProtocolData protocol, IPolicy policy, IEncryptor encryptor, ICompressor compressor)
@@ -51,15 +43,12 @@ namespace SP.Engine.Runtime.Networking
             var bodySpan = w.WrittenSpan;
             var flags = HeaderFlags.None;
 
-            var useComp = policy.UseCompress && compressor != null && bodySpan.Length >= policy.CompressionThreshold;
-            var useEncrypt = policy.UseEncrypt && encryptor != null;
-            
             byte[] rentBuf1 = null;
             byte[] rentBuf2 = null;
             
             try
             {
-                if (useComp)
+                if (policy.UseCompress && compressor != null && bodySpan.Length >= policy.CompressionThreshold)
                 {
                     var maxLen = compressor.GetMaxCompressedLength(bodySpan.Length);
                     rentBuf1 = ArrayPool<byte>.Shared.Rent(maxLen);
@@ -70,7 +59,7 @@ namespace SP.Engine.Runtime.Networking
                     flags |= HeaderFlags.Compressed;
                 }
 
-                if (useEncrypt)
+                if (policy.UseEncrypt && encryptor != null)
                 {
                     var maxLen = encryptor.GetCiphertextLength(bodySpan.Length);
                     rentBuf2 = ArrayPool<byte>.Shared.Rent(maxLen);
@@ -80,14 +69,27 @@ namespace SP.Engine.Runtime.Networking
                     bodySpan = new ReadOnlySpan<byte>(rentBuf2, 0, count);
                     flags |= HeaderFlags.Encrypted;
                 }
-                
-                var bLen = bodySpan.Length;
-                var bodyBytes = ArrayPool<byte>.Shared.Rent(bLen);
-                bodySpan.CopyTo(bodyBytes);
 
-                Header = CreateHeader(flags, protocol.Id, bLen);
-                Body = bodyBytes;
-                BodyLength = bLen;
+                byte[] bodyBytes;
+                if (rentBuf2 != null)
+                {
+                    bodyBytes = rentBuf2;
+                    rentBuf2 = null;
+                }
+                else if (rentBuf1 != null)
+                {
+                    bodyBytes = rentBuf1;
+                    rentBuf1 = null;
+                }
+                else
+                {
+                    bodyBytes = ArrayPool<byte>.Shared.Rent(bodySpan.Length);
+                    bodySpan.CopyTo(bodyBytes);
+                }
+
+                var bodyLength = bodySpan.Length;
+                _body = new RentedBuffer(bodyBytes, bodyLength);
+                Header = CreateHeader(flags, protocol.Id, bodyLength);
             }
             finally
             {

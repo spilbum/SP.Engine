@@ -1,4 +1,5 @@
 ﻿using System;
+using SP.Core;
 
 namespace SP.Engine.Runtime.Networking
 {
@@ -8,7 +9,7 @@ namespace SP.Engine.Runtime.Networking
         {
         }
 
-        public TcpMessage(TcpHeader header, byte[] body, int bodyLength) : base(header, body, bodyLength)
+        public TcpMessage(TcpHeader header, RentedBuffer body) : base(header, body)
         {
         }
 

@@ -1,19 +1,20 @@
 using System;
-using System.Buffers;
+using SP.Core;
 
 namespace SP.Engine.Runtime.Networking
 {
     public sealed class SocketSendBuffer : IDisposable
     {
-        private readonly byte[] _buffer;
+        private RentedBuffer _buffer;
         private int _head;
         private int _tail;
         private readonly object _lock = new object();
+        private bool _wrapped;
         private bool _disposed;
         
         public SocketSendBuffer(int capacity)
         {
-            _buffer = ArrayPool<byte>.Shared.Rent(capacity);
+            _buffer = new RentedBuffer(capacity);
         }
 
         /// <summary>
@@ -29,30 +30,47 @@ namespace SP.Engine.Runtime.Networking
             segment = default;
             span = default;
             
-            if (_disposed || size <= 0) return false;
-            
+            if (_disposed || size <= 0 || size > _buffer.Length) return false;
+
             lock (_lock)
             {
-                var pos = _tail;
-                var bufLen = _buffer.Length;
+                if (!_wrapped)
+                {
+                    // 선형 상태: [....H------T....]
+                    // 남은 공간: 끝부분(Length - _tail) + 앞부분(_head)
+                    if (_tail + size <= _buffer.Length)
+                    {
+                        // 끝부분에 바로 할당 가능
+                        span = _buffer.Span.Slice(_tail, size);
+                        segment = CreateSegment(_tail, size);
+                        _tail += size;
+                        return true;
+                    }
 
-                // 순환 체크
-                if (pos + size > bufLen)
-                {
-                    if (_head > size) pos = 0; // 앞으로 회전 가능
-                    else return false; // 공간 부족 
+                    if (_head > size)
+                    {
+                        // 앞부분으로 회전 가능
+                        _tail = size;
+                        _wrapped = true;
+                        span = _buffer.Span.Slice(0, size);
+                        segment = CreateSegment(0, size);
+                        return true;
+                    }
                 }
-                // 선형 상태에서 Head 침범 체크
-                else if (pos < _head && pos + size >= _head)
+                else
                 {
-                    return false;
+                    // 순환 상태: [----T.....H----]
+                    var freeSpace = _head - _tail;
+                    if (freeSpace > size)
+                    {
+                        span = _buffer.Span.Slice(_tail, size);
+                        segment = CreateSegment(_tail, size);
+                        _tail += size;
+                        return true;
+                    }
                 }
-                
-                // 점유 확정
-                _tail = pos + size;
-                span = _buffer.AsSpan(pos, size);
-                segment = new ArraySegment<byte>(_buffer, pos, size);
-                return true;
+
+                return false;
             }
         }
 
@@ -66,43 +84,34 @@ namespace SP.Engine.Runtime.Networking
 
             lock (_lock)
             {
-                var remaining = transferred;
-                while (remaining > 0)
+                var distanceToEnd = _buffer.Length - _head;
+                if (_wrapped && transferred >= distanceToEnd)
                 {
-                    var distanceToEnd = _buffer.Length - _head;
-                    var move = Math.Min(remaining, distanceToEnd);
-                    
-                    _head += move;
-                    remaining -= move;
-
-                    if (_head >= _buffer.Length)
-                        _head = 0;
+                    _head = transferred - distanceToEnd;
+                    _wrapped = false; // 다시 선형 상태로
                 }
-
-                // 버퍼가 비었을 때 단편화 방지를 위한 초기화
-                if (_head == _tail)
+                else
+                {
+                    _head += transferred;
+                }
+                
+                // 완전히 비었을 때 위치 초기화
+                if (_head == _tail && !_wrapped)
                 {
                     _head = 0;
                     _tail = 0;
                 }
             }
         }
-
-        public void Clear()
-        {
-            lock (_lock)
-            {
-                _head = 0;
-                _tail = 0;
-                Array.Clear(_buffer, 0, _buffer.Length);
-            }
-        }
+        
+        private ArraySegment<byte> CreateSegment(int offset, int size)
+            => _buffer.AsSegment(offset, size);
 
         public void Dispose()
         {
             if (_disposed) return;
             _disposed = true;
-            ArrayPool<byte>.Shared.Return(_buffer);
+            _buffer.Dispose();
         }
     }
 }

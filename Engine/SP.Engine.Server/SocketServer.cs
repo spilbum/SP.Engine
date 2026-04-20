@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using SP.Core;
 using SP.Engine.Runtime;
 using SP.Engine.Server.Configuration;
 
@@ -137,7 +138,7 @@ internal sealed class SocketServer(IBaseEngine engine, ListenerInfo[] listenerIn
                 var socketEventArgs = new SocketAsyncEventArgs();
                 socketEventArgs.SetBuffer(buffer, 0, bufferSize);
                 
-                contexts.Add(new SocketReceiveContext(socketEventArgs, buffer));
+                contexts.Add(new SocketReceiveContext(socketEventArgs, new RentedBuffer(buffer, bufferSize)));
             }
             
             _socketReceiveContextPool = new ConcurrentStack<SocketReceiveContext>(contexts);

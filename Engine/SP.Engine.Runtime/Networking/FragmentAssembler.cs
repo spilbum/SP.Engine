@@ -1,13 +1,13 @@
 using System;
 using System.Buffers;
 using System.Collections.Concurrent;
+using SP.Core;
 
 namespace SP.Engine.Runtime.Networking
 {
     internal sealed class FragmentReassembly : IDisposable
     {
-        private readonly byte[][] _fragments;
-        private readonly int[] _lengths;
+        private readonly RentedBuffer[] _fragments;
         private int _totalLength;
         
         public readonly long CreateAt = DateTime.UtcNow.Ticks;
@@ -17,47 +17,47 @@ namespace SP.Engine.Runtime.Networking
         public FragmentReassembly(byte count)
         {
             ExpectedCount = count;
-            _fragments = ArrayPool<byte[]>.Shared.Rent(count);
-            _lengths = ArrayPool<int>.Shared.Rent(count);
+            _fragments = ArrayPool<RentedBuffer>.Shared.Rent(count);
             Array.Clear(_fragments, 0, count);
         }
 
         public bool Add(byte index, ArraySegment<byte> segment)
         {
-            if (index >= ExpectedCount || _fragments[index] != null) return false;
+            if (index >= ExpectedCount || _fragments[index].Span.Length > 0) return false;
 
-            var buffer = ArrayPool<byte>.Shared.Rent(segment.Count);
-            segment.AsSpan().CopyTo(buffer);
+            var buffer = new RentedBuffer(segment.Count);
+            segment.AsSpan().CopyTo(buffer.Span);
 
             _fragments[index] = buffer;
-            _lengths[index] = segment.Count;
             _totalLength += segment.Count;
             ReceivedCount++;
             return true;
         }
 
-        public (byte[] buffer, int length) Combine()
+        public RentedBuffer Combine()
         {
-            var buffer = ArrayPool<byte>.Shared.Rent(_totalLength);
-            for (int i = 0, offset = 0; i < ExpectedCount; i++)
+            var result = new RentedBuffer(_totalLength);
+            var dest = result.Span;
+            var offset = 0;
+            
+            for (var i = 0; i < ExpectedCount; i++)
             {
-                Buffer.BlockCopy(_fragments[i], 0, buffer, offset, _lengths[i]);
-                offset += _lengths[i];
+                var src = _fragments[i].Span;
+                src.CopyTo(dest[offset..]);
+                offset += src.Length;
             }
-
-            return (buffer, _totalLength);
+    
+            return result;
         }
 
         public void Dispose()
         {
             for (var i = 0; i < ExpectedCount; i++)
             {
-                if (_fragments[i] == null) continue;
-                ArrayPool<byte>.Shared.Return(_fragments[i]);
+                _fragments[i].Dispose();
             }
 
-            ArrayPool<byte[]>.Shared.Return(_fragments);
-            ArrayPool<int>.Shared.Return(_lengths);
+            ArrayPool<RentedBuffer>.Shared.Return(_fragments);
         }
     }
     
@@ -66,10 +66,9 @@ namespace SP.Engine.Runtime.Networking
         private readonly ConcurrentDictionary<uint, FragmentReassembly> _states =
             new ConcurrentDictionary<uint, FragmentReassembly>();
 
-        public bool TryAssemble(FragmentHeader header, ArraySegment<byte> segment, out byte[] buffer, out int length)
+        public bool TryAssemble(FragmentHeader header, ArraySegment<byte> segment, out RentedBuffer buffer)
         {
-            buffer = null;
-            length = 0;
+            buffer = default;
 
             var state = _states.GetOrAdd(header.FragId, _ => new FragmentReassembly(header.TotalCount));
 
@@ -85,11 +84,11 @@ namespace SP.Engine.Runtime.Networking
 
                 _states.TryRemove(header.FragId, out _);
 
-                var (buf, len) = state.Combine();
-                buffer = buf;
-                length = len;
+                using (state)
+                {
+                    buffer = state.Combine();
+                }
                 
-                state.Dispose();
                 return true;
             }
         }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using SP.Core;
 
 namespace SP.Engine.Runtime.Networking
 {
@@ -9,7 +10,7 @@ namespace SP.Engine.Runtime.Networking
         {
         }
         
-        public UdpMessage(UdpHeader header, byte[] body, int bodyLength) : base(header, body, bodyLength)
+        public UdpMessage(UdpHeader header, RentedBuffer body) : base(header, body)
         {
         }
 

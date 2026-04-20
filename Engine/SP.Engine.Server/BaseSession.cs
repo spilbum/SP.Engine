@@ -3,6 +3,7 @@ using System.Buffers;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using SP.Core;
 using SP.Core.Logging;
 using SP.Engine.Protocol;
 using SP.Engine.Runtime;
@@ -188,30 +189,28 @@ public abstract class BaseSession : IBaseSession
 
             var fSegment = new ArraySegment<byte>(segment.Array!, consumed, fHeader.FragLength);
             
-            if (!UdpSocket.Assembler.TryAssemble(fHeader, fSegment, out var bodyBytes, out var length)) return;
+            if (!UdpSocket.Assembler.TryAssemble(fHeader, fSegment, out var body)) return;
 
             var normalizedHeader = new UdpHeaderBuilder()
                 .From(header)
-                .WithBodyLength(length)
+                .WithBodyLength(body.Length)
                 .Build();
 
-            var message = new UdpMessage(normalizedHeader, bodyBytes, length);
+            var message = new UdpMessage(normalizedHeader, body);
             OnReceivedMessage(message);
         }
         else
         {
             if (header.BodyLength > 0)
             {
-                var bLen = header.BodyLength;
-                var bodyBytes = ArrayPool<byte>.Shared.Rent(bLen);
-                segment.AsSpan(0, bLen).CopyTo(bodyBytes);
-            
-                var message = new UdpMessage(header, bodyBytes, bLen);
+                var body = new RentedBuffer(header.BodyLength);
+                segment.AsSpan(0, header.BodyLength).CopyTo(body.Span);
+                var message = new UdpMessage(header, body);
                 OnReceivedMessage(message);
             }
             else
             {
-                var message = new UdpMessage(header, [], 0);
+                var message = new UdpMessage(header, RentedBuffer.Empty);
                 OnReceivedMessage(message);
             }
         }
@@ -238,31 +237,31 @@ public abstract class BaseSession : IBaseSession
                 }
 
                 // 페이로드 검증
-                var bodyLen = header.BodyLength;
-                if (bodyLen < 0 || bodyLen > Config.Network.MaxFrameBytes)
+                var bodyLength = header.BodyLength;
+                if (bodyLength < 0 || bodyLength > Config.Network.MaxFrameBytes)
                 {
                     Logger.Warn("Invalid payload length. id={0}, max={1}, len={2}",
-                        header.Id, Config.Network.MaxFrameBytes, bodyLen);
+                        header.Id, Config.Network.MaxFrameBytes, bodyLength);
                     Close(CloseReason.ProtocolError);
                     break;
                 }
 
-                var totalLen = consumed + bodyLen;
+                var totalLen = consumed + bodyLength;
                 if (_receiveBuffer.Available < totalLen) break;
 
                 // 헤더 소비
                 _receiveBuffer.Consume(consumed);
 
-                if (bodyLen > 0)
+                if (bodyLength > 0)
                 {
-                    var bodyBytes = ArrayPool<byte>.Shared.Rent(bodyLen);
-                    _receiveBuffer.TryPeek(bodyBytes, bodyLen);
-                    _receiveBuffer.Consume(bodyLen);
-                    OnReceivedMessage(new TcpMessage(header, bodyBytes, bodyLen));
+                    var body = new RentedBuffer(bodyLength);
+                    _receiveBuffer.TryPeek(body.Span, bodyLength);
+                    _receiveBuffer.Consume(bodyLength);
+                    OnReceivedMessage(new TcpMessage(header, body));
                 }
                 else
                 {
-                    OnReceivedMessage(new TcpMessage(header, [], 0));
+                    OnReceivedMessage(new TcpMessage(header, RentedBuffer.Empty));
                 }
             }
         }

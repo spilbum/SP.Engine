@@ -704,16 +704,16 @@ namespace SP.Engine.Client
                         break;
                     }
 
-                    var bodyLen = header.BodyLength;
-                    if (bodyLen > MaxFrameBytes)
+                    var bodyLength = header.BodyLength;
+                    if (bodyLength > MaxFrameBytes)
                     {
                         Logger.Warn("Invalid payload length. id={0}, max={1}, len={2}",
-                            header.Id, MaxFrameBytes, bodyLen);
+                            header.Id, MaxFrameBytes, bodyLength);
                         Close();
                         break;
                     }
 
-                    var total = consumed + bodyLen;
+                    var total = consumed + bodyLength;
                     if (_receiveBuffer.Available < total) break;
 
                     _receiveBuffer.Consume(consumed);
@@ -721,16 +721,16 @@ namespace SP.Engine.Client
                     // ACK 처리
                     ProcessAckStatus(header.AckNumber);
 
-                    if (bodyLen > 0)
+                    if (bodyLength > 0)
                     {
-                        var bodyBytes = ArrayPool<byte>.Shared.Rent(bodyLen);
-                        _receiveBuffer.TryPeek(bodyBytes, bodyLen);
-                        _receiveBuffer.Consume(bodyLen);
-                        OnReceivedMessage(new TcpMessage(header, bodyBytes, bodyLen));
+                        var body = new RentedBuffer(bodyLength);
+                        _receiveBuffer.TryPeek(body.Span, bodyLength);
+                        _receiveBuffer.Consume(bodyLength);
+                        OnReceivedMessage(new TcpMessage(header, body));
                     }
                     else
                     {
-                        OnReceivedMessage(new TcpMessage(header, Array.Empty<byte>(), 0));
+                        OnReceivedMessage(new TcpMessage(header, RentedBuffer.Empty));
                     }
                 }
             }
@@ -909,31 +909,30 @@ namespace SP.Engine.Client
                 
                 var fSegment = new ArraySegment<byte>(segment.Array, bodyOffset + consumed, fHeader.FragLength);
                     
-                if (!_udpSocket.Assembler.TryAssemble(fHeader, fSegment, out var bodyBytes, out var length))
+                if (!_udpSocket.Assembler.TryAssemble(fHeader, fSegment, out var body))
                     return;
 
                 var normalizedHeader = new UdpHeaderBuilder()
                     .From(header)
-                    .WithBodyLength(length)
+                    .WithBodyLength(body.Length)
                     .Build();
 
-                var message = new UdpMessage(normalizedHeader, bodyBytes, length);
+                var message = new UdpMessage(normalizedHeader, body);
                 OnReceivedMessage(message);
             }
             else
             {
                 if (header.BodyLength > 0)
                 {
-                    var bLen = header.BodyLength;
-                    var bodyBytes = ArrayPool<byte>.Shared.Rent(bLen);
-                    segment.AsSpan(bodyOffset, bLen).CopyTo(bodyBytes);
-                
-                    var message = new UdpMessage(header, bodyBytes, bLen);
+                    var bodyBytes = ArrayPool<byte>.Shared.Rent(header.BodyLength);
+                    segment.AsSpan(bodyOffset, header.BodyLength).CopyTo(bodyBytes);
+
+                    var message = new UdpMessage(header, new RentedBuffer(bodyBytes, header.BodyLength));
                     OnReceivedMessage(message);
                 }
                 else
                 {
-                    var message = new UdpMessage(header, Array.Empty<byte>(), 0);
+                    var message = new UdpMessage(header, RentedBuffer.Empty);
                     OnReceivedMessage(message);
                 }
             }
