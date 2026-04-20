@@ -5,20 +5,12 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
-using SP.Core;
 using SP.Engine.Runtime;
 using SP.Engine.Server.Configuration;
 
 namespace SP.Engine.Server;
 
-public interface ISocketServer
-{
-    bool IsRunning { get; }
-    bool Start();
-    void Stop();
-}
-
-internal sealed class SocketServer(IBaseEngine engine, ListenerInfo[] listenerInfos) : ISocketServer, IDisposable
+internal sealed class SocketServer(IBaseEngine engine, ListenerInfo[] listenerInfos) : IDisposable
 {
     private byte[] _keepAliveOptionValues;
     private ConcurrentStack<SocketReceiveContext> _socketReceiveContextPool;
@@ -46,8 +38,8 @@ internal sealed class SocketServer(IBaseEngine engine, ListenerInfo[] listenerIn
         var logger = Engine.Logger;
 
         var sendingQueuePool = new ExpandablePool<SegmentQueue>();
-        sendingQueuePool.Initialize(Math.Max(config.Session.MaxConnections / 6, 256)
-            , Math.Max(config.Session.MaxConnections * 2, 256)
+        sendingQueuePool.Initialize(Math.Max(config.Session.MaxConnections / 2, 512)
+            , Math.Max(config.Session.MaxConnections * 3, 512)
             , new SendingQueueSegmentCreator(config.Network.SendingQueueSize));
 
         SendingQueuePool = sendingQueuePool;

@@ -21,132 +21,122 @@ public interface IObjectPool<T> : IDisposable
     void Clear();
 }
 
-public class ExpandablePool<T> : IObjectPool<T>
+public sealed class ExpandablePool<T> : IObjectPool<T>
 {
     private readonly ConcurrentStack<T> _globalStack = new();
 
-    private int _currentSourceCount;
-    private bool _isDisposed;
-    private int _isExpanding;
     private IPoolSegment[] _itemSources;
     private IPoolSegmentFactory<T> _sourceCreator;
-
-    public int MinPoolSize { get; private set; }
-    public int MaxPoolSize { get; private set; }
-    public int TotalItemCount { get; private set; }
-    public int AvailableItemCount => _globalStack.Count;
-    public int CurrentSourceCount => _currentSourceCount;
-    public bool IsExpanding => _isExpanding == 1;
-
-    public bool TryRent(out T item)
-    {
-        item = default;
-
-        if (_isDisposed)
-            throw new ObjectDisposedException(nameof(ExpandablePool<T>));
-
-        if (_globalStack.TryPop(out item))
-            return true;
-
-        return TryEnsureCapacity() && _globalStack.TryPop(out item);
-    }
-
-    public void Return(T item)
-    {
-        if (_isDisposed)
-            throw new ObjectDisposedException(nameof(ExpandablePool<T>));
-
-        if (item == null)
-            throw new ArgumentNullException(nameof(item));
-
-        _globalStack.Push(item);
-    }
-
-    public void Clear()
-    {
-        if (_isDisposed) return;
-
-        while (_globalStack.TryPop(out var item))
-            if (item is IDisposable disposable)
-                disposable.Dispose();
-
-        for (var i = 0; i < _currentSourceCount; i++)
-            _itemSources[i] = null;
-
-        _itemSources = null;
-        _currentSourceCount = 0;
-        TotalItemCount = 0;
-    }
-
-    public void Dispose()
-    {
-        if (_isDisposed) return;
-        _isDisposed = true;
-        Clear();
-    }
-
+    
+    private int _currentSourceCount;
+    private int _totalItemCount;
+    private int _minPoolSize;
+    private int _maxPoolSize;
+    private int _expanding;
+    private volatile bool _disposed;
+    
     public void Initialize(int minPoolSize, int maxPoolSize, IPoolSegmentFactory<T> sourceCreator)
     {
         ArgumentNullException.ThrowIfNull(sourceCreator);
         if (minPoolSize <= 0 || maxPoolSize < minPoolSize)
             throw new ArgumentException("Invalid min/max pool size.");
 
-        MinPoolSize = minPoolSize;
-        MaxPoolSize = maxPoolSize;
+        _minPoolSize = minPoolSize;
+        _maxPoolSize = maxPoolSize;
         _sourceCreator = sourceCreator;
+        
         _itemSources = new IPoolSegment[CalculateSourceArraySize(minPoolSize, maxPoolSize)];
         AddSource(minPoolSize);
     }
-
-    private static int CalculateSourceArraySize(int minPoolSize, int maxPoolSize)
+    
+    public bool TryRent(out T item)
     {
-        var size = 1;
-        var current = minPoolSize;
-
-        while (current < maxPoolSize)
+        if (_disposed)
         {
-            size++;
-            current *= 2;
+            item = default;
+            return false;
         }
-
-        return size;
+        
+        if (_globalStack.TryPop(out item)) return true;
+        
+        return TryEnsureCapacity() && _globalStack.TryPop(out item);
     }
 
+    public void Return(T item)
+    {
+        if (_disposed || item == null) return;
+        _globalStack.Push(item);
+    }
+    
+    private bool TryEnsureCapacity()
+    {
+        if (Volatile.Read(ref _totalItemCount) >= _maxPoolSize) return false;
+
+        if (Interlocked.CompareExchange(ref _expanding, 1, 0) != 0) return false;
+
+        try
+        {
+            var total = _totalItemCount;
+            if (total >= _maxPoolSize) return false;
+            
+            var nextSize = Math.Min(total * 2, _maxPoolSize - total);
+            if (nextSize <= 0) return false;
+            AddSource(nextSize);
+            return true;
+
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _expanding, 0);
+        }
+    }
+    
     private void AddSource(int size)
     {
-        if (null == _itemSources)
-            throw new InvalidOperationException("Item sources cannot be null.");
-
         var newIndex = Interlocked.Increment(ref _currentSourceCount) - 1;
-        if (newIndex >= _itemSources.Length)
-            throw new InvalidOperationException("Exceeded max source count.");
+        if (newIndex >= _itemSources.Length) return;
 
-        _itemSources[newIndex] = _sourceCreator.Create(size, out var items);
-        TotalItemCount += items.Length;
+        var segment = _sourceCreator.Create(size, out var items);
+        _itemSources[newIndex] = segment;
+
+        Interlocked.Add(ref _totalItemCount, items.Length);
 
         foreach (var item in items)
             _globalStack.Push(item);
     }
-
-    private bool TryEnsureCapacity()
+    
+    private static int CalculateSourceArraySize(int minPoolSize, int maxPoolSize)
     {
-        if (TotalItemCount >= MaxPoolSize || _currentSourceCount >= _itemSources.Length)
-            return false;
-
-        if (Interlocked.CompareExchange(ref _isExpanding, 1, 0) != 0)
-            return false;
-
-        try
+        var count = 1;
+        var current = minPoolSize;
+        while (current < maxPoolSize)
         {
-            var nextSize = Math.Min(TotalItemCount * 2, MaxPoolSize) - TotalItemCount;
-            if (nextSize > 0)
-                AddSource(nextSize);
+            count++;
+            current *= 2;
+        }
 
-            return true;
-        }
-        finally
+        return count;
+    }
+
+    public void Clear()
+    {
+        while (_globalStack.TryPop(out var item))
         {
-            _isExpanding = 0;
+            if (item is IDisposable disposable)
+                disposable.Dispose();
         }
+
+        for (var i = 0; i < _currentSourceCount; i++)
+            _itemSources[i] = null;
+
+        _currentSourceCount = 0;
+        _totalItemCount = 0;
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        Clear();
     }
 }

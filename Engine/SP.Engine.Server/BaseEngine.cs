@@ -23,9 +23,9 @@ public interface IBaseEngine : ILogContext
     void ProcessUdpClient(ArraySegment<byte> segment, Socket socket, IPEndPoint remoteEndPoint);
 }
 
-public interface ISocketServerAccessor
+internal interface ISocketServerAccessor
 {
-    ISocketServer SocketServer { get; }
+    SocketServer SocketServer { get; }
 }
 
 public enum EServerState
@@ -80,7 +80,7 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
     public IEngineConfig Config { get; private set; }
     public IFiber Fiber => _fiber;
     public IScheduler Scheduler => _globalScheduler;
-    ISocketServer ISocketServerAccessor.SocketServer => _socketServer;
+    SocketServer ISocketServerAccessor.SocketServer => _socketServer;
 
 
     IBaseSession IBaseEngine.CreateSession(TcpNetworkSession networkSession)

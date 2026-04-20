@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net.Sockets;
 using System.Threading;
@@ -177,7 +178,7 @@ public class TcpNetworkSession(Socket client, SocketReceiveContext socketReceive
 
             if (1 < queue.Count)
             {
-                _sendEventArgs.BufferList = queue;
+                _sendEventArgs.BufferList = (IList<ArraySegment<byte>>)queue;
             }
             else
             {

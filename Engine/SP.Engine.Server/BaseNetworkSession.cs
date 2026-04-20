@@ -91,10 +91,8 @@ public abstract class BaseNetworkSession(SocketMode mode) : INetworkSession
         _session = session ?? throw new ArgumentNullException(nameof(session));
         Config = session.Config;
 
-        if (((ISocketServerAccessor)session.Engine).SocketServer is SocketServer socketServer)
-            _sendingQueuePool =
-                socketServer.SendingQueuePool ?? throw new ArgumentException("SendingQueuePool is null");
-
+        _sendingQueuePool = ((ISocketServerAccessor)session.Engine).SocketServer.SendingQueuePool;
+        
         if (!_sendingQueuePool.TryRent(out var queue) || queue == null)
             throw new InvalidOperationException("Failed to acquire a SendingQueue from the pool.");
 
@@ -104,8 +102,7 @@ public abstract class BaseNetworkSession(SocketMode mode) : INetworkSession
 
     public bool TrySend(ArraySegment<byte> segment)
     {
-        if (IsClosed)
-            return false;
+        if (IsClosed) return false;
 
         var queue = _sendingQueue;
         if (queue == null || !queue.Enqueue(segment, queue.TrackId))

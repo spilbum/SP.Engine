@@ -5,184 +5,141 @@ using System.Threading;
 
 namespace SP.Engine.Server;
 
-public sealed class SegmentQueue(ArraySegment<byte>[] globalQueue, int offset, int capacity)
+public sealed class SegmentQueue(ArraySegment<byte>[] globalQueue, int baseOffset, int capacity)
     : IList<ArraySegment<byte>>
 {
     private static readonly ArraySegment<byte> Null = default;
-    private int _currentCount;
-    private int _innerOffset;
+    private int _writeIndex;
+    private int _readIndex;
     private bool _enqueueBlocked;
-    private int _updatingCount;
+    private int _pendingWriteCount;
 
     public ushort TrackId { get; private set; } = 1;
     public int Position { get; private set; }
-    public int Count => _currentCount - _innerOffset;
-
-    bool ICollection<ArraySegment<byte>>.IsReadOnly => true;
-
-    public void Clear()
-    {
-        TrackId = (ushort)(TrackId == ushort.MaxValue ? 1 : TrackId + 1);
-
-        for (var i = 0; i < _currentCount; i++)
-            globalQueue[offset + i] = Null;
-
-        _currentCount = 0;
-        _innerOffset = 0;
-        Position = 0;
-    }
-
-    public int IndexOf(ArraySegment<byte> item)
-    {
-        throw new NotSupportedException();
-    }
-
-    public void Insert(int index, ArraySegment<byte> item)
-    {
-        throw new NotSupportedException();
-    }
-
-    public void RemoveAt(int index)
-    {
-        throw new NotSupportedException();
-    }
-
-    public void Add(ArraySegment<byte> item)
-    {
-        throw new NotSupportedException();
-    }
-
-    public bool Remove(ArraySegment<byte> item)
-    {
-        throw new NotSupportedException();
-    }
-
-    public bool Contains(ArraySegment<byte> item)
-    {
-        throw new NotSupportedException();
-    }
-
-    public void CopyTo(ArraySegment<byte>[] array, int arrayIndex)
-    {
-        for (var i = 0; i < Count; i++)
-        {
-            if (array.Length <= arrayIndex + i)
-                throw new ArgumentException("Target array to small");
-
-            array[arrayIndex + i] = this[i];
-        }
-    }
+    public int Count => _writeIndex - _readIndex;
 
     public ArraySegment<byte> this[int index]
     {
-        get => globalQueue[offset + _innerOffset + index];
-        set => throw new NotSupportedException();
+        get => globalQueue[baseOffset + _readIndex + index];
+        set => throw new NotSupportedException("SegmentQueue is read-only for external indexer access");
     }
-
+    
     public IEnumerator<ArraySegment<byte>> GetEnumerator()
     {
         for (var i = 0; i < Count; i++)
-            yield return globalQueue[offset + _innerOffset + i];
+            yield return this[i];
     }
+    
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
-    IEnumerator IEnumerable.GetEnumerator()
+    public void Clear()
     {
-        return GetEnumerator();
-    }
+        // 재사용 시 유효성 검증을 위한 ID 갱신
+        TrackId = (ushort)(TrackId == ushort.MaxValue ? 1 : TrackId + 1);
 
-    public void SetPosition(int position)
-    {
-        Position = position;
-    }
+        // 공유 배열의 참조를 해제하여 GC가 실제 데이터(byte[])를 수거하게 함
+        for (var i = 0; i < _writeIndex; i++)
+            globalQueue[baseOffset + i] = Null;
 
-    private bool TryEnqueue(ArraySegment<byte> item, out bool conflict, ushort trackId)
-    {
-        conflict = false;
-        var oldCount = _currentCount;
-
-        if (oldCount >= capacity || _enqueueBlocked || trackId != TrackId)
-            return false;
-
-        var updatedCount = Interlocked.CompareExchange(ref _currentCount, oldCount + 1, oldCount);
-        if (updatedCount != oldCount)
-        {
-            conflict = true;
-            return false;
-        }
-
-        globalQueue[offset + oldCount] = item;
-        return true;
+        _writeIndex = 0;
+        _readIndex = 0;
+        Position = 0;
     }
 
     public bool Enqueue(ArraySegment<byte> item, ushort trackId)
     {
-        if (_enqueueBlocked)
-            return false;   
+        if (_enqueueBlocked) return false;   
 
-        Interlocked.Increment(ref _updatingCount);
-        while (!_enqueueBlocked)
+        // 진행 중인 쓰기 작업 카운팅
+        Interlocked.Increment(ref _pendingWriteCount);
+        try
         {
-            if (TryEnqueue(item, out var conflict, trackId))
+            while (!_enqueueBlocked)
             {
-                Interlocked.Decrement(ref _updatingCount);
-                return true;
+                var curPos = _writeIndex;
+
+                if (curPos >= capacity || trackId != TrackId) return false;
+
+                if (Interlocked.CompareExchange(ref _writeIndex, curPos + 1, curPos) == curPos)
+                {
+                    globalQueue[baseOffset + curPos] = item;
+                    return true;
+                }
+
+                // 경합 시 잠시 양보
+                Thread.Yield();
             }
 
-            if (!conflict)
-                break;
+            return false;
         }
-
-        Interlocked.Decrement(ref _updatingCount);
-        return false;
+        finally
+        {
+            Interlocked.Decrement(ref _pendingWriteCount);
+        }
     }
 
+    public void TrimSentBytes(int sentByteCount)
+    {
+        if (sentByteCount <= 0 || Count <= 0) return;
+
+        var accumulated = 0;
+        for (var i = _readIndex; i < _writeIndex; i++)
+        {
+            var segment = globalQueue[baseOffset + i];
+            accumulated += segment.Count;
+
+            if (accumulated <= sentByteCount)
+            {
+                // 세그먼트 전체가 송신됨
+                _readIndex = i + 1;
+                continue;
+            }
+
+            // 세그먼트 일부가 송신됨: 남은 영역 재구성
+            var excess = accumulated - sentByteCount;
+            _readIndex = i;
+
+            globalQueue[baseOffset + i] = new ArraySegment<byte>(
+                segment.Array!,
+                segment.Offset + (segment.Count - excess),
+                excess
+            );
+
+            return;
+        }
+
+        // 모든 데이터 송신 완료 시 상태 초기화
+        Clear();
+    }
+    
+    public void SetPosition(int position) => Position = position;
+    
+    public void StartEnqueue() => _enqueueBlocked = false;
+    
     public void StopEnqueue()
     {
         _enqueueBlocked = true;
         var spinWait = new SpinWait();
-        while (_updatingCount > 0)
+        // 현재 진행 중인 모든 쓰기 작업이 끝날 때까지 대기
+        while (_pendingWriteCount > 0)
             spinWait.SpinOnce();
     }
+    
+    bool ICollection<ArraySegment<byte>>.IsReadOnly => true;
+    void ICollection<ArraySegment<byte>>.Add(ArraySegment<byte> item) => throw new NotSupportedException();
+    void ICollection<ArraySegment<byte>>.Clear() => Clear();
+    bool ICollection<ArraySegment<byte>>.Contains(ArraySegment<byte> item) => throw new NotSupportedException();
 
-    public void StartEnqueue()
+    void ICollection<ArraySegment<byte>>.CopyTo(ArraySegment<byte>[] array, int arrayIndex)
     {
-        _enqueueBlocked = false;
+        for (var i = 0; i < Count; i++)
+            array[arrayIndex + i] = this[i];
     }
-
-
-    public void TrimSentBytes(int sentByteCount)
-    {
-        if (sentByteCount <= 0 || _currentCount <= _innerOffset)
-            return;
-
-        var accumulated = 0;
-
-        for (var i = _innerOffset; i < _currentCount; i++)
-        {
-            var segment = globalQueue[offset + i];
-            accumulated += segment.Count;
-
-            if (accumulated <= sentByteCount)
-                continue;
-
-            // Adjust the segment with remaining data
-            var excess = accumulated - sentByteCount;
-            _innerOffset = i;
-
-            // Update the current segment with the leftover data
-            if (segment.Array != null)
-                globalQueue[offset + i] = new ArraySegment<byte>(
-                    segment.Array,
-                    segment.Offset + segment.Count - excess,
-                    excess
-                );
-
-            return;
-        }
-
-        // If the offset exceeds the total size, clear the queue
-        Clear();
-    }
+    
+    bool ICollection<ArraySegment<byte>>.Remove(ArraySegment<byte> item) => throw new NotSupportedException();
+    int IList<ArraySegment<byte>>.IndexOf(ArraySegment<byte> item) => throw new NotSupportedException();
+    void IList<ArraySegment<byte>>.Insert(int index, ArraySegment<byte> item) => throw new NotSupportedException();
+    void IList<ArraySegment<byte>>.RemoveAt(int index) => throw new NotSupportedException();
 }
 
 public class SendingQueueSegmentCreator : IPoolSegmentFactory<SegmentQueue>
