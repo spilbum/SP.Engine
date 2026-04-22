@@ -372,7 +372,7 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
                     now.Subtract(s.LastActiveTime).TotalSeconds,
                     s.StartTime,
                     s.LastActiveTime);
-
+                
                 s.Close(CloseReason.TimeOut);
             });
         }
@@ -468,7 +468,7 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
                 if (DateTime.UtcNow < session.StartClosingTime.AddSeconds(Config.Session.CloseHandshakeTimeoutSec))
                     continue;
 
-                Logger.Debug("Client terminated due to timeout. sessionId={0}", session.SessionId);
+                Logger.Debug("Client terminated due to close handshake timeout. sessionId={0}", session.SessionId);
 
                 // 종료 타임아웃
                 _closeHandshakePendingQueue.TryDequeue(out _);

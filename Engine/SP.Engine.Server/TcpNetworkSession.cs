@@ -1,11 +1,11 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Net.Sockets;
 using System.Threading;
 using SP.Core.Logging;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Networking;
+using SP.Engine.Server.Logging;
 
 namespace SP.Engine.Server;
 
@@ -19,16 +19,14 @@ public class TcpNetworkSession(Socket client, SocketReceiveContext socketReceive
     : BaseNetworkSession(SocketMode.Tcp, client), ITcpNetworkSession
 {
     private SocketAsyncEventArgs _sendEventArgs;
-    private readonly SocketSendBuffer _sendBuffer = new(1024 * 64);
+    private readonly SessionSendBuffer _sendBuffer = new(1024 * 32);
     
     ILogger ILogContext.Logger => Session.Logger;
     public SocketReceiveContext ReceiveContext { get; } = socketReceiveContext;
 
     public bool TrySend(TcpMessage message)
     {
-        if (!_sendBuffer.TryReserve(message.Size, out var segment, out var span)) 
-            return false;
-        
+        if (!_sendBuffer.TryReserve(message.Size, out var segment, out var span)) return false;
         message.WriteTo(span);
         return TrySend(segment);
     }
@@ -178,7 +176,7 @@ public class TcpNetworkSession(Socket client, SocketReceiveContext socketReceive
 
             if (1 < queue.Count)
             {
-                _sendEventArgs.BufferList = (IList<ArraySegment<byte>>)queue;
+                _sendEventArgs.BufferList = queue;
             }
             else
             {

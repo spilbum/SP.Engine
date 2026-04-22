@@ -266,14 +266,22 @@ public sealed class Session : BaseSession, ISession
             {
                 var tcp = new TcpMessage();
                 tcp.Serialize(data, policy, encryptor, compressor);
-                return TrySend(channel, tcp);
+
+                using (tcp)
+                {
+                    return TrySend(channel, tcp);
+                }
             }
             case ChannelKind.Unreliable:
             {
                 var udp = new UdpMessage();
                 udp.SetSessionId(SessionId);
                 udp.Serialize(data, policy, encryptor, compressor);
-                return TrySend(channel, udp);
+
+                using (udp)
+                {
+                    return TrySend(channel, udp);
+                }
             }
             default:
                 throw new Exception($"Unknown channel: {channel}");

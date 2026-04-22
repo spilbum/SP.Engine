@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using SP.Engine.Runtime;
 using SP.Engine.Server.Configuration;
+using SP.Engine.Server.Logging;
 
 namespace SP.Engine.Server;
 

@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 
 namespace SP.Engine.Runtime.Networking
 {
-    public sealed class SocketReceiveBuffer : IDisposable
+    public sealed class SessionReceiveBuffer : IDisposable
     {
         private byte[] _buffer;
         private readonly int _mask;
@@ -23,7 +23,7 @@ namespace SP.Engine.Runtime.Networking
             }
         }
 
-        public SocketReceiveBuffer(int capacity)
+        public SessionReceiveBuffer(int capacity)
         {
             var cap = 1;
             while (cap < capacity) cap <<= 1;

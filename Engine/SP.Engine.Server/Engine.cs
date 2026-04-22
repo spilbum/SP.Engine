@@ -200,7 +200,7 @@ public abstract class Engine : BaseEngine, IEngine
             return;
 
         _perfMonitor = new PerfMonitor();
-        Scheduler.Schedule(Fiber, _perfMonitor.Tick, TimeSpan.Zero, config.SamplePeriod);
+        Scheduler.Schedule(Fiber, PerfMonitorTick, TimeSpan.Zero, config.SamplePeriod);
 
         if (!config.LoggerEnabled)
             return;
@@ -211,6 +211,12 @@ public abstract class Engine : BaseEngine, IEngine
             if (_perfMonitor.TryGetLast(out var metrics))
                 _perfLogger.Info(metrics.ToString());
         }, TimeSpan.Zero, config.LoggingPeriod);
+    }
+
+    private void PerfMonitorTick()
+    {
+        var sessions = SessionsSource;
+        _perfMonitor?.Tick(sessions.Length);
     }
 
     private bool SetupConnectorFiber(List<ConnectorConfig> configs)

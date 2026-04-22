@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Threading;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Networking;
+using SP.Engine.Server.Logging;
 
 namespace SP.Engine.Server;
 
@@ -11,7 +12,7 @@ public class UdpSocket : BaseNetworkSession, IUnreliableSender
 {
     private uint _fragSeq;
     private ushort _maxDataSize = 512;
-    private readonly SocketSendBuffer _sendBuffer = new(1024 * 16);
+    private readonly SessionSendBuffer _sendBuffer = new(1024 * 16);
     
     public UdpSocket(Socket client, IPEndPoint remoteEndPoint)
         : base(SocketMode.Udp, client)
@@ -24,32 +25,29 @@ public class UdpSocket : BaseNetworkSession, IUnreliableSender
 
     public bool TrySend(UdpMessage message)
     {
-        using (message)
+        if (message.Size <= _maxDataSize)
         {
-            if (message.Size <= _maxDataSize)
-            {
-                if (!_sendBuffer.TryReserve(message.Size, out var segment, out var span)) return false;
-                message.WriteTo(span);
-                return TrySend(segment);
-            }
+            if (!_sendBuffer.TryReserve(message.Size, out var segment, out var span)) return false;
+            message.WriteTo(span);
+            return TrySend(segment);
+        }
             
-            const int hSize = UdpHeader.ByteSize;
-            const int fHeaderSize = FragmentHeader.ByteSize;
-            var fragId = AllocateFragId();
-            var maxBodyPerFrag = _maxDataSize - hSize - fHeaderSize;
-            var totalCount = (byte)Math.Ceiling((double)message.BodyLength / maxBodyPerFrag);
+        const int hSize = UdpHeader.ByteSize;
+        const int fHeaderSize = FragmentHeader.ByteSize;
+        var fragId = AllocateFragId();
+        var maxBodyPerFrag = _maxDataSize - hSize - fHeaderSize;
+        var totalCount = (byte)Math.Ceiling((double)message.BodyLength / maxBodyPerFrag);
 
-            for (byte index = 0; index < totalCount; index++)
-            {
-                var bodyOffset = index * maxBodyPerFrag;
-                var fragLen = (ushort)Math.Min(message.BodyLength - bodyOffset, maxBodyPerFrag);
-                var totalSize = hSize + fHeaderSize + fragLen;
+        for (byte index = 0; index < totalCount; index++)
+        {
+            var bodyOffset = index * maxBodyPerFrag;
+            var fragLen = (ushort)Math.Min(message.BodyLength - bodyOffset, maxBodyPerFrag);
+            var totalSize = hSize + fHeaderSize + fragLen;
 
-                if (!_sendBuffer.TryReserve(totalSize, out var segment, out var span)) return false;
+            if (!_sendBuffer.TryReserve(totalSize, out var segment, out var span)) return false;
 
-                message.WriteFragmentTo(span, fragId, index, totalCount, bodyOffset, fragLen);
-                if (!TrySend(segment)) return false;
-            }
+            message.WriteFragmentTo(span, fragId, index, totalCount, bodyOffset, fragLen);
+            if (!TrySend(segment)) return false;
         }
         
         return true;

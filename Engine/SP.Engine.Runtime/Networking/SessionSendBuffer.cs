@@ -3,7 +3,7 @@ using SP.Core;
 
 namespace SP.Engine.Runtime.Networking
 {
-    public sealed class SocketSendBuffer : IDisposable
+    public sealed class SessionSendBuffer : IDisposable
     {
         private RentedBuffer _buffer;
         private int _head;
@@ -12,7 +12,7 @@ namespace SP.Engine.Runtime.Networking
         private bool _wrapped;
         private bool _disposed;
         
-        public SocketSendBuffer(int capacity)
+        public SessionSendBuffer(int capacity)
         {
             _buffer = new RentedBuffer(capacity);
         }

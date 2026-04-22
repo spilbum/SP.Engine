@@ -25,7 +25,7 @@ public abstract class BaseSession : IBaseSession
     private readonly MessageChannelRouter _channelRouter = new();
     private IDisposable _assemblerCleanupTimer;
     private BaseEngine _engine;
-    private SocketReceiveBuffer _receiveBuffer;
+    private SessionReceiveBuffer _receiveBuffer;
     private long _sessionId;
     
     public long SessionId
@@ -82,7 +82,7 @@ public abstract class BaseSession : IBaseSession
         Index = sessionIndex;
         NetworkSession = networkSession;
         _engine = (BaseEngine)engine;
-        _receiveBuffer = new SocketReceiveBuffer(engine.Config.Network.ReceiveBufferSize);
+        _receiveBuffer = new SessionReceiveBuffer(engine.Config.Network.ReceiveBufferSize);
         networkSession.Attach(this);
         _channelRouter.Bind(new ReliableChannel(networkSession));
         IsConnected = true;
@@ -143,7 +143,7 @@ public abstract class BaseSession : IBaseSession
                     UdpSocket.Attach(this);
                     _channelRouter.Bind(new UnreliableChannel(UdpSocket));
                     StartFragmentAssemblerCleanupScheduler();
-                    Logger.Info("Session {0} UDP Socket Created: {1}", SessionId, remoteEndPoint);
+                    Logger.Debug("Session {0} UDP Socket Created: {1}", SessionId, remoteEndPoint);
                     return;
                 }
             }
@@ -157,7 +157,7 @@ public abstract class BaseSession : IBaseSession
             if (UdpSocket.RemoteEndPoint.Equals(remoteEndPoint))
                 return;
 
-            Logger.Info("Session {0} UDP EndPoint Changed: {1} -> {2}",
+            Logger.Debug("Session {0} UDP EndPoint Changed: {1} -> {2}",
                 SessionId, UdpSocket.RemoteEndPoint, remoteEndPoint);
             UdpSocket.UpdateRemoteEndPoint(remoteEndPoint);
         }

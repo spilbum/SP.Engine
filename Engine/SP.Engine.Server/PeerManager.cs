@@ -73,6 +73,7 @@ public class PeerManager(ILogger logger, IEngineConfig config)
         }
 
         logger.Debug("Peer waiting reconnect registered. peerId={0}", peer.PeerId);
+        
         peer.Offline(reason);
     }
 
@@ -125,7 +126,7 @@ public class PeerManager(ILogger logger, IEngineConfig config)
                 continue;
             
             logger.Debug("Client terminated due to timeout. peerId={0}", peerId);
-            removed.Peer.LeaveServer(CloseReason.TimeOut);
+            removed.Peer.Close(CloseReason.ServerClosing);
         }
     }
     

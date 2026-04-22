@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Threading;
+using SP.Engine.Server.Logging;
 
 namespace SP.Engine.Server;
 
@@ -58,7 +60,6 @@ public sealed class ExpandablePool<T> : IObjectPool<T>
         }
         
         if (_globalStack.TryPop(out item)) return true;
-        
         return TryEnsureCapacity() && _globalStack.TryPop(out item);
     }
 

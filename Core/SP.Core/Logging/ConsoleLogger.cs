@@ -6,14 +6,19 @@ namespace SP.Core.Logging
 {
     public class ConsoleLogger : ILogger
     {
+        private readonly LogLevel _minLevel;
         private readonly string _category;
         private readonly IReadOnlyDictionary<string, object> _context;
 
-        public ConsoleLogger(string category, IReadOnlyDictionary<string, object> context = null)
+        public ConsoleLogger(string category, LogLevel minLevel = LogLevel.Debug, IReadOnlyDictionary<string, object> context = null)
         {
             _category = category;
+            _minLevel = minLevel;
             _context = context;
         }
+
+        public bool IsEnabled(LogLevel level)
+            => level >= _minLevel;
 
         public ILogger With(string key, object value)
         {
@@ -22,7 +27,7 @@ namespace SP.Core.Logging
                 : new Dictionary<string, object>(_context);
 
             dict[key] = value;
-            return new ConsoleLogger(_category, dict);
+            return new ConsoleLogger(_category, context: dict);
         }
 
         public void Log(LogLevel level, string message)
@@ -118,6 +123,8 @@ namespace SP.Core.Logging
 
         private void Write(LogLevel level, string message)
         {
+            if (!IsEnabled(level)) return;
+            
             var time = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff");
             var ctx = _context != null && _context.Count > 0
                 ? " | " + string.Join(" ", _context.Select(kv => $"{kv.Key}={kv.Value}"))

@@ -9,17 +9,19 @@ namespace SP.Core
         public int Length { get; }
 
         public static RentedBuffer Empty => default;
-
+        
         public RentedBuffer(int length)
         {
             _rented = ArrayPool<byte>.Shared.Rent(length);
             Length = length;
+            BufferMetrics.OnRent();
         }
 
         public RentedBuffer(byte[] rented, int length)
         {
             _rented = rented;
             Length = length;
+            BufferMetrics.OnRent();
         }
 
         public Span<byte> Span
@@ -30,10 +32,14 @@ namespace SP.Core
 
         public void Dispose()
         {
-            var toReturn = _rented;
-            if (toReturn == null) return;
+            var buf = _rented;
             _rented = null;
-            ArrayPool<byte>.Shared.Return(toReturn);
+            
+            if (buf != null)
+            {
+                ArrayPool<byte>.Shared.Return(buf);   
+                BufferMetrics.OnReturn();
+            }
         }
     }
 }

@@ -77,7 +77,7 @@ namespace SP.Engine.Client
         private readonly Dictionary<ushort, ICommand> _userCommands = new Dictionary<ushort, ICommand>();
         private readonly ConcurrentQueue<IMessage> _receivedMessageQueue = new ConcurrentQueue<IMessage>();
         private readonly ReliableMessageProcessor _messageProcessor = new ReliableMessageProcessor();
-        private SocketReceiveBuffer _receiveBuffer;
+        private SessionReceiveBuffer _receiveBuffer;
         private Lz4Compressor _compressor;
         private bool _disposed;
         private AesGcmEncryptor _encryptor;
@@ -521,7 +521,7 @@ namespace SP.Engine.Client
             session?.Close();
             
             _receiveBuffer?.Dispose();
-            _receiveBuffer = new SocketReceiveBuffer(Config.ReceiveBufferSize);
+            _receiveBuffer = new SessionReceiveBuffer(Config.ReceiveBufferSize);
 
             session = new TcpNetworkSession(Config);
             session.Opened += OnSessionOpened;
@@ -924,10 +924,9 @@ namespace SP.Engine.Client
             {
                 if (header.BodyLength > 0)
                 {
-                    var bodyBytes = ArrayPool<byte>.Shared.Rent(header.BodyLength);
-                    segment.AsSpan(bodyOffset, header.BodyLength).CopyTo(bodyBytes);
-
-                    var message = new UdpMessage(header, new RentedBuffer(bodyBytes, header.BodyLength));
+                    var body = new RentedBuffer(header.BodyLength);
+                    segment.AsSpan(bodyOffset, header.BodyLength).CopyTo(body.Span);
+                    var message = new UdpMessage(header, body);
                     OnReceivedMessage(message);
                 }
                 else

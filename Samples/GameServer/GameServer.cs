@@ -67,7 +67,7 @@ public class GameServer : Engine
                 MonitorEnabled = true,
                 SamplePeriod = TimeSpan.FromSeconds(1),
                 LoggerEnabled = true,
-                LoggingPeriod = TimeSpan.FromMinutes(1),
+                LoggingPeriod = TimeSpan.FromSeconds(10),
             })
             .AddListener(new ListenerConfig { Ip = "Any", Port = appConfig.Server.Port, Mode = SocketMode.Tcp })
             .AddListener(new ListenerConfig { Ip = "Any", Port = appConfig.Server.Port + 1, Mode = SocketMode.Udp });
@@ -170,13 +170,17 @@ public class GameServer : Engine
     public void Bind(GamePeer peer)
     {
         if (_byUid.TryAdd(peer.Uid, peer.PeerId))
+        {
             Logger.Debug("Bind peer: uid={0}, peerId={1}", peer.Uid, peer.PeerId);
+        }
     }
 
     private void Unbind(GamePeer peer)
     {
         if (_byUid.TryRemove(peer.Uid, out var peerId))
+        {
             Logger.Debug("Unbind peer: uid={0}, peerId={1}", peer.Uid, peerId);
+        }
     }
 
     protected override void OnPeerRemoved(IPeer peer, CloseReason reason)

@@ -29,7 +29,11 @@ public class SerilogFactory : ILoggerFactory
         Directory.CreateDirectory("logs");
         
         _root = new LoggerConfiguration()
+#if DEBUG
             .MinimumLevel.Debug()
+#else
+            .MinimumLevel.Information()
+#endif
             .Enrich.FromLogContext()
             .Enrich.With(_threadIdEnricher)
             .WriteTo.Async(a => a.Console(

@@ -30,7 +30,7 @@ namespace SP.Engine.Client
         private ushort _maxDataSize = 512;
         private IPEndPoint _remoteEndPoint;
         private SocketAsyncEventArgs _sendEventArgs;
-        private readonly SocketSendBuffer _sendBuffer = new SocketSendBuffer(1024 * 16);
+        private readonly SessionSendBuffer _sendBuffer = new SessionSendBuffer(1024 * 16);
         private Socket _socket;
         
         public UdpSocket(EngineConfig config)

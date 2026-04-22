@@ -24,7 +24,7 @@ namespace SP.Engine.Client
         private SocketAsyncEventArgs _receiveEventArgs;
         private SocketAsyncEventArgs _sendEventArgs;
         private Socket _socket;
-        private readonly SocketSendBuffer _sendBuffer = new SocketSendBuffer(1024 * 64);
+        private readonly SessionSendBuffer _sendBuffer = new SessionSendBuffer(1024 * 32);
 
         public TcpNetworkSession(EngineConfig config)
         {

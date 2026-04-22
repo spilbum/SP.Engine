@@ -38,7 +38,7 @@ internal class UdpNetworkListener(ListenerInfo listenerInfo) : BaseNetworkListen
             eventArgs.Completed += OnReceiveCompleted;
             eventArgs.RemoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
 
-            _receiveBuffer = ArrayPool<byte>.Shared.Rent(65536);
+            _receiveBuffer = new byte[ushort.MaxValue];
             eventArgs.SetBuffer(_receiveBuffer, 0, _receiveBuffer.Length);
 
             _listenSocket.ReceiveFromAsync(eventArgs);
@@ -90,7 +90,7 @@ internal class UdpNetworkListener(ListenerInfo listenerInfo) : BaseNetworkListen
         catch (Exception ex)
         {
             OnError(new Exception(
-                "[UDP] ReceiveFromAsync failed. Remote={e.RemoteEndPoint}, Bytes={e.BytesTransferred}, Error={ex.Message}",
+                $"[UDP] ReceiveFromAsync failed. Remote={e.RemoteEndPoint}, Bytes={e.BytesTransferred}, Error={ex.Message}",
                 ex));
         }
     }
@@ -108,12 +108,6 @@ internal class UdpNetworkListener(ListenerInfo listenerInfo) : BaseNetworkListen
                 _receiveEventArgs.Completed -= OnReceiveCompleted;
                 _receiveEventArgs.Dispose();
                 _receiveEventArgs = null;
-            }
-
-            if (_receiveBuffer != null)
-            {
-                ArrayPool<byte>.Shared.Return(_receiveBuffer);
-                _receiveBuffer = null;
             }
 
             _listenSocket.SafeClose();

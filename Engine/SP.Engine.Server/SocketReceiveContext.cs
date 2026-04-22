@@ -7,11 +7,9 @@ namespace SP.Engine.Server;
 public sealed class SocketReceiveContext : IDisposable
 {
     private bool _disposed;
-    private RentedBuffer _buffer;
     
-    public SocketReceiveContext(SocketAsyncEventArgs e, RentedBuffer buffer)
+    public SocketReceiveContext(SocketAsyncEventArgs e)
     {
-        _buffer = buffer;
         SocketEventArgs = e;
         
         OriginOffset = e.Offset;
@@ -46,8 +44,6 @@ public sealed class SocketReceiveContext : IDisposable
     {
         if (_disposed) return;
 
-        _buffer.Dispose();
-        
         SocketEventArgs.Completed -= OnReceiveCompleted;
         SocketEventArgs.Dispose();
         

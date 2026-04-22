@@ -122,7 +122,7 @@ public class SerilogLogger(Serilog.ILogger logger) : ILogger
         Log(LogLevel.Fatal, ex, format, args);
     }
 
-    private bool IsEnabled(LogLevel logLevel)
+    public bool IsEnabled(LogLevel logLevel)
     {
         return _logger.IsEnabled(logLevel.ToSerilogLevel());
     }
