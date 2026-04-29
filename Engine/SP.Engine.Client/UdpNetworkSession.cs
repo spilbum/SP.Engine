@@ -6,7 +6,6 @@ using System.Net.Sockets;
 using System.Threading;
 using SP.Core;
 using SP.Engine.Client.Configuration;
-using SP.Engine.Runtime;
 using SP.Engine.Runtime.Networking;
 
 namespace SP.Engine.Client
@@ -16,7 +15,7 @@ namespace SP.Engine.Client
         public int Position { get; set; }
     }
 
-    public class UdpSocket : IUnreliableSender
+    public class UdpNetworkSession : IUnreliableSender
     {
         private const int AssemblerCleanupIntervalSec = 15;
         private readonly PostList<ArraySegment<byte>> _itemsToSend = new PostList<ArraySegment<byte>>();
@@ -24,7 +23,6 @@ namespace SP.Engine.Client
         private readonly byte[] _receiveBuffer;
         private readonly int _sendBufferSize;
         private readonly SwapQueue<ArraySegment<byte>> _sendQueue;
-        private TickTimer _cleanupTimer;
         private int _fragSeq;
         private int _sending;
         private ushort _maxDataSize = 512;
@@ -33,7 +31,7 @@ namespace SP.Engine.Client
         private readonly SessionSendBuffer _sendBuffer = new SessionSendBuffer(1024 * 16);
         private Socket _socket;
         
-        public UdpSocket(EngineConfig config)
+        public UdpNetworkSession(EngineConfig config)
         {
             _sendQueue = new SwapQueue<ArraySegment<byte>>(config.SendQueueSize);
             _sendBufferSize = config.SendBufferSize;
@@ -41,7 +39,13 @@ namespace SP.Engine.Client
         }
 
         public bool IsRunning { get; private set; }
-        public MessageAssembler Assembler { get; } = new MessageAssembler();
+        public UdpFragmentAssembler Assembler { get; private set; }
+
+        public void SetupAssembler(int assemblyTimeoutSec, int maxPendingMessageCount)
+        {
+            Assembler?.Dispose();
+            Assembler = new UdpFragmentAssembler(assemblyTimeoutSec, maxPendingMessageCount);
+        }
 
         public bool TrySend(UdpMessage message)
         {
@@ -50,34 +54,31 @@ namespace SP.Engine.Client
 
             var items = new List<ArraySegment<byte>>();
             
-            using (message)
+            if (message.Size <= _maxDataSize)
             {
-                if (message.Size <= _maxDataSize)
+                if (!_sendBuffer.TryReserve(message.Size, out var segment, out var span)) return false;
+                message.WriteTo(span);
+                items.Add(segment);
+            }
+            else
+            {
+                const int hSize = UdpHeader.ByteSize;
+                const int fHeaderSize = UdpFragmentHeader.ByteSize;
+                var fragId = AllocateFragId();
+                var maxBodyPerFrag = _maxDataSize - hSize - fHeaderSize;
+                var totalCount = (byte)Math.Ceiling((double)message.BodyLength / maxBodyPerFrag);
+
+                for (byte index = 0; index < totalCount; index++)
                 {
-                    if (!_sendBuffer.TryReserve(message.Size, out var segment, out var span)) return false;
-                    message.WriteTo(span);
+                    var bodyOffset = index * maxBodyPerFrag;
+                    var fragLen = (ushort)Math.Min(message.BodyLength - bodyOffset, maxBodyPerFrag);
+                    var totalSize = hSize + fHeaderSize + fragLen;
+
+                    if (!_sendBuffer.TryReserve(totalSize, out var segment, out var span)) 
+                        return false;
+
+                    message.WriteFragmentTo(span, fragId, index, totalCount, bodyOffset, fragLen);
                     items.Add(segment);
-                }
-                else
-                {
-                    const int hSize = UdpHeader.ByteSize;
-                    const int fHeaderSize = FragmentHeader.ByteSize;
-                    var fragId = AllocateFragId();
-                    var maxBodyPerFrag = _maxDataSize - hSize - fHeaderSize;
-                    var totalCount = (byte)Math.Ceiling((double)message.BodyLength / maxBodyPerFrag);
-
-                    for (byte index = 0; index < totalCount; index++)
-                    {
-                        var bodyOffset = index * maxBodyPerFrag;
-                        var fragLen = (ushort)Math.Min(message.BodyLength - bodyOffset, maxBodyPerFrag);
-                        var totalSize = hSize + fHeaderSize + fragLen;
-
-                        if (!_sendBuffer.TryReserve(totalSize, out var segment, out var span)) 
-                            return false;
-
-                        message.WriteFragmentTo(span, fragId, index, totalCount, bodyOffset, fragLen);
-                        items.Add(segment);
-                    }
                 }
             }
 
@@ -104,11 +105,6 @@ namespace SP.Engine.Client
             _maxDataSize = (ushort)(mtu - 20 /* IP header size */ - 8 /* UDP header size*/);
         }
 
-        public void Tick()
-        {
-            _cleanupTimer?.Tick();
-        }
-
         public bool Connect(string ip, int port)
         {
             try
@@ -123,9 +119,7 @@ namespace SP.Engine.Client
                 _receiveEventArgs.Completed += OnReceiveCompleted;
                 _socket.ReceiveFromAsync(_receiveEventArgs);
 
-                _cleanupTimer =
-                    new TickTimer(_ => Assembler.Cleanup(TimeSpan.FromSeconds(AssemblerCleanupIntervalSec)), null, 0,
-                        AssemblerCleanupIntervalSec / 2);
+
 
                 IsRunning = true;
                 return true;
@@ -152,9 +146,6 @@ namespace SP.Engine.Client
                     _socket.Dispose();
                     _socket = null;
                 }
-
-                _cleanupTimer?.Dispose();
-                _cleanupTimer = null;
             }
             catch (Exception e)
             {
@@ -209,9 +200,10 @@ namespace SP.Engine.Client
                 if (!_socket.SendAsync(_sendEventArgs))
                     OnSendCompleted(this, _sendEventArgs);
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                OnError(e);
+                if (!IsIgnoreException(ex))
+                    OnError(ex);
             }
         }
 
@@ -223,7 +215,9 @@ namespace SP.Engine.Client
                 _itemsToSend.Position = 0;
                 Interlocked.Exchange(ref _sending, 0);
 
-                OnError(new SocketException((int)e.SocketError));
+                var ex = new SocketException((int)e.SocketError);
+                if (!IsIgnoreException(ex))
+                    OnError(ex);
                 return;
             }
             
@@ -263,7 +257,8 @@ namespace SP.Engine.Client
         {
             if (e.SocketError != SocketError.Success || e.BytesTransferred <= 0)
             {
-                OnError(new SocketException((int)e.SocketError));
+                var ex = new SocketException((int)e.SocketError);
+                if (!IsIgnoreException(ex)) OnError(ex);
                 return;
             }
 
@@ -273,7 +268,8 @@ namespace SP.Engine.Client
             }
             catch (Exception ex)
             {
-                OnError(ex);
+                if (!IsIgnoreException(ex))
+                    OnError(ex);
             }
 
             try
@@ -285,7 +281,8 @@ namespace SP.Engine.Client
             }
             catch (Exception ex)
             {
-                OnError(ex);
+                if (!IsIgnoreException(ex))
+                    OnError(ex);
             }
         }
 
@@ -307,6 +304,36 @@ namespace SP.Engine.Client
         private void OnClose()
         {
             Closed?.Invoke(this, EventArgs.Empty);
+        }
+        
+        private static bool IsIgnoreException(Exception ex)
+        {
+            switch (ex)
+            {
+                case ObjectDisposedException _:
+                case InvalidOperationException _:
+                    return true;
+                case SocketException socketException:
+                    return IsIgnoreSocketError(socketException.SocketErrorCode);
+                default:
+                    return false;
+            }
+        }
+
+        private static bool IsIgnoreSocketError(SocketError errorCode)
+        {
+            switch (errorCode)
+            {
+                case SocketError.Interrupted:       // 10004
+                case SocketError.ConnectionAborted: // 10053
+                case SocketError.ConnectionReset:   // 10054
+                case SocketError.Shutdown:          // 10058
+                case SocketError.TimedOut:          // 10060
+                case SocketError.OperationAborted:  // 995
+                    return true; 
+                default:
+                    return false;
+            }
         }
     }
 }

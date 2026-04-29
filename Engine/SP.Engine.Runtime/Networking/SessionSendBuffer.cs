@@ -5,7 +5,7 @@ namespace SP.Engine.Runtime.Networking
 {
     public sealed class SessionSendBuffer : IDisposable
     {
-        private RentedBuffer _buffer;
+        private readonly PooledBuffer _buffer;
         private int _head;
         private int _tail;
         private readonly object _lock = new object();
@@ -14,7 +14,7 @@ namespace SP.Engine.Runtime.Networking
         
         public SessionSendBuffer(int capacity)
         {
-            _buffer = new RentedBuffer(capacity);
+            _buffer = new PooledBuffer(capacity);
         }
 
         /// <summary>
@@ -41,7 +41,7 @@ namespace SP.Engine.Runtime.Networking
                     if (_tail + size <= _buffer.Length)
                     {
                         // 끝부분에 바로 할당 가능
-                        span = _buffer.Span.Slice(_tail, size);
+                        span = _buffer.Slice(_tail, size);
                         segment = CreateSegment(_tail, size);
                         _tail += size;
                         return true;
@@ -52,7 +52,7 @@ namespace SP.Engine.Runtime.Networking
                         // 앞부분으로 회전 가능
                         _tail = size;
                         _wrapped = true;
-                        span = _buffer.Span.Slice(0, size);
+                        span = _buffer[..size];
                         segment = CreateSegment(0, size);
                         return true;
                     }
@@ -63,7 +63,7 @@ namespace SP.Engine.Runtime.Networking
                     var freeSpace = _head - _tail;
                     if (freeSpace > size)
                     {
-                        span = _buffer.Span.Slice(_tail, size);
+                        span = _buffer.Slice(_tail, size);
                         segment = CreateSegment(_tail, size);
                         _tail += size;
                         return true;

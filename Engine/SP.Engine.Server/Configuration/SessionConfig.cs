@@ -19,6 +19,9 @@ public sealed record SessionConfig
 
     public int PeerUpdateIntervalMs { get; init; } = 50;
     public int ConnectorTickPeriodMs { get; init; } = 30;
-
-    public int FragmentAssemblerCleanupTimeoutSec { get; init; } = 15;
+    
+    // 백프레셔가 발동되는 임계치(수신 중단)
+    public int PeerJobBackPressureThreshold { get; init; } = 200;
+    // 작업이 처리되어 수신이 재개되는 시점
+    public int PeerJobResumeThreshold { get; init; } = 50;
 }

@@ -35,7 +35,7 @@ namespace SP.Core.Fiber
             return Track(handle, dueTime, period);
         }
 
-        private IDisposable Track(TimerHandleBase handle, TimeSpan due, TimeSpan period)
+        private IDisposable Track(TimerHandleBase handle, TimeSpan dueTime, TimeSpan period)
         {
             if (_disposed)
             {
@@ -46,7 +46,7 @@ namespace SP.Core.Fiber
             handle.OnDisposed = h => _timers.TryRemove(h, out _);
             
             _timers.TryAdd(handle, 0);
-            handle.Start(due, period);
+            handle.Start(dueTime, period);
             return handle;
         }
         

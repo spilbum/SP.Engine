@@ -65,7 +65,7 @@ public class GameServer : Engine
             .WithPerf(r => r with
             {
                 MonitorEnabled = true,
-                SamplePeriod = TimeSpan.FromSeconds(1),
+                SamplePeriod = TimeSpan.FromSeconds(3),
                 LoggerEnabled = true,
                 LoggingPeriod = TimeSpan.FromSeconds(10),
             })

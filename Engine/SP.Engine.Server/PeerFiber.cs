@@ -5,7 +5,7 @@ using SP.Core.Logging;
 
 namespace SP.Engine.Server;
 
-public sealed class PeerFiber : IDisposable
+public sealed class PeerFiber
 {
     private readonly List<BasePeer> _peers = [];
     private readonly IFiber _fiber;
@@ -15,6 +15,9 @@ public sealed class PeerFiber : IDisposable
     private volatile bool _disposed;
     
     public int PeerCount => _peers.Count;
+    public bool IsDisposed => _disposed;
+    public string Name => _fiber.Name;
+    public int QueueCount => _fiber.QueueCount;
 
     public PeerFiber(IFiber fiber, IScheduler globalScheduler, ILogger logger, TimeSpan tickInterval)
     {
@@ -89,17 +92,48 @@ public sealed class PeerFiber : IDisposable
         _fiber.Dispose();
     }
     
-    public void Enqueue(Action action) => _fiber.Enqueue(action);
-    public void Enqueue<T>(Action<T> action, T state) => _fiber.Enqueue(action, state);
-    public void Enqueue<T1, T2>(Action<T1, T2> action, T1 s1, T2 s2) => _fiber.Enqueue(action, s1, s2);
-    public void Enqueue<T1, T2, T3>(Action<T1, T2, T3> action, T1 s1, T2 s2, T3 s3) => _fiber.Enqueue(action, s1, s2, s3);
-    
-    public IDisposable Schedule(Action action, TimeSpan due, TimeSpan period) 
-        => _globalScheduler.Schedule(_fiber, action, due, period);
-    public IDisposable Schedule<T>(Action<T> action, T state, TimeSpan due, TimeSpan period) 
-        => _globalScheduler.Schedule(_fiber, action, state, due, period);
-    public IDisposable Schedule<T1, T2>(Action<T1, T2> action, T1 s1, T2 s2, TimeSpan due, TimeSpan period)
-        => _globalScheduler.Schedule(_fiber, action, s1, s2, due, period);
-    public IDisposable Schedule<T1, T2, T3>(Action<T1, T2, T3> action, T1 s1, T2 s2, T3 s3, TimeSpan due, TimeSpan period)
-        => _globalScheduler.Schedule(_fiber, action, s1, s2, s3, due, period);
+    public void EnqueueJob<T1, T2>(BasePeer peer, Action<T1, T2> action, T1 s1, T2 s2)
+    {
+        var job = SimplePool<PeerJob<T1, T2>>.Get();
+        job.Peer = peer;
+        job.Action = action;
+        job.S1 = s1;
+        job.S2 = s2;
+        _fiber.Enqueue(ExecuteJob, job);
+    }
+
+    private static void ExecuteJob<T1, T2>(PeerJob<T1, T2> job)
+    {
+        job.Execute();
+    }
+
+    private class PeerJob<T1, T2>
+    {
+        public BasePeer Peer;
+        public Action<T1, T2> Action;
+        public T1 S1;
+        public T2 S2;
+
+        public void Execute()
+        {
+            try
+            {
+                Action?.Invoke(S1, S2);
+            }
+            finally
+            {
+                Peer.OnJobFinished();
+                ReturnToPool();
+            }
+        }
+
+        private void ReturnToPool()
+        {
+            Peer = null;
+            Action = null;
+            S1 = default;
+            S2 = default;
+            SimplePool<PeerJob<T1, T2>>.Return(this);
+        }
+    }
 }

@@ -21,10 +21,13 @@ namespace SP.Engine.Client.Configuration
         ///     Mtu 값 (기본값: 1200)
         /// </summary>
         public ushort UdpMtu { get; set; } = 1200;
+
         // Udp HealthCheck 최대 실패 횟수 (기본값: 3회)
         public int MaxUdpHealthFail { get; set; } = 3;
+
         // UDP HealthCheck 주기 (기본값: 10초)
         public int UdpHealthCheckIntervalSec { get; set; } = 10;
+
         // UDP 핸드쉐이크 시간 제한 (기본값: 5초)
         public int UdpHandshakeTimeSec { get; set; } = 5;
 

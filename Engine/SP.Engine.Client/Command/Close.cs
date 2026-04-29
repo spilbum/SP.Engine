@@ -1,4 +1,3 @@
-using System.Threading.Tasks;
 using SP.Engine.Protocol;
 using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Protocol;
@@ -16,9 +15,10 @@ namespace SP.Engine.Client.Command
                 context.CloseWithoutHandshake();
                 return;
             }
-
+            
             // 서버 요청으로 종료함
             context.Close();
+            context.Logger.Debug("");
         }
     }
 }

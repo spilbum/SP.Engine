@@ -15,7 +15,6 @@ public sealed class SegmentQueue(ArraySegment<byte>[] globalQueue, int baseOffse
     private int _pendingWriteCount;
 
     public ushort TrackId { get; private set; } = 1;
-    public int Position { get; private set; }
     public int Count => _writeIndex - _readIndex;
 
     public ArraySegment<byte> this[int index]
@@ -43,7 +42,6 @@ public sealed class SegmentQueue(ArraySegment<byte>[] globalQueue, int baseOffse
 
         _writeIndex = 0;
         _readIndex = 0;
-        Position = 0;
     }
 
     public bool Enqueue(ArraySegment<byte> item, ushort trackId)
@@ -112,18 +110,7 @@ public sealed class SegmentQueue(ArraySegment<byte>[] globalQueue, int baseOffse
         Clear();
     }
     
-    public void SetPosition(int position) => Position = position;
-    
     public void StartEnqueue() => _enqueueBlocked = false;
-    
-    public void StopEnqueue()
-    {
-        _enqueueBlocked = true;
-        var spinWait = new SpinWait();
-        // 현재 진행 중인 모든 쓰기 작업이 끝날 때까지 대기
-        while (_pendingWriteCount > 0)
-            spinWait.SpinOnce();
-    }
     
     bool ICollection<ArraySegment<byte>>.IsReadOnly => true;
     void ICollection<ArraySegment<byte>>.Add(ArraySegment<byte> item) => throw new NotSupportedException();
@@ -142,35 +129,3 @@ public sealed class SegmentQueue(ArraySegment<byte>[] globalQueue, int baseOffse
     void IList<ArraySegment<byte>>.RemoveAt(int index) => throw new NotSupportedException();
 }
 
-public class SendingQueueSegmentCreator : IPoolSegmentFactory<SegmentQueue>
-{
-    private readonly int _sendingQueueSize;
-
-    public SendingQueueSegmentCreator(int sendingQueueSize)
-    {
-        if (sendingQueueSize <= 0)
-            throw new ArgumentException("Sending queue size must be greater than zero.", nameof(sendingQueueSize));
-
-        _sendingQueueSize = sendingQueueSize;
-    }
-
-    public IPoolSegment Create(int size, out SegmentQueue[] poolItems)
-    {
-        if (size <= 0)
-            throw new ArgumentException("Size must be greater than zero.", nameof(size));
-
-        var source = new ArraySegment<byte>[size * _sendingQueueSize];
-        poolItems = new SegmentQueue[size];
-
-        for (var i = 0; i < size; i++)
-            poolItems[i] = new SegmentQueue(source, i * _sendingQueueSize, _sendingQueueSize);
-
-        return new SendingPoolSegment(source, size);
-    }
-}
-
-public class SendingPoolSegment(ArraySegment<byte>[] source, int count) : IPoolSegment
-{
-    public ArraySegment<byte>[] Source { get; } = source ?? throw new ArgumentNullException(nameof(source));
-    public int Count { get; } = count;
-}

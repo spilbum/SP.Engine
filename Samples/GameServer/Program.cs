@@ -1,4 +1,6 @@
 ﻿
+using SP.Core;
+
 namespace GameServer;
 
 internal static class Program
@@ -22,6 +24,13 @@ internal static class Program
 
     private static async Task<int> Main(string[] args)
     {
+        AppDomain.CurrentDomain.UnhandledException += (sender, e) =>
+        {
+            var ex = (Exception)e.ExceptionObject;
+            Console.WriteLine($"[FATAL] UnhandledException: {ex.Message}");
+            Console.WriteLine($"StackTrace: {ex.StackTrace}");
+        };
+        
         using var cts = new CancellationTokenSource();
         using var _ = SubscribeCtrlC(cts);
 
@@ -49,6 +58,10 @@ internal static class Program
         }
         finally
         {
+            #if DEBUG
+            BufferTracker.DumpLeaks(server?.Logger);
+            #endif
+            
             server?.Dispose();
         }
         

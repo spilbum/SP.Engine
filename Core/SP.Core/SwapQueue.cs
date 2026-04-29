@@ -128,6 +128,10 @@ namespace SP.Core
 
             public void Reset()
             {
+                if (Count > 0)
+                {
+                    System.Array.Clear(Array, 0, Count);
+                }
                 Count = 0;
             }
 

@@ -11,13 +11,10 @@ public sealed record NetworkConfig
     public bool EnableKeepAlive { get; init; } = true;
     public int KeepAliveTimeSec { get; init; } = 30;
     public int KeepAliveIntervalSec { get; init; } = 2;
-    public bool LogAllSocketError { get; init; }
     public bool UseEncrypt { get; init; } = true;
     public bool UseCompress { get; init; } = false;
     public ushort CompressionThreshold { get; init; } = 2048;
-    public int MaxRetryCount { get; init; } = 5;
-    public int MinMtu { get; init; } = 576;
-    public int MaxMtu { get; init; } = 1500;
+    public int MaxRetransmissionCount { get; init; } = 5;
 
     // 상행 패킷이 없을 때, ACK 송신을 최대한 미룰 수 있는 최대 시간 (Delayed ACK)
     public int MaxAckDelayMs { get; init; } = 40;
@@ -26,4 +23,12 @@ public sealed record NetworkConfig
     public int AckStepThreshold { get; init; } = 10;
     // UDP HealthCheck 최대 실패 횟수
     public int MaxUdpHealthFail { get; init; } = 3;
+    public int MaxOutOfOderCount { get; init; } = 1024;
+    
+    public bool EnableUdp { get; init; } = false;
+    public ushort UdpMinMtu { get; init; } = 576;
+    public ushort UdpMaxMtu { get; init; } = 1200;
+    public int UdpCleanupIntervalSec { get; init; } = 2;
+    public int UdpAssemblyTimeoutSec { get; init; } = 3;
+    public int UdpMaxPendingMessageCount { get; init; } = 100;
 }

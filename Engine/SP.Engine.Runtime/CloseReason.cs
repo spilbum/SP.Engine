@@ -11,7 +11,8 @@ namespace SP.Engine.Runtime
         TimeOut = 6,
         ProtocolError = 7,
         InternalError = 8,
-        LimitExceededRetry = 9,
-        Rejected = 10
+        LimitExceededRetransmission = 9,
+        Rejected = 10,
+        ServerBusy = 11,
     }
 }

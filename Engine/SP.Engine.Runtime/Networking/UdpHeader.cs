@@ -11,6 +11,8 @@ namespace SP.Engine.Runtime.Networking
         public ushort Id { get; }
         public byte Fragmented { get; }
         public int BodyLength { get; }
+        
+        public bool IsFragmented => Fragmented == 1;
 
         public UdpHeader(HeaderFlags flags, long sessionId, ushort id, byte fragmented, int bodyLength)
         {
@@ -35,23 +37,16 @@ namespace SP.Engine.Runtime.Networking
             destination.WriteInt32(12, BodyLength);
         }
 
-        public static bool TryRead(ReadOnlySpan<byte> source, out UdpHeader header, out int consumed)
+        public static UdpHeader Read(ReadOnlySpan<byte> source)
         {
-            if (source.Length < ByteSize)
-            {
-                header = default;
-                consumed = 0;
-                return false;
-            }
+            if (source.Length < ByteSize) return default;
 
             var flags = (HeaderFlags)source[0];
             var sessionId = source.ReadInt64(1);
             var protocolId = source.ReadUInt16(9);
             var fragmented = source[11];
             var bodyLength = source.ReadInt32(12);
-            header = new UdpHeader(flags, sessionId, protocolId, fragmented, bodyLength);
-            consumed = ByteSize;
-            return true;
+            return new UdpHeader(flags, sessionId, protocolId, fragmented, bodyLength);
         }
     }
 

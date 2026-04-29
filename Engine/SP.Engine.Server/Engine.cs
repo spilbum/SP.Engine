@@ -35,6 +35,11 @@ public abstract class Engine : BaseEngine, IEngine
     private PerfMonitor _perfMonitor;
     private ILogger _perfLogger;
     private IDisposable _waitingReconnectCheckingTimer;
+    private IFiber _perfMonitorFiber;
+    
+    private static readonly long _baseUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+    public static long UtcNowMs => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+    internal static uint NetworkTimeMs => (uint)(UtcNowMs - _baseUnixMs);
 
     protected override bool Initialize(string name, EngineConfig config)
     {
@@ -71,6 +76,7 @@ public abstract class Engine : BaseEngine, IEngine
     public override void Stop()
     {
         _perfMonitor?.Dispose();
+        _perfMonitorFiber?.Dispose();
         foreach (var fiber in _peerFibers) fiber.Dispose();
         foreach (var fiber in _connectorFibers) fiber.Dispose();
         StopReconnectTimer();
@@ -131,25 +137,24 @@ public abstract class Engine : BaseEngine, IEngine
         var peer = session.Peer;
         if (null == peer) return;
         
-        peer.Fiber.RemovePeer(peer);
+        peer.Fiber?.RemovePeer(peer);
         
         if (session.IsClosing)
         {
             // 종료중이면 즉시 제거
             _peerManager.RemovePeer(peer, reason);
             OnPeerRemoved(peer, reason);
-            return;
         }
-        
-        if (peer.IsConnected)
+        else if (peer.IsConnected)
         {
             // 오프라인 전환
             _peerManager.Offline(peer, reason);
-            return;
         }
-        
-        _peerManager.RemovePeer(peer, reason);
-        OnPeerRemoved(peer, reason);
+        else
+        {
+            _peerManager.RemovePeer(peer, reason);
+            OnPeerRemoved(peer, reason);   
+        }
     }
     
     private void StartReconnectTimer()
@@ -178,20 +183,39 @@ public abstract class Engine : BaseEngine, IEngine
     
     private void SetupPeerFiber()
     {
-        var fiberCnt = Math.Max(Config.Session.MaxConnections / 300, 10);
+        var fiberCnt = Environment.ProcessorCount;
+        fiberCnt = Math.Clamp(fiberCnt, 4, 32); // todo:환경에 맞게 튜닝
+        
         var tickInterval = TimeSpan.FromMilliseconds(Config.Session.PeerUpdateIntervalMs);
         
         for (var i = 0; i < fiberCnt; i++)
         {
-            var fiber = new ThreadFiber($"PeerFiber_{i:D2}", maxBatchSize: 1024, capacity: 4096,
+            var fiber = new ThreadFiber($"PeerFiber_{i:D2}",
+                maxBatchSize: 2048,
+                capacity: 8192,
                 onError: ex =>
                 {
-                    Logger.Error(ex);
+                    switch (ex)
+                    {
+                        case FiberException e:
+                            Logger.Error(e.InnerException, "Fiber: {0}, Job: {1}", e.FiberName, e.Job?.Name ?? "unknown");
+                            break;
+                        case FiberQueueFullException e:
+                            if (e.DroppedCount % 100 == 1)
+                            {
+                                Logger.Warn("Fiber '{0}' is overwhelmed. Pending: {1}, Dropped: {2}",
+                                    e.FiberName, e.PendingCount, e.DroppedCount);
+                            }
+                            break;
+                    }
                 });
             
             var peerFiber = new PeerFiber(fiber, Scheduler, Logger, tickInterval);
             _peerFibers.Add(peerFiber);
         }
+        
+        Logger.Info("PeerFiber setup completed. FiberCount: {0}, Shared Sessions per fiber: ~{1}", 
+            fiberCnt, Config.Session.MaxConnections / fiberCnt);
     }
     
     private void SetupPerfMonitor(PerfConfig config)
@@ -199,14 +223,17 @@ public abstract class Engine : BaseEngine, IEngine
         if (!config.MonitorEnabled)
             return;
 
+        var fiber = new ThreadFiber("PerfMonitorFiber");
+        _perfMonitorFiber = fiber;
+        
         _perfMonitor = new PerfMonitor();
-        Scheduler.Schedule(Fiber, PerfMonitorTick, TimeSpan.Zero, config.SamplePeriod);
+        Scheduler.Schedule(fiber, PerfMonitorTick, TimeSpan.Zero, config.SamplePeriod);
 
         if (!config.LoggerEnabled)
             return;
 
         _perfLogger = LogManager.GetLogger("PerfMonitor");
-        Scheduler.Schedule(Fiber, () =>
+        Scheduler.Schedule(fiber, () =>
         {
             if (_perfMonitor.TryGetLast(out var metrics))
                 _perfLogger.Info(metrics.ToString());
@@ -309,66 +336,63 @@ public abstract class Engine : BaseEngine, IEngine
         _userCommands.TryGetValue(protocolId, out var command);
         return command;
     }
-
-    internal void ExecuteMessage(Session session, IMessage message)
+    
+    internal void ExecuteCommand(Session session, IMessage message)
     {
-        var command = GetInternalCommand(message.Id);
-        if (command != null)
-        {
-            command.Execute(session, message);
-            return;
-        }
-        
-        command = GetUserCommand(message.Id);
-        if (command == null)
-        {
-            Logger.Error("Unknown command: msgId={0}, session={1}/{2}",
-                message.Id, session.SessionId, session.RemoteEndPoint);
-            return;
-        }
-        
+        if (session == null) return;
         var peer = session.Peer;
-        if (peer == null)
+
+        using (message)
         {
-            Logger.Warn("Peer not authenticated. sessionId={0}", session.SessionId);
-            session.Close();
-            return;
-        }
+            if (message is TcpMessage { SequenceNumber: > 0 } tcp && peer != null)
+            {
+                var messages = peer.MessageProcessor.IngestReceivedMessage(tcp);
+                if (messages == null) return;
 
-        switch (message)
-        {
-            case TcpMessage tcp:
-
-                if (tcp.SequenceNumber == 0)
+                foreach (var m in messages)
                 {
-                    // 즉시 처리 (Internal/Fallback)
-                    GetUserCommand(tcp.Id)?.Execute(peer, tcp);
-                    break;
+                    using (m) DispatchCommand(session, peer, m);
                 }
-                
-                // 피기배킹 처리
-                peer.HandleRemoteAck(tcp.AckNumber);
-                
-                var messages = peer.ProcessMessageInOrder(tcp);
-                if (messages != null)
-                {
-                    foreach (var msg in messages)
-                    {
-                        var cmd = GetUserCommand(msg.Id);
-                        cmd?.Execute(peer, msg);
-                    }
-                }
-
-                break;
-            case UdpMessage udp:
-                command.Execute(peer, udp);
-                break;
+            }
+            else
+            {
+                DispatchCommand(session, peer, message);
+            }
         }
     }
-    
-    private static readonly long _baseUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-    public static long UtcNowMs => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-    internal static uint NetworkTimeMs => (uint)(UtcNowMs - _baseUnixMs);
+
+    private void DispatchCommand(BaseSession session, BasePeer peer, IMessage message)
+    {
+        var internalCommand = GetInternalCommand(message.Id);
+        if (internalCommand != null)
+        {
+            internalCommand.Execute(session, message);
+            return;
+        }
+
+        if (peer == null)
+        {
+            Logger.Warn("Unauthorized user command dropped. id={0}", message.Id);
+            return;
+        }
+        
+        var command = GetUserCommand(message.Id);
+        if (command == null)
+        {
+            Logger.Error("Unknown user command: id={0}", message.Id);
+            return;
+        }
+
+        var protocol = command.Deserialize(peer, message);
+        if (protocol == null)
+        {
+            Logger.Error("Invalid message: id={0}", message.Id);
+            peer.Close(CloseReason.Rejected);
+            return;
+        }
+
+        peer.EnqueueJob(command.Execute, peer, protocol);
+    }
 
     public IEnumerable<IConnector> GetAllConnectors()
     {

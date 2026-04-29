@@ -28,7 +28,7 @@ public class Client : BaseNetPeer
     private void OnError(object? sender, ErrorEventArgs e)
     {
         var ex = e.GetException();
-        Logger.Error("An error occurred: {0}\r\n{1}", ex.Message, ex.StackTrace);
+        Logger.Error("An error occurred: {0}\r\nStacktrace:{1}", ex.Message, ex.InnerException?.StackTrace);
     }
 
     private void OnOffline(object? sender, EventArgs e)

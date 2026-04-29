@@ -9,6 +9,14 @@ namespace SP.Core.Fiber
         public long Seq;
     }
     
+    public enum EnqueueResult
+    {
+        Success,
+        Full,       // 물리적으로 자리가 없음
+        Contention, // 경합이 심해서 제시간에 넣지 못함
+        Closed      // 큐가 종료됨
+    }
+    
     public sealed class BatchQueue<T> : IDisposable where T : class
     {
         private readonly Slot<T>[] _buffer;
@@ -24,18 +32,23 @@ namespace SP.Core.Fiber
         private long _totalEnqueuedCount;
         private long _totalDroppedCount;
         private long _totalProcessedCount;
-        private long _totalDequeueCount;
+        private long _totalDequeuedCount;
 
         public int Capacity => _buffer.Length;
         public int PendingCount => (int)(Volatile.Read(ref _tail) - Volatile.Read(ref _head));
         public long TotalEnqueuedCount => Volatile.Read(ref _totalEnqueuedCount);
         public long TotalDroppedCount => Volatile.Read(ref _totalDroppedCount);
         public long TotalProcessedCount => Volatile.Read(ref _totalProcessedCount);
-        public long TotalDequeueCount => Volatile.Read(ref _totalDequeueCount);
-        public double AvgBatchSize => _totalDequeueCount == 0 
+        public long TotalDequeuedCount => Volatile.Read(ref _totalDequeuedCount);
+        public double AvgBatchSize => _totalDequeuedCount == 0 
             ? 0 
-            : (double)Volatile.Read(ref _totalProcessedCount) / Volatile.Read(ref _totalDequeueCount);
-            
+            : (double)Volatile.Read(ref _totalProcessedCount) / Volatile.Read(ref _totalDequeuedCount);
+
+        public override string ToString()
+        {
+            return $"Enqueued:{TotalEnqueuedCount}, Dropped:{TotalDroppedCount}, Processed:{TotalProcessedCount}, Dequeued:{TotalDequeuedCount}";
+        }
+
         public BatchQueue(int capacity)
         {
             // 2의 배수로 만듬
@@ -49,9 +62,9 @@ namespace SP.Core.Fiber
             for (var i = 0; i < cap; i++) _buffer[i].Seq = i;
         }
 
-        public bool TryEnqueue(T item, int maxSpinCount = 100)
+        public EnqueueResult TryEnqueue(T item, int maxSpinCount = 100)
         {
-            if (_closed || _disposed) return false;
+            if (_closed || _disposed) return EnqueueResult.Closed;
 
             var spinner = new SpinWait();
             var spins = 0;
@@ -74,15 +87,19 @@ namespace SP.Core.Fiber
                     if (_signal.CurrentCount == 0) _signal.Release();
                     
                     Interlocked.Increment(ref _totalEnqueuedCount);
-                    return true;
+                    return EnqueueResult.Success;
                 }
 
                 if (diff < 0)
                 {
                     if (spins++ >= maxSpinCount)
                     {
+                        if (PendingCount < Capacity - 1) 
+                            return EnqueueResult.Contention;
+                        
                         Interlocked.Increment(ref _totalDroppedCount);
-                        return false;
+                        return EnqueueResult.Full;
+
                     }
                 }
 
@@ -120,7 +137,7 @@ namespace SP.Core.Fiber
             
             _head += count;
             Interlocked.Add(ref _totalProcessedCount, count);
-            Interlocked.Increment(ref _totalDequeueCount);
+            Interlocked.Increment(ref _totalDequeuedCount);
             return count;
         }
         

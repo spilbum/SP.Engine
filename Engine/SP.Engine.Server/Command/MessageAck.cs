@@ -1,4 +1,3 @@
-using System.Threading.Tasks;
 using SP.Engine.Protocol;
 using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Protocol;
@@ -10,6 +9,6 @@ internal class MessageAck : BaseCommand<Session, C2SEngineProtocolData.MessageAc
 {
     protected override void ExecuteCommand(Session session, C2SEngineProtocolData.MessageAck protocol)
     {
-        session.Peer.OnMessageAck(protocol.AckNumber);
+        session.Peer?.OnMessageAck(protocol.AckNumber);
     }
 }

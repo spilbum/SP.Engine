@@ -3,13 +3,11 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
-using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using SP.Core.Fiber;
 using SP.Core.Logging;
 using SP.Engine.Runtime;
-using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Server.Configuration;
 using SP.Engine.Server.Logging;
@@ -20,7 +18,6 @@ public interface IBaseEngine : ILogContext
 {
     IEngineConfig Config { get; }
     IBaseSession CreateSession(TcpNetworkSession networkSession);
-    void ProcessUdpClient(ArraySegment<byte> segment, Socket socket, IPEndPoint remoteEndPoint);
 }
 
 internal interface ISocketServerAccessor
@@ -57,16 +54,17 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
     private IDisposable _sessionSnapshotTimer;
     private ListenerInfo[] _listenerInfos;
     private SocketServer _socketServer;
-    private BaseSession[] _sessionSnapshot;
+    private Session[] _sessionSnapshot;
     private int _stateCode = ServerStateConst.NotInitialized;
     private bool _disposed;
-    private ThreadFiber _fiber;
+    private ThreadFiber _engineFiber;
     private readonly Scheduler _globalScheduler = new();
     private SessionManager _sessionManager;
+    private IDisposable _udpCleanupTimer;
     
     public string Name { get; private set; }
 
-    protected BaseSession[] SessionsSource
+    protected Session[] SessionsSource
     {
         get
         {
@@ -76,58 +74,17 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
         }
     }
 
+    protected IFiber Fiber => _engineFiber;
     public ILogger Logger { get; private set; }
     public IEngineConfig Config { get; private set; }
-    public IFiber Fiber => _fiber;
     public IScheduler Scheduler => _globalScheduler;
     SocketServer ISocketServerAccessor.SocketServer => _socketServer;
-
-
-    IBaseSession IBaseEngine.CreateSession(TcpNetworkSession networkSession)
-    {
-        var session = _sessionManager.CreateSession(this, networkSession);
-        if (session == null)
-            return null;
-        
-        session.NetworkSession.Closed += OnNetworkSessionClosed;
-        
-        // 인증 해드쉐이크 대기 등록
-        EnqueueAuthHandshakePending(session);
-        Logger.Debug("A new session connected. sessionId={0}, remoteEndPoint={1}", session.SessionId, session.RemoteEndPoint);
-        return session;
-    }
-
-    void IBaseEngine.ProcessUdpClient(ArraySegment<byte> segment, Socket socket, IPEndPoint remoteEndPoint)
-    {
-        if (!UdpHeader.TryRead(segment, out var header, out var consumed))
-        {
-            // 헤더 파싱 실패
-            return;
-        }
-
-        if (segment.Count < consumed + header.BodyLength)
-        {
-            // 데이터 부족
-            return;
-        }
-
-        var session = _sessionManager.GetSession(header.SessionId);
-        if (session == null)
-        {
-            Logger.Debug("[UDP] Not found session: {0}", header.SessionId);
-            return;
-        }
-
-        segment = new ArraySegment<byte>(segment.Array!, consumed + segment.Offset, header.BodyLength);
-        session.ProcessUdpBuffer(header, segment, socket, remoteEndPoint);
-    }
 
     public void Dispose()
     {
         Dispose(true);
         GC.SuppressFinalize(this);
     }
-
 
     protected virtual bool Initialize(string name, EngineConfig config)
     {
@@ -152,15 +109,12 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
             return false;
 
         _sessionManager = new SessionManager(config.Session.MaxConnections);
-        _fiber = new ThreadFiber("EngineFiber", maxBatchSize: 1024, capacity: 4096,
-            onError: ex =>
-            {
-                Logger.Error(ex);        
-            });
+        _engineFiber = new ThreadFiber("EngineFiber", onError: ex => Logger.Error(ex));
         
         _stateCode = ServerStateConst.NotStarted;
         return true;
     }
+    
 
     public virtual bool Start()
     {
@@ -186,6 +140,9 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
 
         if (Config.Session.EnableClearIdleSession)
             StartClearIdleSessionTimer();
+        
+        if (Config.Network.EnableUdp)
+            StartUdpCleanupTimer();
 
         StartHandshakePendingTimer();
 
@@ -215,6 +172,7 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
         StopSessionSnapshotTimer();
         StopClearIdleSessionTimer();
         StopHandshakePendingTimer();
+        StopUdpCleanupTimer();
         LogManager.Dispose();
 
         var snapshot = _sessionManager.GetActiveSnapshot();
@@ -248,10 +206,10 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
         return -1;
     }
 
-    public IBaseSession GetSession(long sessionId)
+    public Session GetSession(long sessionId)
         => _sessionManager.GetSession(sessionId);
 
-    public IEnumerable<IBaseSession> GetAllSessions()
+    public IEnumerable<Session> GetAllSessions()
     {
         var sessions = SessionsSource;
         return sessions;
@@ -292,14 +250,14 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
             Logger.Fatal("Listeners is null or empty in server config.");
             return false;
         }
-
-        var listenerInfos = (from l in config.Listeners
-            where 0 < l.Port
+        
+        var listenerInfos = (from lc in config.Listeners 
+            where 0 < lc.Port && (lc.Mode != SocketMode.Udp || config.Network.EnableUdp) 
             select new ListenerInfo
-            {
-                EndPoint = new IPEndPoint(ParseIpAddress(l.Ip), l.Port),
-                BackLog = l.BackLog,
-                Mode = l.Mode
+            { 
+                EndPoint = new IPEndPoint(ParseIpAddress(lc.Ip), lc.Port), 
+                BackLog = lc.BackLog, 
+                Mode = lc.Mode
             }).ToList();
 
         if (0 == listenerInfos.Count)
@@ -319,26 +277,40 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
         return "IPv6Any".Equals(ip, StringComparison.OrdinalIgnoreCase) ? IPAddress.IPv6Any : IPAddress.Parse(ip);
     }
 
-    private void OnNetworkSessionClosed(INetworkSession ns, CloseReason reason)
-    {
-        if (ns.Session is not Session session)
-            return;
 
-        session.IsConnected = false;
-        session.IsClosed = true;
-        _sessionManager.RemoveSession(session.Index);
-        Logger.Debug("The session {0} has been closed. reason={1}", session.SessionId, reason);
-        OnSessionClosed(session, reason);
-    }
 
     internal virtual void OnSessionClosed(Session session, CloseReason reason)
     {
     }
 
+    private void StartUdpCleanupTimer()
+    {
+        var period = TimeSpan.FromSeconds(Config.Network.UdpCleanupIntervalSec);
+        _udpCleanupTimer = _globalScheduler.Schedule(_engineFiber, CleanupUdpFragment, TimeSpan.Zero, period);
+    }
+
+    private void StopUdpCleanupTimer()
+    {
+        _udpCleanupTimer?.Dispose();
+        _udpCleanupTimer = null;
+    }
+
+    private void CleanupUdpFragment()
+    {
+        var sessions = SessionsSource;
+        var now = DateTime.UtcNow;
+
+        Parallel.ForEach(sessions, s =>
+        {
+            if (s.UdpSession != null && !s.IsClosed)
+                s.UdpSession.Assembler.Cleanup(now);
+        });
+    }
+
     private void StartClearIdleSessionTimer()
     {
-        var ts = TimeSpan.FromSeconds(Config.Session.ClearIdleSessionIntervalSec);
-        _clearIdleSessionTimer = _globalScheduler.Schedule(_fiber, ClearIdleSession, ts, ts);
+        var period = TimeSpan.FromSeconds(Config.Session.ClearIdleSessionIntervalSec);
+        _clearIdleSessionTimer = _globalScheduler.Schedule(_engineFiber, ClearIdleSession, TimeSpan.Zero, period);
     }
 
     private void StopClearIdleSessionTimer()
@@ -384,8 +356,8 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
 
     private void StartSessionSnapshotTimer()
     {
-        var ts = TimeSpan.FromSeconds(Config.Session.SessionSnapshotIntervalSec);
-        _sessionSnapshotTimer = _globalScheduler.Schedule(_fiber, TakeSessionSnapshot, ts, ts);
+        var period = TimeSpan.FromSeconds(Config.Session.SessionSnapshotIntervalSec);
+        _sessionSnapshotTimer = _globalScheduler.Schedule(_engineFiber, TakeSessionSnapshot, TimeSpan.Zero, period);
     }
 
     private void StopSessionSnapshotTimer()
@@ -398,7 +370,6 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
     {
         var snapshot = _sessionManager.GetActiveSnapshot();
         Interlocked.Exchange(ref _sessionSnapshot, snapshot);
-        //Logger.Debug("Session snapshot has been taken. count={0}", snapshot.Length);
     }
 
     protected virtual void Dispose(bool disposing)
@@ -408,7 +379,7 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
 
         if (disposing)
         {
-            _fiber?.Dispose();
+            _engineFiber?.Dispose();
             _globalScheduler.Dispose();
             
             if (_stateCode == ServerStateConst.Running)
@@ -420,8 +391,8 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
 
     private void StartHandshakePendingTimer()
     {
-        var ts = TimeSpan.FromSeconds(Config.Session.HandshakePendingTimerIntervalSec);
-        _handshakePendingTimer = _globalScheduler.Schedule(_fiber, CheckHandshakePendingCallback, ts, ts);
+        var period = TimeSpan.FromSeconds(Config.Session.HandshakePendingTimerIntervalSec);
+        _handshakePendingTimer = _globalScheduler.Schedule(_engineFiber, ProcessPendingQueue, TimeSpan.Zero, period);
     }
 
     private void StopHandshakePendingTimer()
@@ -430,16 +401,15 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
         _handshakePendingTimer = null;
     }
 
-    private void CheckHandshakePendingCallback()
+    private void ProcessPendingQueue()
     {
-        if (null == _handshakePendingTimer)
-            return;
+        if (null == _handshakePendingTimer) return;
 
         try
         {
             while (_authHandshakePendingQueue.TryPeek(out var session))
             {
-                if (session.IsAuthHandshake || !session.IsConnected)
+                if (session.IsClosed || session.IsAuthenticated)
                 {
                     // 인증 핸드쉐이크를 완료했거나 연결이 끊어졌으면 제거함
                     _authHandshakePendingQueue.TryDequeue(out _);
@@ -449,15 +419,15 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
                 // 타임 아웃 체크
                 if (DateTime.UtcNow < session.StartTime.AddSeconds(Config.Session.AuthHandshakeTimeoutSec))
                     continue;
-
+                
                 // 인증 타임 아웃
-                _authHandshakePendingQueue.TryDequeue(out _);
-                session.Close(CloseReason.TimeOut);
+                if (_authHandshakePendingQueue.TryDequeue(out var expired))
+                    expired.Close(CloseReason.ServerClosing);
             }
 
             while (_closeHandshakePendingQueue.TryPeek(out var session))
             {
-                if (!session.IsConnected)
+                if (session.IsClosed)
                 {
                     // 종료 처리가 되었음
                     _closeHandshakePendingQueue.TryDequeue(out _);
@@ -468,17 +438,41 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
                 if (DateTime.UtcNow < session.StartClosingTime.AddSeconds(Config.Session.CloseHandshakeTimeoutSec))
                     continue;
 
-                Logger.Debug("Client terminated due to close handshake timeout. sessionId={0}", session.SessionId);
-
+                Logger.Debug("Timeout close handshake for session: {0}", session.SessionId);
+                
                 // 종료 타임아웃
-                _closeHandshakePendingQueue.TryDequeue(out _);
-                session.Close(CloseReason.ServerClosing);
+                if (_closeHandshakePendingQueue.TryDequeue(out var expired))
+                    expired.Close(CloseReason.ServerClosing);
             }
         }
         catch (Exception e)
         {
             Logger.Error(e);
         }
+    }
+    
+    IBaseSession IBaseEngine.CreateSession(TcpNetworkSession ns)
+    {
+        var session = _sessionManager.CreateSession(this, ns);
+        if (session == null) return null;
+        
+        ns.Session = session;
+        ns.Closed += OnTcpSessionClosed;
+        
+        // 인증 해드쉐이크 대기 등록
+        EnqueueAuthHandshakePending(session);
+        Logger.Debug("A new session connected. sessionId={0}", session.SessionId);
+        return session;
+    }
+    
+    private void OnTcpSessionClosed(INetworkSession ns, CloseReason reason)
+    {
+        var session = ns.Session;
+        if (session == null) return;
+
+        Logger.Debug("The session {0} has been closed. reason={1}", session.SessionId, reason);
+        _sessionManager.RemoveSession(session.SessionId);
+        OnSessionClosed(session, reason);
     }
 
     private void EnqueueAuthHandshakePending(BaseSession session)
@@ -488,6 +482,7 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
 
     internal void EnqueueCloseHandshakePending(BaseSession session)
     {
+        Logger.Debug("Enqueue close handshake pending: {0}", session.SessionId);
         _closeHandshakePendingQueue.Enqueue(session);
     }
 }

@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Buffers;
 using System.Net;
 using System.Net.Sockets;
 using SP.Engine.Runtime;
@@ -12,36 +11,33 @@ internal class UdpNetworkListener(ListenerInfo listenerInfo) : BaseNetworkListen
     private Socket _listenSocket;
     private SocketAsyncEventArgs _receiveEventArgs;
     private byte[] _receiveBuffer;
+    private volatile bool _stopping;
 
     public override bool Start()
     {
         try
         {
+            _stopping = false;
             _listenSocket = new Socket(EndPoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
             _listenSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-            _listenSocket.Bind(EndPoint);
 
+            // UDP에서 Port Unreachable (10054) 예외 방지 (Windows 전용)
             if (OperatingSystem.IsWindows())
             {
-                const uint iocIn = 0x80000000;
-                const int iocVendor = 0x18000000;
-                const uint sioUdpConnReset = iocIn | iocVendor | 12;
-
-                var optionInValue = new[] { Convert.ToByte(false) };
-                var optionOutValue = new byte[4];
-                _listenSocket.IOControl(unchecked((int)sioUdpConnReset), optionInValue, optionOutValue);
+                const int SIO_UDP_CONNRESET = -1744830452;
+                _listenSocket.IOControl(SIO_UDP_CONNRESET, [0], null);
             }
+            
+            _listenSocket.Bind(EndPoint);
 
-            var eventArgs = new SocketAsyncEventArgs();
-            _receiveEventArgs = eventArgs;
-
-            eventArgs.Completed += OnReceiveCompleted;
-            eventArgs.RemoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
+            _receiveEventArgs = new SocketAsyncEventArgs();
+            _receiveEventArgs.Completed += OnReceiveCompleted;
+            _receiveEventArgs.RemoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
 
             _receiveBuffer = new byte[ushort.MaxValue];
-            eventArgs.SetBuffer(_receiveBuffer, 0, _receiveBuffer.Length);
-
-            _listenSocket.ReceiveFromAsync(eventArgs);
+            _receiveEventArgs.SetBuffer(_receiveBuffer, 0, _receiveBuffer.Length);
+            
+            StartReceive(_receiveEventArgs);
             return true;
         }
         catch (Exception ex)
@@ -51,66 +47,104 @@ internal class UdpNetworkListener(ListenerInfo listenerInfo) : BaseNetworkListen
         }
     }
 
+    private void StartReceive(SocketAsyncEventArgs e)
+    {
+        try
+        {
+            if (_stopping || _listenSocket == null) return;
+
+            if (!_listenSocket.ReceiveFromAsync(e))
+            {
+                OnReceiveCompleted(this, e);
+            }
+        }
+        catch (ObjectDisposedException) {}
+        catch (Exception ex)
+        {
+            OnError(ex);
+        }
+    }
+
     private void OnReceiveCompleted(object sender, SocketAsyncEventArgs e)
     {
-        if (e.SocketError != SocketError.Success)
+        var pending = false;
+        while (!pending)
         {
-            var errorCode = (int)e.SocketError;
-            if (errorCode is not (995 or 10004 or 10038))
-                OnError(new SocketException(errorCode));
-            return;
-        }
-
-        if (e.LastOperation != SocketAsyncOperation.ReceiveFrom || e.BytesTransferred == 0)
-            return;
-
-        try
-        {
-            if (null == e.RemoteEndPoint)
-                throw new Exception("RemoteEndPoint is null");
+            if (_stopping) return;
             
-            var segment = new ArraySegment<byte>(e.Buffer!, e.Offset, e.BytesTransferred);
-            var remote = (IPEndPoint)e.RemoteEndPoint;
-            OnNewClientAccepted(_listenSocket, (segment, remote));
-        }
-        catch (Exception ex)
-        {
-            OnError(new Exception($"[UDP] Error receiving data from {e.RemoteEndPoint}: {ex.Message}", ex));
-        }
+            if (e.SocketError != SocketError.Success)
+            {
+                HandleSocketError(e);
+                return;
+            }
 
-        // 다음 수신 대기
-        try
-        {
-            // 다음 클라이언트의 주소를 받기 위해 EndPoint 초기화
+            if (e.BytesTransferred > 0 && e.RemoteEndPoint != null)
+            {
+                try
+                {
+                    var segment = new ArraySegment<byte>(e.Buffer!, e.Offset, e.BytesTransferred);
+                    var remote = (IPEndPoint)e.RemoteEndPoint;
+                    
+                    OnNewClientAccepted(_listenSocket, (segment, remote));
+                }
+                catch (Exception ex)
+                {
+                    OnError(new Exception($"[UDP] Packet processing error: {ex.Message}", ex));
+                }
+            }
+        
+            // 다음 수신을 위한 초기화
             e.RemoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
             
-            if (!_listenSocket.ReceiveFromAsync(e))
-                OnReceiveCompleted(this, e);
+            try
+            {
+                if (_stopping) break;
+                // 다시 수신 시도
+                pending = _listenSocket.ReceiveFromAsync(e);
+            }
+            catch (ObjectDisposedException)
+            {
+                pending = true;
+            }
+            catch (Exception ex)
+            {
+                OnError(ex);
+                pending = true;
+            }
         }
-        catch (Exception ex)
+    }
+
+    private void HandleSocketError(SocketAsyncEventArgs e)
+    {
+        var errorCode = (int)e.SocketError;
+        // 995: Operation Aborted (소켓 닫힘), 10004: Interrupted, 10038: Not a socket
+        if (!_stopping && errorCode is not (995 or 10004 or 10038))
         {
-            OnError(new Exception(
-                $"[UDP] ReceiveFromAsync failed. Remote={e.RemoteEndPoint}, Bytes={e.BytesTransferred}, Error={ex.Message}",
-                ex));
+            OnError(new SocketException(errorCode));
         }
     }
 
     public override void Stop()
     {
-        if (_listenSocket == null) return;
-
         lock (_lock)
         {
-            if (_listenSocket == null) return;
+            if (_stopping) return;
+            _stopping = true;
 
+            if (_listenSocket != null)
+            {
+                _listenSocket.SafeClose();
+                _listenSocket = null;
+            }
+            
             if (_receiveEventArgs != null)
             {
-                _receiveEventArgs.Completed -= OnReceiveCompleted;
-                _receiveEventArgs.Dispose();
+                var tempArgs = _receiveEventArgs;
                 _receiveEventArgs = null;
+                
+                tempArgs.Completed -= OnReceiveCompleted;
+                tempArgs.Dispose();
             }
-
-            _listenSocket.SafeClose();
         }
 
         OnStopped();

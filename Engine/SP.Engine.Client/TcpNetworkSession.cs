@@ -166,9 +166,9 @@ namespace SP.Engine.Client
                 /* ignored */
             }
 
-            var recvEventArgs = new SocketAsyncEventArgs();
-            recvEventArgs.Completed += OnReceiveCompleted;
-            GetSocket(recvEventArgs);
+            var receiveEventArgs = new SocketAsyncEventArgs();
+            receiveEventArgs.Completed += OnReceiveCompleted;
+            GetSocket(receiveEventArgs);
         }
 
         private void GetSocket(SocketAsyncEventArgs e)
@@ -247,7 +247,7 @@ namespace SP.Engine.Client
                 if (EnsureSocketClosed(socket))
                     OnClosed();
 
-                if (!IsIgnorableException(ex))
+                if (!IsIgnoreException(ex))
                     OnError(ex);
             }
         }
@@ -270,7 +270,8 @@ namespace SP.Engine.Client
                 }
                 catch (Exception ex)
                 {
-                    OnError(ex);
+                    if (!IsIgnoreException(ex))
+                        OnError(ex);
                 }
                 finally
                 {
@@ -283,7 +284,7 @@ namespace SP.Engine.Client
                     OnClosed();
 
                 var ex = new SocketException((int)e.SocketError);
-                if (!IsIgnorableException(ex))
+                if (!IsIgnoreException(ex))
                     OnError(ex);
             }
         }
@@ -323,49 +324,44 @@ namespace SP.Engine.Client
             }
             catch (Exception ex)
             {
-                OnError(new Exception(
-                    $"Failed to send. Error: {ex.Message}, BufferList Count: {_sendEventArgs?.BufferList?.Count ?? 0}",
-                    ex));
-
-                if (EnsureSocketClosed() && !IsIgnorableException(ex))
+                if (EnsureSocketClosed() && !IsIgnoreException(ex))
                     OnError(ex);
             }
         }
 
         private void OnSendCompleted(object sender, SocketAsyncEventArgs e)
         {
-            if (e.SocketError != SocketError.Success || e.BytesTransferred == 0)
+            while (true)
             {
-                if (EnsureSocketClosed()) 
-                    OnClosed();
-
-                if (e.SocketError == SocketError.Success) 
-                    return;
-                    
-                var ex = new SocketException((int)e.SocketError);
-                if (!IsIgnorableException(ex)) 
-                    OnError(ex);
-                    
-                return;
-            }
-
-            if (e.BufferList is List<ArraySegment<byte>> list && list.Count > 0)
-            {
-                _sendBuffer.Release(e.BytesTransferred);
-                
-                ConsumeTransferred(list, e.BytesTransferred);
-
-                if (list.Count > 0)
+                if (e.SocketError != SocketError.Success || e.BytesTransferred == 0)
                 {
-                    if (!_socket.SendAsync(e)) 
-                        OnSendCompleted(null, e);
-                    
+                    if (EnsureSocketClosed()) OnClosed();
+
+                    if (e.SocketError == SocketError.Success) return;
+
+                    var ex = new SocketException((int)e.SocketError);
+                    if (!IsIgnoreException(ex)) OnError(ex);
+
                     return;
                 }
-            }
 
-            e.BufferList = null;
-            OnSendCompleted();
+                if (e.BufferList is List<ArraySegment<byte>> list && list.Count > 0)
+                {
+                    _sendBuffer.Release(e.BytesTransferred);
+
+                    ConsumeTransferred(list, e.BytesTransferred);
+
+                    if (list.Count > 0)
+                    {
+                        if (_socket.SendAsync(e)) return;
+                        continue;
+                    }
+                }
+
+                e.BufferList = null;
+                OnSendCompleted();
+                break;
+            }
         }
 
         private void OnSendCompleted()
@@ -420,21 +416,16 @@ namespace SP.Engine.Client
 
         private void OnClosed()
         {
+            if (!IsConnected) return;
+            
             if (_receiveBuffer != null)
-            {
                 ArrayPool<byte>.Shared.Return(_receiveBuffer);
-                _receiveBuffer = null;
-            }
             
             _sendQueue.Dispose();
             _sendBuffer.Dispose();
-
-            _receiveEventArgs?.Dispose();
-            _receiveEventArgs = null;
-            
             _sendEventArgs?.Dispose();
-            _sendEventArgs = null;
-
+            _receiveEventArgs?.Dispose();
+            
             IsConnected = false;
             Closed?.Invoke(this, EventArgs.Empty);
         }
@@ -454,7 +445,7 @@ namespace SP.Engine.Client
             Error?.Invoke(this, new ErrorEventArgs(ex));
         }
 
-        private static bool IsIgnorableException(Exception ex)
+        private static bool IsIgnoreException(Exception ex)
         {
             switch (ex)
             {
@@ -462,16 +453,26 @@ namespace SP.Engine.Client
                 case InvalidOperationException _:
                     return true;
                 case SocketException socketException:
-                    return IsIgnorableSocketError(socketException.SocketErrorCode);
+                    return IsIgnoreSocketError(socketException.SocketErrorCode);
                 default:
                     return false;
             }
         }
 
-        private static bool IsIgnorableSocketError(SocketError error)
+        private static bool IsIgnoreSocketError(SocketError errorCode)
         {
-            return error == SocketError.Shutdown || error == SocketError.ConnectionAborted ||
-                   error == SocketError.ConnectionReset || error == SocketError.OperationAborted;
+            switch (errorCode)
+            {
+                case SocketError.Interrupted:       // 10004
+                case SocketError.ConnectionAborted: // 10053
+                case SocketError.ConnectionReset:   // 10054
+                case SocketError.Shutdown:          // 10058
+                case SocketError.TimedOut:          // 10060
+                case SocketError.OperationAborted:  // 995
+                    return true; 
+                default:
+                    return false;
+            }
         }
     }
 }

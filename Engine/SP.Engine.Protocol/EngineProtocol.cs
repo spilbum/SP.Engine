@@ -53,8 +53,6 @@ namespace SP.Engine.Protocol
             public ushort AvgRttMs;
             // EWMA 지터
             public ushort JitterMs;
-            // 최근 구간 유실률 (0 ~ 100)
-            public byte PacketLossRate;
         }
 
         [Protocol(C2SEngineProtocolId.Close)]
@@ -95,12 +93,15 @@ namespace SP.Engine.Protocol
             public int SendTimeoutMs;
             public byte[]? ServerPublicKey;
             public long SessionId;
-            public int UdpOpenPort;
             public bool UseCompress;
             public bool UseEncrypt;
             public int MaxAckDelayMs;
             public int AckStepThreshold;
-            
+            public int UdpOpenPort;
+            public int UdpAssemblyTimeoutSec;
+            public int UdpMaxPendingMessageCount;
+            public int UdpCleanupIntervalSec;
+            public int MaxOutOfOrderCount;
         }
 
         [Protocol(S2CEngineProtocolId.Pong)]

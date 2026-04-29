@@ -2,18 +2,19 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Threading;
 using SP.Engine.Runtime;
-using SP.Engine.Server.Configuration;
-using SP.Engine.Server.Logging;
 
 namespace SP.Engine.Server;
 
 [Flags]
 public enum SocketState
 {
+    None = 0,
     InSending = 1 << 0,
     InReceiving = 1 << 1,
+    Paused = 1 << 2,
     InClosing = 1 << 4,
     Closed = 1 << 24
 }
@@ -26,424 +27,160 @@ public enum SocketMode
 
 public interface INetworkSession
 {
-    SocketMode Mode { get; }
-    string SessionId { get; }
-    Socket Client { get; }
-    IPEndPoint LocalEndPoint { get; }
-    IPEndPoint RemoteEndPoint { get; }
-    IBaseSession Session { get; }
-    event Action<INetworkSession, CloseReason> Closed;
-    void Attach(IBaseSession session);
-    void Close(CloseReason reason);
-    bool TrySend(ArraySegment<byte> data);
+    Session Session { get; }
 }
 
-public abstract class BaseNetworkSession(SocketMode mode) : INetworkSession
+public abstract class BaseNetworkSession : INetworkSession
 {
-    private const string ErrorMessageFormat = "An error occurred: {0}\r\n{1}";
-    private const string SocketErrorFormat = "An socket error occurred: {0}";
-    private const string CallerFormat = "caller={0}, file path={1}, line number={2}";
-    private readonly object _lock = new();
-    private Socket _client;
+    private const string LogHeaderFormat = "[NetworkError] SessionId: {0}, Mode: {1}";
+    private const string SocketInfoFormat = "SocketErrorCode: {0} ({1})";
+    private const string CallerInfoFormat = "Location: {0} in {1}:{2}";
 
+    protected Socket _client;
     private Action<INetworkSession, CloseReason> _closed;
-    private SegmentQueue _sendingQueue;
-    private IObjectPool<SegmentQueue> _sendingQueuePool;
-
-    private IBaseSession _session;
-
-    // 1st byte : Closed (y/n)
-    // 2nd byte : N/A
-    // 3rd byte : CloseReason
-    // last byte : Normal State
-    private volatile int _state;
-
+    private volatile int _socketState;
+    private protected IPEndPoint _remoteEndPoint;
+    protected CloseReason _finalReason;
+    
     protected BaseNetworkSession(SocketMode mode, Socket client)
-        : this(mode)
     {
-        _client = client
-                  ?? throw new ArgumentNullException(nameof(client));
-
-        LocalEndPoint = client.LocalEndPoint as IPEndPoint;
-        RemoteEndPoint = client.RemoteEndPoint as IPEndPoint;
-        SessionId = Guid.NewGuid().ToString();
+        _client = client;
+        Mode = mode;
+        LocalEndPoint = (IPEndPoint)client.LocalEndPoint;
+        RemoteEndPoint = (IPEndPoint)client.RemoteEndPoint;
     }
 
-    public IEngineConfig Config { get; private set; }
-
-    protected bool IsInClosingOrClosed => _state >= (int)SocketState.InClosing;
-    private bool IsClosed => _state >= (int)SocketState.Closed;
-
     public Socket Client => _client;
-    public SocketMode Mode { get; } = mode;
-    public IBaseSession Session => _session ?? throw new InvalidOperationException("Session is not initialized.");
-    public string SessionId { get; }
-    public IPEndPoint LocalEndPoint { get; protected init; }
-    public IPEndPoint RemoteEndPoint { get; protected set; }
+    public Session Session { get; internal set; }
+    public SocketMode Mode { get; }
+    public IPEndPoint LocalEndPoint { get; }
+    public IPEndPoint RemoteEndPoint
+    {
+        get => Volatile.Read(ref _remoteEndPoint);
+        protected set => Volatile.Write(ref _remoteEndPoint, value);
+    }
 
+    public bool IsClosed => HasState(SocketState.Closed);
+    public bool IsPaused => HasState(SocketState.Paused);
+    public bool IsIdle => (_socketState & ((int)SocketState.InSending | (int)SocketState.InReceiving)) == 0;
+    public bool IsInClosingOrClosed => _socketState >= (int)SocketState.InClosing;
+    
     public event Action<INetworkSession, CloseReason> Closed
     {
         add => _closed += value;
         remove => _closed -= value;
     }
-
-    public virtual void Attach(IBaseSession session)
-    {
-        _session = session ?? throw new ArgumentNullException(nameof(session));
-        Config = session.Config;
-
-        _sendingQueuePool = ((ISocketServerAccessor)session.Engine).SocketServer.SendingQueuePool;
-        
-        if (!_sendingQueuePool.TryRent(out var queue) || queue == null)
-            throw new InvalidOperationException("Failed to acquire a SendingQueue from the pool.");
-
-        _sendingQueue = queue;
-        queue.StartEnqueue();
-    }
-
-    public bool TrySend(ArraySegment<byte> segment)
-    {
-        if (IsClosed) return false;
-
-        var queue = _sendingQueue;
-        if (queue == null || !queue.Enqueue(segment, queue.TrackId))
-            return false;
-
-        StartSend(queue, queue.TrackId, true);
-        return true;
-    }
-
+    
     public void Close(CloseReason reason)
     {
-        if (!TryAddState(SocketState.InClosing))
-            return;
+        if (!TryAddState(SocketState.InClosing)) return;
+        _finalReason = reason;
 
-        if (TryValidateClosedBySocket(out var client))
-            return;
-
-        if (CheckState(SocketState.InSending))
-        {
-            TryAddState(GetSocketState(reason), false);
-            return;
-        }
-
-        if (client != null)
-            InternalClose(client, reason, true);
-        else
-            OnClosed(reason);
+        InternalClose(reason);
     }
 
+    private void InternalClose(CloseReason reason)
+    {
+        var client = Interlocked.Exchange(ref _client, null);
+        if (client == null) return;
+        
+        client.SafeClose();
+        if (IsIdle) OnClosed(reason);
+    }
+    
     protected virtual void OnClosed(CloseReason reason)
     {
-        // 종료 플래그 설정
-        if (!TryAddState(SocketState.Closed))
-            return;
+        if (!TryAddState(SocketState.Closed)) return;
 
-        // 전송 큐 반환
-        var queue = Interlocked.Exchange(ref _sendingQueue, null);
-        if (queue != null)
-        {
-            queue.Clear();
-            _sendingQueuePool?.Return(queue);
-        }
-
-        // 종료 이벤트 호출
-        lock (_lock)
-        {
-            _closed?.Invoke(this, reason);
-        }
+        OnRelease();
+        
+        var handler = Interlocked.Exchange(ref _closed, null);
+        handler?.Invoke(this, reason);
     }
+    
+    protected abstract void OnRelease();
 
-    protected abstract void Send(SegmentQueue queue);
+    protected bool HasState(SocketState state) => (_socketState & (int)state) != 0;
 
-    private void StartSend(SegmentQueue queue, int trackId, bool isInit)
-    {
-        if (queue == null)
-            return;
-
-        if (isInit)
-        {
-            if (!TryAddState(SocketState.InSending))
-                return;
-
-            var currentQueue = _sendingQueue;
-            if (queue != currentQueue || trackId != currentQueue.TrackId)
-            {
-                OnSendEnd();
-                return;
-            }
-        }
-
-        if (IsInClosingOrClosed && TryValidateClosedBySocket(out _))
-        {
-            OnSendEnd(true);
-            return;
-        }
-
-        if (!_sendingQueuePool.TryRent(out var newQueue) && newQueue == null)
-        {
-            Session.Logger.Error("Unable to acquire a new sending queue from the pool.");
-            OnSendEnd(false);
-            Close(CloseReason.InternalError);
-            return;
-        }
-
-        var oldQueue = Interlocked.CompareExchange(ref _sendingQueue, newQueue, queue);
-        if (!ReferenceEquals(oldQueue, queue))
-        {
-            if (null != newQueue)
-                _sendingQueuePool.Return(newQueue);
-
-            if (IsInClosingOrClosed)
-            {
-                OnSendEnd(true);
-            }
-            else
-            {
-                OnSendEnd(false);
-                Session.Logger.Error("Failed to switch the sending queue.");
-                Close(CloseReason.InternalError);
-            }
-
-            return;
-        }
-
-        queue.StopEnqueue();
-        newQueue.StartEnqueue();
-
-        if (0 == queue.Count)
-        {
-            Session.Logger.Error("There is no data to be sent in the queue.");
-            _sendingQueuePool.Return(queue);
-            OnSendEnd(false);
-            Close(CloseReason.InternalError);
-            return;
-        }
-
-        Send(queue);
-    }
-
-    private void OnSendEnd()
-    {
-        OnSendEnd(IsInClosingOrClosed);
-    }
-
-    private void OnSendEnd(bool isInClosingOrClosed)
-    {
-        RemoveState(SocketState.InSending);
-
-        if (!isInClosingOrClosed)
-            return;
-
-        if (!TryValidateClosedBySocket(out var client))
-        {
-            var queue = _sendingQueue;
-            if (queue is { Count: > 0 }) return;
-            if (null != client)
-                InternalClose(client, GetCloseReasonFromSocketState(), false);
-            else
-                OnClosed(GetCloseReasonFromSocketState());
-
-            return;
-        }
-
-        if (IsIdle()) OnClosed(GetCloseReasonFromSocketState());
-    }
-
-    protected void OnSendCompleted(SegmentQueue queue)
-    {
-        // 사용한 큐 반환
-        queue.Clear();
-        _sendingQueuePool.Return(queue);
-
-        var newQueue = _sendingQueue;
-        if (IsInClosingOrClosed)
-        {
-            if (newQueue is not { Count: 0 } && !TryValidateClosedBySocket(out _))
-            {
-                StartSend(newQueue, newQueue.TrackId, false);
-                return;
-            }
-
-            OnSendEnd(true);
-            return;
-        }
-
-        if (null == newQueue || 0 == newQueue.Count)
-            OnSendEnd();
-        else
-            StartSend(newQueue, newQueue.TrackId, false);
-    }
-
-    private void InternalClose(Socket client, CloseReason reason, bool isSetCloseReason)
-    {
-        if (Interlocked.CompareExchange(ref _client, null, client) != client)
-            return;
-
-        if (isSetCloseReason)
-            TryAddState(GetSocketState(reason), false);
-
-        client.SafeClose();
-
-        if (IsIdle()) OnClosed(reason);
-    }
-
-    private static SocketState GetSocketState(CloseReason reason)
-    {
-        return (SocketState)(((int)reason & 0xFF) << 16);
-    }
-
-    protected virtual bool TryValidateClosedBySocket(out Socket client)
-    {
-        client = _client;
-        return null == client;
-    }
-
-    protected virtual bool IsIgnoreSocketError(int socketErrorCode)
-    {
-        return socketErrorCode is 10004 or 10053 or 10054 or 10058 or 10060 or 995;
-    }
-
-    protected virtual bool IsIgnoreException(Exception e, out int errorCode)
-    {
-        errorCode = 0;
-        switch (e)
-        {
-            case ObjectDisposedException:
-            case NullReferenceException:
-                return true;
-            case SocketException socketEx:
-                errorCode = socketEx.ErrorCode;
-                return IsIgnoreSocketError(errorCode);
-            default:
-                return false;
-        }
-    }
-
-    private bool TryAddState(SocketState state, bool ensureNotClosing)
+    protected bool TryAddState(SocketState state)
     {
         while (true)
         {
-            var oldState = _state;
-            if (ensureNotClosing && oldState >= (int)SocketState.InClosing)
-                return false;
+            var current = _socketState;
+            if (((SocketState)current & state) != 0) return false;
 
-            var newState = oldState | (int)state;
-            if (Interlocked.CompareExchange(ref _state, newState, oldState) != oldState)
-                continue;
-
-            return true;
-        }
-    }
-
-    private bool TryAddState(SocketState state)
-    {
-        while (true)
-        {
-            var oldState = _state;
-            var newState = _state | (int)state;
-
-            //Already marked
-            if (oldState == newState) return false;
-
-            var compareState = Interlocked.CompareExchange(ref _state, newState, oldState);
-            if (compareState == oldState)
+            var next = current | (int)state;
+            if (Interlocked.CompareExchange(ref _socketState, next, current) == current) 
                 return true;
         }
     }
 
-    private void RemoveState(SocketState state)
+    protected bool RemoveState(SocketState state)
     {
         while (true)
         {
-            var oldState = _state;
-            var newState = oldState & ~(int)state;
-            if (Interlocked.CompareExchange(ref _state, newState, oldState) == oldState)
-                break;
+            var current = _socketState;
+            var next = current & ~(int)state;
+            if (Interlocked.CompareExchange(ref _socketState, next, current) == current)
+                return true;
         }
     }
 
-    private bool CheckState(SocketState state)
+    protected void HandleNetworkError(Exception e)
     {
-        return (_state & (int)state) != 0;
-    }
-
-    private bool IsIdle()
-    {
-        return (_state & ((int)SocketState.InSending | (int)SocketState.InReceiving)) == 0;
-    }
-
-    private CloseReason GetCloseReasonFromSocketState()
-    {
-        return (CloseReason)((_state >> 16) & 0xFF);
-    }
-
-    private void ValidateClosed(CloseReason closeReason)
-    {
-        if (IsClosed)
-            return;
-
-        // 종료 중인지 체크
-        if (CheckState(SocketState.InClosing))
-        {
-            if (IsIdle())
-                // 송수신 중이 아니면 종료
-                OnClosed(GetCloseReasonFromSocketState());
-        }
-        else
-        {
-            Close(closeReason);
-        }
-    }
-
-    protected void OnSendError(SegmentQueue queue, CloseReason closeReason)
-    {
-        queue.Clear();
-        _sendingQueuePool.Return(queue);
-        OnSendEnd(IsInClosingOrClosed);
-        ValidateClosed(closeReason);
-    }
-
-    protected void OnReceiveTerminated()
-    {
-        OnReceiveTerminated(GetCloseReasonFromSocketState());
-    }
-
-    protected void OnReceiveTerminated(CloseReason reason)
-    {
-        OnReceiveEnded();
-        ValidateClosed(reason);
-    }
-
-    protected bool OnReceiveStarted()
-    {
-        return TryAddState(SocketState.InReceiving, true);
-    }
-
-    protected void OnReceiveEnded()
-    {
-        RemoveState(SocketState.InReceiving);
+        LogError(e);
+        Close(CloseReason.SocketError);
     }
 
     protected void LogError(Exception e, [CallerMemberName] string caller = "", [CallerFilePath] string filePath = "",
         [CallerLineNumber] int lineNumber = -1)
     {
-        if (IsIgnoreException(e, out var socketErrorCode))
-            return;
+        if (ShouldIgnoreError(e)) return;
 
-        var message = 0 < socketErrorCode
-            ? string.Format(SocketErrorFormat, socketErrorCode)
-            : string.Format(ErrorMessageFormat, e.Message, e.StackTrace);
-        Session.Logger.Error(message + Environment.NewLine + string.Format(CallerFormat, caller, filePath, lineNumber));
+        var sessionId = Session.SessionId;
+        var logBuilder = new StringBuilder();
+
+        logBuilder.AppendLine(string.Format(LogHeaderFormat, sessionId, Mode));
+        logBuilder.AppendLine($"Message: {e.Message}");
+
+        if (e is SocketException socketEx)
+        {
+            logBuilder.AppendLine(string.Format(SocketInfoFormat,
+                (int)socketEx.SocketErrorCode,
+                socketEx.SocketErrorCode));
+        }
+        
+        logBuilder.AppendLine(string.Format(CallerInfoFormat, caller, System.IO.Path.GetFileName(filePath), lineNumber));
+        logBuilder.AppendLine("StackTrace:");
+        logBuilder.AppendLine(e.StackTrace);
+        
+        Session.Logger.Error(logBuilder.ToString());
     }
 
-    protected void LogError(int socketErrorCode, [CallerMemberName] string caller = "",
-        [CallerFilePath] string filePath = "", [CallerLineNumber] int lineNumber = -1)
+    private bool ShouldIgnoreError(Exception e)
     {
-        if (!Config.Network.LogAllSocketError && IsIgnoreSocketError(socketErrorCode))
-            return;
+        switch (e)
+        {
+            case SocketException se when IsIgnoreSocketError((int)se.SocketErrorCode):
+            case ObjectDisposedException or InvalidOperationException:
+            case OperationCanceledException:
+                return true;
+            default:
+                return false;
+        }
+    }
 
-        Session.Logger.Error(string.Format(SocketErrorFormat, socketErrorCode) + Environment.NewLine +
-                             string.Format(CallerFormat, caller, filePath, lineNumber));
+    protected virtual bool IsIgnoreSocketError(int errorCode)
+    {
+        var error = (SocketError)errorCode;
+        return error switch
+        {
+            SocketError.ConnectionReset => true,    // 10054: 상대방 강제 종료
+            SocketError.ConnectionAborted => true,  // 10053: 연결 중단
+            SocketError.TimedOut => true,           // 10060: 시간 초과
+            SocketError.OperationAborted => true,   // 995: 비동기 작업 취소 (중요)
+            SocketError.Shutdown => true,           // 10058: 종료된 소켓에 작업
+            _ => false
+        };
     }
 }

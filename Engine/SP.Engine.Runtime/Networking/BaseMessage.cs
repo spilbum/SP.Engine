@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Threading;
 using SP.Core;
 using SP.Core.Serialization;
 using SP.Engine.Runtime.Compression;
@@ -10,27 +11,34 @@ namespace SP.Engine.Runtime.Networking
 {
     public abstract class BaseMessage<THeader> : IMessage where THeader : IHeader
     {
+        private int _refCount;
         protected THeader Header { get; set; }
-        private RentedBuffer _body;
-        public int BodyLength => _body.Length;
-        protected ReadOnlySpan<byte> BodySpan => _body.Span;
+        protected IMemoryOwner<byte> _bodyOwner;
         
-        public ushort Id => Header.Id;
+        public int BodyLength => _bodyOwner?.Memory.Length ?? 0;
+        public ushort Id => Header?.Id ?? 0;
         
         protected BaseMessage()
         {
         }
 
-        protected BaseMessage(THeader header, RentedBuffer body)
+        protected BaseMessage(THeader header, IMemoryOwner<byte> bodyOwner)
         {
             Header = header;
-            _body = body;
+            _bodyOwner = bodyOwner;
+            Retain();
+        }
+
+        public void Retain()
+        {
+            Interlocked.Increment(ref _refCount);
         }
 
         public void Dispose()
         {
-            Header = default;
-            _body.Dispose();
+            if (Interlocked.Decrement(ref _refCount) != 0) return;
+            _bodyOwner?.Dispose();
+            _bodyOwner = null;
         }
         
         public void Serialize(IProtocolData protocol, IPolicy policy, IEncryptor encryptor, ICompressor compressor)
@@ -40,89 +48,78 @@ namespace SP.Engine.Runtime.Networking
             using var w = new NetWriter();
             NetSerializer.Serialize(w, protocol.GetType(), protocol);
             
-            var bodySpan = w.WrittenSpan;
+            var currentSpan = w.WrittenSpan;
             var flags = HeaderFlags.None;
 
-            byte[] rentBuf1 = null;
-            byte[] rentBuf2 = null;
+            IMemoryOwner<byte> tempOwner1 = null;
+            IMemoryOwner<byte> tempOwner2 = null;
             
             try
             {
-                if (policy.UseCompress && compressor != null && bodySpan.Length >= policy.CompressionThreshold)
+                if (policy.UseCompress && compressor != null && currentSpan.Length >= policy.CompressionThreshold)
                 {
-                    var maxLen = compressor.GetMaxCompressedLength(bodySpan.Length);
-                    rentBuf1 = ArrayPool<byte>.Shared.Rent(maxLen);
-                    // 압축
-                    var count = compressor.Compress(bodySpan, rentBuf1);
+                    var maxLen = compressor.GetMaxCompressedLength(currentSpan.Length);
+                    tempOwner1 = new PooledBuffer(maxLen);
+                    var count = compressor.Compress(currentSpan, tempOwner1.Memory.Span);
 
-                    bodySpan = new ReadOnlySpan<byte>(rentBuf1, 0, count);
+                    currentSpan = tempOwner1.Memory.Span[..count];
                     flags |= HeaderFlags.Compressed;
                 }
 
                 if (policy.UseEncrypt && encryptor != null)
                 {
-                    var maxLen = encryptor.GetCiphertextLength(bodySpan.Length);
-                    rentBuf2 = ArrayPool<byte>.Shared.Rent(maxLen);
-                    // 암호화
-                    var count = encryptor.Encrypt(bodySpan, rentBuf2);
+                    var maxLen = encryptor.GetCiphertextLength(currentSpan.Length);
+                    tempOwner2 = new PooledBuffer(maxLen);
+                    var count = encryptor.Encrypt(currentSpan, tempOwner2.Memory.Span);
                     
-                    bodySpan = new ReadOnlySpan<byte>(rentBuf2, 0, count);
+                    currentSpan = tempOwner2.Memory.Span[..count];
                     flags |= HeaderFlags.Encrypted;
                 }
 
-                byte[] bodyBytes;
-                if (rentBuf2 != null)
-                {
-                    bodyBytes = rentBuf2;
-                    rentBuf2 = null;
-                }
-                else if (rentBuf1 != null)
-                {
-                    bodyBytes = rentBuf1;
-                    rentBuf1 = null;
-                }
-                else
-                {
-                    bodyBytes = ArrayPool<byte>.Shared.Rent(bodySpan.Length);
-                    bodySpan.CopyTo(bodyBytes);
-                }
-
-                var bodyLength = bodySpan.Length;
-                _body = new RentedBuffer(bodyBytes, bodyLength);
-                Header = CreateHeader(flags, protocol.Id, bodyLength);
+                var finalOwner = new PooledBuffer(currentSpan.Length);
+                currentSpan.CopyTo(finalOwner.Span);
+                
+                Retain();
+                _bodyOwner = finalOwner;
+                Header = CreateHeader(flags, protocol.Id, currentSpan.Length);
             }
             finally
             {
-                if (rentBuf1 != null) ArrayPool<byte>.Shared.Return(rentBuf1);
-                if (rentBuf2 != null) ArrayPool<byte>.Shared.Return(rentBuf2);
+                tempOwner1?.Dispose();
+                tempOwner2?.Dispose();
             }
         }
 
         public TProtocol Deserialize<TProtocol>(IEncryptor encryptor, ICompressor compressor)
             where TProtocol : IProtocolData
         {
-            byte[] rentBuf1 = null;
-            byte[] rentBuf2 = null;
-
+            if (_bodyOwner == null)
+            {
+                return default;
+            }
+            
+            IMemoryOwner<byte> tempOwner1 = null;
+            IMemoryOwner<byte> tempOwner2 = null;
+            
             try
             {
-                var bodySpan = BodySpan;
+                var bodySpan = _bodyOwner.Memory.Span;
                 if (HasFlag(HeaderFlags.Encrypted) && encryptor != null)
                 {
                     var maxLen = encryptor.GetPlaintextLength(bodySpan.Length);
-                    rentBuf1 = ArrayPool<byte>.Shared.Rent(maxLen);
-                    // 복호화
-                    var count = encryptor.Decrypt(bodySpan, rentBuf1);
-                    bodySpan = new ReadOnlySpan<byte>(rentBuf1, 0, count);
+                    tempOwner1 = new PooledBuffer(maxLen);
+                    
+                    var count = encryptor.Decrypt(bodySpan, tempOwner1.Memory.Span);
+                    bodySpan = tempOwner1.Memory.Span[..count];
                 }
 
                 if (HasFlag(HeaderFlags.Compressed) && compressor != null)
                 {
                     var decompressedLength = compressor.GetDecompressedLength(bodySpan);
-                    rentBuf2 = ArrayPool<byte>.Shared.Rent(decompressedLength);
-                    // 압축 해제
-                    var count = compressor.Decompress(bodySpan, rentBuf2);
-                    bodySpan = new ReadOnlySpan<byte>(rentBuf2, 0, count);
+                    tempOwner2 = new PooledBuffer(decompressedLength);
+                    
+                    var count = compressor.Decompress(bodySpan, tempOwner2.Memory.Span);
+                    bodySpan = tempOwner2.Memory.Span[..count];
                 }
                 
                 var reader = new NetReader(bodySpan);
@@ -130,8 +127,8 @@ namespace SP.Engine.Runtime.Networking
             }
             finally
             {
-                if (rentBuf1 != null) ArrayPool<byte>.Shared.Return(rentBuf1);
-                if (rentBuf2 != null) ArrayPool<byte>.Shared.Return(rentBuf2);
+               tempOwner1?.Dispose();
+               tempOwner2?.Dispose();
             }
         }
 

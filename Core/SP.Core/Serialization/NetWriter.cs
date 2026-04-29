@@ -24,6 +24,7 @@ namespace SP.Core.Serialization
         }
 
         public byte[] ToArray() => _buffer.WrittenSpan.ToArray();
+        public int WrittenCount => _buffer.WrittenCount;
         public ReadOnlySpan<byte> WrittenSpan => _buffer.WrittenSpan;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

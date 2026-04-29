@@ -4,6 +4,7 @@ namespace SP.Core.Fiber
     public interface IFiber : IDisposable
     {
         string Name { get; }
+        int QueueCount { get; }
         bool IsDisposed { get; }
         bool Enqueue(Action action);
         bool Enqueue<T>(Action<T> action, T state);

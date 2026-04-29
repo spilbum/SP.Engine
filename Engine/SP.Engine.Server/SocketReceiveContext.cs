@@ -1,38 +1,33 @@
 using System;
 using System.Net.Sockets;
-using SP.Core;
 
 namespace SP.Engine.Server;
 
 public sealed class SocketReceiveContext : IDisposable
 {
     private bool _disposed;
-    
-    public SocketReceiveContext(SocketAsyncEventArgs e)
-    {
-        SocketEventArgs = e;
-        
-        OriginOffset = e.Offset;
-        SocketEventArgs.Completed += OnReceiveCompleted;
-    }
-
     public SocketAsyncEventArgs SocketEventArgs { get; }
     public int OriginOffset { get; }
 
+    public SocketReceiveContext(SocketAsyncEventArgs e)
+    {
+        SocketEventArgs = e;
+        OriginOffset = e.Offset;
+        SocketEventArgs.Completed += OnReceiveCompleted;
+    }
+    
+    public void Initialize(ITcpNetworkSession tcpSession)
+    {
+        SocketEventArgs.UserToken = tcpSession;
+    }
+    
     private static void OnReceiveCompleted(object sender, SocketAsyncEventArgs e)
     {
-        if (e.UserToken is not ITcpNetworkSession networkSession)
-            return;
-
+        if (e.UserToken is not TcpNetworkSession ns) return;
         if (e.LastOperation == SocketAsyncOperation.Receive)
-            networkSession.AsyncRun(() => networkSession.ProcessReceive(e));
-        else
-            throw new ArgumentException("The last operation completed on the socket was not a receive");
-    }
-
-    public void Initialize(ITcpNetworkSession networkSession)
-    {
-        SocketEventArgs.UserToken = networkSession;
+        {
+            ns.AsyncRun(() => ns.ProcessReceive(e));
+        }
     }
 
     public void Reset()
@@ -43,10 +38,8 @@ public sealed class SocketReceiveContext : IDisposable
     public void Dispose()
     {
         if (_disposed) return;
-
         SocketEventArgs.Completed -= OnReceiveCompleted;
         SocketEventArgs.Dispose();
-        
         _disposed = true;
     }
 }

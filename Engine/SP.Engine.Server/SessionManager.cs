@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Security.Cryptography;
 
@@ -5,7 +6,7 @@ namespace SP.Engine.Server;
 
 public sealed class SessionManager
 {
-    private readonly BaseSession[] _sessions;
+    private readonly Session[] _sessions;
     private readonly Stack<int> _freeIndices;
     private readonly object _lock = new();
     private readonly int _maxCapacity;
@@ -13,7 +14,7 @@ public sealed class SessionManager
     public SessionManager(int capacity)
     {
         _maxCapacity = capacity;
-        _sessions = new BaseSession[capacity];
+        _sessions = new Session[capacity];
         _freeIndices = new Stack<int>(capacity);
 
         for (var i = capacity - 1; i >= 0; i--)
@@ -22,14 +23,14 @@ public sealed class SessionManager
         }
     }
 
-    public BaseSession[] GetActiveSnapshot()
+    public Session[] GetActiveSnapshot()
     {
         lock (_lock)
         {
             var activeCount = _maxCapacity - _freeIndices.Count;
             if (activeCount <= 0) return [];
             
-            var snapshot = new BaseSession[activeCount];
+            var snapshot = new Session[activeCount];
             var cursor = 0;
             for (var i = 0; i < _maxCapacity; i++)
             {
@@ -43,7 +44,7 @@ public sealed class SessionManager
         }
     }
 
-    public BaseSession CreateSession(BaseEngine engine, TcpNetworkSession networkSession)
+    public Session CreateSession(BaseEngine engine, TcpNetworkSession networkSession)
     {
         lock (_lock)
         {
@@ -55,35 +56,48 @@ public sealed class SessionManager
             var sessionId = ((long)salt << 32) | (uint)index;
 
             var session = new Session();
-            session.Initialize(sessionId, index, engine, networkSession);
+
+            try
+            {
+                session.Initialize(sessionId, engine, networkSession);
+            }
+            catch (Exception ex)
+            {
+                engine.Logger.Error(ex);
+                return null;
+            }
+      
             _sessions[index] = session;
             return session;
         }
     }
 
-    public BaseSession GetSession(long sessionId)
+    public Session GetSession(long sessionId)
     {
         var index = (int)(sessionId & 0xFFFFFFFF);
         if (index < 0 || index >= _maxCapacity) return null;
-        
-        var session = _sessions[index];
-        if (session != null && session.SessionId == sessionId)
-            return session;
+
+        lock (_lock)
+        {
+            var session = _sessions[index];
+            if (session != null && session.SessionId == sessionId)
+                return session;
+        }
         
         return null;
     }
 
-    public void RemoveSession(int index)
+    public void RemoveSession(long sessionId)
     {
         lock (_lock)
         {
+            var index = (int)(sessionId & 0xFFFFFFFF);
             if (index < 0 || index >= _maxCapacity) return;
             
             var session = _sessions[index];
             if (session == null) return;
 
-            session.SessionId = 0;
-            session.Index = -1;
+            session.Dispose();
             
             _sessions[index] = null;
             _freeIndices.Push(index);

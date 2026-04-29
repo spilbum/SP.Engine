@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Net;
 using System.Threading;
 
 namespace SP.Core.Fiber
@@ -6,17 +7,18 @@ namespace SP.Core.Fiber
     public sealed class ThreadFiber : IFiber
     {
         private readonly BatchQueue<IWorkJob> _queue;
-        private readonly Action<FiberException> _onError;
+        private readonly Action<Exception> _onError;
         private readonly int _maxBatchSize;
         private readonly Thread _thread;
         private volatile bool _disposed;
         
         public string Name { get; }
         public bool IsDisposed => _disposed;
+        public int QueueCount => _queue.PendingCount;
 
         private long _totalExceptionCount;
 
-        public ThreadFiber(string name, int capacity = 4096, int maxBatchSize = 256, Action<FiberException> onError = null)
+        public ThreadFiber(string name, int capacity = 4096, int maxBatchSize = 256, Action<Exception> onError = null)
         {
             Name = name;
             _queue = new BatchQueue<IWorkJob>(capacity);
@@ -41,33 +43,52 @@ namespace SP.Core.Fiber
                 job.Dispose();
                 return false;
             }
+            
+            var spinner = new SpinWait();
 
-            try
+            for (var retry = 0; retry < 3; retry++)
             {
-                if (_queue.TryEnqueue(job))
-                    return true;
+                var result = _queue.TryEnqueue(job);
 
-                // 큐가 꽉참  
-                var ex = new FiberException(this, job, $"Fiber '{Name}' queue full! job dropped.");
-                _onError?.Invoke(ex);
+                switch (result)
+                {
+                    case EnqueueResult.Success:
+                        return true;
                 
-                job.Dispose();
-                return false;
-            }
-            catch (Exception ex)
-            {
-                _onError?.Invoke(new FiberException(this, job, ex.Message, ex));
+                    case EnqueueResult.Contention:
+                        spinner.SpinOnce();
+                        continue;
                 
-                job.Dispose();
-                return false;
+                    case EnqueueResult.Full:
+                        Thread.Yield();
+                        continue;
+                
+                    case EnqueueResult.Closed:
+                        job.Dispose();
+                        return false;
+                
+                    default:
+                        return false;
+                }
             }
+
+            HandleQueueFull(job);
+            return false;
+        }
+
+        private void HandleQueueFull(IWorkJob job)
+        {
+            var ex = new FiberQueueFullException(Name, _queue.PendingCount, _queue.Capacity, _queue.TotalDroppedCount, job);
+            _onError?.Invoke(ex);
+            
+            job.Dispose();
         }
 
         private void Run()
         {
             var batchBuf = new IWorkJob[_maxBatchSize];
 
-            while (!_disposed)
+            while (!_disposed)  
             {
                 var count = _queue.DequeueBatch(batchBuf);
 
@@ -95,7 +116,7 @@ namespace SP.Core.Fiber
                 catch (Exception e)
                 {
                     Interlocked.Increment(ref _totalExceptionCount);
-                    _onError?.Invoke(new FiberException(this, job, e.Message, e));
+                    _onError?.Invoke(new FiberException(Name, job, e.Message, e));
                 }
                 finally
                 {
@@ -115,7 +136,7 @@ namespace SP.Core.Fiber
                 QueueCapacity = _queue.Capacity,
                 TotalProcessedCount = _queue.TotalProcessedCount,
                 TotalDroppedCount = _queue.TotalDroppedCount,
-                TotalDequeueCount = _queue.TotalDequeueCount,
+                TotalDequeueCount = _queue.TotalDequeuedCount,
                 AvgBatchCount = _queue.AvgBatchSize,
                 TotalExceptionCount = Volatile.Read(ref _totalExceptionCount),
             };

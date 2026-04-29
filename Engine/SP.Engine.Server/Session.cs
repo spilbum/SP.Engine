@@ -1,60 +1,35 @@
 ﻿using System;
 using System.Net;
-using SP.Core.Fiber;
+using SP.Core.Logging;
 using SP.Engine.Protocol;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Channel;
-using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Server.Configuration;
 
 namespace SP.Engine.Server;
 
-public interface ISession : ICommandContext
+public interface ISession
 {
     long SessionId { get; }
+    ILogger Logger { get; }
     IPEndPoint LocalEndPoint { get; }
     IPEndPoint RemoteEndPoint { get; }
     IEngineConfig Config { get; }
-    bool IsConnected { get; }
     bool TrySend(ChannelKind channel, IMessage message);
-    void Close(CloseReason reason);
 }
 
 public sealed class Session : BaseSession, ISession
 {
     private int _udpHealthFailCount;
-    
     private Engine _engine;
-    public BasePeer Peer { get; private set; }
-    public bool IsClosing { get; private set; }
+    public BasePeer Peer { get; internal set; }
 
-    public override void Close(CloseReason reason)
+    public override void Initialize(long sessionId, IBaseEngine baseEngine, TcpNetworkSession tcpSession)
     {
-        if (reason is CloseReason.TimeOut or CloseReason.Rejected)
-        {
-            SendCloseHandshake();
-            return;
-        }
-
-        base.Close(reason);
-    }
-
-    TProtocol ICommandContext.Deserialize<TProtocol>(IMessage message)
-    {
-        return message.Deserialize<TProtocol>(Peer?.Encryptor, Peer?.Compressor);
-    }
-
-    public override void Initialize(long sessionId, int sessionIndex, IBaseEngine engine, TcpNetworkSession networkSession)
-    {
-        base.Initialize(sessionId, sessionIndex, engine, networkSession);
-        _engine = (Engine)engine;
-    }
-
-    internal void UpdatePeer(BasePeer peer)
-    {
-        Peer = peer;
+        base.Initialize(sessionId, baseEngine, tcpSession);
+        _engine = (Engine)baseEngine;
     }
 
     internal void OnSessionHandshake(C2SEngineProtocolData.SessionAuthReq req)
@@ -83,7 +58,7 @@ public sealed class Session : BaseSession, ISession
             else
             {
                 // 재연결
-                var prevSession = (Session)engine.GetSession(req.SessionId);
+                var prevSession = engine.GetSession(req.SessionId);
                 if (null != prevSession)
                 {
                     // 이전 세션이 살아 있는 경우
@@ -92,29 +67,27 @@ public sealed class Session : BaseSession, ISession
                             $"Reconnection is not allowed because the session was rejected. sessionId={prevSession.SessionId}");
 
                     peer = prevSession.Peer;
-                    prevSession.Close();
+                    prevSession.Close(CloseReason.ServerClosing);
                 }
                 else
                 {
                     // 재 연결 대기 피어 조회
                     peer = engine.GetWaitingReconnectPeer(req.PeerId);
                     if (peer == null)
-                        throw new SessionAuthException(SessionAuthResult.SessionNotFound,
-                            $"No waiting reconnection peer found for sessionId={req.SessionId}");
+                        return;
                 }
 
                 if (!engine.OnlinePeer(peer, this))
-                {
-                    throw new SessionAuthException(SessionAuthResult.SessionNotFound,
-                        "Reconnection filed. The session has timed out.");
-                }
+                    return;
+                
+                Peer = peer;
             }
 
-            if (peer == null)
-                throw new InvalidOperationException("peer is null.");
-
-            UpdatePeer(peer);
+            if (peer == null) throw new InvalidOperationException("peer is null.");
+            
+            IsAuthenticated = true;
             peer.OnSessionAuthCompleted();
+            
             ack.Result = SessionAuthResult.Ok;
             Logger.Debug("Session authentication succeeded. sessionId={0}, peerId={1}", SessionId, peer.PeerId);
         }
@@ -135,18 +108,20 @@ public sealed class Session : BaseSession, ISession
         }
         finally
         {
-            IsAuthHandshake = true;
-
             if (ack.Result == SessionAuthResult.Ok)
             {
                 var network = Config.Network;
                 ack.SessionId = SessionId;
                 ack.MaxFrameBytes = network.MaxFrameBytes;
                 ack.SendTimeoutMs = network.SendTimeoutMs;
-                ack.MaxRetries = network.MaxRetryCount;
+                ack.MaxRetries = network.MaxRetransmissionCount;
                 ack.MaxAckDelayMs = network.MaxAckDelayMs;
                 ack.AckStepThreshold = network.AckStepThreshold;
                 ack.UdpOpenPort = engine.GetOpenPort(SocketMode.Udp);
+                ack.UdpAssemblyTimeoutSec = network.UdpAssemblyTimeoutSec;
+                ack.UdpMaxPendingMessageCount = network.UdpMaxPendingMessageCount;
+                ack.UdpCleanupIntervalSec = network.UdpCleanupIntervalSec;
+                ack.MaxOutOfOrderCount = network.MaxOutOfOderCount;
 
                 if (peer != null)
                 {
@@ -180,14 +155,14 @@ public sealed class Session : BaseSession, ISession
             if (SessionId != req.SessionId)
             {
                 ack.Result = UdpHandshakeResult.InvalidRequest;
-                Logger.Warn("UDP Hello: SessionId mismatch. Expected={0}, Received={1}", SessionId, req.SessionId);
+                Logger.Debug("UDP Hello: SessionId mismatch. Expected={0}, Received={1}", SessionId, req.SessionId);
                 return;
             }
 
             if (Peer == null || Peer.PeerId != req.PeerId)
             {
                 ack.Result = UdpHandshakeResult.InvalidRequest;
-                Logger.Warn("UDP Hello: PeerId mismatch or null. sessionId={0}", SessionId);
+                Logger.Debug("UDP Hello: PeerId mismatch or null. sessionId={0}", SessionId);
                 return;
             }
 
@@ -208,10 +183,10 @@ public sealed class Session : BaseSession, ISession
             const ushort minIpv4Mtu = 576;
 
             var net = Config.Network;
-            var minMtu = Math.Max(minIpv4Mtu, net.MinMtu);
-            var maxMtu = Math.Max(minMtu, net.MaxMtu);
-            var negotiated = (ushort)Math.Min(Math.Max(req.Mtu, minMtu), maxMtu);
-            UdpSocket.SetMaxFrameSize(negotiated);
+            var minMtu = Math.Max(minIpv4Mtu, net.UdpMinMtu);
+            var maxMtu = Math.Max(minMtu, net.UdpMaxMtu);
+            var negotiated = Math.Min(Math.Max(req.Mtu, minMtu), maxMtu);
+            SetMtu(negotiated);
             ack.Mtu = negotiated;
 
             Logger.Debug("UDP hello OK - pid={0}, sid={1}, mtu={2}", Peer.PeerId, SessionId, negotiated);
@@ -265,21 +240,19 @@ public sealed class Session : BaseSession, ISession
             case ChannelKind.Reliable:
             {
                 var tcp = new TcpMessage();
-                tcp.Serialize(data, policy, encryptor, compressor);
-
                 using (tcp)
                 {
+                    tcp.Serialize(data, policy, encryptor, compressor);
                     return TrySend(channel, tcp);
                 }
             }
             case ChannelKind.Unreliable:
             {
                 var udp = new UdpMessage();
-                udp.SetSessionId(SessionId);
-                udp.Serialize(data, policy, encryptor, compressor);
-
                 using (udp)
                 {
+                    udp.SetSessionId(SessionId);
+                    udp.Serialize(data, policy, encryptor, compressor);
                     return TrySend(channel, udp);
                 }
             }
@@ -299,12 +272,10 @@ public sealed class Session : BaseSession, ISession
 
     internal void SendCloseHandshake()
     {
-        if (!IsClosing)
-        {
-            IsClosing = true;
-            StartClosingTime = DateTime.UtcNow;
-            _engine.EnqueueCloseHandshakePending(this);
-        }
+        if (IsClosing) return;
+        IsClosing = true;
+        StartClosingTime = DateTime.UtcNow;
+        _engine.EnqueueCloseHandshakePending(this);
 
         var close = new S2CEngineProtocolData.Close();
         InternalSend(close);
@@ -316,14 +287,25 @@ public sealed class Session : BaseSession, ISession
         InternalSend(messageAck);
     }
 
-    protected override void ExecuteMessage(IMessage message)
+    protected override void MessageReceived(IMessage message)
     {
-        _engine.ExecuteMessage(this, message);
+        base.MessageReceived(message);
+        
+        var peer = Peer;
+        if (peer != null && message is TcpMessage { AckNumber: > 0 } tcp)
+            peer.HandleRemoteAck(tcp.AckNumber);
+            
+        _engine.ExecuteCommand(this, message);
     }
 
-    public override void Close()
+    public override void Close(CloseReason reason)
     {
-        Peer = null;
-        base.Close();
+        if (reason is CloseReason.TimeOut or CloseReason.Rejected)
+        {
+            SendCloseHandshake();
+            return;
+        }
+
+        base.Close(reason);
     }
 }

@@ -7,10 +7,11 @@ using SP.Core;
 namespace SP.Engine.Runtime.Networking
 {
 
-    public sealed class ReliableSender
+    public sealed class ReliableSender : IDisposable
     {
         private readonly object _lock = new object();
-        private readonly SortedDictionary<uint, MessageState> _states = new SortedDictionary<uint, MessageState>();
+        private readonly SortedDictionary<uint, RetransmissionTracker> _states = new SortedDictionary<uint, RetransmissionTracker>();
+        private bool _disposed;
         
         public int MessageCount
         {
@@ -20,34 +21,38 @@ namespace SP.Engine.Runtime.Networking
             }
         }
 
-        public void Register(TcpMessage message, int initialRtoMs, int maxRetryCount)
+        public void Register(TcpMessage message, int initRtoMs, int maxAttempts)
         {
+            if (_disposed) return;
+            
             lock (_lock)
             {
-                var state = new MessageState(message, initialRtoMs, maxRetryCount);
+                var state = new RetransmissionTracker(message, initRtoMs, maxAttempts);
+                state.Message.Retain();
                 _states.Add(message.SequenceNumber, state);   
             }
         }
 
-        public void RemoveUntil(uint ackNumber)
+        public void RemoveUntil(uint remoteAckNumber)
         {
             lock (_lock)
             {
-                var keysToRemove = _states
-                    .Keys
-                    .TakeWhile(seq => seq <= ackNumber)
-                    .ToList();
+                if (_disposed) return;
 
-                foreach (var key in keysToRemove)
+                while (_states.Count > 0)
                 {
-                    if (!_states.TryGetValue(key, out var state)) continue;
-                    state.Message.Dispose();
-                    _states.Remove(key);
+                    var first = _states.Keys.First();
+                    if ((int)(first - remoteAckNumber) >= 0) break;
+
+                    if (_states.Remove(first, out var state))
+                    {
+                        state.Message.Dispose();
+                    }
                 }
             }
         }
 
-        public (List<TcpMessage> Retries, List<TcpMessage> Failed) UpdateAndExtract(RtoEstimator rto)
+        public (List<TcpMessage> Retries, List<TcpMessage> Failed) ProcessRetransmissions(RtoEstimator rto)
         {
             var now = DateTime.UtcNow;
             var retries = new List<TcpMessage>();
@@ -55,20 +60,27 @@ namespace SP.Engine.Runtime.Networking
 
             lock (_lock)
             {
-                foreach (var (seq, state) in _states)
-                {
-                    // 만료 안된건 패스
-                    if (!state.HasExpired(now)) continue;
+                if (_disposed) return default;
                 
-                    // 최대 재전송 횟수 도달 체크
-                    if (state.HasReachedRetryLimit)
+                var keysToRemove = _states
+                    .Where(kvp => kvp.Value.IsTimeout(now) && kvp.Value.IsExhausted)
+                    .Select(kvp => kvp.Key)
+                    .ToList();
+
+                foreach (var key in keysToRemove)
+                {
+                    if (_states.Remove(key, out var state))
                     {
                         failed.Add(state.Message);
-                        continue;
                     }
-                
-                    var nextRto = rto.GetRtoMs(state.RetryCount);
-                    state.Retry(nextRto);
+                }
+
+                foreach (var (seq, state) in _states)
+                {
+                    if (!state.IsTimeout(now)) continue;
+
+                    var nextRto = rto.GetRtoMs(state.CurrentAttempt);
+                    state.RecordRetryAttempt(nextRto);
                     retries.Add(state.Message);
                 }
             }
@@ -76,64 +88,61 @@ namespace SP.Engine.Runtime.Networking
             return (retries, failed);
         }
 
-        public void ResetAll()
+        public void RestartAll()
         {
             lock (_lock)
             {
-                foreach (var state in _states.Values)
-                {
-                    state.Reset();
-                }
+                foreach (var state in _states.Values) state.Restart();
             }
         }
 
-        public void Clear()
+        public void Dispose()
         {
             lock (_lock)
             {
-                foreach (var state in _states.Values)
-                    state.Message.Dispose();
-                
-                _states.Clear();
+                if (_disposed) return;
+                _disposed = true;
+                foreach (var state in _states.Values) state.Message.Dispose();
+                _states.Clear();   
             }
         }
         
-        private class MessageState
+        private class RetransmissionTracker
         {
             public TcpMessage Message { get; }
-            public int MaxRetryCount { get; }
-            public int RetryCount { get; private set; }
-            public int RtoMs { get; private set; }
-            private DateTime _expiresAtUtc;
+            public int MaxAttempts { get; }
+            public int CurrentAttempt { get; private set; }
+            public int CurrentRtoMs { get; private set; }
+            private DateTime _nextTimeoutUtc;
 
-            public MessageState(TcpMessage message, int initialRtoMs, int maxRetryCount)
+            public RetransmissionTracker(TcpMessage message, int initRtoMs, int maxAttempts)
             {
                 Message = message;
-                RtoMs = initialRtoMs;
-                MaxRetryCount = maxRetryCount;
-                RetryCount = 0;
-                UpdateExpiration();
+                CurrentRtoMs = initRtoMs;
+                MaxAttempts = maxAttempts;
+                CurrentAttempt = 0;
+                ScheduleNextTimeout();
             }
             
-            public bool HasExpired(DateTime now) => now >= _expiresAtUtc;
-            public bool HasReachedRetryLimit => RetryCount >= MaxRetryCount;
+            public bool IsTimeout(DateTime nowUtc) => nowUtc >= _nextTimeoutUtc;
+            public bool IsExhausted => CurrentAttempt >= MaxAttempts;
 
-            public void Retry(int rtoMs)
+            public void RecordRetryAttempt(int nextRtoMs)
             {
-                RetryCount++;
-                RtoMs = rtoMs;
-                UpdateExpiration();
+                CurrentAttempt++;
+                CurrentRtoMs = nextRtoMs;
+                ScheduleNextTimeout();
             }
 
-            private void UpdateExpiration()
+            private void ScheduleNextTimeout()
             {
-                _expiresAtUtc = DateTime.UtcNow.AddMilliseconds(RtoMs);
+                _nextTimeoutUtc = DateTime.UtcNow.AddMilliseconds(CurrentRtoMs);
             }
 
-            public void Reset()
+            public void Restart()
             {
-                RetryCount = 0;
-                UpdateExpiration();
+                CurrentAttempt = 0;
+                ScheduleNextTimeout();
             }
         }
     }
@@ -163,13 +172,17 @@ namespace SP.Engine.Runtime.Networking
 
         public void AddSample(double rttMs)
         {
-            var wasInitialized = _rttFilter.IsInitialized;
-            _rttFilter.Update(rttMs);
-            
-            if (wasInitialized)
+            if (!_rttFilter.IsInitialized)
             {
-                var delta = Math.Abs(rttMs - _lastRtt);
+                _rttFilter.Update(rttMs);
+                _rttVar.Update(rttMs/ 2);
+            }
+            else
+            {
+                // RTTVAR = (1 - beta) * RTTVAR + beta * |SRTT - R'|
+                var delta = Math.Abs(_rttFilter.Value - rttMs);
                 _rttVar.Update(delta);
+                _rttFilter.Update(rttMs);
             }
             
             _lastRtt = rttMs;
@@ -177,88 +190,82 @@ namespace SP.Engine.Runtime.Networking
 
         public int GetRtoMs(int retryCount)
         {
-            var rto = _rttFilter.Value + Math.Max(_minRtoVarianceMs, 4 * _rttVar.Value); // 변동폭 반영
-            rto *= Math.Pow(2, retryCount); 
-            return (int)Math.Clamp(rto, _minRtoMs, _maxRtoMs);
-        }
-
-        public void Reset()
-        {
-            _rttFilter.Reset();
-            _rttVar.Reset();
+            // RTO = SRTT + max(G, K*RTTVAR)  (K = 4)
+            var baseRto = _rttFilter.Value + Math.Max(_minRtoVarianceMs, 4 * _rttVar.Value);
+            var safeRetryCount = Math.Min(retryCount, 10);
+            var backoffRto = baseRto * (1 << safeRetryCount); 
+            return (int)Math.Clamp(backoffRto, _minRtoMs, _maxRtoMs);
         }
     }
 
-    public sealed class ReliableReceiver
+    public sealed class SequenceReorderer : IDisposable
     {
         private readonly object _lock = new object();
-        private uint _lastReceivedSeq;
-        private readonly Dictionary<long, TcpMessage> _outOfOrder = new Dictionary<long, TcpMessage>();
-
-        public int OutOfOrderCount
+        private uint _nextExpectedSeq = 1;
+        private readonly SortedDictionary<uint, TcpMessage> _buffer = new SortedDictionary<uint, TcpMessage>();
+        private bool _disposed;
+        
+        public int TotalOutOfOrderCount
         {
             get
             {
-                lock (_lock) return _outOfOrder.Count;
+                lock (_lock) return _buffer.Count;
             }
         }
 
-        public uint LastReceivedSeq
+        public uint NextExpectedSeq
         {
             get
             {
-                lock (_lock) return _lastReceivedSeq;
+                lock (_lock) return _nextExpectedSeq;
             }
         }
 
-        public List<TcpMessage> Process(TcpMessage message)
+        public List<TcpMessage> Push(TcpMessage message, int maxBufferSize)
         {
-            if (message.SequenceNumber == 0) return new List<TcpMessage> { message };
+            if (_disposed) return null;
             
             lock (_lock)
             {
-                // 중복/오래된 패킷 체크
-                if (message.SequenceNumber <= _lastReceivedSeq)
+                if (message.SequenceNumber < _nextExpectedSeq || _buffer.ContainsKey(message.SequenceNumber))
                     return null;
 
-                if (_outOfOrder.ContainsKey(message.SequenceNumber))
-                    return null;
-
-                // 정순서 도착
-                if (message.SequenceNumber == _lastReceivedSeq + 1)
+                if (_buffer.Count >= maxBufferSize)
                 {
-                    return EmitInOrder(message);
+                    var oldestSeq = _buffer.Keys.First();
+                    _nextExpectedSeq = oldestSeq;
                 }
-                
-                // 순서 어긋남 -> 버퍼링
-                _outOfOrder.TryAdd(message.SequenceNumber, message);
-                return null;
+                    
+                if (_buffer.TryAdd(message.SequenceNumber, message))
+                    message.Retain();
+
+                return DrainReadyMessages();
             }
         }
 
-        public void Clear()
+        private List<TcpMessage> DrainReadyMessages()
+        {
+            List<TcpMessage> readyList = null;
+
+            while (_buffer.Remove(_nextExpectedSeq, out var message))
+            {
+                readyList ??= new List<TcpMessage>();
+                readyList.Add(message);
+                _nextExpectedSeq++;
+            }
+            
+            return readyList;
+        }
+        
+        public void Dispose()
         {
             lock (_lock)
             {
-                foreach (var message in _outOfOrder.Values)
-                    message.Dispose();
-                
-                _outOfOrder.Clear();
-                _lastReceivedSeq = 0;
+                if (_disposed) return;
+                _disposed = true;
+                foreach (var message in _buffer.Values) message.Dispose();
+                _buffer.Clear();   
             }
-        }
-
-        private List<TcpMessage> EmitInOrder(TcpMessage first)
-        {
-            var list = new List<TcpMessage> { first };
-            _lastReceivedSeq = first.SequenceNumber;
-            
-            while (_outOfOrder.Remove(_lastReceivedSeq + 1, out var next))
-            {
-                _lastReceivedSeq = next.SequenceNumber;
-                list.Add(next);
-            }
-            return list;
         }
     }
 
@@ -266,37 +273,41 @@ namespace SP.Engine.Runtime.Networking
     {
         private readonly SwapQueue<TcpMessage> _pendingQueue = new SwapQueue<TcpMessage>(1024);
         private readonly ReliableSender _sender = new ReliableSender();
-        private readonly ReliableReceiver _receiver = new ReliableReceiver();
+        private readonly SequenceReorderer reorderer = new SequenceReorderer();
         private readonly RtoEstimator _rtoEstimator = new RtoEstimator();
         private readonly List<TcpMessage> _dequeuedCache = new List<TcpMessage>();
-        private int _nextReliableSeq;
+        private long _nextReliableSeq;
+        private int _maxOutOfOrder = 32;
+        private int _maxRetransmissionCount = 5;
+        private int _initSendTimeoutMs = 500;
 
         public int InFlightCount => _sender.MessageCount;
-        public int OutOfOrderCount => _receiver.OutOfOrderCount;
+        public int OutOfOrderCount => reorderer.TotalOutOfOrderCount;
         public int PendingCount => _pendingQueue.Count;
         public double SRttMs => _rtoEstimator.SRttMs;
         public double JitterMs => _rtoEstimator.JitterMs;
         
-        public int SendTimeoutMs { get; private set; } = 500;
-        public int MaxRetryCount { get; private set; } = 5;
         public int MaxAckDelayMs { get; private set; } = 30;
         public int AckStepThreshold { get; private set; } = 10;
-        public uint LastReceivedSeq => _receiver.LastReceivedSeq;
+        public uint LastReceivedSeq => reorderer.NextExpectedSeq;
 
-        public void SetSendTimeoutMs(int ms) => SendTimeoutMs = ms;
-        public void SetMaxRetryCount(int count) => MaxRetryCount = count;
+        public void SetSendTimeoutMs(int ms) => _initSendTimeoutMs = ms;
+        public void SetMaxRetransmissionCount(int count) => _maxRetransmissionCount = count;
         public void SetMaxAckDelayMs(int ms) => MaxAckDelayMs = ms;
         public void SetAckStepThreshold(int count) => AckStepThreshold = count;
         
+        public void SetMaxOutOfOrder(int count) => _maxOutOfOrder = count;
+        
         public void EnqueuePendingMessage(TcpMessage message)
         {
-            if (!_pendingQueue.TryEnqueue(message)) return;
-
-            var seqNum = (uint)Interlocked.Increment(ref _nextReliableSeq);
-            var ackNum = _receiver.LastReceivedSeq;
-            
-            message.SetSequenceNumber(seqNum);
-            message.SetAckNumber(ackNum);
+            if (_pendingQueue.TryEnqueue(message))
+            {
+                message.Retain();
+            }
+            else
+            {
+                message.Dispose();
+            }
         }
 
         public List<TcpMessage> DequeuePendingMessages()
@@ -306,46 +317,44 @@ namespace SP.Engine.Runtime.Networking
             return _dequeuedCache;
         }
 
-        public void RegisterMessageState(TcpMessage message)
+        public void PrepareReliableSend(TcpMessage message)
         {
             var seqNum = (uint)Interlocked.Increment(ref _nextReliableSeq);
-            var ackNum = _receiver.LastReceivedSeq;
-            
+            var ackNum = reorderer.NextExpectedSeq;
             message.SetSequenceNumber(seqNum);
             message.SetAckNumber(ackNum);
-            
-            _sender.Register(message, SendTimeoutMs, MaxRetryCount);
+            _sender.Register(message, _initSendTimeoutMs, _maxRetransmissionCount);
         }
 
-        public void RemoveMessageStates(uint ackNumber)
+        public void AcknowledgeInFlight(uint remoteAckNumber)
         {
-            if (ackNumber == 0) return;
-            _sender.RemoveUntil(ackNumber);
+            _sender.RemoveUntil(remoteAckNumber);
         }
-        
-        public (List<TcpMessage> Retries, List<TcpMessage> Failed) ExtractRetryMessages()
-            => _sender.UpdateAndExtract(_rtoEstimator);
 
-        public void ResetMessageStates()
-            => _sender.ResetAll();
+        public (List<TcpMessage> Retries, List<TcpMessage> Failed) ProcessRetransmissions()
+            => _sender.ProcessRetransmissions(_rtoEstimator);
 
-        public List<TcpMessage> ProcessMessageInOrder(TcpMessage message)
-            => _receiver.Process(message);
+        public List<TcpMessage> IngestReceivedMessage(TcpMessage message)
+        {
+            return reorderer.Push(message, _maxOutOfOrder);
+        }
+
+        public void RestartInFlightMessages()
+        {
+            _sender.RestartAll();
+        }
         
         public void AddRtoSample(double rttMs) => _rtoEstimator.AddSample(rttMs);
 
-        public void Clear()
-        {
-            _pendingQueue.Clear();
-            _sender.Clear();
-            _receiver.Clear();
-            _dequeuedCache.Clear();
-            _nextReliableSeq = 0;
-        }
-
         public void Dispose()
         {
+            var remaining = new List<TcpMessage>();
+            _pendingQueue.Exchange(remaining);
+            foreach (var message in remaining) message.Dispose();
+            
             _pendingQueue.Dispose();
+            _sender.Dispose();
+            reorderer.Dispose();
         }
     }
 }

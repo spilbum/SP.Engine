@@ -1,6 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using System.Diagnostics;
 using Common;
+using SP.Core;
 using SP.Core.Logging;
 using SP.Engine.Client.Configuration;
 using SP.Engine.Protocol;
@@ -39,6 +40,8 @@ internal static class Program
             var line = Console.ReadLine();
             if (string.IsNullOrWhiteSpace(line)) continue;
             HandleCommand(line.Trim());
+            
+            Thread.Sleep(50);
         }
     }
 
@@ -47,7 +50,7 @@ internal static class Program
         var args = line.Split(' ');
         switch (args[0])
         {
-            case "mconnect":
+            case "connect":
                 var count = int.Parse(args[1]);
                 var delay = int.Parse(args[2]);
                 if (string.IsNullOrWhiteSpace(Host) || _manager == null) return;
@@ -57,18 +60,27 @@ internal static class Program
                     : _manager.StartConnectAsync(Host, Port, count, delay);
                 break;
             
-            case "mstart":
+            case "start":
                 var type = args[1].ToLower();
                 var period = int.Parse(args[2]);
                 var batch = int.Parse(args[3]);
                 _manager?.StartEchoTest(type, period, batch);
                 break;
             
-            case "mquit":
+            case "stop":
                 _manager?.StopAll();
-                Environment.Exit(0);
                 break;
+            
+            case "reconnect":
+                _manager?.Test_Reconnect();
+                break;
+            case "quit":
+#if DEBUG
+                BufferTracker.DumpLeaks(_manager?.Logger);
+#endif
                 
+                Environment.Exit(0);
+                break;                
         }
     }
 }

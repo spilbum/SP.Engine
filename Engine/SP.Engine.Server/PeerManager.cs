@@ -28,7 +28,7 @@ public class PeerManager(ILogger logger, IEngineConfig config)
     {
         if (!_peers.TryAdd(peer.PeerId, peer))
         {
-            logger.Warn("Failed to join peer. peerId={0}", peer.PeerId);
+            peer.Close(CloseReason.InternalError);
             return;
         }
         
@@ -39,15 +39,11 @@ public class PeerManager(ILogger logger, IEngineConfig config)
     {
         // 대기 목록 제거
         if (!_waitingPeers.TryRemove(peer.PeerId, out _))
-        {
-            logger.Warn($"Reconnection rejected: Peer timed out. peerId={peer.PeerId}");
             return false;
-        }
 
         if (!_peers.TryAdd(peer.PeerId, peer))
         {
-            logger.Error("Failed to add peer to active list. peerId={0}", peer.PeerId);
-            peer.LeaveServer(CloseReason.InternalError);
+            peer.Close(CloseReason.InternalError);
             return false;
         }
 
@@ -58,22 +54,17 @@ public class PeerManager(ILogger logger, IEngineConfig config)
     public void Offline(BasePeer peer, CloseReason reason)
     {
         if (!_peers.TryRemove(peer.PeerId, out _))
-        {
-            logger.Error("Failed to remove peer from active list: {0}", peer.PeerId);
             return;
-        }
 
         // 대기 목록 추가
         var waiting = new WaitingReconnectPeer(peer, config.Session.WaitingReconnectTimeoutSec);
         if (!_waitingPeers.TryAdd(peer.PeerId, waiting))
         {
-            logger.Error("Failed to register waiting reconnect peer. peerId={0}", peer.PeerId);
             peer.LeaveServer(CloseReason.InternalError);
             return;
         }
 
         logger.Debug("Peer waiting reconnect registered. peerId={0}", peer.PeerId);
-        
         peer.Offline(reason);
     }
 
@@ -81,7 +72,6 @@ public class PeerManager(ILogger logger, IEngineConfig config)
     {
         _peers.TryRemove(peer.PeerId, out _);
         _waitingPeers.TryRemove(peer.PeerId, out _);
-
         peer.LeaveServer(reason);
     }
 
@@ -101,7 +91,7 @@ public class PeerManager(ILogger logger, IEngineConfig config)
 
         if (oldPeer.Session is Session session)
         {
-            session.UpdatePeer(newPeer);
+            session.Peer = newPeer;
         }
         else
         {
@@ -126,7 +116,7 @@ public class PeerManager(ILogger logger, IEngineConfig config)
                 continue;
             
             logger.Debug("Client terminated due to timeout. peerId={0}", peerId);
-            removed.Peer.Close(CloseReason.ServerClosing);
+            removed.Peer.LeaveServer(CloseReason.TimeOut);
         }
     }
     

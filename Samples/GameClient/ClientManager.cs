@@ -11,7 +11,16 @@ public class ClientManager(EngineConfig config, ILogger logger)
     private int _port;
 
     public bool IsRunning { get; private set; }
+    public ILogger Logger => logger;
 
+    public void Test_Reconnect()
+    {
+        foreach (var client in _clients)
+        {
+            client.Test_Reconnect();
+        }
+    }
+    
     public async Task StartConnectAsync(string host, int port, int count, int delayMs)
     {
         IsRunning = true;
@@ -52,7 +61,7 @@ public class ClientManager(EngineConfig config, ILogger logger)
                     }
                     catch (Exception e)
                     {
-                        logger.Error($"Tick Error: {e.Message}");
+                        logger.Error($"Tick Error: {e.Message}/r/nStacktrace: {e.StackTrace}");
                     }
                 });
             }
@@ -74,5 +83,6 @@ public class ClientManager(EngineConfig config, ILogger logger)
     {
         IsRunning = false;
         foreach (var client in _clients) client.Close();
+        _clients.Clear();
     }
 }

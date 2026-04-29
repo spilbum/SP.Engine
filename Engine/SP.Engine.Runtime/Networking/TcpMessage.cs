@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using SP.Core;
 
 namespace SP.Engine.Runtime.Networking
@@ -9,13 +10,13 @@ namespace SP.Engine.Runtime.Networking
         {
         }
 
-        public TcpMessage(TcpHeader header, RentedBuffer body) : base(header, body)
+        public TcpMessage(TcpHeader header, IMemoryOwner<byte> bodyOwner) : base(header, bodyOwner)
         {
         }
 
         public uint SequenceNumber => Header.SequenceNumber;
         public uint AckNumber => Header.AckNumber;
-        public int Size => TcpHeader.ByteSize + BodyLength;
+        public int Size => TcpHeader.ByteSize + _bodyOwner?.Memory.Length ?? 0;
 
         public void SetSequenceNumber(uint sequenceNumber)
         {
@@ -36,15 +37,15 @@ namespace SP.Engine.Runtime.Networking
         public int WriteTo(Span<byte> destination)
         {
             const int hSize = TcpHeader.ByteSize;
-            var bLen = BodyLength;
-            var total = hSize + bLen;
+            var bodyLength = _bodyOwner?.Memory.Length ?? 0;
+            var total = hSize + bodyLength;
 
             if (destination.Length < total) return 0;
             
             Header.WriteTo(destination[..hSize]);
-            if (bLen > 0)
+            if (bodyLength > 0)
             {
-                BodySpan.CopyTo(destination.Slice(hSize, bLen));
+                _bodyOwner?.Memory.Span.CopyTo(destination.Slice(hSize, bodyLength));
             }
             return total;
         }
