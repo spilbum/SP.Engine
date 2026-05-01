@@ -22,10 +22,11 @@ public abstract class BaseSession : IBaseSession, IDisposable
     private SessionReceiveBuffer _receiveBuffer;
     private long _sessionId;
     private TcpNetworkSession _tcpSession;
+    private long _lastActiveTimeTicks;
 
     public UdpNetworkSession UdpSession { get; private set; }
     
-    public bool IsPaused => _tcpSession?.IsPaused ?? false;
+    public bool IsPaused => _tcpSession?.IsPaused ?? true;
     public void PauseReceive() => _tcpSession?.PauseReceive();
     public void ResumeReceive() => _tcpSession?.ResumeReceive();
 
@@ -34,13 +35,18 @@ public abstract class BaseSession : IBaseSession, IDisposable
         get => Interlocked.Read(ref _sessionId);
         private set => Interlocked.Exchange(ref _sessionId, value);
     }
+    
+    public long LastActiveTimeTicks
+    {
+        get => Interlocked.Read(ref _lastActiveTimeTicks);
+        private set => _lastActiveTimeTicks = value;
+    }
 
     public IPEndPoint LocalEndPoint => _tcpSession?.LocalEndPoint;
     public IPEndPoint RemoteEndPoint => _tcpSession?.RemoteEndPoint;
-    public bool IsClosed => _tcpSession?.IsClosed ?? false;
+    public bool IsClosed => _tcpSession?.IsClosed ?? true;
     public ILogger Logger => _engine?.Logger;
     public IEngineConfig Config => _engine?.Config;
-    public DateTime LastActiveTime { get; private set; }
     public DateTime StartTime { get; }
     public CloseReason CloseReason { get; private set; }
     public bool IsAuthenticated { get; protected set; }
@@ -50,7 +56,7 @@ public abstract class BaseSession : IBaseSession, IDisposable
     protected BaseSession()
     {
         StartTime = DateTime.UtcNow;
-        LastActiveTime = StartTime;
+        LastActiveTimeTicks = DateTime.UtcNow.Ticks;
     }
     
     public virtual void Initialize(long sessionId, IBaseEngine baseEngine, TcpNetworkSession tcpSession)
@@ -70,6 +76,14 @@ public abstract class BaseSession : IBaseSession, IDisposable
         UdpSession = udpSession;
     }
 
+    public void CleanupFragmentAssembler()
+    {
+        if (UdpSession == null) return;
+        
+        var now = DateTime.UtcNow;
+        UdpSession.Assembler.Cleanup(now);
+    }
+
     protected void EnableUdp()
         => _router.SetUdpAvailable(true);
     
@@ -87,14 +101,14 @@ public abstract class BaseSession : IBaseSession, IDisposable
                 return false;
             default:
                 if (!_router.TrySend(channel, message)) return false;
-                LastActiveTime = DateTime.UtcNow;
+                LastActiveTimeTicks = DateTime.UtcNow.Ticks;
                 return true;
         }
     }
 
     public void ProcessTcpBuffer(byte[] data, int offset, int length)
     {
-        if (!_receiveBuffer.Write(data.AsSpan(offset, length))) return;
+        if (IsClosed || !_receiveBuffer.Write(data.AsSpan(offset, length))) return;
 
         try
         {
@@ -113,7 +127,7 @@ public abstract class BaseSession : IBaseSession, IDisposable
 
     public void ProcessUdpBuffer(byte[] data, int offset, int length)
     {
-        if (IsClosed || UdpSession == null) return;
+        if (UdpSession == null) return;
 
         try
         {
@@ -130,7 +144,7 @@ public abstract class BaseSession : IBaseSession, IDisposable
 
     protected virtual void MessageReceived(IMessage message)
     {
-        LastActiveTime = DateTime.UtcNow;
+        LastActiveTimeTicks = DateTime.UtcNow.Ticks;
     }
 
     protected void SetMtu(ushort mtu)

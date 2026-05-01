@@ -14,6 +14,14 @@ using SP.Engine.Server.Logging;
 
 namespace SP.Engine.Server;
 
+public static class TickExtensions
+{
+    public static DateTime ToDateTime(this long ticks, DateTimeKind kind = DateTimeKind.Utc)
+    {
+        return new DateTime(ticks, kind);
+    }
+}
+
 public interface IBaseEngine : ILogContext
 {
     IEngineConfig Config { get; }
@@ -298,13 +306,7 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
     private void CleanupUdpFragment()
     {
         var sessions = SessionsSource;
-        var now = DateTime.UtcNow;
-
-        Parallel.ForEach(sessions, s =>
-        {
-            if (s.UdpSession != null && !s.IsClosed)
-                s.UdpSession.Assembler.Cleanup(now);
-        });
+        Parallel.ForEach(sessions, s => s.CleanupFragmentAssembler());
     }
 
     private void StartClearIdleSessionTimer()
@@ -321,36 +323,23 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
 
     private void ClearIdleSession()
     {
-        try
+        var nowTicks = DateTime.UtcNow.Ticks;
+        var timeoutTicks = nowTicks - TimeSpan.FromSeconds(Config.Session.ClearIdleSessionIntervalSec).Ticks;
+
+        foreach (var s in SessionsSource)
         {
-            var source = SessionsSource;
-            var config = Config;
-            var now = DateTime.UtcNow;
+            if (s.LastActiveTimeTicks > timeoutTicks) continue;
 
-            // 비활성된 시간 체크
-            var sessions = source
-                .Where(x => x.LastActiveTime <= now.AddSeconds(-config.Session.IdleSessionTimeoutSec))
-                .ToList();
-
-            if (sessions.Count == 0)
-                return;
-
-            var options = new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount };
-            Parallel.ForEach(sessions, options, s =>
-            {
-                Logger.Debug(
-                    "The session {0} will be closed for {1} timeout, the session start time: {2}, last active time: {3}",
-                    s.SessionId,
-                    now.Subtract(s.LastActiveTime).TotalSeconds,
-                    s.StartTime,
-                    s.LastActiveTime);
+            if (s.IsClosed) continue;
                 
-                s.Close(CloseReason.TimeOut);
-            });
-        }
-        catch (Exception ex)
-        {
-            Logger.Error("Clear idle session error: {0}\n{1}", ex.Message, ex.StackTrace);
+            Logger.Debug(
+                "The session {0} will be closed for {1} timeout, the session start time: {2}, last active time: {3}",
+                s.SessionId,
+                TimeSpan.FromTicks(nowTicks - s.LastActiveTimeTicks).TotalSeconds,
+                s.StartTime,
+                s.LastActiveTimeTicks.ToDateTime());
+
+            s.Close(CloseReason.TimeOut);
         }
     }
 
@@ -420,6 +409,8 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
                 if (DateTime.UtcNow < session.StartTime.AddSeconds(Config.Session.AuthHandshakeTimeoutSec))
                     continue;
                 
+                Logger.Debug("Timeout auth handshake for session: {0}", session.SessionId);
+                
                 // 인증 타임 아웃
                 if (_authHandshakePendingQueue.TryDequeue(out var expired))
                     expired.Close(CloseReason.ServerClosing);
@@ -482,7 +473,6 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
 
     internal void EnqueueCloseHandshakePending(BaseSession session)
     {
-        Logger.Debug("Enqueue close handshake pending: {0}", session.SessionId);
         _closeHandshakePendingQueue.Enqueue(session);
     }
 }

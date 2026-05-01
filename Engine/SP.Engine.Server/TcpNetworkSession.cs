@@ -16,7 +16,7 @@ public interface ITcpNetworkSession : IReliableSender, ILogContext
 
 public class TcpNetworkSession : BaseNetworkSession, ITcpNetworkSession
 {
-    private readonly SegmentQueue _sendingQueue;
+    private SegmentQueue _sendingQueue;
     private readonly IObjectPool<SegmentQueue> _sendingQueuePool;
     private SocketAsyncEventArgs _sendEventArgs;
     private volatile int _inSendingFlag;
@@ -47,11 +47,16 @@ public class TcpNetworkSession : BaseNetworkSession, ITcpNetworkSession
     
     public void StartReceive()
     {
-        if (IsInClosingOrClosed) return;
-        if (!TryAddState(SocketState.InReceiving)) return;
+        if (!IncrementIo()) return;
 
         try
         {
+            if (!TryAddState(SocketState.InReceiving))
+            {
+                DecrementIo();
+                return;
+            }
+            
             var e = ReceiveContext.SocketEventArgs;
             if (!_client.ReceiveAsync(e))
                 ProcessReceive(e);
@@ -69,22 +74,21 @@ public class TcpNetworkSession : BaseNetworkSession, ITcpNetworkSession
         {
             if (e.SocketError != SocketError.Success || e.BytesTransferred == 0)
             {
-                OnReceiveEnded();
-                Close(e.BytesTransferred == 0 ? CloseReason.ClientClosing : CloseReason.SocketError);
+                OnReceiveTerminated(e.BytesTransferred == 0 ? CloseReason.ClientClosing : CloseReason.SocketError);
                 return;
             }
             
             Session.ProcessTcpBuffer(e.Buffer, e.Offset, e.BytesTransferred);
 
-            if (IsPaused || IsInClosingOrClosed)
+            if (!IsPaused && !IsInClosingOrClosed)
             {
-                OnReceiveEnded();
-                if (IsInClosingOrClosed && IsIdle) OnClosed(_finalReason);
+                if (!_client.ReceiveAsync(e))
+                    ProcessReceive(e);
+
                 return;
             }
             
-            if (!_client.ReceiveAsync(e))
-                ProcessReceive(e);
+            OnReceiveEnded();
         }
         catch (Exception ex)
         {
@@ -94,7 +98,17 @@ public class TcpNetworkSession : BaseNetworkSession, ITcpNetworkSession
         }
     }
 
-    private void OnReceiveEnded() => RemoveState(SocketState.InReceiving);
+    private void OnReceiveEnded()
+    {
+        RemoveState(SocketState.InReceiving);
+        DecrementIo();
+    }
+    
+    private void OnReceiveTerminated(CloseReason reason)
+    {
+        OnReceiveEnded();
+        Close(reason);
+    }
     
     public bool TrySend(TcpMessage message)
     {
@@ -118,10 +132,15 @@ public class TcpNetworkSession : BaseNetworkSession, ITcpNetworkSession
     
     private void ExecuteSend(bool isContinuation)
     {
-        if (!isContinuation && !TryAddState(SocketState.InSending))
+        if (!isContinuation)
         {
-            Interlocked.Exchange(ref _inSendingFlag, 0);
-            return;
+            if (!IncrementIo()) return;
+            if (!TryAddState(SocketState.InSending))
+            {
+                Interlocked.Exchange(ref _inSendingFlag, 0);
+                DecrementIo();
+                return;
+            }
         }
 
         var client = _client;
@@ -226,7 +245,7 @@ public class TcpNetworkSession : BaseNetworkSession, ITcpNetworkSession
             _backPressureTimeoutTimer?.Dispose();
             _backPressureTimeoutTimer = new Timer(_ =>
             {
-                Logger.Warn("[BackPressure] Timeout reached. Force closing session: {0}", Session.SessionId);
+                Logger.Debug("BackPressure timeout reached. Force closing session: {0}", Session.SessionId);
                 Close(CloseReason.ServerBusy);
             }, null, 10000, Timeout.Infinite);
         }
@@ -251,7 +270,7 @@ public class TcpNetworkSession : BaseNetworkSession, ITcpNetworkSession
         lock (_backPressureLock)
         {
             _backPressureTimeoutTimer?.Dispose();
-            _backPressureTimeoutTimer = null;
+            _backPressureTimeoutTimer = null;   
         }
         
         var e = Interlocked.Exchange(ref _sendEventArgs, null);
@@ -261,10 +280,11 @@ public class TcpNetworkSession : BaseNetworkSession, ITcpNetworkSession
             e.Dispose();
         }
 
-        if (_sendingQueue != null)
+        var queue = Interlocked.Exchange(ref _sendingQueue, null);
+        if (queue != null)
         {
-            _sendingQueue.Clear();
-            _sendingQueuePool.Return(_sendingQueue);
+            queue.Clear();
+            _sendingQueuePool.Return(queue);
         }
 
         _sendBuffer.Dispose();
@@ -273,9 +293,7 @@ public class TcpNetworkSession : BaseNetworkSession, ITcpNetworkSession
     private void OnSendEnded()
     {
         RemoveState(SocketState.InSending);
-        
-        if (IsInClosingOrClosed && IsIdle)
-            OnClosed(_finalReason);
+        DecrementIo();
     }
 
     private void OnSendCompleted(object sender, SocketAsyncEventArgs e)

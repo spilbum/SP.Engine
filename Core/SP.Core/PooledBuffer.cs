@@ -7,6 +7,24 @@ using SP.Core.Logging;
 
 namespace SP.Core
 {
+    public static class BufferMetrics
+    {
+        private static long _activeRentCount;
+
+        public static void OnRent()
+        {
+            Interlocked.Increment(ref _activeRentCount);
+        }
+
+        public static void OnReturn()
+        {
+            Interlocked.Decrement(ref _activeRentCount);
+        }
+        
+        public static long GetRentCount()
+            => Interlocked.Read(ref _activeRentCount);
+    }
+    
     #if DEBUG
     public static class BufferTracker
     {

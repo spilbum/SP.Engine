@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using SP.Core.Fiber;
 using SP.Core.Logging;
 
@@ -15,9 +16,6 @@ public sealed class PeerFiber
     private volatile bool _disposed;
     
     public int PeerCount => _peers.Count;
-    public bool IsDisposed => _disposed;
-    public string Name => _fiber.Name;
-    public int QueueCount => _fiber.QueueCount;
 
     public PeerFiber(IFiber fiber, IScheduler globalScheduler, ILogger logger, TimeSpan tickInterval)
     {
@@ -99,6 +97,7 @@ public sealed class PeerFiber
         job.Action = action;
         job.S1 = s1;
         job.S2 = s2;
+        job.EnqueuedTimestamp = Stopwatch.GetTimestamp();
         _fiber.Enqueue(ExecuteJob, job);
     }
 
@@ -113,16 +112,23 @@ public sealed class PeerFiber
         public Action<T1, T2> Action;
         public T1 S1;
         public T2 S2;
+        public long EnqueuedTimestamp;
 
         public void Execute()
         {
+            var start = Stopwatch.GetTimestamp();
+            var dwellTimeMs = (double)(start - EnqueuedTimestamp) / Stopwatch.Frequency * 1000;
+            
             try
             {
                 Action?.Invoke(S1, S2);
             }
             finally
             {
-                Peer.OnJobFinished();
+                var end = Stopwatch.GetTimestamp();
+                var executionTimeMs = (double)(end - start) / Stopwatch.Frequency * 1000;
+                
+                Peer.OnJobFinished(dwellTimeMs, executionTimeMs);
                 ReturnToPool();
             }
         }

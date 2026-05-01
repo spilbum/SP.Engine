@@ -913,7 +913,7 @@ namespace SP.Engine.Client
 #else
                 OnError(new Exception($"Session auth failed: {p.Result}"));
 #endif
-                OnClosed();
+                Close();
                 return;
             }
 

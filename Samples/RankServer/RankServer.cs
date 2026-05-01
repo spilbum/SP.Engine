@@ -262,7 +262,7 @@ public class RankServer : Engine
                 return ErrorCode.InternalError;
         }
         
-        if (!ChangeServerPeer(newPeer))
+        if (!TransitionTo(newPeer))
         {
             Logger.Error("Failed to change peer. kind={0}", req.ServerKind);
             return ErrorCode.InternalError;

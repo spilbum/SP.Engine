@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
 using SP.Core.Logging;
 using SP.Engine.Runtime;
 using SP.Engine.Server.Configuration;
@@ -8,26 +10,53 @@ namespace SP.Engine.Server;
 
 public class PeerManager(ILogger logger, IEngineConfig config)
 {
-    private readonly ConcurrentDictionary<uint, BasePeer> _peers = [];
-    private readonly ConcurrentDictionary<uint, WaitingReconnectPeer> _waitingPeers = [];
+    private readonly ConcurrentDictionary<uint, BasePeer> _activePeers = [];
+    private readonly ConcurrentDictionary<uint, WaitingReconnectPeer> _reconnectQueue = [];
 
-    public BasePeer GetPeer(uint peerId)
-    {
-        if (_peers.TryGetValue(peerId, out var peer)) return peer;
-        _waitingPeers.TryGetValue(peerId, out var waiting);
-        return waiting?.Peer;
-    }
+    public BasePeer GetActivePeer(uint peerId)
+        => _activePeers.GetValueOrDefault(peerId);
 
     public BasePeer GetWaitingPeer(uint peerId)
-    {
-        _waitingPeers.TryGetValue(peerId, out var waiting);
-        return waiting?.Peer;
-    }
+        => _reconnectQueue.TryGetValue(peerId, out var waiting) ? waiting.Peer : null;
 
-    public void Join(BasePeer peer)
+    public BasePeer GetAnyPeer(uint peerId)
+        => _activePeers.TryGetValue(peerId, out var peer) 
+            ? peer 
+            : _reconnectQueue.TryGetValue(peerId, out var waiting) ? waiting.Peer : null;
+
+    public (double avgDwell, double avgExec, int pendingTotal) GetGlobalFiberMetrics()
     {
-        if (!_peers.TryAdd(peer.PeerId, peer))
+        var globalSumDwellMs = 0d;
+        var globalSumExecMs = 0d;
+        var globalCompletedCount = 0;
+        var globalPendingJobs = 0;
+
+        foreach (var peer in _activePeers.Values)
         {
+            var metrics = peer.ExtractMetrics();
+            globalSumDwellMs += metrics.totalDwell;
+            globalSumExecMs += metrics.totalExec;
+            globalCompletedCount += metrics.count;
+            
+            globalPendingJobs += peer.PendingJobCount;
+        }
+
+        globalPendingJobs += _reconnectQueue.Values.Sum(waiting => waiting.Peer.PendingJobCount);
+
+        if (globalCompletedCount == 0)
+            return (0, 0, globalPendingJobs);
+        
+        return (
+            globalSumDwellMs / globalCompletedCount, 
+            globalSumExecMs / globalCompletedCount,
+            globalPendingJobs);
+    }
+    
+    public void Register(BasePeer peer)
+    {
+        if (!_activePeers.TryAdd(peer.PeerId, peer))
+        {
+            logger.Warn("Register failed: Peer {0} already exists.", peer.PeerId);
             peer.Close(CloseReason.InternalError);
             return;
         }
@@ -35,13 +64,14 @@ public class PeerManager(ILogger logger, IEngineConfig config)
         peer.JoinServer();
     }
 
-    public bool Online(BasePeer peer, ISession session)
+    public bool TransitionToOnline(uint peerId, ISession session)
     {
-        // 대기 목록 제거
-        if (!_waitingPeers.TryRemove(peer.PeerId, out _))
+        // 대기 목록에서 먼저 제거
+        if (!_reconnectQueue.TryRemove(peerId, out var waiting))
             return false;
 
-        if (!_peers.TryAdd(peer.PeerId, peer))
+        var peer = waiting.Peer;
+        if (!_activePeers.TryAdd(peerId, peer))
         {
             peer.Close(CloseReason.InternalError);
             return false;
@@ -51,72 +81,52 @@ public class PeerManager(ILogger logger, IEngineConfig config)
         return true;
     }
 
-    public void Offline(BasePeer peer, CloseReason reason)
+    public void TransitionToOffline(BasePeer peer, CloseReason reason)
     {
-        if (!_peers.TryRemove(peer.PeerId, out _))
+        if (!_activePeers.TryRemove(peer.PeerId, out _))
             return;
 
-        // 대기 목록 추가
-        var waiting = new WaitingReconnectPeer(peer, config.Session.WaitingReconnectTimeoutSec);
-        if (!_waitingPeers.TryAdd(peer.PeerId, waiting))
+        // 재접속 대기열 추가
+        var timeout = config.Session.WaitingReconnectTimeoutSec;
+        var waiting = new WaitingReconnectPeer(peer, timeout);
+        
+        if (!_reconnectQueue.TryAdd(peer.PeerId, waiting))
         {
             peer.LeaveServer(CloseReason.InternalError);
             return;
         }
 
-        logger.Debug("Peer waiting reconnect registered. peerId={0}", peer.PeerId);
         peer.Offline(reason);
     }
 
-    public void RemovePeer(BasePeer peer, CloseReason reason)
+    public void Terminate(uint peerId, CloseReason reason)
     {
-        _peers.TryRemove(peer.PeerId, out _);
-        _waitingPeers.TryRemove(peer.PeerId, out _);
-        peer.LeaveServer(reason);
+        _activePeers.TryRemove(peerId, out var p1);
+        _reconnectQueue.TryRemove(peerId, out var p2);
+
+        var target = p1 ?? p2?.Peer;
+        target?.LeaveServer(reason);
     }
 
-    public bool ChangeServerPeer(BasePeer newPeer)
+    public bool TransitionTo(BasePeer newPeer)
     {
-        if (newPeer.Kind != PeerKind.Server)
-        {
-            logger.Error($"Change failed: Invalid peer kind={newPeer.Kind}");
-            return false;
-        }
-        
-        if (!_peers.TryGetValue(newPeer.PeerId, out var oldPeer))
-        {
-            logger.Error($"Change failed: Peer not found in active list. peerId={newPeer.PeerId}");
-            return false;
-        }
-
-        if (oldPeer.Session is Session session)
-        {
-            session.Peer = newPeer;
-        }
-        else
-        {
-            logger.Error($"Change failed: Old peer has no valid session. peerId={newPeer.PeerId}");
-            return false;
-        }
-        
-        _peers[newPeer.PeerId] = newPeer;
-        return true;
+        return _activePeers.TryGetValue(newPeer.PeerId, out var oldPeer) 
+               && _activePeers.TryUpdate(newPeer.PeerId, newPeer, oldPeer);
     }
 
-    public void CheckTimeouts()
+    public void Update()
     {
+        if (_reconnectQueue.IsEmpty) return;
+        
         var now = DateTime.UtcNow;
-
-        foreach (var (peerId, info) in _waitingPeers)
+        foreach (var (peerId, info) in _reconnectQueue)
         {
-            if (now < info.ExpireTime)
-                continue;
+            if (now < info.ExpireTime) continue;
 
-            if (!_waitingPeers.TryRemove(peerId, out var removed)) 
-                continue;
-            
-            logger.Debug("Client terminated due to timeout. peerId={0}", peerId);
-            removed.Peer.LeaveServer(CloseReason.TimeOut);
+            if (_reconnectQueue.TryRemove(peerId, out var expired))
+            {
+                expired.Peer.LeaveServer(CloseReason.ServerClosing);
+            }
         }
     }
     

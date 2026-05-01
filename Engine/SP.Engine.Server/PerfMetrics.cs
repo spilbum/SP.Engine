@@ -2,29 +2,10 @@ using System;
 using System.Diagnostics;
 using System.Globalization;
 using System.Threading;
+using SP.Core;
 
-namespace SP.Core
+namespace SP.Engine.Server
 {
-    public static class BufferMetrics
-    {
-        private static long _activeRentCount;
-        private static long _totalRentCount;
-
-        public static void OnRent()
-        {
-            Interlocked.Increment(ref _activeRentCount);
-            Interlocked.Increment(ref _totalRentCount);
-        }
-
-        public static void OnReturn()
-        {
-            Interlocked.Decrement(ref _activeRentCount);
-        }
-        
-        public static (long Active, long Total) GetSnapshot()
-            => (Interlocked.Read(ref _activeRentCount), Interlocked.Read(ref _totalRentCount));
-    }
-    
     public class PerfMetrics
     {
         public DateTime TimestampUtc { get; set; }
@@ -38,7 +19,10 @@ namespace SP.Core
         
         public int SessionCount { get; set; }
         public long ActiveBufferCount { get; set; }
-        public long TotalRentCount { get; set; }
+
+        public double AvgFiberDwellMs { get; set; }
+        public double AvgFiberExecMs { get; set; }
+        public int PendingJobTotal { get; set; }
 
         public override string ToString()
         {
@@ -47,8 +31,9 @@ namespace SP.Core
                    $"WS:{FormatBytes(WorkingSetBytes)} " +
                    $"Heap:{FormatBytes(ManagedHeapBytes)} " +
                    $"GC_Delta(0/1/2):{GcDelta[0]}/{GcDelta[1]}/{GcDelta[2]} " +
-                   $"Threads={ThreadCount} " +
-                   $"Sessions:{SessionCount} | Buffers(Active/Total):{ActiveBufferCount}/{TotalRentCount}";
+                   $"Threads:{ThreadCount} " +
+                   $"Sessions:{SessionCount} | Buffers:{ActiveBufferCount} " +
+                   $"Fiber: [AvgDwell:{AvgFiberDwellMs:F2}ms | AvgExec:{AvgFiberExecMs:F2}ms | PendingJobs:{PendingJobTotal}]";
         }
 
         private static string FormatBytes(long bytes)
@@ -93,7 +78,7 @@ namespace SP.Core
             }
         }
 
-        public PerfMetrics Sample(int sessionCount)
+        public PerfMetrics Sample(int sessionCount, PeerManager manager)
         {
             lock (_lock)
             {
@@ -123,7 +108,9 @@ namespace SP.Core
                     _prevGcCounts[i] = currentGcCounts[i];
                 }
 
-                var (activeBuf, totalRent) = BufferMetrics.GetSnapshot();
+                var activeBuf = BufferMetrics.GetRentCount();
+
+                var fiberMetrics = manager.GetGlobalFiberMetrics();
                 
                 var metrics = new PerfMetrics
                 {
@@ -136,7 +123,9 @@ namespace SP.Core
                     ThreadCount = _proc.Threads.Count,
                     SessionCount = sessionCount,
                     ActiveBufferCount = activeBuf,
-                    TotalRentCount = totalRent,
+                    AvgFiberDwellMs = fiberMetrics.avgDwell,
+                    AvgFiberExecMs = fiberMetrics.avgExec,
+                    PendingJobTotal = fiberMetrics.pendingTotal
                 };
 
                 _prevTotalCpu = totalCpu;
@@ -175,14 +164,14 @@ namespace SP.Core
             return metrics != null;
         }
 
-        public void Tick(int sessionCount)
+        public void Tick(int sessionCount, PeerManager manager)
         {
             if (Interlocked.Exchange(ref _sampling, 1) == 1)
                 return;
 
             try
             {
-                var m = _sampler.Sample(sessionCount);
+                var m = _sampler.Sample(sessionCount, manager);
                 _last = m;
                 var handler = OnSampled;
                 handler?.Invoke(_last);

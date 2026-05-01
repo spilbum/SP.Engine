@@ -84,13 +84,13 @@ public abstract class Engine : BaseEngine, IEngine
         base.Stop();
     }
     
-    protected TPeer GetPeer<TPeer>(uint peerId) where TPeer : BasePeer
-        => _peerManager.GetPeer(peerId) as TPeer;
+    protected TPeer GetActivePeer<TPeer>(uint peerId) where TPeer : BasePeer
+        => _peerManager.GetActivePeer(peerId) as TPeer;
 
-    protected bool ChangeServerPeer(BasePeer newPeer)
-        => _peerManager.ChangeServerPeer(newPeer);
+    protected bool TransitionTo(BasePeer newPeer)
+        => _peerManager.TransitionTo(newPeer);
     
-    internal BasePeer GetWaitingReconnectPeer(uint peerId)
+    internal BasePeer GetWaitingPeer(uint peerId)
         => _peerManager.GetWaitingPeer(peerId);
     
     private PeerFiber GetPeerFiber()
@@ -98,7 +98,7 @@ public abstract class Engine : BaseEngine, IEngine
 
     internal bool OnlinePeer(BasePeer peer, ISession session)
     {
-        if (!_peerManager.Online(peer, session))
+        if (!_peerManager.TransitionToOnline(peer.PeerId, session))
             return false;
 
         // 파이버 재할당
@@ -114,7 +114,7 @@ public abstract class Engine : BaseEngine, IEngine
         fiber.AddPeer(peer);
         
         // 매니저에 피어 등록
-        _peerManager.Join(peer);
+        _peerManager.Register(peer);
     }
     
     internal bool NewPeer(ISession session, out BasePeer peer)
@@ -125,11 +125,6 @@ public abstract class Engine : BaseEngine, IEngine
     
     protected abstract IPeer CreatePeer(ISession session);
 
-    protected virtual void OnPeerRemoved(IPeer peer, CloseReason reason)
-    {
-        
-    }
-    
     internal override void OnSessionClosed(Session session, CloseReason reason)
     {
         base.OnSessionClosed(session, reason);
@@ -137,24 +132,24 @@ public abstract class Engine : BaseEngine, IEngine
         var peer = session.Peer;
         if (null == peer) return;
         
-        peer.Fiber?.RemovePeer(peer);
-        
-        if (session.IsClosing)
+        peer.OnSessionClosed(session);
+
+        if (ShouldKeepPeer(session))
         {
-            // 종료중이면 즉시 제거
-            _peerManager.RemovePeer(peer, reason);
-            OnPeerRemoved(peer, reason);
-        }
-        else if (peer.IsConnected)
-        {
-            // 오프라인 전환
-            _peerManager.Offline(peer, reason);
+            // 재 연결 대기로 전환
+            _peerManager.TransitionToOffline(peer, reason);
         }
         else
         {
-            _peerManager.RemovePeer(peer, reason);
-            OnPeerRemoved(peer, reason);   
+            // 즉시 제거
+            _peerManager.Terminate(peer.PeerId, reason);
         }
+    }
+
+    private static bool ShouldKeepPeer(Session session)
+    {
+        if (session.IsClosing) return false;
+        return session.Peer is { Kind: PeerKind.User };
     }
     
     private void StartReconnectTimer()
@@ -173,7 +168,7 @@ public abstract class Engine : BaseEngine, IEngine
     {
         try
         {
-            _peerManager.CheckTimeouts();
+            _peerManager.Update();
         }
         catch (Exception e)
         {
@@ -183,7 +178,7 @@ public abstract class Engine : BaseEngine, IEngine
     
     private void SetupPeerFiber()
     {
-        var fiberCnt = Environment.ProcessorCount;
+        var fiberCnt = Environment.ProcessorCount * 2;
         fiberCnt = Math.Clamp(fiberCnt, 4, 32); // todo:환경에 맞게 튜닝
         
         var tickInterval = TimeSpan.FromMilliseconds(Config.Session.PeerUpdateIntervalMs);
@@ -192,7 +187,7 @@ public abstract class Engine : BaseEngine, IEngine
         {
             var fiber = new ThreadFiber($"PeerFiber_{i:D2}",
                 maxBatchSize: 2048,
-                capacity: 8192,
+                capacity: 1024 * 64,
                 onError: ex =>
                 {
                     switch (ex)
@@ -243,7 +238,7 @@ public abstract class Engine : BaseEngine, IEngine
     private void PerfMonitorTick()
     {
         var sessions = SessionsSource;
-        _perfMonitor?.Tick(sessions.Length);
+        _perfMonitor?.Tick(sessions.Length, _peerManager);
     }
 
     private bool SetupConnectorFiber(List<ConnectorConfig> configs)
@@ -346,7 +341,7 @@ public abstract class Engine : BaseEngine, IEngine
         {
             if (message is TcpMessage { SequenceNumber: > 0 } tcp && peer != null)
             {
-                var messages = peer.MessageProcessor.IngestReceivedMessage(tcp);
+                var messages = peer.IngestReceivedMessage(tcp);
                 if (messages == null) return;
 
                 foreach (var m in messages)
@@ -371,22 +366,15 @@ public abstract class Engine : BaseEngine, IEngine
         }
 
         if (peer == null)
-        {
-            Logger.Warn("Unauthorized user command dropped. id={0}", message.Id);
             return;
-        }
         
         var command = GetUserCommand(message.Id);
         if (command == null)
-        {
-            Logger.Error("Unknown user command: id={0}", message.Id);
             return;
-        }
 
         var protocol = command.Deserialize(peer, message);
         if (protocol == null)
         {
-            Logger.Error("Invalid message: id={0}", message.Id);
             peer.Close(CloseReason.Rejected);
             return;
         }

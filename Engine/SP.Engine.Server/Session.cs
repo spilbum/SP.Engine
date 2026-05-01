@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Net;
+using System.Threading;
 using SP.Core.Logging;
 using SP.Engine.Protocol;
 using SP.Engine.Runtime;
@@ -24,7 +25,13 @@ public sealed class Session : BaseSession, ISession
 {
     private int _udpHealthFailCount;
     private Engine _engine;
-    public BasePeer Peer { get; internal set; }
+    private BasePeer _peer;
+
+    public BasePeer Peer
+    {
+        get => _peer;
+        set => Interlocked.Exchange(ref _peer, value);
+    }
 
     public override void Initialize(long sessionId, IBaseEngine baseEngine, TcpNetworkSession tcpSession)
     {
@@ -44,14 +51,28 @@ public sealed class Session : BaseSession, ISession
             {
                 // 최초 연결
                 if (null != peer)
-                    throw new SessionAuthException(SessionAuthResult.InvalidRequest,
-                        $"Already created peer. sessionId={peer.Session.SessionId}, peerId={peer.PeerId}");
+                {
+                    ack.Result = SessionAuthResult.InvalidRequest;
+#if DEBUG
+                    ack.Reason = $"Peer '{peer.PeerId}' already exists. sid: {peer.Session.SessionId}";
+#endif
+                    return;
+                }
 
                 if (!engine.NewPeer(this, out peer))
-                    throw new SessionAuthException(SessionAuthResult.InternalError, $"Failed to create peer. sessionId={SessionId}");
+                {
+                    ack.Result = SessionAuthResult.InternalError;
+                    #if DEBUG
+                    ack.Reason = $"NewPeer failed. sid={SessionId}";
+                    #endif
+                    return;
+                }
 
                 if (!peer.TryKeyExchange(req.KeySize, req.ClientPublicKey))
-                    throw new SessionAuthException(SessionAuthResult.KeyExchangeFailed, "Key exchange failed.");
+                {
+                    ack.Result = SessionAuthResult.KeyExchangeFailed;
+                    return;
+                }
 
                 engine.JoinPeer(peer);
             }
@@ -61,10 +82,14 @@ public sealed class Session : BaseSession, ISession
                 var prevSession = engine.GetSession(req.SessionId);
                 if (null != prevSession)
                 {
-                    // 이전 세션이 살아 있는 경우
                     if (CloseReason.Rejected == prevSession.CloseReason)
-                        throw new SessionAuthException(SessionAuthResult.ReconnectionNotAllowed,
-                            $"Reconnection is not allowed because the session was rejected. sessionId={prevSession.SessionId}");
+                    {
+                        ack.Result = SessionAuthResult.ReconnectionNotAllowed;
+#if DEBUG
+                        ack.Reason =
+                            $"Reconnection is not allowed because the session was rejected. sessionId={prevSession.SessionId}";
+#endif
+                    }
 
                     peer = prevSession.Peer;
                     prevSession.Close(CloseReason.ServerClosing);
@@ -72,39 +97,49 @@ public sealed class Session : BaseSession, ISession
                 else
                 {
                     // 재 연결 대기 피어 조회
-                    peer = engine.GetWaitingReconnectPeer(req.PeerId);
+                    peer = engine.GetWaitingPeer(req.PeerId);
                     if (peer == null)
+                    {
+                        ack.Result = SessionAuthResult.SessionNotFound;
+#if DEBUG
+                        ack.Reason = $"Not in reconnecting waiting list. peerId={req.PeerId}";
+#endif
                         return;
+                    }
                 }
 
                 if (!engine.OnlinePeer(peer, this))
+                {
+                    ack.Result = SessionAuthResult.InternalError;
+#if DEBUG
+                    ack.Reason = $"Failed to online peer: {peer.PeerId}";
+#endif
                     return;
-                
+                }
+
                 Peer = peer;
             }
 
-            if (peer == null) throw new InvalidOperationException("peer is null.");
-            
+            if (peer == null)
+            {
+                ack.Result = SessionAuthResult.InternalError;
+#if DEBUG
+                ack.Reason = "Peer is null";
+#endif
+                return;
+            }
+
             IsAuthenticated = true;
             peer.OnSessionAuthCompleted();
             
             ack.Result = SessionAuthResult.Ok;
-            Logger.Debug("Session authentication succeeded. sessionId={0}, peerId={1}", SessionId, peer.PeerId);
-        }
-        catch (SessionAuthException e)
-        {
-            ack.Result = e.Result;
-#if DEBUG
-            ack.Reason = e.Message;
-#endif
-            Logger.Error("Session authentication failed ({0}). {1}\r\nstackTrace={2}",
-                e.Result, e.Message, e.StackTrace);
+            Logger.Debug("Session authentication succeeded. sid: {0}, pid: {1}", SessionId, peer.PeerId);
         }
         catch (Exception e)
         {
             ack.Result = SessionAuthResult.InternalError;
-            Logger.Error("Session authentication failed. {0}\r\nstackTrace={1}",
-                e.Message, e.StackTrace);
+            Logger.Error("Failed to authentication session: {0}, Exception: {1}\r\nStackTrace: {2}",
+                SessionId, e.Message, e.StackTrace);
         }
         finally
         {
@@ -270,16 +305,7 @@ public sealed class Session : BaseSession, ISession
         });
     }
 
-    internal void SendCloseHandshake()
-    {
-        if (IsClosing) return;
-        IsClosing = true;
-        StartClosingTime = DateTime.UtcNow;
-        _engine.EnqueueCloseHandshakePending(this);
 
-        var close = new S2CEngineProtocolData.Close();
-        InternalSend(close);
-    }
 
     internal void SendMessageAck(uint ackNumber)
     {
@@ -296,6 +322,15 @@ public sealed class Session : BaseSession, ISession
             peer.HandleRemoteAck(tcp.AckNumber);
             
         _engine.ExecuteCommand(this, message);
+    }
+    
+    internal void SendCloseHandshake()
+    {
+        if (IsClosing) return;
+        IsClosing = true;
+        StartClosingTime = DateTime.UtcNow;
+        _engine.EnqueueCloseHandshakePending(this);
+        InternalSend(new S2CEngineProtocolData.Close());
     }
 
     public override void Close(CloseReason reason)

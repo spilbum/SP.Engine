@@ -39,6 +39,7 @@ public abstract class BaseNetworkSession : INetworkSession
     protected Socket _client;
     private Action<INetworkSession, CloseReason> _closed;
     private volatile int _socketState;
+    private int _pendingIoCount;
     private protected IPEndPoint _remoteEndPoint;
     protected CloseReason _finalReason;
     
@@ -50,7 +51,6 @@ public abstract class BaseNetworkSession : INetworkSession
         RemoteEndPoint = (IPEndPoint)client.RemoteEndPoint;
     }
 
-    public Socket Client => _client;
     public Session Session { get; internal set; }
     public SocketMode Mode { get; }
     public IPEndPoint LocalEndPoint { get; }
@@ -70,13 +70,36 @@ public abstract class BaseNetworkSession : INetworkSession
         add => _closed += value;
         remove => _closed -= value;
     }
+
+    protected bool IncrementIo()
+    {
+        if (IsInClosingOrClosed) return false;
+        Interlocked.Increment(ref _pendingIoCount);
+        return true;
+    }
+
+    protected void DecrementIo()
+    {
+        if (Interlocked.Decrement(ref _pendingIoCount) != 0) return;
+        
+        if (IsInClosingOrClosed)
+        {
+            OnClosed(_finalReason);
+        }
+    }
     
     public void Close(CloseReason reason)
     {
         if (!TryAddState(SocketState.InClosing)) return;
         _finalReason = reason;
-
-        InternalClose(reason);
+        
+        if (_client != null)
+            InternalClose(reason);
+        else
+        {
+            if (Volatile.Read(ref _pendingIoCount) == 0)
+                OnClosed(_finalReason);
+        }
     }
 
     private void InternalClose(CloseReason reason)
@@ -85,7 +108,9 @@ public abstract class BaseNetworkSession : INetworkSession
         if (client == null) return;
         
         client.SafeClose();
-        if (IsIdle) OnClosed(reason);
+        
+        if (Volatile.Read(ref _pendingIoCount) == 0)
+            OnClosed(reason);
     }
     
     protected virtual void OnClosed(CloseReason reason)

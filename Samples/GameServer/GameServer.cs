@@ -163,7 +163,7 @@ public class GameServer : Engine
         if (!_byUid.TryGetValue(uid, out var peerId))
             return false;
 
-        peer = GetPeer<GamePeer>(peerId);
+        peer = GetActivePeer<GamePeer>(peerId);
         return peer != null;
     }
     
@@ -175,20 +175,11 @@ public class GameServer : Engine
         }
     }
 
-    private void Unbind(GamePeer peer)
+    public void Unbind(GamePeer peer)
     {
         if (_byUid.TryRemove(peer.Uid, out var peerId))
         {
             Logger.Debug("Unbind peer: uid={0}, peerId={1}", peer.Uid, peerId);
         }
-    }
-
-    protected override void OnPeerRemoved(IPeer peer, CloseReason reason)
-    {
-        if (peer is not GamePeer p)
-            return;
-        
-        Unbind(p);
-        Logger.Debug("Peer leaved. uid={0}, reason={1}", p.Uid, reason);
     }
 }

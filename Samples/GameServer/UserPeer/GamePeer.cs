@@ -16,6 +16,7 @@ public partial class GamePeer(ISession session) : BasePeer(PeerKind.User, sessio
         if (rr != null)
             LeaveRoom(rr.Room.RoomId, RoomLeaveReason.SessionClosed);
 
+        GameServer.Instance.Unbind(this);
         GameServer.Instance.Matchmaker.Cancel(this);
     }
 

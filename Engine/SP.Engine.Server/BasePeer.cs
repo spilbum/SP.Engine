@@ -53,17 +53,21 @@ public interface IPeer : ICommandContext
 
 public abstract class BasePeer : IPeer, IDisposable
 {
-    private readonly Lz4Compressor _compressor;
     private DiffieHellman _diffieHellman;
-    private bool _disposed;
+    private Lz4Compressor _compressor;
     private AesGcmEncryptor _encryptor;
     private IProtocolPolicySnapshot _policySnapshot;
-    private int _stateCode = PeerStateConst.NotAuthenticated;
     private Session _session;
+    private ReliableMessageProcessor _messageProcessor = new();
+    private int _stateCode = PeerStateConst.NotAuthenticated;
     private uint _lastSentAck;
     private DateTime _lastAckTime;
     private readonly object _ackLock = new();
+    private PeerFiber _fiber;
+    private bool _disposed;
     private int _pendingJobCount;
+    
+    public int PendingJobCount => Volatile.Read(ref _pendingJobCount);
     
     protected BasePeer(PeerKind kind, ISession session)
     {
@@ -75,39 +79,52 @@ public abstract class BasePeer : IPeer, IDisposable
         
         var config = session.Config;
         _compressor = new Lz4Compressor(config.Network.MaxFrameBytes);
-        MessageProcessor.SetSendTimeoutMs(config.Network.SendTimeoutMs);
-        MessageProcessor.SetMaxRetransmissionCount(config.Network.MaxRetransmissionCount);
-        MessageProcessor.SetMaxAckDelayMs(config.Network.MaxAckDelayMs);
-        MessageProcessor.SetAckStepThreshold(config.Network.AckStepThreshold);
-        MessageProcessor.SetMaxOutOfOrder(config.Network.MaxOutOfOderCount);
-        
+        _messageProcessor.SetSendTimeoutMs(config.Network.SendTimeoutMs);
+        _messageProcessor.SetMaxRetransmissionCount(config.Network.MaxRetransmissionCount);
+        _messageProcessor.SetMaxAckDelayMs(config.Network.MaxAckDelayMs);
+        _messageProcessor.SetAckStepThreshold(config.Network.AckStepThreshold);
+        _messageProcessor.SetMaxOutOfOrder(config.Network.MaxOutOfOderCount);
         _policySnapshot = ProtocolPolicyRegistry.CreateSnapshot(PolicyDefaults.FallbackGlobals);
     }
 
     protected BasePeer(BasePeer other)
     {
         PeerId = other.PeerId;
+        other.PeerId = 0;
+        
         Kind = other.Kind;
         Logger = other.Logger;
-        Fiber = other.Fiber;
-        _session = (Session)other.Session;
-        _stateCode = other._stateCode;
+        _fiber = other._fiber;
+        _stateCode = Interlocked.CompareExchange(ref other._stateCode, PeerStateConst.Closed, other._stateCode);
+        
         _diffieHellman = other._diffieHellman;
+        other._diffieHellman = null;
+        
         _encryptor = other._encryptor;
+        other._encryptor = null;
+        
         _compressor = other._compressor;
-        MessageProcessor = other.MessageProcessor;
+        other._compressor = null;
+        
         _policySnapshot = other._policySnapshot;
+        _pendingJobCount = Interlocked.Exchange(ref other._pendingJobCount, 0);
+        
+        _messageProcessor = other._messageProcessor;
+        other._messageProcessor = null;
+        
+        _session = (Session)other.Session;
+        _session.Peer = this;
     }
 
     public double LatencyAvgMs { get; private set; }
     public double LatencyJitterMs { get; private set; }
     public IEncryptor Encryptor => _encryptor;
     public ICompressor Compressor => _compressor;
-    public IPEndPoint LocalEndPoint => Session.LocalEndPoint;
-    public IPEndPoint RemoteEndPoint => Session.RemoteEndPoint;
+    public IPEndPoint LocalEndPoint => _session.LocalEndPoint;
+    public IPEndPoint RemoteEndPoint => _session.RemoteEndPoint;
     public bool IsConnected => _stateCode is PeerStateConst.Authenticated or PeerStateConst.Online;
-    public ReliableMessageProcessor MessageProcessor { get; } = new();
-    public PeerFiber Fiber { get; private set; }
+    public bool IsClosed => _stateCode is PeerStateConst.Closed;
+
     internal byte[] LocalPublicKey => _diffieHellman?.PublicKey;
 
     public void Dispose()
@@ -116,31 +133,57 @@ public abstract class BasePeer : IPeer, IDisposable
         GC.SuppressFinalize(this);
     }
     
-    public void EnqueueJob<T1, T2>(Action<T1, T2> action, T1 s1, T2 s2)
+    public bool EnqueueJob<T1, T2>(Action<T1, T2> action, T1 s1, T2 s2)
     {
+        if (_fiber == null) return false;
+        
         var count = Interlocked.Increment(ref _pendingJobCount);
-        if (count >= _session.Config.Session.PeerJobBackPressureThreshold)
+        if (count >= _session.Config.Session.PeerJobBackPressureThreshold && !_session.IsPaused)
         {
-            if (!_session.IsPaused)
-            {
-                Logger.Warn("BackPressure Enabled. PeerId: {0}, SessionId: {1}, PendingJobs: {2}",
-                    PeerId, _session.SessionId, count);
-                _session.PauseReceive();   
-            }
+            _session.PauseReceive();
         }
 
-        Fiber.EnqueueJob(this, action, s1, s2);
+        _fiber.EnqueueJob(this, action, s1, s2);
+        return true;
     }
 
-    internal void OnJobFinished()
+    private long _accumulatedDwellTicks;
+    private long _accumulatedExecutionTicks;
+    private int _completedJobCount;
+
+    internal void OnJobFinished(double dwellTimeMs, double executionTimeMs)
     {
+        Interlocked.Add(ref _accumulatedDwellTicks, (long)(dwellTimeMs * TimeSpan.TicksPerMillisecond));
+        Interlocked.Add(ref _accumulatedExecutionTicks, (long)(executionTimeMs * TimeSpan.TicksPerMillisecond));
+        Interlocked.Increment(ref _completedJobCount);
+        
         var count = Interlocked.Decrement(ref _pendingJobCount);
-        if (count > _session.Config.Session.PeerJobResumeThreshold) return;
-        if (!_session.IsPaused) return;
-            
-        Logger.Info("[BackPressure] Disabled. PeerId: {0}, SessionId: {1}, PendingJobs: {2}",
-            PeerId, _session.SessionId, count);
-        _session.ResumeReceive();
+
+        if (executionTimeMs > 50)
+        {
+            Logger.Warn("Slow Job Detected: PeerId={0}, Execution={1:F2}ms, Dwell={2:F2}ms",
+                PeerId, executionTimeMs, dwellTimeMs);    
+        }
+
+        if (count <= _session.Config.Session.PeerJobBackPressureThreshold && _session.IsPaused)
+        {
+            _session.ResumeReceive();
+        }
+    }
+
+    internal (double totalDwell, double totalExec, int count) ExtractMetrics()
+    {
+        var count = Interlocked.Exchange(ref _completedJobCount, 0);
+        if (count == 0) return (0, 0, 0);
+        
+        var dwellTicks = Interlocked.Exchange(ref _accumulatedDwellTicks, 0);
+        var executionTicks = Interlocked.Exchange(ref _accumulatedExecutionTicks, 0);
+
+        return (
+            (double)dwellTicks / TimeSpan.TicksPerMillisecond,
+            (double)executionTicks / TimeSpan.TicksPerMillisecond,
+            count
+        );
     }
 
     public PeerState State => (PeerState)_stateCode;
@@ -154,11 +197,20 @@ public abstract class BasePeer : IPeer, IDisposable
     
     public void Close(CloseReason reason)
     {
+        if (IsClosed) return;
         _session.Close(reason);
+    }
+
+    internal void OnSessionClosed(Session session)
+    {
+        if (_session.SessionId != session.SessionId) return;
+        _fiber?.RemovePeer(this);
     }
 
     public bool Send(IProtocolData data)
     {
+        if (IsClosed) return false;
+        
         var policy = _policySnapshot.Resolve(data.Id);
         var encryptor = policy.UseEncrypt ? Encryptor : null;
         var compressor = policy.UseCompress ? Compressor : null;
@@ -181,13 +233,13 @@ public abstract class BasePeer : IPeer, IDisposable
 
                     if (IsConnected)
                     {
-                        MessageProcessor.PrepareReliableSend(tcp);
+                        _messageProcessor?.PrepareReliableSend(tcp);
                         if (!_session.TrySend(channel, tcp)) return false;
                         Interlocked.Exchange(ref _lastSentAck, tcp.AckNumber);
                     }
                     else
                     {
-                        MessageProcessor.EnqueuePendingMessage(tcp);
+                        _messageProcessor?.EnqueuePendingMessage(tcp);
                     }
 
                     return true;
@@ -221,13 +273,8 @@ public abstract class BasePeer : IPeer, IDisposable
         if (disposing)
         {
             PeerIdGenerator.Free(PeerId);
-            PeerId = 0;
-            Fiber = null;
-            _lastSentAck = 0;
             _diffieHellman?.Dispose();
-            _diffieHellman = null;
-            _encryptor = null;
-            MessageProcessor.Dispose();
+            _messageProcessor?.Dispose();
         }
 
         _disposed = true;
@@ -236,14 +283,14 @@ public abstract class BasePeer : IPeer, IDisposable
     public virtual void Tick()
     {
         if (!IsConnected) return;
-        
         ProcessRetransmission();
         MaintainAckStatus();
     }
 
     private void ProcessRetransmission()
     {
-        var (retries, failed) = MessageProcessor.ProcessRetransmissions();
+        if (_messageProcessor == null) return;
+        var (retries, failed) = _messageProcessor.ProcessRetransmissions();
         if (failed.Count > 0)
         {
             // Logger.Debug("Connection terminated due to message delivery failure. sessionId: {0}, peerId: {1}, first seq: {2}, count: {3}",
@@ -251,7 +298,7 @@ public abstract class BasePeer : IPeer, IDisposable
             
             foreach (var m in failed)
                 m.Dispose();
-            MessageProcessor.RestartInFlightMessages();
+            _messageProcessor.RestartInFlightMessages();
             
             Close(CloseReason.LimitExceededRetransmission);
             return;
@@ -265,20 +312,21 @@ public abstract class BasePeer : IPeer, IDisposable
 
     private void MaintainAckStatus()
     {
-        var ackNumber = MessageProcessor.LastReceivedSeq;
+        if (_messageProcessor == null) return;
+        var ackNumber = _messageProcessor.LastReceivedSeq;
         if (ackNumber <= _lastSentAck) return;
         
         var now = DateTime.UtcNow;
         var elapsedMs = (now - _lastAckTime).TotalMilliseconds;
         var pendingCount = ackNumber - _lastSentAck;
 
-        if (elapsedMs < MessageProcessor.MaxAckDelayMs && pendingCount < MessageProcessor.AckStepThreshold)
+        if (elapsedMs < _messageProcessor.MaxAckDelayMs && pendingCount < _messageProcessor.AckStepThreshold)
             return;
 
         lock (_ackLock)
         {
             if (ackNumber <= _lastSentAck) return;
-            if (elapsedMs < MessageProcessor.MaxAckDelayMs && pendingCount < MessageProcessor.AckStepThreshold)
+            if (elapsedMs < _messageProcessor.MaxAckDelayMs && pendingCount < _messageProcessor.AckStepThreshold)
                 return;
 
             _lastAckTime = DateTime.UtcNow;
@@ -289,7 +337,7 @@ public abstract class BasePeer : IPeer, IDisposable
 
     internal void OnPing(ushort rttMs, ushort avgRttMs, ushort jitterMs)
     {
-        MessageProcessor.AddRtoSample(rttMs);
+        _messageProcessor?.AddRtoSample(rttMs);
         LatencyAvgMs = avgRttMs;
         LatencyJitterMs = jitterMs;
     }
@@ -301,12 +349,17 @@ public abstract class BasePeer : IPeer, IDisposable
 
     internal void HandleRemoteAck(uint remoteAckNumber)
     {
-        MessageProcessor.AcknowledgeInFlight(remoteAckNumber);
+        _messageProcessor?.AcknowledgeInFlight(remoteAckNumber);
+    }
+
+    internal List<TcpMessage> IngestReceivedMessage(TcpMessage message)
+    {
+        return _messageProcessor?.IngestReceivedMessage(message);
     }
 
     internal void SetFiber(PeerFiber fiber)
     {
-        Fiber = fiber;
+        _fiber = fiber;
     }
 
     internal void JoinServer()
@@ -335,14 +388,17 @@ public abstract class BasePeer : IPeer, IDisposable
         Interlocked.Exchange(ref _stateCode, PeerStateConst.Online);
         _session = (Session)session;
 
-        var pendingMessages = MessageProcessor.DequeuePendingMessages();
-        foreach (var message in pendingMessages)
-        {
-            using (message)
+        if (_messageProcessor != null)
+        {        
+            var pendingMessages = _messageProcessor.DequeuePendingMessages();
+            foreach (var message in pendingMessages)
             {
-                MessageProcessor.PrepareReliableSend(message);
-                if (!session.TrySend(ChannelKind.Reliable, message)) continue;
-                Interlocked.Exchange(ref _lastSentAck, message.AckNumber);
+                using (message)
+                {
+                    _messageProcessor.PrepareReliableSend(message);
+                    if (!session.TrySend(ChannelKind.Reliable, message)) continue;
+                    Interlocked.Exchange(ref _lastSentAck, message.AckNumber);
+                }
             }
         }
         
@@ -359,7 +415,7 @@ public abstract class BasePeer : IPeer, IDisposable
     {
         Interlocked.Exchange(ref _stateCode, PeerStateConst.Closed);
         PeerIdGenerator.Free(PeerId);
-        MessageProcessor.Dispose();
+        _messageProcessor?.Dispose();
         _diffieHellman?.Dispose();
         _session.Peer = null;
         OnLeaveServer(reason);
@@ -422,26 +478,34 @@ public abstract class BasePeer : IPeer, IDisposable
 
     public override string ToString()
     {
-        return $"sessionId={Session.SessionId}, peerId={PeerId}, peerType={Kind}, remoteEndPoint={RemoteEndPoint}";
+        return $"sessionId={_session.SessionId}, peerId={PeerId}, peerType={Kind}, remoteEndPoint={RemoteEndPoint}";
     }
 
     private static class PeerIdGenerator
     {
         private static readonly ConcurrentQueue<uint> FreePeerIdPool = new();
-        private static uint _latestPeerId;
+        private static int _latestPeerId;
 
         public static uint Generate()
         {
-            if (_latestPeerId >= uint.MaxValue) throw new InvalidOperationException("ID overflow detected");
-            return FreePeerIdPool.TryDequeue(out var peerId)
-                ? peerId
-                : Interlocked.Increment(ref _latestPeerId);
+            if (FreePeerIdPool.TryDequeue(out var peerId))
+            {
+                return peerId;
+            }
+
+            var newId = (uint)Interlocked.Increment(ref _latestPeerId);
+            if (newId == 0)
+            {
+                throw new InvalidOperationException("Peer ID pool exhausted.");
+            }
+            
+            return newId;
         }
 
         public static void Free(uint peerId)
         {
-            if (peerId > 0)
-                FreePeerIdPool.Enqueue(peerId);
+            if (peerId == 0) return;
+            FreePeerIdPool.Enqueue(peerId);
         }
     }
 }
