@@ -133,7 +133,7 @@ namespace SP.Engine.Client
 
         public void Test_Reconnect()
         {
-            _tcpSession.Close();
+            _tcpSession?.Close();
         }
 
         protected void Initialize(EngineConfig config, ILogger logger)
@@ -335,10 +335,10 @@ namespace SP.Engine.Client
 
             // 재전송할 메시지 추출
             var (retries, failed) = _messageProcessor.ProcessRetransmissions();
-            if (failed.Count > 0)
+            if (failed != null && failed.Count > 0)
             {
                 // 재전송 횟수 초과로 인해 실패됨
-                Logger.Debug("Connection terminated due to message delivery failure. first seq: {0}, count: {1}",
+                Logger.Warn("Connection terminated due to message delivery failure. first seq: {0}, count: {1}",
                     failed[0].SequenceNumber, failed.Count);
 
                 foreach (var message in failed)
@@ -348,13 +348,16 @@ namespace SP.Engine.Client
                 _tcpSession?.Close();
                 return;
             }
-            
-            foreach (var message in retries.Where(message => TrySend(ChannelKind.Reliable, message)))
+
+            if (retries != null)
             {
-                lock (_ackLock)
+                foreach (var message in retries.Where(message => TrySend(ChannelKind.Reliable, message)))
                 {
-                    _lastSentAck = message.AckNumber;
-                    RestartAckTimer();
+                    lock (_ackLock)
+                    {
+                        _lastSentAck = message.AckNumber;
+                        RestartAckTimer();
+                    }
                 }
             }
         }
@@ -717,11 +720,11 @@ namespace SP.Engine.Client
                 const long maxTicks = TimeSpan.TicksPerMillisecond * 5;
                 var sw = Stopwatch.StartNew();
                 var processed = 0;
-                while (_receiveBuffer.TryExtract(MaxFrameBytes, out var header, out var bodyOwner))
+                while (_receiveBuffer.TryExtract(MaxFrameBytes, out var header, out var bodyOwner, out var bodyLength))
                 {
                     ProcessAckStatus(header.AckNumber);
 
-                    var message = new TcpMessage(header, bodyOwner);
+                    var message = new TcpMessage(header, bodyOwner, bodyLength);
                     MessageReceived(message);
 
                     if (++processed >= maxBatch || ((processed & 15) == 0 && sw.ElapsedTicks > maxTicks)) break;

@@ -14,11 +14,13 @@ internal class Close : BaseCommand<Session, C2SEngineProtocolData.Close>
         
         if (session.IsClosing)
         {
-            session.Close(CloseReason.ClientClosing);
+            // 서버 요청에 대한 응답인 경우
+            session.Close(CloseReason.ServerClosing);
             return;
         }
-
-        session.SendCloseHandshake();
+        
+        // 응답을 보내고 종료함
+        session.SendClose();
         session.Close(CloseReason.ClientClosing);
     }
 }

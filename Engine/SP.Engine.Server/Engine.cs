@@ -178,7 +178,7 @@ public abstract class Engine : BaseEngine, IEngine
     
     private void SetupPeerFiber()
     {
-        var fiberCnt = Environment.ProcessorCount * 2;
+        var fiberCnt = Environment.ProcessorCount;
         fiberCnt = Math.Clamp(fiberCnt, 4, 32); // todo:환경에 맞게 튜닝
         
         var tickInterval = TimeSpan.FromMilliseconds(Config.Session.PeerUpdateIntervalMs);

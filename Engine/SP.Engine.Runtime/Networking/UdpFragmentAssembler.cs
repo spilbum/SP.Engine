@@ -26,10 +26,10 @@ namespace SP.Engine.Runtime.Networking
 
         public bool Add(byte index, ReadOnlySpan<byte> span)
         {
-            if (index >= ExpectedCount || _fragments[index].Span.Length > 0) return false;
+            if (index >= ExpectedCount || _fragments[index].Capacity > 0) return false;
 
             var pooled = new PooledBuffer(span.Length);
-            span.CopyTo(pooled.Span);
+            span.CopyTo(pooled.GetSpan());
 
             _fragments[index] = pooled;
             _totalLength += span.Length;
@@ -37,19 +37,20 @@ namespace SP.Engine.Runtime.Networking
             return true;
         }
 
-        public PooledBuffer Combine()
+        public PooledBuffer Combine(out int length)
         {
             var result = new PooledBuffer(_totalLength);
-            var dest = result.Span;
+            var dest = result.GetSpan();
             var offset = 0;
             
             for (var i = 0; i < ExpectedCount; i++)
             {
-                var src = _fragments[i].Span;
+                var src = _fragments[i].GetSpan();
                 src.CopyTo(dest[offset..]);
                 offset += src.Length;
             }
     
+            length = offset;
             return result;
         }
 
@@ -105,10 +106,10 @@ namespace SP.Engine.Runtime.Networking
                 if (!_assembles.ContainsKey(fragHeader.FragId) && _assembles.Count >= _maxPendingMessageCount) 
                     return false;
                 
-                if (!TryAssembleInternal(fragHeader, fragData, out var bodyOwner)) 
+                if (!TryAssembleInternal(fragHeader, fragData, out var bodyOwner, out var bodyLength)) 
                     return false;
                 
-                message = new UdpMessage(header, bodyOwner);
+                message = new UdpMessage(header, bodyOwner, bodyLength);
                 return true;
             }
             
@@ -116,17 +117,22 @@ namespace SP.Engine.Runtime.Networking
             if (header.BodyLength > 0)
             {
                 var pooled = new PooledBuffer(header.BodyLength);
-                span.CopyTo(pooled.Span);
+                span.CopyTo(pooled.GetSpan());
                 owner = pooled;
             }
             
-            message = new UdpMessage(header, owner);
+            message = new UdpMessage(header, owner, header.BodyLength);
             return true;
         }
         
-        private bool TryAssembleInternal(UdpFragmentHeader fragHeader, ReadOnlySpan<byte> fragData, out IMemoryOwner<byte> bodyOwner)
+        private bool TryAssembleInternal(
+            UdpFragmentHeader fragHeader,
+            ReadOnlySpan<byte> fragData, 
+            out IMemoryOwner<byte> bodyOwner, 
+            out int bodyLength)
         {
             bodyOwner = null;
+            bodyLength = 0;
 
             var state = _assembles.GetOrAdd(fragHeader.FragId, _ => new FragmentState(fragHeader.TotalCount));
 
@@ -143,7 +149,8 @@ namespace SP.Engine.Runtime.Networking
                 
                 using (state)
                 {
-                    bodyOwner = state.Combine();
+                    bodyOwner = state.Combine(out var length);
+                    bodyLength = length;
                     return true;
                 }
             }

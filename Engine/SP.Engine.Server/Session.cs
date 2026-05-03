@@ -44,7 +44,7 @@ public sealed class Session : BaseSession, ISession
         var ack = new S2CEngineProtocolData.SessionAuthAck { Result = SessionAuthResult.None };
         var engine = _engine;
         var peer = Peer;
-
+        
         try
         {
             if (req.SessionId == 0)
@@ -89,6 +89,7 @@ public sealed class Session : BaseSession, ISession
                         ack.Reason =
                             $"Reconnection is not allowed because the session was rejected. sessionId={prevSession.SessionId}";
 #endif
+                        return;
                     }
 
                     peer = prevSession.Peer;
@@ -175,7 +176,7 @@ public sealed class Session : BaseSession, ISession
                     }
                 }
             }
-
+            
             if (!InternalSend(ack))
                 Logger.Error("Failed to send session auth ack. sessionId={0}", SessionId);
         }
@@ -305,8 +306,6 @@ public sealed class Session : BaseSession, ISession
         });
     }
 
-
-
     internal void SendMessageAck(uint ackNumber)
     {
         var messageAck = new S2CEngineProtocolData.MessageAck { AckNumber = ackNumber };
@@ -323,24 +322,35 @@ public sealed class Session : BaseSession, ISession
             
         _engine.ExecuteCommand(this, message);
     }
-    
-    internal void SendCloseHandshake()
-    {
-        if (IsClosing) return;
-        IsClosing = true;
-        StartClosingTime = DateTime.UtcNow;
-        _engine.EnqueueCloseHandshakePending(this);
-        InternalSend(new S2CEngineProtocolData.Close());
-    }
 
     public override void Close(CloseReason reason)
     {
         if (reason is CloseReason.TimeOut or CloseReason.Rejected)
         {
-            SendCloseHandshake();
+            StartClosing();
             return;
         }
-
+        
         base.Close(reason);
+    }
+    
+    private void StartClosing()
+    {
+        if (Interlocked.CompareExchange(ref _state, (int)SessionState.Closing, (int)SessionState.Connected)
+            != (int)SessionState.Connected)
+        {
+            return;
+        }
+        
+        Logger.Debug("Session {0} start closing...", SessionId);
+        
+        StartClosingTime = DateTime.UtcNow;
+        _engine.EnqueueCloseHandshakePending(this);
+        SendClose();
+    }
+    
+    internal void SendClose()
+    {
+        InternalSend(new S2CEngineProtocolData.Close());
     }
 }

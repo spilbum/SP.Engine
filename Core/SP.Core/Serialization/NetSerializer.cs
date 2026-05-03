@@ -2,52 +2,67 @@
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Reflection;
+using DateTime = System.DateTime;
 
 namespace SP.Core.Serialization
 {
+    public static class NetSerializer<T>
+    {
+        private static readonly SerializerPair.WriteGenericFn<T> _writer;
+        private static readonly SerializerPair.ReadGenericFn<T> _reader;
+        
+        static NetSerializer()
+        {
+            var pair = NetSerializer.GetOrBuild(typeof(T));
+            _writer = (SerializerPair.WriteGenericFn<T>)pair.GenericWriter;
+            _reader = (SerializerPair.ReadGenericFn<T>)pair.GenericReader;
+        }
+
+        public static void Serialize(ref NetWriter w, T value) => _writer(ref w, value);
+        public static T Deserialize(ref NetReader r) => _reader(ref r);
+    }
+    
     public static class NetSerializer
     {
         private static readonly ConcurrentDictionary<Type, SerializerPair> Cache =
             new ConcurrentDictionary<Type, SerializerPair>();
 
-        public static void Serialize<T>(NetWriter w, T value)
-            => Serialize(w, typeof(T), value);
+        public static void Serialize<T>(ref NetWriter w, T value)
+            => NetSerializer<T>.Serialize(ref w, value);
 
-        public static void Serialize(NetWriter w, Type type, object value)
-            => GetOrBuild(type).Writer(ref w, value);
-        
         public static T Deserialize<T>(ref NetReader r)
-            => (T)Deserialize(ref r, typeof(T));
+            => NetSerializer<T>.Deserialize(ref r);
 
-        public static object Deserialize(ref NetReader r, Type type)
-            => GetOrBuild(type).Reader(ref r);
-
-        private static SerializerPair GetOrBuild(Type type)
+        public static SerializerPair GetOrBuild(Type type)
             => Cache.GetOrAdd(type, Build);
-
+        
         private static SerializerPair Build(Type t)
         {
             if (t == typeof(string)) return BuildString();
             if (t == typeof(byte[])) return BuildByteArray();
+            if (t == typeof(DateTime)) return BuildDateTime();
+            
             if (t.IsArray) return BuildArray(t);
             if (TryBuildList(t, out var p)) return p;
             if (TryBuildDictionary(t, out p)) return p;
-            return t == typeof(DateTime) 
-                ? BuildDateTime() 
-                : BuildDataClass(t);
+            
+            return BuildDataClass(t);
         }
 
         private static SerializerPair BuildString()
         {
-            return new SerializerPair(Read, Write);
+            return new SerializerPair(
+                Reader, 
+                Writer, 
+                (SerializerPair.ReadGenericFn<string>)ReaderGeneric,
+                (SerializerPair.WriteGenericFn<string>)WriterGeneric);
 
-            object Read(ref NetReader r)
-            {
-                var has = r.ReadBool();
-                return has ? r.ReadString() : null;
-            }
+            object Reader(ref NetReader r) => ReaderGeneric(ref r);
+            void Writer(ref NetWriter w, object v) => WriterGeneric(ref w, (string)v);
 
-            void Write(ref NetWriter w, object v)
+            string ReaderGeneric(ref NetReader r) => r.ReadBool() ? r.ReadString() : null;
+            void WriterGeneric(ref NetWriter w, string v)
             {
                 if (v == null)
                 {
@@ -56,31 +71,34 @@ namespace SP.Core.Serialization
                 }
 
                 w.WriteBool(true);
-                w.WriteString((string)v);
+                w.WriteString(v);
             }
         }
 
         private static SerializerPair BuildByteArray()
         {
-            return new SerializerPair(Read, Write);
+            return new SerializerPair(
+                (ref NetReader r) => ReadGeneric(ref r),
+                (ref NetWriter w, object v) => WriteGeneric(ref w, (byte[])v),
+                (SerializerPair.ReadGenericFn<byte[]>)ReadGeneric,
+                (SerializerPair.WriteGenericFn<byte[]>)WriteGeneric
+            );
 
-            void Write(ref NetWriter w, object value)
+            void WriteGeneric(ref NetWriter w, byte[] v)
             {
-                var bytes = (byte[])value;
-                if (bytes == null)
+                if (v == null)
                 {
                     w.WriteBool(false);
                     return;
                 }
 
                 w.WriteBool(true);
-                w.WriteBytes(bytes);
+                w.WriteBytes(v);
             }
 
-            object Read(ref NetReader r)
+            byte[] ReadGeneric(ref NetReader r)
             {
-                var has = r.ReadBool();
-                if (!has) return null;
+                if (!r.ReadBool()) return null;
                 var s = r.ReadBytes();
                 var arr = new byte[s.Length];
                 s.CopyTo(arr);
@@ -93,7 +111,10 @@ namespace SP.Core.Serialization
             var elemType = arrayType.GetElementType() ?? throw new InvalidOperationException("elemType is null");
             var elemSer = GetOrBuild(elemType);
 
-            return new SerializerPair(Read, Write);
+            var rFn = new SerializerPair.ReadFn(Read);
+            var wfn = new SerializerPair.WriteFn(Write);
+
+            return new SerializerPair(rFn, wfn, rFn, wfn);
 
             object Read(ref NetReader r)
             {
@@ -126,14 +147,15 @@ namespace SP.Core.Serialization
         private static bool TryBuildList(Type t, out SerializerPair pair)
         {
             pair = null;
-            if (!t.IsGenericType) return false;
-            var gen = t.GetGenericTypeDefinition();
-            if (gen != typeof(List<>)) return false;
+            if (!t.IsGenericType || t.GetGenericTypeDefinition() != typeof(List<>)) return false;
 
             var elemType = t.GetGenericArguments()[0];
             var elemSer = GetOrBuild(elemType);
+            
+            var rFn = new SerializerPair.ReadFn(Read);
+            var wfn = new SerializerPair.WriteFn(Write);
 
-            pair = new SerializerPair(Read, Write);
+            pair = new SerializerPair(rFn, wfn, rFn, wfn);
             return true;
 
             void Write(ref NetWriter w, object v)
@@ -166,15 +188,16 @@ namespace SP.Core.Serialization
         private static bool TryBuildDictionary(Type t, out SerializerPair pair)
         {
             pair = null;
-            if (!t.IsGenericType) return false;
-            var gen = t.GetGenericTypeDefinition();
-            if (gen != typeof(Dictionary<,>)) return false;
+            if (!t.IsGenericType || t.GetGenericTypeDefinition() != typeof(Dictionary<,>)) return false;
 
             var args = t.GetGenericArguments();
             var kSer = GetOrBuild(args[0]);
             var vSer = GetOrBuild(args[1]);
+            
+            var rFn = new SerializerPair.ReadFn(Read);
+            var wfn = new SerializerPair.WriteFn(Write);
 
-            pair = new SerializerPair(Read, Write);
+            pair = new SerializerPair(rFn, wfn, rFn, wfn);
             return true;
 
             object Read(ref NetReader r)
@@ -215,7 +238,23 @@ namespace SP.Core.Serialization
 
         private static SerializerPair BuildDateTime()
         {
-            return new SerializerPair(Read, Write);
+            return new SerializerPair(
+                Read, 
+                Write, 
+                (SerializerPair.ReadGenericFn<DateTime>)ReadGeneric,
+                (SerializerPair.WriteGenericFn<DateTime>)WriteGeneric);
+
+            DateTime ReadGeneric(ref NetReader r)
+            {
+                return new DateTime(r.ReadInt64(), DateTimeKind.Utc);
+            }
+            
+            void WriteGeneric(ref NetWriter w, DateTime v)
+            {
+                w.WriteInt64(v.ToUniversalTime().Ticks);
+            }
+
+            object Read(ref NetReader r) => r.ReadBool() ? (object)ReadGeneric(ref r) : null;
 
             void Write(ref NetWriter w, object v)
             {
@@ -224,42 +263,68 @@ namespace SP.Core.Serialization
                     w.WriteBool(false);
                     return;
                 }
-
+                
                 w.WriteBool(true);
-                var dt = ((DateTime)v).ToUniversalTime();
-                w.WriteInt64(dt.Ticks);
+                WriteGeneric(ref w, (DateTime)v);
             }
+        }
+
+        private static SerializerPair BuildEnum(Type t)
+        {
+            var readMethod = typeof(NetSerializer).GetMethod(nameof(ReadEnumInternal), BindingFlags.Static | BindingFlags.NonPublic)!
+                .MakeGenericMethod(t);
+            var writeMethod = typeof(NetSerializer).GetMethod(nameof(WriteEnumInternal), BindingFlags.Static | BindingFlags.NonPublic)!
+                .MakeGenericMethod(t);
+            
+            var genericReader = readMethod.CreateDelegate(typeof(SerializerPair.ReadGenericFn<>).MakeGenericType(t));
+            var genericWriter = writeMethod.CreateDelegate(typeof(SerializerPair.WriteGenericFn<>).MakeGenericType(t));
+
+            var rFn = new SerializerPair.ReadFn(Read);
+            var wFn = new SerializerPair.WriteFn(Write);
+            
+            return new SerializerPair(rFn, wFn, genericReader, genericWriter);
 
             object Read(ref NetReader r)
             {
-                var has = r.ReadBool();
-                if (!has) return null;
+                var pair = GetOrBuild(t);
+                return pair.Reader(ref r);
+            }
 
-                var ticks = r.ReadInt64();
-                return new DateTime(ticks, DateTimeKind.Utc);
+            void Write(ref NetWriter w, object v)
+            {
+                var pair = GetOrBuild(t);
+                pair.Writer(ref w, v);
             }
         }
+        
+        private static T ReadEnumInternal<T>(ref NetReader r) where T : unmanaged => r.Read<T>();
+        private static void WriteEnumInternal<T>(ref NetWriter w, T v) where T : unmanaged => w.Write(v);
 
         private static SerializerPair BuildDataClass(Type t)
         {
-            var writer = NetSerializerBuilder.BuildWriter(t);
-            var reader = NetSerializerBuilder.BuildReader(t);
-            return new SerializerPair(reader, writer);
+            return NetSerializerBuilder.Build(t);
         }
+    }
+    
+    public class SerializerPair
+    {
+        public delegate object ReadFn(ref NetReader r);
+        public delegate void WriteFn(ref NetWriter w, object v);
+        
+        public delegate T ReadGenericFn<out T>(ref NetReader r);
+        public delegate void WriteGenericFn<in T>(ref NetWriter w, T value);
 
-        public class SerializerPair
+        public ReadFn Reader { get; }
+        public WriteFn Writer { get; }
+        public object GenericReader { get; }
+        public object GenericWriter { get; }
+
+        public SerializerPair(ReadFn reader, WriteFn writer, object genericReader, object genericWriter)
         {
-            public delegate object ReadFn(ref NetReader r);
-            public delegate void WriteFn(ref NetWriter w, object value);
-
-            public SerializerPair(ReadFn reader, WriteFn writer)
-            {
-                Reader = reader;
-                Writer = writer;
-            }
-
-            public ReadFn Reader { get; }
-            public WriteFn Writer { get; }
+            Reader = reader;
+            Writer = writer;
+            GenericReader = genericReader;
+            GenericWriter = genericWriter;
         }
     }
 }

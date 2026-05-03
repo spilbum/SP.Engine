@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
 using System.Threading;
+using SP.Core;
 using SP.Core.Logging;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Channel;
@@ -226,15 +227,24 @@ public abstract class BasePeer : IPeer, IDisposable
                 var tcp = new TcpMessage();
                 using (tcp)
                 {
-                    tcp.Serialize(data, policy, encryptor, compressor);
+                    var sc_serialize = new SlowChecker(50, "Serialize", Logger);
+                    using (sc_serialize)
+                    {
+                        tcp.Serialize(data, policy, encryptor, compressor);   
+                    }
 
                     if (originalChannel == ChannelKind.Unreliable)
                         return _session.TrySend(channel, tcp);   
 
                     if (IsConnected)
                     {
-                        _messageProcessor?.PrepareReliableSend(tcp);
-                        if (!_session.TrySend(channel, tcp)) return false;
+                        var sc_processor = new SlowChecker(50, "PrepareReliableSend", Logger);
+                        using (sc_processor)
+                        {
+                            _messageProcessor?.PrepareReliableSend(tcp);  
+                        }
+                  
+                        if (!_session.TrySend(channel, tcp)) return false; 
                         Interlocked.Exchange(ref _lastSentAck, tcp.AckNumber);
                     }
                     else
@@ -291,10 +301,10 @@ public abstract class BasePeer : IPeer, IDisposable
     {
         if (_messageProcessor == null) return;
         var (retries, failed) = _messageProcessor.ProcessRetransmissions();
-        if (failed.Count > 0)
+        if (failed is { Count: > 0 })
         {
-            // Logger.Debug("Connection terminated due to message delivery failure. sessionId: {0}, peerId: {1}, first seq: {2}, count: {3}",
-            //     _session.SessionId, PeerId, failed[0].SequenceNumber, failed.Count);
+            Logger.Warn("Connection terminated due to message delivery failure. sessionId: {0}, peerId: {1}, first seq: {2}, count: {3}",
+                _session.SessionId, PeerId, failed[0].SequenceNumber, failed.Count);
             
             foreach (var m in failed)
                 m.Dispose();
@@ -304,9 +314,12 @@ public abstract class BasePeer : IPeer, IDisposable
             return;
         }
 
-        foreach (var message in retries.Where(message => _session.TrySend(ChannelKind.Reliable, message)))
+        if (retries != null)
         {
-            Interlocked.Exchange(ref _lastSentAck, message.AckNumber);
+            foreach (var message in retries.Where(message => _session.TrySend(ChannelKind.Reliable, message)))
+            {
+                Interlocked.Exchange(ref _lastSentAck, message.AckNumber);
+            }   
         }
     }
 

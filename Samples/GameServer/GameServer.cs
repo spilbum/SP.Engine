@@ -60,7 +60,7 @@ public class GameServer : Engine
             })
             .WithSession(s => s with
             {
-                IdleSessionTimeoutSec = 10
+                IdleSessionTimeoutSec = 60
             })
             .WithPerf(r => r with
             {

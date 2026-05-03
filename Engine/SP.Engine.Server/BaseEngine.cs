@@ -323,21 +323,25 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
 
     private void ClearIdleSession()
     {
-        var nowTicks = DateTime.UtcNow.Ticks;
-        var timeoutTicks = nowTicks - TimeSpan.FromSeconds(Config.Session.ClearIdleSessionIntervalSec).Ticks;
+        var activeSessions = _sessionManager.GetActiveSnapshot();
+        if (activeSessions.Length == 0) return;
+        
+        var nowUtc = DateTime.UtcNow;
+        var idleTimeoutSec = Config.Session.IdleSessionTimeoutSec;
+        var timeoutTicks = nowUtc.Ticks - TimeSpan.FromSeconds(idleTimeoutSec).Ticks;
 
-        foreach (var s in SessionsSource)
+        foreach (var s in activeSessions)
         {
-            if (s.LastActiveTimeTicks > timeoutTicks) continue;
+            if (s == null) continue;
 
-            if (s.IsClosed) continue;
-                
+            var lastActive = s.LastActiveTimeTicks;
+            if (lastActive > timeoutTicks) continue;
+
             Logger.Debug(
-                "The session {0} will be closed for {1} timeout, the session start time: {2}, last active time: {3}",
+                "[IdleTimeout] Session {0} idle for {1}s. LastActive: {2}",
                 s.SessionId,
-                TimeSpan.FromTicks(nowTicks - s.LastActiveTimeTicks).TotalSeconds,
-                s.StartTime,
-                s.LastActiveTimeTicks.ToDateTime());
+                TimeSpan.FromTicks(nowUtc.Ticks - lastActive).TotalSeconds,
+                lastActive.ToDateTime());
 
             s.Close(CloseReason.TimeOut);
         }
@@ -422,6 +426,7 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
                 {
                     // 종료 처리가 되었음
                     _closeHandshakePendingQueue.TryDequeue(out _);
+                    Logger.Debug("Remove close handshake: {0}", session.SessionId);
                     continue;
                 }
 

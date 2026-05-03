@@ -11,18 +11,18 @@ namespace SP.Engine.Server;
 public class PeerManager(ILogger logger, IEngineConfig config)
 {
     private readonly ConcurrentDictionary<uint, BasePeer> _activePeers = [];
-    private readonly ConcurrentDictionary<uint, WaitingReconnectPeer> _reconnectQueue = [];
+    private readonly ConcurrentDictionary<uint, PendingReconnect> _reconnectPendingPeers = [];
 
     public BasePeer GetActivePeer(uint peerId)
         => _activePeers.GetValueOrDefault(peerId);
 
     public BasePeer GetWaitingPeer(uint peerId)
-        => _reconnectQueue.TryGetValue(peerId, out var waiting) ? waiting.Peer : null;
+        => _reconnectPendingPeers.TryGetValue(peerId, out var waiting) ? waiting.Peer : null;
 
     public BasePeer GetAnyPeer(uint peerId)
         => _activePeers.TryGetValue(peerId, out var peer) 
             ? peer 
-            : _reconnectQueue.TryGetValue(peerId, out var waiting) ? waiting.Peer : null;
+            : _reconnectPendingPeers.TryGetValue(peerId, out var waiting) ? waiting.Peer : null;
 
     public (double avgDwell, double avgExec, int pendingTotal) GetGlobalFiberMetrics()
     {
@@ -41,7 +41,7 @@ public class PeerManager(ILogger logger, IEngineConfig config)
             globalPendingJobs += peer.PendingJobCount;
         }
 
-        globalPendingJobs += _reconnectQueue.Values.Sum(waiting => waiting.Peer.PendingJobCount);
+        globalPendingJobs += _reconnectPendingPeers.Values.Sum(waiting => waiting.Peer.PendingJobCount);
 
         if (globalCompletedCount == 0)
             return (0, 0, globalPendingJobs);
@@ -67,12 +67,16 @@ public class PeerManager(ILogger logger, IEngineConfig config)
     public bool TransitionToOnline(uint peerId, ISession session)
     {
         // 대기 목록에서 먼저 제거
-        if (!_reconnectQueue.TryRemove(peerId, out var waiting))
+        if (!_reconnectPendingPeers.TryRemove(peerId, out var pending))
+        {
+            logger.Warn("No peer to reconnect pending: {0}, sessionId={1}", peerId, session.SessionId);
             return false;
+        }
 
-        var peer = waiting.Peer;
+        var peer = pending.Peer;
         if (!_activePeers.TryAdd(peerId, peer))
         {
+            logger.Warn("Failed to add active: {0}, sessionId={1}", peerId, session.SessionId);
             peer.Close(CloseReason.InternalError);
             return false;
         }
@@ -88,9 +92,9 @@ public class PeerManager(ILogger logger, IEngineConfig config)
 
         // 재접속 대기열 추가
         var timeout = config.Session.WaitingReconnectTimeoutSec;
-        var waiting = new WaitingReconnectPeer(peer, timeout);
+        var waiting = new PendingReconnect(peer, timeout);
         
-        if (!_reconnectQueue.TryAdd(peer.PeerId, waiting))
+        if (!_reconnectPendingPeers.TryAdd(peer.PeerId, waiting))
         {
             peer.LeaveServer(CloseReason.InternalError);
             return;
@@ -101,11 +105,15 @@ public class PeerManager(ILogger logger, IEngineConfig config)
 
     public void Terminate(uint peerId, CloseReason reason)
     {
-        _activePeers.TryRemove(peerId, out var p1);
-        _reconnectQueue.TryRemove(peerId, out var p2);
-
-        var target = p1 ?? p2?.Peer;
-        target?.LeaveServer(reason);
+        if (_activePeers.TryRemove(peerId, out var activePeer))
+        {
+            activePeer.LeaveServer(reason);
+            _reconnectPendingPeers.TryRemove(peerId, out _);
+            return;
+        }
+        
+        if (_reconnectPendingPeers.TryRemove(peerId, out var pending))
+            pending.Peer.LeaveServer(reason);
     }
 
     public bool TransitionTo(BasePeer newPeer)
@@ -116,23 +124,32 @@ public class PeerManager(ILogger logger, IEngineConfig config)
 
     public void Update()
     {
-        if (_reconnectQueue.IsEmpty) return;
+        if (_reconnectPendingPeers.IsEmpty) return;
         
-        var now = DateTime.UtcNow;
-        foreach (var (peerId, info) in _reconnectQueue)
+        var nowUtc = DateTime.UtcNow;
+        List<uint> targets = null;
+        
+        foreach (var kvp in _reconnectPendingPeers)
         {
-            if (now < info.ExpireTime) continue;
+            if (!kvp.Value.IsExpired(nowUtc)) continue;
+            targets ??= [];
+            targets.Add(kvp.Key);
+        }
 
-            if (_reconnectQueue.TryRemove(peerId, out var expired))
-            {
-                expired.Peer.LeaveServer(CloseReason.ServerClosing);
-            }
+        if (targets == null) return;
+
+        foreach (var peerId in targets)
+        {
+            if (!_reconnectPendingPeers.TryRemove(peerId, out var pending)) continue;
+            logger.Debug("Reconnect timeout for PeerId: {0}.", peerId);
+            pending.Peer.LeaveServer(CloseReason.TimeOut);
         }
     }
     
-    private sealed class WaitingReconnectPeer(BasePeer peer, int timeOutSec)
+    private readonly struct PendingReconnect(BasePeer peer, int timeoutSec)
     {
         public BasePeer Peer { get; } = peer;
-        public DateTime ExpireTime { get; } = DateTime.UtcNow.AddSeconds(timeOutSec);
+        public DateTime ExpireTime { get; } = DateTime.UtcNow.AddSeconds(timeoutSec);
+        public bool IsExpired(DateTime now) => now >= ExpireTime;
     }
 }

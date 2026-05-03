@@ -4,7 +4,9 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
+using SP.Core.Logging;
 using SP.Engine.Runtime;
+using SP.Engine.Server.Logging;
 
 namespace SP.Engine.Server;
 
@@ -65,6 +67,8 @@ public abstract class BaseNetworkSession : INetworkSession
     public bool IsIdle => (_socketState & ((int)SocketState.InSending | (int)SocketState.InReceiving)) == 0;
     public bool IsInClosingOrClosed => _socketState >= (int)SocketState.InClosing;
     
+    public ILogger Logger => Session.Logger;
+    
     public event Action<INetworkSession, CloseReason> Closed
     {
         add => _closed += value;
@@ -80,11 +84,12 @@ public abstract class BaseNetworkSession : INetworkSession
 
     protected void DecrementIo()
     {
-        if (Interlocked.Decrement(ref _pendingIoCount) != 0) return;
-        
-        if (IsInClosingOrClosed)
+        if (Interlocked.Decrement(ref _pendingIoCount) == 0)
         {
-            OnClosed(_finalReason);
+            if (IsInClosingOrClosed)
+            {
+                OnClosed(_finalReason);
+            }
         }
     }
     
@@ -179,7 +184,7 @@ public abstract class BaseNetworkSession : INetworkSession
         logBuilder.AppendLine("StackTrace:");
         logBuilder.AppendLine(e.StackTrace);
         
-        Session.Logger.Error(logBuilder.ToString());
+        Logger.Error(logBuilder.ToString());
     }
 
     private bool ShouldIgnoreError(Exception e)

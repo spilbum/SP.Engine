@@ -9,11 +9,12 @@ namespace SP.Engine.Runtime.Networking
         {
         }
         
-        public UdpMessage(UdpHeader header, IMemoryOwner<byte> bodyOwner) : base(header, bodyOwner)
+        public UdpMessage(UdpHeader header, IMemoryOwner<byte> bodyOwner, int bodyLength) 
+            : base(header, bodyOwner, bodyLength)
         {
         }
 
-        public int Size => UdpHeader.ByteSize + _bodyOwner.Memory.Length;
+        public int Size => UdpHeader.ByteSize + BodyLength;
 
         public void SetSessionId(long sessionId)
         {
@@ -26,19 +27,18 @@ namespace SP.Engine.Runtime.Networking
         public void WriteTo(Span<byte> destination)
         {
             const int hSize = UdpHeader.ByteSize;
-            var bodyLength = _bodyOwner?.Memory.Length ?? 0;
 
             var header = new UdpHeaderBuilder()
                 .From(Header)
                 .WithFragmented(0)
-                .WithBodyLength(bodyLength)
+                .WithBodyLength(BodyLength)
                 .Build();
             
             header.WriteTo(destination[..hSize]);
 
-            if (bodyLength > 0)
+            if (BodyLength > 0)
             {
-                _bodyOwner?.Memory.Span.CopyTo(destination.Slice(hSize, bodyLength));
+                BodySpan.CopyTo(destination.Slice(hSize, BodyLength));
             }
         }
 
@@ -59,7 +59,7 @@ namespace SP.Engine.Runtime.Networking
             var fh = new UdpFragmentHeader(fragId, index, totalCount, fragLen);
             fh.WriteTo(destination.Slice(hSize, fHeaderSize));
             
-            _bodyOwner?.Memory.Span.Slice(bodyOffset, fragLen).CopyTo(destination.Slice(hSize + fHeaderSize, fragLen));
+            BodySpan.Slice(bodyOffset, fragLen).CopyTo(destination.Slice(hSize + fHeaderSize, fragLen));
         }
 
         protected override UdpHeader CreateHeader(HeaderFlags flags, ushort protocolId, int bodyLength)

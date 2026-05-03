@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 
 namespace SP.Engine.Server;
@@ -46,10 +47,11 @@ public sealed class SegmentQueue(ArraySegment<byte>[] globalQueue, int baseOffse
 
     public bool Enqueue(ArraySegment<byte> item, ushort trackId)
     {
-        if (_enqueueBlocked) return false;   
-
+        if (_enqueueBlocked) return false;
+        
         // 진행 중인 쓰기 작업 카운팅
         Interlocked.Increment(ref _pendingWriteCount);
+        
         try
         {
             while (!_enqueueBlocked)

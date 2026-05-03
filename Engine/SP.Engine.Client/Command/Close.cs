@@ -12,13 +12,13 @@ namespace SP.Engine.Client.Command
             if (context.State == NetPeerState.Closing)
             {
                 // 클라이언트 요청으로 받은 경우, 즉시 종료함
+                context.Logger.Debug("Ack close handshake. state: {0}", context.State);
                 context.CloseWithoutHandshake();
                 return;
             }
             
             // 서버 요청으로 종료함
             context.Close();
-            context.Logger.Debug("");
         }
     }
 }

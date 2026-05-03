@@ -245,7 +245,7 @@ internal sealed class SocketServer(IBaseEngine engine, ListenerInfo[] listenerIn
         var session = CreateSession(client, ns);
         if (session != null)
         {
-            engine.AsyncRun(ns.StartReceive);
+            engine.AsyncRun(ns.Start);
         }
         else
         {

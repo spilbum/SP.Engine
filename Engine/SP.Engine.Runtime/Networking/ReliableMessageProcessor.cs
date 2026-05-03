@@ -6,30 +6,36 @@ using SP.Core;
 
 namespace SP.Engine.Runtime.Networking
 {
-
     public sealed class ReliableSender : IDisposable
     {
         private readonly object _lock = new object();
-        private readonly SortedDictionary<uint, RetransmissionTracker> _states = new SortedDictionary<uint, RetransmissionTracker>();
+
+        private readonly SortedDictionary<uint, RetransmissionTracker> _states =
+            new SortedDictionary<uint, RetransmissionTracker>();
+
+        private readonly SortedSet<RetransmissionTracker> _timeoutOrder = new SortedSet<RetransmissionTracker>(new TrackerComparer());
+        private readonly RetransmissionTrackerPool _pool = new RetransmissionTrackerPool();
         private bool _disposed;
-        
+
         public int MessageCount
         {
             get
-            { 
+            {
                 lock (_lock) return _states.Count;
             }
         }
 
         public void Register(TcpMessage message, int initRtoMs, int maxAttempts)
         {
-            if (_disposed) return;
-            
             lock (_lock)
             {
-                var state = new RetransmissionTracker(message, initRtoMs, maxAttempts);
+                if (_disposed) return;
+
+                var state = _pool.Rent(message, initRtoMs, maxAttempts);
                 state.Message.Retain();
-                _states.Add(message.SequenceNumber, state);   
+
+                _states.Add(message.SequenceNumber, state);
+                _timeoutOrder.Add(state);
             }
         }
 
@@ -41,13 +47,16 @@ namespace SP.Engine.Runtime.Networking
 
                 while (_states.Count > 0)
                 {
-                    var first = _states.Keys.First();
-                    if ((int)(first - remoteAckNumber) >= 0) break;
+                    // 가장 작은 시퀀스 번호 확인
+                    var firstKey = _states.Keys.First(); 
+            
+                    // remoteAckNumber보다 작으면 제거 대상 (Unsigned overflow 고려)
+                    if ((int)(firstKey - remoteAckNumber) >= 0) break;
 
-                    if (_states.Remove(first, out var state))
-                    {
-                        state.Message.Dispose();
-                    }
+                    if (!_states.Remove(firstKey, out var state)) continue;
+                    _timeoutOrder.Remove(state);
+                    state.Message.Dispose();
+                    _pool.Return(state);
                 }
             }
         }
@@ -55,36 +64,40 @@ namespace SP.Engine.Runtime.Networking
         public (List<TcpMessage> Retries, List<TcpMessage> Failed) ProcessRetransmissions(RtoEstimator rto)
         {
             var now = DateTime.UtcNow;
-            var retries = new List<TcpMessage>();
-            var failed = new List<TcpMessage>();
+            List<TcpMessage> retries = null;
+            List<TcpMessage> failed = null;
 
             lock (_lock)
             {
                 if (_disposed) return default;
-                
-                var keysToRemove = _states
-                    .Where(kvp => kvp.Value.IsTimeout(now) && kvp.Value.IsExhausted)
-                    .Select(kvp => kvp.Key)
-                    .ToList();
 
-                foreach (var key in keysToRemove)
+                while (_timeoutOrder.Count > 0)
                 {
-                    if (_states.Remove(key, out var state))
+                    var minTracker = _timeoutOrder.Min;
+                    if (!minTracker.IsTimeout(now)) break;
+
+                    _timeoutOrder.Remove(minTracker);
+
+                    if (minTracker.IsExhausted)
                     {
-                        failed.Add(state.Message);
+                        failed ??= new List<TcpMessage>();
+                        failed.Add(minTracker.Message);
+                        _states.Remove(minTracker.Message.SequenceNumber);
+                        _pool.Return(minTracker);
+                    }
+                    else
+                    {
+                        var nextRto = rto.GetRtoMs(minTracker.CurrentAttempt);
+                        minTracker.RecordRetryAttempt(nextRto);
+                        
+                        retries ??= new List<TcpMessage>();
+                        retries.Add(minTracker.Message);
+
+                        _timeoutOrder.Add(minTracker);
                     }
                 }
-
-                foreach (var (seq, state) in _states)
-                {
-                    if (!state.IsTimeout(now)) continue;
-
-                    var nextRto = rto.GetRtoMs(state.CurrentAttempt);
-                    state.RecordRetryAttempt(nextRto);
-                    retries.Add(state.Message);
-                }
             }
-            
+
             return (retries, failed);
         }
 
@@ -92,7 +105,14 @@ namespace SP.Engine.Runtime.Networking
         {
             lock (_lock)
             {
-                foreach (var state in _states.Values) state.Restart();
+                if (_disposed || _states.Count == 0) return;
+                _timeoutOrder.Clear();
+                
+                foreach (var state in _states.Values)
+                {
+                    state.Restart();
+                    _timeoutOrder.Add(state);
+                }
             }
         }
 
@@ -103,17 +123,53 @@ namespace SP.Engine.Runtime.Networking
                 if (_disposed) return;
                 _disposed = true;
                 foreach (var state in _states.Values) state.Message.Dispose();
-                _states.Clear();   
+                _states.Clear();
             }
+        }
+
+        private class TrackerComparer : IComparer<RetransmissionTracker>
+        {
+            public int Compare(RetransmissionTracker x, RetransmissionTracker y)
+            {
+                var result = x!.NextTimeoutUtc.CompareTo(y!.NextTimeoutUtc);
+                return result == 0 
+                    ? x.Message.SequenceNumber.CompareTo(y.Message.SequenceNumber) 
+                    : result;
+            }
+        }
+
+        private class RetransmissionTrackerPool
+        {
+            private readonly Stack<RetransmissionTracker> _pool = new Stack<RetransmissionTracker>();
+            private readonly object _lock = new object();
+
+            public RetransmissionTracker Rent(TcpMessage message, int rto, int maxAttempts)
+            {
+                lock (_lock)
+                {
+                    if (_pool.Count <= 0)
+                        return new RetransmissionTracker(message, rto, maxAttempts);
+                    
+                    var t = _pool.Pop();
+                    t.Reset(message, rto, maxAttempts);
+                    return t;
+                }
+            }
+
+            public void Return(RetransmissionTracker tracker)
+            {
+                tracker.Clear();
+                lock (_lock) { _pool.Push(tracker); }
+            }   
         }
         
         private class RetransmissionTracker
         {
-            public TcpMessage Message { get; }
-            public int MaxAttempts { get; }
+            public TcpMessage Message { get; private set; }
+            public int MaxAttempts { get; private set; }
             public int CurrentAttempt { get; private set; }
             public int CurrentRtoMs { get; private set; }
-            private DateTime _nextTimeoutUtc;
+            public DateTime NextTimeoutUtc { get; private set; }
 
             public RetransmissionTracker(TcpMessage message, int initRtoMs, int maxAttempts)
             {
@@ -124,7 +180,7 @@ namespace SP.Engine.Runtime.Networking
                 ScheduleNextTimeout();
             }
             
-            public bool IsTimeout(DateTime nowUtc) => nowUtc >= _nextTimeoutUtc;
+            public bool IsTimeout(DateTime nowUtc) => nowUtc >= NextTimeoutUtc;
             public bool IsExhausted => CurrentAttempt >= MaxAttempts;
 
             public void RecordRetryAttempt(int nextRtoMs)
@@ -136,13 +192,27 @@ namespace SP.Engine.Runtime.Networking
 
             private void ScheduleNextTimeout()
             {
-                _nextTimeoutUtc = DateTime.UtcNow.AddMilliseconds(CurrentRtoMs);
+                NextTimeoutUtc = DateTime.UtcNow.AddMilliseconds(CurrentRtoMs);
             }
 
             public void Restart()
             {
                 CurrentAttempt = 0;
                 ScheduleNextTimeout();
+            }
+
+            public void Reset(TcpMessage message, int initRtoMs, int maxAttempts)
+            {
+                Message = message;
+                CurrentAttempt = 0;
+                CurrentRtoMs = initRtoMs;
+                MaxAttempts = maxAttempts;
+                ScheduleNextTimeout();
+            }
+
+            public void Clear()
+            {
+                CurrentAttempt = 0;
             }
         }
     }

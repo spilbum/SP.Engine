@@ -2,10 +2,12 @@
 using System.Net;
 using System.Threading;
 using SP.Core.Logging;
+using SP.Engine.Protocol;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Channel;
 using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Networking;
+using SP.Engine.Runtime.Protocol;
 using SP.Engine.Server.Configuration;
 
 namespace SP.Engine.Server;
@@ -13,6 +15,14 @@ namespace SP.Engine.Server;
 public interface IBaseSession : ICommandContext
 {
     public long SessionId { get; }
+}
+
+public enum SessionState
+{
+    None = 0,
+    Connected,
+    Closing,
+    Closed
 }
 
 public abstract class BaseSession : IBaseSession, IDisposable
@@ -23,6 +33,8 @@ public abstract class BaseSession : IBaseSession, IDisposable
     private long _sessionId;
     private TcpNetworkSession _tcpSession;
     private long _lastActiveTimeTicks;
+    
+    protected volatile int _state = (int)SessionState.None;
 
     public UdpNetworkSession UdpSession { get; private set; }
     
@@ -44,13 +56,15 @@ public abstract class BaseSession : IBaseSession, IDisposable
 
     public IPEndPoint LocalEndPoint => _tcpSession?.LocalEndPoint;
     public IPEndPoint RemoteEndPoint => _tcpSession?.RemoteEndPoint;
-    public bool IsClosed => _tcpSession?.IsClosed ?? true;
+    
     public ILogger Logger => _engine?.Logger;
     public IEngineConfig Config => _engine?.Config;
     public DateTime StartTime { get; }
     public CloseReason CloseReason { get; private set; }
     public bool IsAuthenticated { get; protected set; }
-    public bool IsClosing { get; protected set; }
+    public bool IsClosing => (SessionState)_state == SessionState.Closing;
+    public bool IsClosed => (SessionState)_state == SessionState.Closed;
+    
     public DateTime StartClosingTime { get; protected set; }
     
     protected BaseSession()
@@ -112,9 +126,9 @@ public abstract class BaseSession : IBaseSession, IDisposable
 
         try
         {
-            while (_receiveBuffer.TryExtract(Config.Network.MaxFrameBytes, out var header, out var bodyOwner))
+            while (_receiveBuffer.TryExtract(Config.Network.MaxFrameBytes, out var header, out var bodyOwner, out var bodyLength))
             {
-                var message = new TcpMessage(header, bodyOwner);
+                var message = new TcpMessage(header, bodyOwner, bodyLength);
                 MessageReceived(message);
             }
         }
@@ -154,6 +168,11 @@ public abstract class BaseSession : IBaseSession, IDisposable
 
     public virtual void Close(CloseReason reason)
     {
+        var prevState = (SessionState)Interlocked.Exchange(ref _state, (int)SessionState.Closed);
+        if (prevState == SessionState.Closed) return;
+        
+        Logger.Debug("Session {0} closed. reason: {1}", SessionId, reason);
+        
         if (_tcpSession != null)
         {
             _router.Unbind(ChannelKind.Reliable);

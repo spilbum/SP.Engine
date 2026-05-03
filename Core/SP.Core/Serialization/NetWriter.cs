@@ -1,5 +1,4 @@
 using System;
-using System.Buffers;
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -8,24 +7,24 @@ namespace SP.Core.Serialization
 {
     public sealed class NetWriter : IDisposable
     {
-        private readonly ArrayBufferWriter<byte> _buffer;
+        private readonly PooledBuffer _buffer;
         private bool _disposed;
 
         public NetWriter(int initialCapacity = 1024)
         {
-            _buffer = new ArrayBufferWriter<byte>(initialCapacity);
+            _buffer = new PooledBuffer(initialCapacity);
         }
 
         public void Dispose()
         {
             if (_disposed) return;
             _disposed = true;
-            _buffer.Clear();
+            _buffer.Dispose();
         }
 
         public byte[] ToArray() => _buffer.WrittenSpan.ToArray();
-        public int WrittenCount => _buffer.WrittenCount;
         public ReadOnlySpan<byte> WrittenSpan => _buffer.WrittenSpan;
+        public int WrittenCount => _buffer.WrittenCount;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private Span<byte> GetSpan(int sizeHint) => _buffer.GetSpan(sizeHint);
