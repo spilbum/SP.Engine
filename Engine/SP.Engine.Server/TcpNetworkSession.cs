@@ -1,12 +1,10 @@
 ﻿using System;
-using System.Diagnostics;
 using System.Linq;
 using System.Net.Sockets;
 using System.Threading;
 using SP.Core.Logging;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Networking;
-using SP.Engine.Server.Logging;
 
 namespace SP.Engine.Server;
 
@@ -21,7 +19,7 @@ public class TcpNetworkSession : BaseNetworkSession, ITcpNetworkSession
     private readonly IObjectPool<SegmentQueue> _sendingQueuePool;
     private SocketAsyncEventArgs _sendEventArgs;
     private volatile int _inSendingFlag;
-    private readonly SessionSendBuffer _sendBuffer = new(1024 * 64);
+    private readonly SessionSendBuffer _sendBuffer;
     private Timer _resumePendingTimeoutTimer;
     private readonly object _timerLock = new();
     
@@ -34,15 +32,16 @@ public class TcpNetworkSession : BaseNetworkSession, ITcpNetworkSession
         ReceiveContext.Initialize(this);
         
         _sendingQueuePool = sendingQueuePool;
-        if (_sendingQueuePool.TryRent(out _sendingQueue))
-            _sendingQueue.StartEnqueue();
-        else
+        if (!_sendingQueuePool.TryRent(out _sendingQueue))
         {
             throw new InvalidOperationException("Failed to rent segment queue.");
         }
         
+        _sendingQueue.StartEnqueue();
+        
         _sendEventArgs = new SocketAsyncEventArgs();
         _sendEventArgs.Completed += OnSendCompleted;
+        _sendBuffer = new SessionSendBuffer(1024 * 64);
     }
 
     public void Start()
@@ -52,6 +51,8 @@ public class TcpNetworkSession : BaseNetworkSession, ITcpNetworkSession
     
     private void StartReceive(SocketAsyncEventArgs e)
     {
+        if (IsPaused || IsClosed) return;
+        
         if (!IncrementIo()) return;
         
         if (!TryAddState(SocketState.InReceiving))
@@ -60,6 +61,10 @@ public class TcpNetworkSession : BaseNetworkSession, ITcpNetworkSession
             return;
         }
         
+        var offset = ReceiveContext.OriginOffset;
+        if (e.Offset != offset)
+            e.SetBuffer(offset, Session.Config.Network.ReceiveBufferSize);
+
         try
         {
             if (!_client.ReceiveAsync(e))
@@ -113,20 +118,18 @@ public class TcpNetworkSession : BaseNetworkSession, ITcpNetworkSession
     {
         if (IsClosed) return false;
 
-        if (!_sendBuffer.TryReserve(message.Size, out var segment, out var span))
+        if (!_sendBuffer.TryReserve(message.Size, out var segment)) 
             return false;
         
-        message.WriteTo(span);
+        message.WriteTo(segment.AsSpan());
         
-        Send(segment);
-        return true;
-    }
-    
-    private void Send(ArraySegment<byte> segment)
-    {
-        if (IsClosed || !_sendingQueue.Enqueue(segment, _sendingQueue.TrackId)) return;
+        if (!_sendingQueue.Enqueue(segment, _sendingQueue.TrackId)) 
+            return false;
+
         if (Interlocked.CompareExchange(ref _inSendingFlag, 1, 0) == 0)
             ExecuteSend(false);
+        
+        return true;
     }
     
     private void ExecuteSend(bool isContinuation)
@@ -199,7 +202,7 @@ public class TcpNetworkSession : BaseNetworkSession, ITcpNetworkSession
         if (e.BytesTransferred > 0)
             _sendBuffer.Release(e.BytesTransferred);
 
-        var totalRequested = (e.BufferList != null)
+        var totalRequested = e.BufferList != null
             ? _sendingQueue.Sum(s => s.Count)
             : e.Count;
 
@@ -238,6 +241,8 @@ public class TcpNetworkSession : BaseNetworkSession, ITcpNetworkSession
         if (IsPaused) return;
         if (!TryAddState(SocketState.Paused)) return;
         
+        Logger.Debug("Session {0} is Paused", Session.SessionId);
+        
         lock (_timerLock)
         {
             _resumePendingTimeoutTimer?.Dispose();
@@ -256,13 +261,18 @@ public class TcpNetworkSession : BaseNetworkSession, ITcpNetworkSession
         if (!IsPaused) return;
         if (!RemoveState(SocketState.Paused)) return;
 
+        Logger.Debug("Session {0} is Resume.", Session.SessionId);
+        
         lock (_timerLock)
         {
             _resumePendingTimeoutTimer?.Dispose();
             _resumePendingTimeoutTimer = null;
         }
 
-        Start();
+        if (!HasState(SocketState.InReceiving))
+        {
+            Start();
+        }
     }
     
     protected override void OnRelease()

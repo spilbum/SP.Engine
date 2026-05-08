@@ -1,13 +1,14 @@
 ﻿using System;
+using System.Buffers;
 using System.Net;
+using System.Net.Sockets;
 using System.Threading;
+using SP.Core;
 using SP.Core.Logging;
-using SP.Engine.Protocol;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Channel;
 using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Networking;
-using SP.Engine.Runtime.Protocol;
 using SP.Engine.Server.Configuration;
 
 namespace SP.Engine.Server;
@@ -31,17 +32,17 @@ public abstract class BaseSession : IBaseSession, IDisposable
     private BaseEngine _engine;
     private SessionReceiveBuffer _receiveBuffer;
     private long _sessionId;
-    private TcpNetworkSession _tcpSession;
+    private volatile TcpNetworkSession _tcpSession;
+    private readonly object _udpSessionLock = new();
     private long _lastActiveTimeTicks;
-    
+    protected volatile UdpNetworkSession _udpSession;
     protected volatile int _state = (int)SessionState.None;
-
-    public UdpNetworkSession UdpSession { get; private set; }
     
     public bool IsPaused => _tcpSession?.IsPaused ?? true;
     public void PauseReceive() => _tcpSession?.PauseReceive();
     public void ResumeReceive() => _tcpSession?.ResumeReceive();
 
+    public UdpNetworkSession UdpSession => _udpSession;
     public long SessionId
     {
         get => Interlocked.Read(ref _sessionId);
@@ -80,22 +81,39 @@ public abstract class BaseSession : IBaseSession, IDisposable
         _tcpSession = tcpSession;
         _router.Bind(new ReliableChannel(tcpSession));
         _receiveBuffer = new SessionReceiveBuffer(Config.Network.ReceiveBufferSize);
+        
+        tcpSession.Closed += OnTcpSessionClosed;
     }
-    
+
+    private void OnTcpSessionClosed(INetworkSession ns, CloseReason reason)
+    {
+        if (Interlocked.Exchange(ref _state, (int)SessionState.Closed) == (int)SessionState.Closed) return;
+        
+        Logger.Debug("Session {0} closed (event). reason: {1}", SessionId, reason);
+        
+        _router.Unbind(ChannelKind.Reliable);
+        Interlocked.Exchange(ref _tcpSession, null);
+        
+        var udp = Interlocked.Exchange(ref _udpSession, null);
+        if (udp != null)
+        {
+            udp.Close(reason);
+            _router.Unbind(ChannelKind.Unreliable);
+        }
+        
+        CloseReason = reason;
+    }
+
+
     TProtocol ICommandContext.Deserialize<TProtocol>(IMessage message)
         => message.Deserialize<TProtocol>(null, null);
 
-    public void BindUdpSession(UdpNetworkSession udpSession)
-    {
-        UdpSession = udpSession;
-    }
-
     public void CleanupFragmentAssembler()
     {
-        if (UdpSession == null) return;
+        if (_udpSession == null) return;
         
         var now = DateTime.UtcNow;
-        UdpSession.Assembler.Cleanup(now);
+        _udpSession.Assembler.Cleanup(now);
     }
 
     protected void EnableUdp()
@@ -120,9 +138,9 @@ public abstract class BaseSession : IBaseSession, IDisposable
         }
     }
 
-    public void ProcessTcpBuffer(byte[] data, int offset, int length)
+    public void ProcessTcpBuffer(byte[] buffer, int offset, int length)
     {
-        if (IsClosed || !_receiveBuffer.Write(data.AsSpan(offset, length))) return;
+        if (IsClosed || !_receiveBuffer.Write(buffer.AsSpan(offset, length))) return;
 
         try
         {
@@ -139,20 +157,56 @@ public abstract class BaseSession : IBaseSession, IDisposable
         }
     }
 
-    public void ProcessUdpBuffer(byte[] data, int offset, int length)
+    public UdpNetworkSession ResolveUdpSession(Socket socket, IPEndPoint remoteEndPoint)
     {
-        if (UdpSession == null) return;
+        if (_udpSession == null)
+        {
+            lock (_udpSessionLock)
+            {
+                if (_udpSession == null)
+                {
+                    var ns = new UdpNetworkSession(this, socket, remoteEndPoint, Config.Network);
+                    _udpSession = ns; 
+                    _router.Bind(new UnreliableChannel(ns));
+                    Logger.Debug("Binding UDP session {0}. EP: {1}", _sessionId, remoteEndPoint);
+                }
+            }
+        }
+        
+        var udp = _udpSession;
+        // 이동통신망(LTE/5G <-> Wi-Fi) 전환 등으로 인한 IP 변경 대응
+        udp?.UpdateRemoteEndPoint(remoteEndPoint);
+        return udp;
+    }
 
+    public void HandleUdpMessage(UdpHeader header, ReadOnlySpan<byte> bodyData)
+    {
         try
         {
-            if (UdpSession.Assembler.TryPush(data.AsSpan(offset, length), out var message))
+            if (header.IsFragmented)
             {
+                if (_udpSession.Assembler.TryPush(header, bodyData, out var message))
+                {
+                    MessageReceived(message);
+                }
+            }
+            else
+            {
+                IMemoryOwner<byte> owner = null;
+                if (header.BodyLength > 0)
+                {
+                    var pooled = new PooledBuffer(header.BodyLength);
+                    bodyData.CopyTo(pooled.Memory.Span);
+                    owner = pooled;
+                }
+            
+                var message = new UdpMessage(header, owner, header.BodyLength);
                 MessageReceived(message);
             }
         }
         catch (Exception ex)
         {
-            Logger.Error(ex, "Error processing UDP buffer. sessionId={0}", SessionId);
+            Logger.Error(ex);
         }
     }
 
@@ -161,30 +215,24 @@ public abstract class BaseSession : IBaseSession, IDisposable
         LastActiveTimeTicks = DateTime.UtcNow.Ticks;
     }
 
-    protected void SetMtu(ushort mtu)
-    {
-        UdpSession?.SetMtu(mtu);
-    }
-
     public virtual void Close(CloseReason reason)
     {
-        var prevState = (SessionState)Interlocked.Exchange(ref _state, (int)SessionState.Closed);
-        if (prevState == SessionState.Closed) return;
+        if (Interlocked.Exchange(ref _state, (int)SessionState.Closed) == (int)SessionState.Closed) return;
         
         Logger.Debug("Session {0} closed. reason: {1}", SessionId, reason);
         
-        if (_tcpSession != null)
+        var tcp = Interlocked.Exchange(ref _tcpSession, null);
+        if (tcp != null)
         {
+            tcp.Close(reason);
             _router.Unbind(ChannelKind.Reliable);
-            _tcpSession.Close(reason);
-            _tcpSession = null;
         }
-
-        if (UdpSession != null)
+        
+        var udp = Interlocked.Exchange(ref _udpSession, null);
+        if (udp != null)
         {
+            udp.Close(reason);
             _router.Unbind(ChannelKind.Unreliable);
-            UdpSession.Close(reason);
-            UdpSession = null;
         }
 
         CloseReason = reason;

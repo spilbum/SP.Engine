@@ -24,8 +24,6 @@ public static class TickExtensions
 
 public interface IBaseEngine : ILogContext
 {
-    IEngineConfig Config { get; }
-    IBaseSession CreateSession(TcpNetworkSession networkSession);
 }
 
 internal interface ISocketServerAccessor
@@ -447,7 +445,7 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
         }
     }
     
-    IBaseSession IBaseEngine.CreateSession(TcpNetworkSession ns)
+    internal IBaseSession CreateSession(TcpNetworkSession ns)
     {
         var session = _sessionManager.CreateSession(this, ns);
         if (session == null) return null;
@@ -468,7 +466,7 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
 
         Logger.Debug("The session {0} has been closed. reason={1}", session.SessionId, reason);
         _sessionManager.RemoveSession(session.SessionId);
-        OnSessionClosed(session, reason);
+        OnSessionClosed((Session)session, reason);
     }
 
     private void EnqueueAuthHandshakePending(BaseSession session)

@@ -19,15 +19,20 @@ namespace SP.Engine.Runtime.Networking
             FragLength = fragLength;
         }
 
-        public static UdpFragmentHeader Read(ReadOnlySpan<byte> source)
+        public static bool TryRead(ReadOnlySpan<byte> source, out UdpFragmentHeader header, out int byteConsumed)
         {
-            if (source.Length < ByteSize) return default;
+            header = default;
+            byteConsumed = 0;
+
+            if (source.Length < ByteSize) return false;
 
             var fragId = source.ReadUInt32(0);
             var index = source[4];
             var totalCount = source[5];
             var fragLength = source.ReadUInt16(6);
-            return new UdpFragmentHeader(fragId, index, totalCount, fragLength);
+            header = new UdpFragmentHeader(fragId, index, totalCount, fragLength);
+            byteConsumed = ByteSize;
+            return true;
         }
 
         public void WriteTo(Span<byte> dst)

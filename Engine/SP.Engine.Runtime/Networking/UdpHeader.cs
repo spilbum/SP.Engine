@@ -8,17 +8,17 @@ namespace SP.Engine.Runtime.Networking
 
         public HeaderFlags Flags { get; }
         public long SessionId { get; }
-        public ushort Id { get; }
+        public ushort ProtocolId { get; }
         public byte Fragmented { get; }
         public int BodyLength { get; }
         
         public bool IsFragmented => Fragmented == 1;
 
-        public UdpHeader(HeaderFlags flags, long sessionId, ushort id, byte fragmented, int bodyLength)
+        public UdpHeader(HeaderFlags flags, long sessionId, ushort protocolId, byte fragmented, int bodyLength)
         {
             Flags = flags;
             SessionId = sessionId;
-            Id = id;
+            ProtocolId = protocolId;
             Fragmented = fragmented;
             BodyLength = bodyLength;
         }
@@ -32,21 +32,26 @@ namespace SP.Engine.Runtime.Networking
         {
             destination[0] = (byte)Flags;
             destination.WriteInt64(1, SessionId);
-            destination.WriteUInt16(9, Id);
+            destination.WriteUInt16(9, ProtocolId);
             destination[11] = Fragmented;
             destination.WriteInt32(12, BodyLength);
         }
 
-        public static UdpHeader Read(ReadOnlySpan<byte> source)
+        public static bool TryRead(ReadOnlySpan<byte> source, out UdpHeader header, out int byteConsumed)
         {
-            if (source.Length < ByteSize) return default;
+            header = default;
+            byteConsumed = 0;
+            
+            if (source.Length < ByteSize) return false;
 
             var flags = (HeaderFlags)source[0];
             var sessionId = source.ReadInt64(1);
             var protocolId = source.ReadUInt16(9);
             var fragmented = source[11];
             var bodyLength = source.ReadInt32(12);
-            return new UdpHeader(flags, sessionId, protocolId, fragmented, bodyLength);
+            header = new UdpHeader(flags, sessionId, protocolId, fragmented, bodyLength);
+            byteConsumed = ByteSize;
+            return true;
         }
     }
 
@@ -62,7 +67,7 @@ namespace SP.Engine.Runtime.Networking
         {
             _flags = header.Flags;
             _sessionId = header.SessionId;
-            _protocolId = header.Id;
+            _protocolId = header.ProtocolId;
             _fragmented = header.Fragmented;
             _bodyLength = header.BodyLength;
             return this;

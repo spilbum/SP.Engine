@@ -6,7 +6,7 @@ namespace SP.Engine.Runtime
         Ok,
         InternalError,
         InvalidRequest,
-        SessionNotFound,
+        PeerNotFound,
         ReconnectionNotAllowed,
         KeyExchangeFailed
     }

@@ -31,6 +31,12 @@ public class ClientManager(EngineConfig config, ILogger logger)
         await AddConnectAsync(count, delayMs);
     }
 
+    public void Stop()
+    {
+        IsRunning = false;
+        foreach (var client in _clients) client.Close();
+    }
+
     public async Task AddConnectAsync(int count, int delayMs)
     {
         if (!IsRunning) return;
@@ -69,20 +75,30 @@ public class ClientManager(EngineConfig config, ILogger logger)
             await Task.Delay(10);
         }
     }
+    
+    private readonly object _lock = new();
 
-    public void StartEchoTest(string type, int period, int batch)
+    public void StartEchoTest(int targetCount, string sendType, int period, int batchCount)
     {
-        var cts = new CancellationTokenSource();
-        foreach (var client in _clients)
+        lock (_lock)
         {
-            _ = client.RunSender(type, period, batch, cts.Token);
+            var targets = _clients.Take(targetCount).ToList();
+            
+            foreach (var client in targets)
+            {
+                client.StartEcho(sendType, period, batchCount);
+            }
+            
+            Logger.Info($"Echo test started for {targets.Count} clients (SendType: {sendType})");
         }
     }
 
-    public void StopAll()
+    public void StopEchoTest()
     {
-        IsRunning = false;
-        foreach (var client in _clients) client.Close();
-        _clients.Clear();
+        lock (_lock)
+        {
+            foreach (var client in _clients) client.StopEcho();
+            logger.Info("All echo tests stopped");
+        }
     }
 }

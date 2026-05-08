@@ -27,8 +27,6 @@ namespace SP.Engine.Runtime.Networking
             get { lock (_lock) { return _available; } }
         }
         
-        public int Capacity => _capacity;
-
         public SessionReceiveBuffer(int capacity)
         {
             // 2의 거듭제곱 크기로 보정하여 마스킹 연산이 가능하도록 함
@@ -66,7 +64,7 @@ namespace SP.Engine.Runtime.Networking
                 return true;
             }
         }
-
+        
         /// <summary>
         /// 완성된 패킷 프레임을 추출합니다.
         /// </summary>
@@ -85,41 +83,42 @@ namespace SP.Engine.Runtime.Networking
                 Span<byte> headerSpan = stackalloc byte[headerSize];
                 CopyToInternal(_head, headerSize, headerSpan);
 
-                if (!TcpHeader.TryRead(headerSpan, out var tempHeader, out var consumed))
-                    return false;
+                if (!TcpHeader.TryRead(headerSpan, out var tempHeader, out var byteConsumed)) return false;
                 
                 // 전체 패킷이 도착했는지 확인
                 var bodyLen = tempHeader.BodyLength;
-                var totalNeed = consumed + bodyLen;
+                var totalNeed = byteConsumed + bodyLen;
                 
                 if (_available < totalNeed) return false;
 
-                if (bodyLen > maxFrameBytes)
-                    throw new InvalidDataException($"Message body too large: {bodyLen}, max: {maxFrameBytes}");
-
+                if (bodyLen < 0 || bodyLen > maxFrameBytes)
+                {
+                    throw new InvalidDataException($"Corrupted packet detected. PID: {tempHeader.ProtocolId}, BodyLen: {bodyLen}, A: {_available}, C: {_capacity}, H: {_head}, T: {_tail}");
+                }
+                
                 header = tempHeader;
                 
                 // 본문 데이터 추출
-                if (bodyLen> 0)
+                if (bodyLen > 0)
                 {
-                    var bodyStartIdx = (_head + consumed) & _mask;
+                    var bodyStartIdx = (_head + byteConsumed) & _mask;
                     var pooled = new PooledBuffer(bodyLen);
-                    CopyToInternal(bodyStartIdx, bodyLen, pooled.GetSpan());
+                    CopyToInternal(bodyStartIdx, bodyLen, pooled.Memory.Span);
+                    
                     bodyOwner = pooled;
                     bodyLength = bodyLen;
                 }
                 
-                // 상태 일괄 갱신
+                // 상태 갱신
                 _head = (_head + totalNeed) & _mask;
                 _available -= totalNeed;
-
+                
                 // 버퍼가 완전히 비었을 경우 포인터 초기화로 파편화 방지
                 if (_available == 0)
                 {
-                    _head = 0;
-                    _tail = 0;
+                    _head = _tail = 0;
                 }
-                
+
                 return true;
             }
         }

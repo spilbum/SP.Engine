@@ -6,6 +6,7 @@ namespace SP.Engine.Server;
 public sealed class SocketReceiveContext : IDisposable
 {
     private bool _disposed;
+    
     public SocketAsyncEventArgs SocketEventArgs { get; }
     public int OriginOffset { get; }
 

@@ -51,11 +51,12 @@ namespace SP.Core
         private byte[] _buffer;
         private int _index;
         private int _disposed;
-        
-        public Memory<byte> Memory { get; private set; }
+
+        public Memory<byte> Memory => _buffer.AsMemory();
         
         public int Capacity => _buffer.Length;
         public int WrittenCount => _index;
+        public ReadOnlyMemory<byte> WrittenMemory => _buffer.AsMemory(0, _index);
         public ReadOnlySpan<byte> WrittenSpan => _buffer.AsSpan(0, _index);
 
         #if DEBUG
@@ -68,7 +69,6 @@ namespace SP.Core
         {
             _buffer = ArrayPool<byte>.Shared.Rent(initialCapacity);
             _index = 0;
-            Memory = new Memory<byte>(_buffer, 0, _buffer.Length);
             
             BufferMetrics.OnRent();
 #if DEBUG
@@ -80,19 +80,24 @@ namespace SP.Core
 
         public Memory<byte> GetMemory(int sizeHint = 0)
         {
+            ThrowIfDisposed();
+            
             CheckAndResizeBuffer(sizeHint);
             return _buffer.AsMemory(_index);
         }
 
         public Span<byte> GetSpan(int sizeHint = 0)
         {
+            ThrowIfDisposed();
+            
             CheckAndResizeBuffer(sizeHint);
             return _buffer.AsSpan(_index);
         }
 
         public void Advance(int count)
         {
-            if (_disposed != 0) throw new ObjectDisposedException(nameof(PooledBuffer));
+            ThrowIfDisposed();
+            
             if (count < 0 || _index + count > _buffer.Length)
                 throw new ArgumentOutOfRangeException(nameof(count));
             _index += count;
@@ -101,50 +106,71 @@ namespace SP.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void CheckAndResizeBuffer(int sizeHint)
         {
-            if (_disposed != 0) throw new ObjectDisposedException(nameof(PooledBuffer));
+            ThrowIfDisposed();
 
-            if (sizeHint <= 0) sizeHint = 1;
-
-            if (_index + sizeHint <= _buffer.Length) return;
+            var size = sizeHint <= 0 ? 1 : sizeHint;
+            if (_index + size <= _buffer.Length) return;
             
-            // 용량 확장
+            Grow(size);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void Grow(int sizeHint)
+        {
             var minCap = _index + sizeHint;
-            var newCap = _buffer.Length * 2;
+            var curCap = _buffer.Length;
+            var newCap = curCap == 0 ? DefaultCapacity : curCap * 2;
+            
             if (newCap < minCap) newCap = minCap;
-                
+            
             var newBuffer = ArrayPool<byte>.Shared.Rent(newCap);
-            // 기존 데이터 복사
-            Buffer.BlockCopy(_buffer, 0, newBuffer, 0, _index);
-            // 기존 버퍼 반납
-            ArrayPool<byte>.Shared.Return(_buffer);
-                
+            if (_index > 0)
+            {
+                _buffer.AsSpan(0, _index).CopyTo(newBuffer);
+            }
+
+            var oldBuffer = _buffer;
             _buffer = newBuffer;
-            Memory = new Memory<byte>(_buffer, 0, _buffer.Length);
+
+            if (oldBuffer != null)
+            {
+                ArrayPool<byte>.Shared.Return(oldBuffer);
+            }
         }
 
         public Span<byte> Slice(int start, int length)
         {
-            if (_disposed != 0) throw new ObjectDisposedException(nameof(PooledBuffer));
+            ThrowIfDisposed();
             return _buffer.AsSpan(start, length);
         }
 
         public ArraySegment<byte> AsSegment(int offset, int count)
         {
-            if (_disposed != 0) throw new ObjectDisposedException(nameof(PooledBuffer));
+            ThrowIfDisposed();
             return new ArraySegment<byte>(_buffer, offset, count);
         }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void ThrowIfDisposed()
+        {
+            if (_disposed != 0) ThrowObjectDisposedException();
+        }
+        
+        [method: MethodImpl(MethodImplOptions.NoInlining)]
+        private static void ThrowObjectDisposedException() => throw new ObjectDisposedException(nameof(PooledBuffer));
 
-        public void Dispose()
+        public void Dispose() => Dispose(false);
+        
+        public void Dispose(bool clearArray)
         {
             if (Interlocked.Exchange(ref _disposed, 1) == 1) return;
             
             var buf = _buffer;
             _buffer = null;
-            Memory = Memory<byte>.Empty;
 
             if (buf != null)
             {
-                ArrayPool<byte>.Shared.Return(buf, clearArray: false);
+                ArrayPool<byte>.Shared.Return(buf, clearArray);
                 BufferMetrics.OnReturn();   
             }
             

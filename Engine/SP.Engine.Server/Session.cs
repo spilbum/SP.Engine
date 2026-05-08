@@ -18,13 +18,11 @@ public interface ISession
     IPEndPoint LocalEndPoint { get; }
     IPEndPoint RemoteEndPoint { get; }
     IEngineConfig Config { get; }
-    bool TrySend(ChannelKind channel, IMessage message);
 }
 
 public sealed class Session : BaseSession, ISession
 {
     private int _udpHealthFailCount;
-    private Engine _engine;
     private BasePeer _peer;
 
     public BasePeer Peer
@@ -32,236 +30,50 @@ public sealed class Session : BaseSession, ISession
         get => _peer;
         set => Interlocked.Exchange(ref _peer, value);
     }
+    
+    public Engine Engine { get; private set; }
 
     public override void Initialize(long sessionId, IBaseEngine baseEngine, TcpNetworkSession tcpSession)
     {
         base.Initialize(sessionId, baseEngine, tcpSession);
-        _engine = (Engine)baseEngine;
+        Engine = (Engine)baseEngine;
     }
 
-    internal void OnSessionHandshake(C2SEngineProtocolData.SessionAuthReq req)
+    internal void Authenticate(BasePeer peer)
     {
-        var ack = new S2CEngineProtocolData.SessionAuthAck { Result = SessionAuthResult.None };
-        var engine = _engine;
-        var peer = Peer;
+        Peer = peer;
+        IsAuthenticated = true;
+        peer.OnSessionAuthCompleted();
+    }
+
+    internal void SetupMaxFrameSize(ushort mtu)
+    {
+        _udpSession?.SetupMaxFrameSize(mtu);
+    }
+
+    internal void InvalidateUdpHealth(int maxFailCount)
+    {
+        var count = Interlocked.Increment(ref _udpHealthFailCount);
+        if (count < maxFailCount) return;
         
-        try
-        {
-            if (req.SessionId == 0)
-            {
-                // 최초 연결
-                if (null != peer)
-                {
-                    ack.Result = SessionAuthResult.InvalidRequest;
-#if DEBUG
-                    ack.Reason = $"Peer '{peer.PeerId}' already exists. sid: {peer.Session.SessionId}";
-#endif
-                    return;
-                }
-
-                if (!engine.NewPeer(this, out peer))
-                {
-                    ack.Result = SessionAuthResult.InternalError;
-                    #if DEBUG
-                    ack.Reason = $"NewPeer failed. sid={SessionId}";
-                    #endif
-                    return;
-                }
-
-                if (!peer.TryKeyExchange(req.KeySize, req.ClientPublicKey))
-                {
-                    ack.Result = SessionAuthResult.KeyExchangeFailed;
-                    return;
-                }
-
-                engine.JoinPeer(peer);
-            }
-            else
-            {
-                // 재연결
-                var prevSession = engine.GetSession(req.SessionId);
-                if (null != prevSession)
-                {
-                    if (CloseReason.Rejected == prevSession.CloseReason)
-                    {
-                        ack.Result = SessionAuthResult.ReconnectionNotAllowed;
-#if DEBUG
-                        ack.Reason =
-                            $"Reconnection is not allowed because the session was rejected. sessionId={prevSession.SessionId}";
-#endif
-                        return;
-                    }
-
-                    peer = prevSession.Peer;
-                    prevSession.Close(CloseReason.ServerClosing);
-                }
-                else
-                {
-                    // 재 연결 대기 피어 조회
-                    peer = engine.GetWaitingPeer(req.PeerId);
-                    if (peer == null)
-                    {
-                        ack.Result = SessionAuthResult.SessionNotFound;
-#if DEBUG
-                        ack.Reason = $"Not in reconnecting waiting list. peerId={req.PeerId}";
-#endif
-                        return;
-                    }
-                }
-
-                if (!engine.OnlinePeer(peer, this))
-                {
-                    ack.Result = SessionAuthResult.InternalError;
-#if DEBUG
-                    ack.Reason = $"Failed to online peer: {peer.PeerId}";
-#endif
-                    return;
-                }
-
-                Peer = peer;
-            }
-
-            if (peer == null)
-            {
-                ack.Result = SessionAuthResult.InternalError;
-#if DEBUG
-                ack.Reason = "Peer is null";
-#endif
-                return;
-            }
-
-            IsAuthenticated = true;
-            peer.OnSessionAuthCompleted();
-            
-            ack.Result = SessionAuthResult.Ok;
-            Logger.Debug("Session authentication succeeded. sid: {0}, pid: {1}", SessionId, peer.PeerId);
-        }
-        catch (Exception e)
-        {
-            ack.Result = SessionAuthResult.InternalError;
-            Logger.Error("Failed to authentication session: {0}, Exception: {1}\r\nStackTrace: {2}",
-                SessionId, e.Message, e.StackTrace);
-        }
-        finally
-        {
-            if (ack.Result == SessionAuthResult.Ok)
-            {
-                var network = Config.Network;
-                ack.SessionId = SessionId;
-                ack.MaxFrameBytes = network.MaxFrameBytes;
-                ack.SendTimeoutMs = network.SendTimeoutMs;
-                ack.MaxRetries = network.MaxRetransmissionCount;
-                ack.MaxAckDelayMs = network.MaxAckDelayMs;
-                ack.AckStepThreshold = network.AckStepThreshold;
-                ack.UdpOpenPort = engine.GetOpenPort(SocketMode.Udp);
-                ack.UdpAssemblyTimeoutSec = network.UdpAssemblyTimeoutSec;
-                ack.UdpMaxPendingMessageCount = network.UdpMaxPendingMessageCount;
-                ack.UdpCleanupIntervalSec = network.UdpCleanupIntervalSec;
-                ack.MaxOutOfOrderCount = network.MaxOutOfOderCount;
-
-                if (peer != null)
-                {
-                    ack.PeerId = peer.PeerId;
-
-                    if (network.UseEncrypt)
-                    {
-                        ack.UseEncrypt = true;
-                        ack.ServerPublicKey = peer.LocalPublicKey;
-                    }
-
-                    if (network.UseCompress)
-                    {
-                        ack.UseCompress = true;
-                        ack.CompressionThreshold = network.CompressionThreshold;
-                    }
-                }
-            }
-            
-            if (!InternalSend(ack))
-                Logger.Error("Failed to send session auth ack. sessionId={0}", SessionId);
-        }
+        Interlocked.Exchange(ref _udpHealthFailCount, 0);
+        if (!IsUdpAvailable) return;
+        
+        DisableUdp();
+        Logger.Warn("Session {0} UDP disabled due to health check failure.", SessionId);
     }
 
-    internal void OnUdpHandshake(C2SEngineProtocolData.UdpHelloReq req)
+    internal bool RecoverUdpHealth()
     {
-        var ack = new S2CEngineProtocolData.UdpHelloAck { Result = UdpHandshakeResult.None };
-
-        try
-        {
-            if (SessionId != req.SessionId)
-            {
-                ack.Result = UdpHandshakeResult.InvalidRequest;
-                Logger.Debug("UDP Hello: SessionId mismatch. Expected={0}, Received={1}", SessionId, req.SessionId);
-                return;
-            }
-
-            if (Peer == null || Peer.PeerId != req.PeerId)
-            {
-                ack.Result = UdpHandshakeResult.InvalidRequest;
-                Logger.Debug("UDP Hello: PeerId mismatch or null. sessionId={0}", SessionId);
-                return;
-            }
-
-            if (IsClosing || IsClosed)
-            {
-                ack.Result = UdpHandshakeResult.InvalidRequest;
-                Logger.Debug("UDP hello while closing. sid={0}", SessionId);
-                return;
-            }
-
-            if (req.Mtu <= 0)
-            {
-                ack.Result = UdpHandshakeResult.InvalidRequest;
-                Logger.Debug("UDP hello invalid mtu. mtu={0}", req.Mtu);
-                return;
-            }
-
-            const ushort minIpv4Mtu = 576;
-
-            var net = Config.Network;
-            var minMtu = Math.Max(minIpv4Mtu, net.UdpMinMtu);
-            var maxMtu = Math.Max(minMtu, net.UdpMaxMtu);
-            var negotiated = Math.Min(Math.Max(req.Mtu, minMtu), maxMtu);
-            SetMtu(negotiated);
-            ack.Mtu = negotiated;
-
-            Logger.Debug("UDP hello OK - pid={0}, sid={1}, mtu={2}", Peer.PeerId, SessionId, negotiated);
-            ack.Result = UdpHandshakeResult.Ok;
-        }
-        catch (Exception e)
-        {
-            ack.Result = UdpHandshakeResult.InternalError;
-            Logger.Error("Udp handshake failed. {0}", e.Message);
-        }
-        finally
-        {
-            if (!InternalSend(ack))
-                Logger.Error("Failed to send UDP hello ack. sessionId={0}", SessionId);
-        }
-    }
-
-    internal void OnUdpHealthCheckReq()
-    {
-        _udpHealthFailCount++;
-        if (_udpHealthFailCount > Config.Network.MaxUdpHealthFail)
-        {
-            _udpHealthFailCount = 0;
-            DisableUdp();
-            Logger.Warn("UDP disabled for session {0} due to health check failure.", SessionId);
-        }
-
-        InternalSend(new S2CEngineProtocolData.UdpHealthCheckAck());
-    }
-
-    internal void OnUdpHealthCheckConfirm()
-    {
-        _udpHealthFailCount = 0;
-        if (IsUdpAvailable) return;
+        Interlocked.Exchange(ref _udpHealthFailCount, 0);
+        if (IsUdpAvailable) return false;
+        
         EnableUdp();
-        Logger.Info("UDP restored for session {0}.", SessionId);
+        Logger.Info("Session {0} UDP capability has been restored and enabled.", SessionId);
+        return true;
     }
 
-    private bool InternalSend(IProtocolData data)
+    internal bool InternalSend(IProtocolData data)
     {
         var policy = PolicyDefaults.InternalPolicy;
         var encryptor = policy.UseEncrypt ? Peer?.Encryptor : null;
@@ -320,7 +132,7 @@ public sealed class Session : BaseSession, ISession
         if (peer != null && message is TcpMessage { AckNumber: > 0 } tcp)
             peer.HandleRemoteAck(tcp.AckNumber);
             
-        _engine.ExecuteCommand(this, message);
+        Engine.ExecuteCommand(this, message);
     }
 
     public override void Close(CloseReason reason)
@@ -345,7 +157,7 @@ public sealed class Session : BaseSession, ISession
         Logger.Debug("Session {0} start closing...", SessionId);
         
         StartClosingTime = DateTime.UtcNow;
-        _engine.EnqueueCloseHandshakePending(this);
+        Engine.EnqueueCloseHandshakePending(this);
         SendClose();
     }
     

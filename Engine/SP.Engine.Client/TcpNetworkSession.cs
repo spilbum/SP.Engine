@@ -2,10 +2,12 @@ using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using SP.Core;
+using SP.Core.Logging;
 using SP.Engine.Client.Configuration;
 using SP.Engine.Runtime.Networking;
 
@@ -15,22 +17,22 @@ namespace SP.Engine.Client
     {
         private readonly List<ArraySegment<byte>> _itemsToSend = new List<ArraySegment<byte>>();
         private readonly int _receiveBufferSize;
-        private readonly List<ArraySegment<byte>> _sendBufferList = new List<ArraySegment<byte>>();
         private readonly int _sendBufferSize;
         private readonly SwapQueue<ArraySegment<byte>> _sendQueue;
         private bool _isConnecting;
-        private int _isSending;
+        private int _inSendingFlag;
         private byte[] _receiveBuffer;
         private SocketAsyncEventArgs _receiveEventArgs;
         private SocketAsyncEventArgs _sendEventArgs;
         private Socket _socket;
-        private readonly SessionSendBuffer _sendBuffer = new SessionSendBuffer(1024 * 32);
+        private readonly SessionSendBuffer _sendBuffer;
 
         public TcpNetworkSession(EngineConfig config)
         {
             _sendBufferSize = config.SendBufferSize;
             _receiveBufferSize = config.ReceiveBufferSize;
             _sendQueue = new SwapQueue<ArraySegment<byte>>(config.SendQueueSize);
+            _sendBuffer = new SessionSendBuffer(1024 * 32);
         }
 
         public bool IsConnected { get; private set; }
@@ -40,16 +42,16 @@ namespace SP.Engine.Client
             if (!IsConnected)
                 return false;
 
-            if (!_sendBuffer.TryReserve(message.Size, out var segment, out var span)) 
+            if (!_sendBuffer.TryReserve(message.Size, out var segment)) 
                 return false;
 
-            message.WriteTo(span);
-            if (!_sendQueue.TryEnqueue(segment))
-                return false;
+            message.WriteTo(segment.AsSpan());
+
+            var enqueued = _sendQueue.TryEnqueue(segment);
+            if (Interlocked.CompareExchange(ref _inSendingFlag, 1, 0) != 0)
+                return enqueued;
             
-            if (Interlocked.CompareExchange(ref _isSending, 1, 0) == 0)
-                DequeueSend();
-
+            DequeueSend();
             return true;
         }
 
@@ -205,7 +207,7 @@ namespace SP.Engine.Client
             else
             {
                 _socket = null;
-                _isSending = 0;
+                _inSendingFlag = 0;
             }
 
             try
@@ -292,10 +294,10 @@ namespace SP.Engine.Client
         private void DequeueSend()
         {
             _sendQueue.Exchange(_itemsToSend);
-
+            
             if (_itemsToSend.Count == 0)
             {
-                _isSending = 0;
+                _inSendingFlag = 0;
                 return;
             }
 
@@ -312,12 +314,20 @@ namespace SP.Engine.Client
 
             try
             {
-                _sendEventArgs.SetBuffer(null, 0, 0);
+                if (items == null || items.Count == 0)
+                    throw new ArgumentException("items cannot be null or empty.");
 
-                _sendBufferList.Clear();
-                foreach (var segment in items)
-                    _sendBufferList.Add(segment);
-                _sendEventArgs.BufferList = _sendBufferList;
+                if (items.Count > 1)
+                {
+                    _sendEventArgs.SetBuffer(null, 0, 0);
+                    _sendEventArgs.BufferList = items;
+                }
+                else
+                {
+                    _sendEventArgs.BufferList = null;
+                    var segment = items[0];
+                    _sendEventArgs.SetBuffer(segment.Array, segment.Offset, segment.Count);
+                }
 
                 if (!_socket.SendAsync(_sendEventArgs))
                     OnSendCompleted(null, _sendEventArgs);
@@ -331,37 +341,76 @@ namespace SP.Engine.Client
 
         private void OnSendCompleted(object sender, SocketAsyncEventArgs e)
         {
-            while (true)
+            if (e.SocketError != SocketError.Success || e.BytesTransferred == 0)
             {
-                if (e.SocketError != SocketError.Success || e.BytesTransferred == 0)
-                {
-                    if (EnsureSocketClosed()) OnClosed();
+                if (EnsureSocketClosed()) OnClosed();
 
-                    if (e.SocketError == SocketError.Success) return;
+                if (e.SocketError == SocketError.Success) return;
 
-                    var ex = new SocketException((int)e.SocketError);
-                    if (!IsIgnoreException(ex)) OnError(ex);
+                var ex = new SocketException((int)e.SocketError);
+                if (!IsIgnoreException(ex)) OnError(ex);
 
-                    return;
-                }
-
-                if (e.BufferList is List<ArraySegment<byte>> list && list.Count > 0)
-                {
-                    _sendBuffer.Release(e.BytesTransferred);
-
-                    ConsumeTransferred(list, e.BytesTransferred);
-
-                    if (list.Count > 0)
-                    {
-                        if (_socket.SendAsync(e)) return;
-                        continue;
-                    }
-                }
-
-                e.BufferList = null;
-                OnSendCompleted();
-                break;
+                return;
             }
+            
+            var transferred = e.BytesTransferred;
+            var requested = 0;
+            if (e.BufferList != null)
+                foreach (var segment in e.BufferList) requested += segment.Count;
+            else
+                requested += e.Count;
+            
+            _sendBuffer.Release(transferred);
+
+            if (transferred < requested)
+            {
+                var originals = 
+                    e.BufferList ?? new List<ArraySegment<byte>> { new ArraySegment<byte>(e.Buffer, e.Offset, e.Count) };
+                var remaining = CreateRemainingItems(originals, transferred);
+        
+                e.SetBuffer(null, 0, 0);
+                e.BufferList = remaining;
+
+                if (!_socket.SendAsync(e))
+                    OnSendCompleted(sender, e);
+                return;
+            }
+
+            e.BufferList = null;
+            OnSendCompleted();
+        }
+
+        private static List<ArraySegment<byte>> CreateRemainingItems(IList<ArraySegment<byte>> originals, int bytesTransferred)
+        {
+            var remainingItems = new List<ArraySegment<byte>>();
+            var skipBytes = bytesTransferred;
+
+            foreach (var segment in originals)
+            {
+                if (segment.Array == null) continue;
+
+                if (skipBytes >= segment.Count)
+                {
+                    skipBytes -= segment.Count;
+                    continue;
+                }
+
+                if (skipBytes > 0)
+                {
+                    remainingItems.Add(new ArraySegment<byte>(
+                        segment.Array, 
+                        segment.Offset + skipBytes,
+                        segment.Count - skipBytes));
+
+                    skipBytes = 0;
+                }
+                else
+                {
+                    remainingItems.Add(segment);
+                }
+            }
+            
+            return remainingItems;
         }
 
         private void OnSendCompleted()
@@ -371,40 +420,14 @@ namespace SP.Engine.Client
 
             if (_itemsToSend.Count == 0)
             {
-                Interlocked.Exchange(ref _isSending, 0);
+                Interlocked.Exchange(ref _inSendingFlag, 0);
 
                 _sendQueue.Exchange(_itemsToSend);
-                if (_itemsToSend.Count == 0 || Interlocked.CompareExchange(ref _isSending, 1, 0) != 0)
+                if (_itemsToSend.Count == 0 || Interlocked.CompareExchange(ref _inSendingFlag, 1, 0) != 0)
                     return;
             }
 
             Send(_itemsToSend);
-        }
-
-        private static void ConsumeTransferred(List<ArraySegment<byte>> list, int bytesTransferred)
-        {
-            var remaining = bytesTransferred;
-            var i = 0;
-
-            while (i < list.Count && remaining > 0)
-            {
-                var seg = list[i];
-                if (remaining >= seg.Count)
-                {
-                    remaining -= seg.Count;
-                    i++;
-                }
-                else
-                {
-                    // 부분 소비: 현재 세그먼트만 슬라이스
-                    if (seg.Array != null)
-                        list[i] = new ArraySegment<byte>(seg.Array, seg.Offset + remaining, seg.Count - remaining);
-                    break;
-                }
-            }
-
-            if (i > 0)
-                list.RemoveRange(0, i);
         }
 
         private void OnConnected()

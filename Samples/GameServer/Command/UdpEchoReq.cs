@@ -10,6 +10,7 @@ public class UdpEchoReq : BaseCommand<GamePeer, C2GProtocolData.UdpEchoReq>
 {
     protected override void ExecuteCommand(GamePeer context, C2GProtocolData.UdpEchoReq protocol)
     {
+        //context.Logger.Debug("Session {0} UDP echo: {1} bytes", context.Session.SessionId, protocol.Data?.Length);
         context.Send(new G2CProtocolData.UdpEchoAck { Seq = protocol.Seq, SentTicks = protocol.SentTicks, Data = protocol.Data });
     }
 }

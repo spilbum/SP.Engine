@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -113,6 +114,8 @@ namespace SP.Engine.Client
         protected IEncryptor Encryptor => _encryptor;
         protected ICompressor Compressor => _compressor;
         public ILogger Logger { get; private set; }
+
+        public bool IsUdpAvailable => _channelRouter.IsUdpAvailable;
 
         TProtocol ICommandContext.Deserialize<TProtocol>(IMessage message)
         {
@@ -407,6 +410,8 @@ namespace SP.Engine.Client
                     }
                     case ChannelKind.Unreliable:
                     {
+                        if (!IsConnected) return false;
+                        
                         var udp = new UdpMessage();
                         using (udp)
                         {
@@ -514,10 +519,10 @@ namespace SP.Engine.Client
             StateChanged?.Invoke(this, new StateChangedEventArgs(oldState, newState));
         }
 
-        private void SetTimer(Action<object> callback, object state, int dueTimeMs, int intervalMs)
+        private void SetTimer(Action<object> callback, object state, TimeSpan dueTime, TimeSpan period)
         {
             _timer?.Dispose();
-            _timer = new TickTimer(callback, state, dueTimeMs, intervalMs);
+            _timer = new TickTimer(callback, state, dueTime, period);
         }
 
         private void CancelTimer()
@@ -530,7 +535,7 @@ namespace SP.Engine.Client
         {
             // 자동 핑 on/off 여부
             if (!Config.EnableAutoPing) return;
-            SetTimer(_ => SendPing(), null, 0, Config.AutoPingIntervalSec * 1000);
+            SetTimer(_ => SendPing(), null, TimeSpan.Zero, TimeSpan.FromSeconds(Config.AutoPingIntervalSec));
         }
 
         private void StartConnection()
@@ -538,7 +543,7 @@ namespace SP.Engine.Client
             SetState(NetPeerState.Connecting);
 
             ConnectTryCount = 0;
-            SetTimer(OnConnectTimerTick, null, 0, Config.ConnectAttemptIntervalSec * 1000);
+            SetTimer(OnConnectTimerTick, null, TimeSpan.Zero, TimeSpan.FromSeconds(Config.ConnectAttemptIntervalSec));
         }
 
         private TcpNetworkSession CreateNetworkSession()
@@ -582,7 +587,7 @@ namespace SP.Engine.Client
             SetState(NetPeerState.Reconnecting);
 
             ReconnectTryCount = 0;
-            SetTimer(OnReconnectTimerTick, null, 1000, Config.ReconnectAttemptIntervalSec * 1000);
+            SetTimer(OnReconnectTimerTick, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(Config.ReconnectAttemptIntervalSec));
         }
 
         private void OnReconnectTimerTick(object state)
@@ -707,7 +712,7 @@ namespace SP.Engine.Client
                 {
                     OnError(e);
                 }
-            }, null, 5000, Timeout.Infinite);
+            }, null, TimeSpan.FromSeconds(5), Timeout.InfiniteTimeSpan);
         }
         
         private void OnSessionDataReceived(object sender, DataEventArgs e)
@@ -737,10 +742,9 @@ namespace SP.Engine.Client
             }
         }
 
-        private void ProcessAckStatus(uint receivedAckNumber)
+        private void ProcessAckStatus(uint remoteAckNumber)
         {
-            // 피기배킹 처리
-            HandleRemoteAck(receivedAckNumber);
+            HandleRemoteAck(remoteAckNumber);
                     
             var ackNumber = _messageProcessor.LastReceivedSeq;
             if (ackNumber - _lastSentAck < _messageProcessor.AckStepThreshold)
@@ -836,10 +840,11 @@ namespace SP.Engine.Client
             session.DataReceived += OnUdpSocketDataReceived;
             session.Closed += OnUdpSocketClosed;
 
-            var ipAddress = ((IPEndPoint)RemoteEndPoint).Address;
-            if (!session.Connect(ipAddress.ToString(), openPort))
+            if (!(RemoteEndPoint is IPEndPoint ep)) return;
+            
+            if (!session.Connect(ep.Address.ToString(), openPort))
             {
-                Logger.Error("Failed to connect to UDP socket. ip={0}, port={1}", ipAddress.ToString(), openPort);
+                Logger.Error("Failed to connect to UDP socket. ip={0}, port={1}", ep.Address, openPort);
                 return;
             }
             
@@ -870,16 +875,36 @@ namespace SP.Engine.Client
         {
             if (_udpSession == null) return;
 
+            var span = e.Data.AsSpan(e.Offset, e.Length);
+            if (!UdpHeader.TryRead(span, out var header, out var headerConsumed)) return;
+            
             try
             {
-                if (_udpSession.Assembler.TryPush(e.Data.AsSpan(e.Offset, e.Length), out var message))
+                var bodyData = span.Slice(headerConsumed, header.BodyLength);
+                if (header.IsFragmented)
                 {
+                    if (_udpSession.Assembler.TryPush(header, bodyData, out var message))
+                    {
+                        MessageReceived(message);
+                    }
+                }
+                else
+                {
+                    IMemoryOwner<byte> owner = null;
+                    if (header.BodyLength > 0)
+                    {
+                        var pooled = new PooledBuffer(header.BodyLength);
+                        bodyData.CopyTo(pooled.Memory.Span);
+                        owner = pooled;
+                    }
+            
+                    var message = new UdpMessage(header, owner, header.BodyLength);
                     MessageReceived(message);
                 }
             }
             catch (Exception ex)
             {
-                Logger.Error(ex, "Error processing UDP buffer. sessionId={0}", _sessionId);
+                Logger.Error(ex);
             }
         }
 
@@ -904,7 +929,9 @@ namespace SP.Engine.Client
                     PeerId = PeerId,
                     Mtu = Config.UdpMtu
                 }))
-                throw new Exception("Failed to send UDP handshake");
+            {
+                throw new Exception("Failed to send UDP handshake");   
+            }
         }
 
         internal void OnSessionAuth(S2CEngineProtocolData.SessionAuthAck p)
@@ -978,7 +1005,9 @@ namespace SP.Engine.Client
         private void StartUdpHealthCheckTimer()
         {
             StopUdpHealthCheckTimer();
-            _udpHealthCheckTimer = new TickTimer(OnUdpHealthCheckTick, null, 0, Config.UdpHealthCheckIntervalSec * 1000);
+            _udpHealthCheckTimer = new TickTimer(
+                OnUdpHealthCheckTick, null, 
+                TimeSpan.Zero, TimeSpan.FromSeconds(Config.UdpHealthCheckIntervalSec));
         }
 
         private void StopUdpHealthCheckTimer()
@@ -992,11 +1021,15 @@ namespace SP.Engine.Client
         {
             if (!IsConnected || _udpSession == null || !_channelRouter.IsUdpAvailable) return;
 
-            if (++_udpHealthFailCount > Config.MaxUdpHealthFail)
+            _udpHealthFailCount++;
+            if (_udpHealthFailCount > Config.MaxUdpHealthFail)
             {
-                Logger.Warn("UDP HealthCheck failed. Final count: {0}. Switching to TCP.", _udpHealthFailCount);
-                _channelRouter.SetUdpAvailable(false);
-                return;
+                _udpHealthFailCount = 0;
+                if (_channelRouter.IsUdpAvailable)
+                {
+                    Logger.Warn("Session {0} UDP HealthCheck failed. Switching to TCP.", _sessionId, _udpHealthFailCount);
+                    _channelRouter.SetUdpAvailable(false);
+                }
             }
 
             InternalSend(new C2SEngineProtocolData.UdpHealthCheckReq());
@@ -1004,26 +1037,32 @@ namespace SP.Engine.Client
 
         internal void OnUdpHealthCheckAck()
         {
-            var wasUdpAvailable = _channelRouter.IsUdpAvailable;
-            
             _udpHealthFailCount = 0;
-            _channelRouter.SetUdpAvailable(true);
-            if (!wasUdpAvailable)
+            if (!_channelRouter.IsUdpAvailable)
             {
-                Logger.Warn("UDP HealthCheck success.");
+                _channelRouter.SetUdpAvailable(true);
+                Logger.Warn("Session {0} UDP HealthCheck restored.", _sessionId);
             }
             
             InternalSend(new C2SEngineProtocolData.UdpHealthCheckConfirm());
         }
+        
+        private int _udpHandshakeCount;
 
         private void StartUdpHandshakeTimer()
         {
-            StopUdpHandshakeTimer();
             _udpHandshakeTimer = new TickTimer(_ =>
             {
-                _channelRouter.SetUdpAvailable(false);
-                Logger.Error("UDP handshake failed (timed out).");
-            }, null, Config.UdpHandshakeTimeSec * 1000, Timeout.Infinite);
+                var count = Interlocked.Increment(ref _udpHandshakeCount) + 1;
+                if (count >= 3)
+                {
+                    StopUdpHandshakeTimer();
+                    _channelRouter.SetUdpAvailable(false);
+                    Logger.Error("UDP handshake failed (timed out: {0} sec).", Config.UdpHandshakeTimeSec * count);
+                }
+                
+                SendUdpHandshake();
+            }, null, TimeSpan.FromSeconds(Config.UdpHandshakeTimeSec), TimeSpan.FromSeconds(Config.UdpHandshakeTimeSec));
         }
 
         private void StopUdpHandshakeTimer()
@@ -1032,14 +1071,14 @@ namespace SP.Engine.Client
             _udpHandshakeTimer = null;
         }
 
-        private void StartUdpCleanupTimer(int intervalSec)
+        private void StartUdpCleanupTimer(int periodSec)
         {
             if (_udpSession?.Assembler == null) return;
             _udpCleanupTimer = new TickTimer(_ =>
             {
                 var now = DateTime.UtcNow;
                 _udpSession.Assembler.Cleanup(now);
-            }, null, 0, intervalSec * 1000);
+            }, null, TimeSpan.Zero, TimeSpan.FromSeconds(periodSec));
         }
 
         private void StopUdpCleanupTimer()

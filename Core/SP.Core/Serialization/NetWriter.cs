@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -7,7 +8,7 @@ namespace SP.Core.Serialization
 {
     public sealed class NetWriter : IDisposable
     {
-        private readonly PooledBuffer _buffer;
+        private PooledBuffer _buffer;
         private bool _disposed;
 
         public NetWriter(int initialCapacity = 1024)
@@ -19,7 +20,22 @@ namespace SP.Core.Serialization
         {
             if (_disposed) return;
             _disposed = true;
-            _buffer.Dispose();
+            
+            _buffer?.Dispose();
+            _buffer = null;
+        }
+
+        public IMemoryOwner<byte> DetachBufferOwner(out int length)
+        {
+            if (_disposed || _buffer == null) throw new ObjectDisposedException(nameof(NetWriter));
+            
+            length = _buffer.WrittenCount;
+            var owner = _buffer;
+            
+            _buffer = null;
+            _disposed = true;
+            
+            return owner;
         }
 
         public byte[] ToArray() => _buffer.WrittenSpan.ToArray();
@@ -104,7 +120,14 @@ namespace SP.Core.Serialization
         public void WriteSingle(float value)
         {
             var span = GetSpan(4);
-            Unsafe.WriteUnaligned(ref span[0], value);
+            if (BitConverter.IsLittleEndian)
+            {
+                BinaryPrimitives.WriteInt32BigEndian(span, Unsafe.As<float, int>(ref value));
+            }
+            else
+            {
+                Unsafe.WriteUnaligned(ref span[0], value);
+            }
             Advance(4);
         }
 
@@ -112,7 +135,7 @@ namespace SP.Core.Serialization
         public void WriteDouble(double value)
         {
             var span = GetSpan(8);
-            Unsafe.WriteUnaligned(ref span[0], value);
+            BinaryPrimitives.WriteInt64BigEndian(span, Unsafe.As<double, long>(ref value));
             Advance(8);
         }
 
@@ -194,102 +217,44 @@ namespace SP.Core.Serialization
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Write<T>(T value) where T : unmanaged
         {
-            if (typeof(T) == typeof(bool))
+            if (typeof(T) == typeof(byte)) WriteByte(Unsafe.As<T, byte>(ref value));
+            else if (typeof(T) == typeof(sbyte)) WriteSByte(Unsafe.As<T, sbyte>(ref value));
+            else if (typeof(T) == typeof(bool)) WriteBool(Unsafe.As<T, bool>(ref value));
+            else if (typeof(T) == typeof(short)) WriteInt16(Unsafe.As<T, short>(ref value));
+            else if (typeof(T) == typeof(ushort)) WriteUInt16(Unsafe.As<T, ushort>(ref value));
+            else if (typeof(T) == typeof(int)) WriteInt32(Unsafe.As<T, int>(ref value));
+            else if (typeof(T) == typeof(uint)) WriteUInt32(Unsafe.As<T, uint>(ref value));
+            else if (typeof(T) == typeof(long)) WriteInt64(Unsafe.As<T, long>(ref value));
+            else if (typeof(T) == typeof(ulong)) WriteUInt64(Unsafe.As<T, ulong>(ref value));
+            else if (typeof(T) == typeof(float)) WriteSingle(Unsafe.As<T, float>(ref value));
+            else if (typeof(T) == typeof(double)) WriteDouble(Unsafe.As<T, double>(ref value));
+            else
             {
-                WriteBool(Unsafe.As<T, bool>(ref value));
-                return;
-            }
+                var size = Unsafe.SizeOf<T>();
 
-            if (typeof(T) == typeof(byte))
-            {
-                WriteByte(Unsafe.As<T, byte>(ref value));
-                return;
+                switch (size)
+                {
+                    case 4:
+                        WriteInt32(Unsafe.As<T, int>(ref value));
+                        break;
+                    case 1:
+                        WriteByte(Unsafe.As<T, byte>(ref value));
+                        break;
+                    case 2:
+                        WriteInt16(Unsafe.As<T, short>(ref value));
+                        break;
+                    case 8:
+                        WriteInt64(Unsafe.As<T, long>(ref value));
+                        break;
+                    default:
+                    {
+                        var span = GetSpan(size);
+                        Unsafe.WriteUnaligned(ref span[0], value);
+                        Advance(size);
+                        break;
+                    }
+                }
             }
-
-            if (typeof(T) == typeof(sbyte))
-            {
-                WriteSByte(Unsafe.As<T, sbyte>(ref value));
-                return;
-            }
-
-            if (typeof(T) == typeof(short))
-            {
-                WriteInt16(Unsafe.As<T, short>(ref value));
-                return;
-            }
-
-            if (typeof(T) == typeof(ushort))
-            {
-                WriteUInt16(Unsafe.As<T, ushort>(ref value));
-                return;
-            }
-
-            if (typeof(T) == typeof(int))
-            {
-                WriteInt32(Unsafe.As<T, int>(ref value));
-                return;
-            }
-
-            if (typeof(T) == typeof(uint))
-            {
-                WriteUInt32(Unsafe.As<T, uint>(ref value));
-                return;
-            }
-
-            if (typeof(T) == typeof(long))
-            {
-                WriteInt64(Unsafe.As<T, long>(ref value));
-                return;
-            }
-
-            if (typeof(T) == typeof(ulong))
-            {
-                WriteUInt64(Unsafe.As<T, ulong>(ref value));
-                return;
-            }
-
-            if (typeof(T) == typeof(float))
-            {
-                WriteSingle(Unsafe.As<T, float>(ref value));
-                return;
-            }
-
-            if (typeof(T) == typeof(double))
-            {
-                WriteDouble(Unsafe.As<T, double>(ref value));
-                return;
-            }
-
-            if (typeof(T) == typeof(DateTime))
-            {
-                WriteInt64(Unsafe.As<T, DateTime>(ref value).Ticks);
-            }
-
-            if (Unsafe.SizeOf<T>() == 4) // enum: int, uint
-            {
-                WriteInt32(Unsafe.As<T, int>(ref value));
-                return;
-            }
-
-            if (Unsafe.SizeOf<T>() == 1) // enum: byte, sbyte
-            {
-                WriteByte(Unsafe.As<T, byte>(ref value));
-                return;
-            }
-
-            if (Unsafe.SizeOf<T>() == 2) // enum: short, ushort
-            {
-                WriteInt16(Unsafe.As<T, short>(ref value));
-                return;
-            }
-
-            if (Unsafe.SizeOf<T>() == 8) // enum: long, ulong
-            {
-                WriteInt64(Unsafe.As<T, long>(ref value));
-                return;
-            }
-
-            ThrowNotSupportedType(typeof(T));
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]

@@ -64,7 +64,7 @@ public class PeerManager(ILogger logger, IEngineConfig config)
         peer.JoinServer();
     }
 
-    public bool TransitionToOnline(uint peerId, ISession session)
+    public bool TransitionToOnline(uint peerId, Session session)
     {
         // 대기 목록에서 먼저 제거
         if (!_reconnectPendingPeers.TryRemove(peerId, out var pending))

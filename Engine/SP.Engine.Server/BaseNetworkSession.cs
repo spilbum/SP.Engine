@@ -6,7 +6,6 @@ using System.Text;
 using System.Threading;
 using SP.Core.Logging;
 using SP.Engine.Runtime;
-using SP.Engine.Server.Logging;
 
 namespace SP.Engine.Server;
 
@@ -29,10 +28,10 @@ public enum SocketMode
 
 public interface INetworkSession
 {
-    Session Session { get; }
+    BaseSession Session { get; }
 }
 
-public abstract class BaseNetworkSession : INetworkSession
+public abstract class BaseNetworkSession : INetworkSession, ILogContext
 {
     private const string LogHeaderFormat = "[NetworkError] SessionId: {0}, Mode: {1}";
     private const string SocketInfoFormat = "SocketErrorCode: {0} ({1})";
@@ -43,7 +42,7 @@ public abstract class BaseNetworkSession : INetworkSession
     private volatile int _socketState;
     private int _pendingIoCount;
     private protected IPEndPoint _remoteEndPoint;
-    protected CloseReason _finalReason;
+    private CloseReason _finalReason;
     
     protected BaseNetworkSession(SocketMode mode, Socket client)
     {
@@ -53,7 +52,7 @@ public abstract class BaseNetworkSession : INetworkSession
         RemoteEndPoint = (IPEndPoint)client.RemoteEndPoint;
     }
 
-    public Session Session { get; internal set; }
+    public BaseSession Session { get; internal set; }
     public SocketMode Mode { get; }
     public IPEndPoint LocalEndPoint { get; }
     public IPEndPoint RemoteEndPoint
@@ -61,7 +60,7 @@ public abstract class BaseNetworkSession : INetworkSession
         get => Volatile.Read(ref _remoteEndPoint);
         protected set => Volatile.Write(ref _remoteEndPoint, value);
     }
-
+    
     public bool IsClosed => HasState(SocketState.Closed);
     public bool IsPaused => HasState(SocketState.Paused);
     public bool IsIdle => (_socketState & ((int)SocketState.InSending | (int)SocketState.InReceiving)) == 0;
@@ -112,7 +111,8 @@ public abstract class BaseNetworkSession : INetworkSession
         var client = Interlocked.Exchange(ref _client, null);
         if (client == null) return;
         
-        client.SafeClose();
+        if (ShouldSocketClosed())
+            client.SafeClose();
         
         if (Volatile.Read(ref _pendingIoCount) == 0)
             OnClosed(reason);
@@ -129,7 +129,8 @@ public abstract class BaseNetworkSession : INetworkSession
     }
     
     protected abstract void OnRelease();
-
+    protected virtual bool ShouldSocketClosed() => true;
+    
     protected bool HasState(SocketState state) => (_socketState & (int)state) != 0;
 
     protected bool TryAddState(SocketState state)

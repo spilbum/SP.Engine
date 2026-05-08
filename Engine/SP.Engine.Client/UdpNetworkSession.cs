@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using SP.Core;
+using SP.Core.Logging;
 using SP.Engine.Client.Configuration;
 using SP.Engine.Runtime.Networking;
 
@@ -17,18 +18,17 @@ namespace SP.Engine.Client
 
     public class UdpNetworkSession : IUnreliableSender
     {
-        private const int AssemblerCleanupIntervalSec = 15;
         private readonly PostList<ArraySegment<byte>> _itemsToSend = new PostList<ArraySegment<byte>>();
         private readonly SocketAsyncEventArgs _receiveEventArgs = new SocketAsyncEventArgs();
         private readonly byte[] _receiveBuffer;
         private readonly int _sendBufferSize;
         private readonly SwapQueue<ArraySegment<byte>> _sendQueue;
-        private int _fragSeq;
-        private int _sending;
-        private ushort _maxDataSize = 512;
+        private int _fragSeq = 1;
+        private int _sendingFlag;
+        private ushort _maxFrameSize = 512;
         private IPEndPoint _remoteEndPoint;
         private SocketAsyncEventArgs _sendEventArgs;
-        private readonly SessionSendBuffer _sendBuffer = new SessionSendBuffer(1024 * 16);
+        private readonly SessionSendBuffer _sendBuffer;
         private Socket _socket;
         
         public UdpNetworkSession(EngineConfig config)
@@ -36,6 +36,7 @@ namespace SP.Engine.Client
             _sendQueue = new SwapQueue<ArraySegment<byte>>(config.SendQueueSize);
             _sendBufferSize = config.SendBufferSize;
             _receiveBuffer = new byte[config.ReceiveBufferSize];
+            _sendBuffer = new SessionSendBuffer(config.ReceiveBufferSize);
         }
 
         public bool IsRunning { get; private set; }
@@ -49,43 +50,48 @@ namespace SP.Engine.Client
 
         public bool TrySend(UdpMessage message)
         {
-            if (!IsRunning)
-                return false;
+            if (!IsRunning) return false;
 
-            var items = new List<ArraySegment<byte>>();
-            
-            if (message.Size <= _maxDataSize)
+            const int headerSize = UdpHeader.ByteSize;
+            const int fragHeaderSize = UdpFragmentHeader.ByteSize;
+            var maxBodyPerFrag = _maxFrameSize - headerSize - fragHeaderSize;
+
+            if (message.Size <= _maxFrameSize)
             {
-                if (!_sendBuffer.TryReserve(message.Size, out var segment, out var span)) return false;
-                message.WriteTo(span);
-                items.Add(segment);
+                if (!_sendBuffer.TryReserve(message.Size, out var segment)) return false;
+                message.WriteTo(segment.AsSpan());
+                return EnqueueSendingQueue(new List<ArraySegment<byte>> { segment });
             }
-            else
-            {
-                const int hSize = UdpHeader.ByteSize;
-                const int fHeaderSize = UdpFragmentHeader.ByteSize;
-                var fragId = AllocateFragId();
-                var maxBodyPerFrag = _maxDataSize - hSize - fHeaderSize;
-                var totalCount = (byte)Math.Ceiling((double)message.BodyLength / maxBodyPerFrag);
 
-                for (byte index = 0; index < totalCount; index++)
+            // 조각화 계산
+            var totalCount = (byte)((message.BodyLength + maxBodyPerFrag - 1) / maxBodyPerFrag);
+            var fragId = AllocateFragId();
+            var fragments = new List<ArraySegment<byte>>(totalCount);
+
+            for (byte index = 0; index < totalCount; index++)
+            {
+                var bodyOffset = index * maxBodyPerFrag;
+                var fragLen = (ushort)Math.Min(message.BodyLength - bodyOffset, maxBodyPerFrag);
+                var totalSize = headerSize + fragHeaderSize + fragLen;
+
+                if (!_sendBuffer.TryReserve(totalSize, out var segment))
                 {
-                    var bodyOffset = index * maxBodyPerFrag;
-                    var fragLen = (ushort)Math.Min(message.BodyLength - bodyOffset, maxBodyPerFrag);
-                    var totalSize = hSize + fHeaderSize + fragLen;
-
-                    if (!_sendBuffer.TryReserve(totalSize, out var segment, out var span)) 
-                        return false;
-
-                    message.WriteFragmentTo(span, fragId, index, totalCount, bodyOffset, fragLen);
-                    items.Add(segment);
+                    return false;
                 }
+
+                message.WriteFragmentTo(segment.AsSpan(), fragId, index, totalCount, bodyOffset, fragLen);
+                fragments.Add(segment);
             }
 
+            return EnqueueSendingQueue(fragments);
+        }
+
+        private bool EnqueueSendingQueue(List<ArraySegment<byte>> items)
+        {
             if (!_sendQueue.TryEnqueue(items))
                 return false;
 
-            if (Interlocked.CompareExchange(ref _sending, 1, 0) == 0)
+            if (Interlocked.CompareExchange(ref _sendingFlag, 1, 0) == 0)
                 DequeueSend();
 
             return true;
@@ -102,7 +108,7 @@ namespace SP.Engine.Client
 
         public void SetMaxFrameSize(ushort mtu)
         {
-            _maxDataSize = (ushort)(mtu - 20 /* IP header size */ - 8 /* UDP header size*/);
+            _maxFrameSize = (ushort)(mtu - 20 /* IP header size */ - 8 /* UDP header size*/);
         }
 
         public bool Connect(string ip, int port)
@@ -118,8 +124,6 @@ namespace SP.Engine.Client
                 _receiveEventArgs.RemoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
                 _receiveEventArgs.Completed += OnReceiveCompleted;
                 _socket.ReceiveFromAsync(_receiveEventArgs);
-
-
 
                 IsRunning = true;
                 return true;
@@ -176,7 +180,7 @@ namespace SP.Engine.Client
 
             if (_itemsToSend.Count == 0)
             {
-                _sending = 0;
+                _sendingFlag = 0;
                 return;
             }
 
@@ -213,7 +217,7 @@ namespace SP.Engine.Client
             {
                 _itemsToSend.Clear();
                 _itemsToSend.Position = 0;
-                Interlocked.Exchange(ref _sending, 0);
+                Interlocked.Exchange(ref _sendingFlag, 0);
 
                 var ex = new SocketException((int)e.SocketError);
                 if (!IsIgnoreException(ex))
@@ -242,11 +246,11 @@ namespace SP.Engine.Client
 
             if (_itemsToSend.Count == 0)
             {
-                Interlocked.Exchange(ref _sending, 0);
+                Interlocked.Exchange(ref _sendingFlag, 0);
 
                 // 더블 체크
                 _sendQueue.Exchange(_itemsToSend);
-                if (_itemsToSend.Count == 0 || Interlocked.CompareExchange(ref _sending, 1, 0) != 0)
+                if (_itemsToSend.Count == 0 || Interlocked.CompareExchange(ref _sendingFlag, 1, 0) != 0)
                     return;
             }
 

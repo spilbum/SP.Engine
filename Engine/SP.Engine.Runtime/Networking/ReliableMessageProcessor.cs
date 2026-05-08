@@ -338,7 +338,7 @@ namespace SP.Engine.Runtime.Networking
             }
         }
     }
-
+    
     public class ReliableMessageProcessor : IDisposable
     {
         private readonly SwapQueue<TcpMessage> _pendingQueue = new SwapQueue<TcpMessage>(1024);

@@ -96,7 +96,7 @@ public abstract class Engine : BaseEngine, IEngine
     private PeerFiber GetPeerFiber()
         => _peerFibers.OrderBy(f => f.PeerCount).First();
 
-    internal bool OnlinePeer(BasePeer peer, ISession session)
+    internal bool OnlinePeer(BasePeer peer, Session session)
     {
         if (!_peerManager.TransitionToOnline(peer.PeerId, session))
             return false;

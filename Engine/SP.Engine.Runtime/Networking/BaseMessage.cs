@@ -1,7 +1,9 @@
 using System;
 using System.Buffers;
+using System.Security.Cryptography;
 using System.Threading;
 using SP.Core;
+using SP.Core.Logging;
 using SP.Core.Serialization;
 using SP.Engine.Runtime.Compression;
 using SP.Engine.Runtime.Protocol;
@@ -16,7 +18,7 @@ namespace SP.Engine.Runtime.Networking
         protected THeader Header { get; set; }
 
         public int BodyLength { get; private set; }
-        public ushort Id => Header?.Id ?? 0;
+        public ushort Id => Header?.ProtocolId ?? 0;
         
         protected BaseMessage()
         {
@@ -48,107 +50,92 @@ namespace SP.Engine.Runtime.Networking
         {
             if (protocol is null) throw new ArgumentNullException(nameof(protocol));
 
-            var w = new NetWriter();
-            protocol.Serialize(ref w);
+            using var writer = new NetWriter();
+            protocol.Serialize(writer);
 
-            var bodySpan = w.WrittenSpan;
+            var bufferOwner = writer.DetachBufferOwner(out var bufferLength);
             var flags = HeaderFlags.None;
-
-            IMemoryOwner<byte> tempOwner1 = null;
-            IMemoryOwner<byte> tempOwner2 = null;
 
             try
             {
-                if (policy.UseCompress && compressor != null && bodySpan.Length >= policy.CompressionThreshold)
+                if (policy.UseCompress && compressor != null && bufferLength >= policy.CompressionThreshold)
                 {
-                    var maxLen = compressor.GetMaxCompressedLength(bodySpan.Length);
-                    tempOwner1 = new PooledBuffer(maxLen);
-                    var count = compressor.Compress(bodySpan, tempOwner1.Memory.Span);
+                    var maxLen = compressor.GetMaxCompressedLength(bufferLength);
+                    var compressedOwner = new PooledBuffer(maxLen);
 
-                    bodySpan = tempOwner1.Memory.Span[..count];
+                    var written = compressor.Compress(bufferOwner.Memory.Span[..bufferLength],
+                        compressedOwner.Memory.Span);
+
+                    bufferOwner.Dispose();
+                    bufferOwner = compressedOwner;
+                    bufferLength = written;
                     flags |= HeaderFlags.Compressed;
                 }
 
                 if (policy.UseEncrypt && encryptor != null)
                 {
-                    var maxLen = encryptor.GetCiphertextLength(bodySpan.Length);
-                    tempOwner2 = new PooledBuffer(maxLen);
-                    var count = encryptor.Encrypt(bodySpan, tempOwner2.Memory.Span);
+                    var maxLen = encryptor.GetCiphertextLength(bufferLength);
+                    var encryptedOwner = new PooledBuffer(maxLen);
 
-                    bodySpan = tempOwner2.Memory.Span[..count];
+                    var written = encryptor.Encrypt(bufferOwner.Memory.Span[..bufferLength],
+                        encryptedOwner.Memory.Span);
+
+                    bufferOwner.Dispose();
+                    bufferOwner = encryptedOwner;
+                    bufferLength = written;
                     flags |= HeaderFlags.Encrypted;
                 }
-                
-                if (tempOwner2 != null)
-                {
-                    _bodyOwner = (PooledBuffer)tempOwner2;
-                    tempOwner2 = null;
-                }
-                else if (tempOwner1 != null)
-                {
-                    _bodyOwner = (PooledBuffer)tempOwner1;
-                    tempOwner1 = null;
-                }
-                else
-                {
-                    var pooled = new PooledBuffer(bodySpan.Length);
-                    bodySpan.CopyTo(pooled.GetSpan());
-                    _bodyOwner = pooled;   
-                }
 
+                _bodyOwner = bufferOwner;
+                BodyLength = bufferLength;
+                Header = CreateHeader(flags, protocol.Id, BodyLength);
                 Retain();
-                BodyLength = bodySpan.Length;
-                Header = CreateHeader(flags, protocol.Id, bodySpan.Length);
             }
-            finally
+            catch
             {
-                tempOwner1?.Dispose();
-                tempOwner2?.Dispose();
-
-                w.Dispose();
+                bufferOwner?.Dispose();
+                throw;
             }
         }
 
         public TProtocol Deserialize<TProtocol>(IEncryptor encryptor, ICompressor compressor)
             where TProtocol : IProtocolData
         {
-            if (_bodyOwner == null)
-            {
-                return default;
-            }
-            
-            IMemoryOwner<byte> tempOwner1 = null;
-            IMemoryOwner<byte> tempOwner2 = null;
-            
+            if (_bodyOwner == null) return default;
+
+            var bodySpan = BodySpan;
+            IMemoryOwner<byte> tempOwner = null;
+
             try
             {
-                var bodySpan = BodySpan;
-                
                 if (HasFlag(HeaderFlags.Encrypted) && encryptor != null)
                 {
                     var maxLen = encryptor.GetPlaintextLength(bodySpan.Length);
-                    tempOwner1 = new PooledBuffer(maxLen);
+                    var decryptedOwner = new PooledBuffer(maxLen);
+
+                    var written = encryptor.Decrypt(bodySpan, decryptedOwner.Memory.Span);
                     
-                    var count = encryptor.Decrypt(bodySpan, tempOwner1.Memory.Span);
-                    bodySpan = tempOwner1.Memory.Span[..count];
-                }   
+                    bodySpan = decryptedOwner.Memory.Span[..written];
+                    tempOwner = decryptedOwner;
+                }
 
                 if (HasFlag(HeaderFlags.Compressed) && compressor != null)
                 {
-                    var decompressedLength = compressor.GetDecompressedLength(bodySpan);
-                    tempOwner2 = new PooledBuffer(decompressedLength);
+                    var decompressedOwner = new PooledBuffer(compressor.GetDecompressedLength(bodySpan));
+                    var written = compressor.Decompress(bodySpan, decompressedOwner.Memory.Span);
                     
-                    var count = compressor.Decompress(bodySpan, tempOwner2.Memory.Span);
-                    bodySpan = tempOwner2.Memory.Span[..count];
+                    tempOwner?.Dispose();
+                    
+                    bodySpan = decompressedOwner.Memory.Span[..written];
+                    tempOwner = decompressedOwner;
                 }
-                
+
                 var reader = new NetReader(bodySpan);
                 return NetSerializer.Deserialize<TProtocol>(ref reader);
             }
             finally
             {
-               tempOwner1?.Dispose();
-               tempOwner2?.Dispose();
+               tempOwner?.Dispose();
             }
         }
 

@@ -3,34 +3,28 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using SP.Core;
+using SP.Engine.Protocol;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Server.Configuration;
 
 namespace SP.Engine.Server;
 
-public class ReceiveContextFactory : IPoolObjectFactory<SocketReceiveContext>
+internal class ReceiveContextFactory(int bufferSize) : IPoolObjectFactory<SocketReceiveContext>
 {
-    private readonly int _bufferSize;
-
-    public ReceiveContextFactory(int bufferSize)
-    {
-        if (bufferSize <= 0)
-            throw new ArgumentException("Buffer size must be greater than zero.");
-        _bufferSize = bufferSize;
-    }
+    private byte[] _globalBuffer;
 
     public SocketReceiveContext[] Create(int size)
     {
+        var totalBytes = bufferSize * size;
+        _globalBuffer = new byte[totalBytes];
+        
         var contexts = new SocketReceiveContext[size];
-
         for (var i = 0; i < size; i++)
         {
-            var buffer = new byte[_bufferSize];
-
             var e = new SocketAsyncEventArgs();
-            e.SetBuffer(buffer, 0, _bufferSize);
-            
+            e.SetBuffer(_globalBuffer, i * bufferSize, bufferSize);
             contexts[i] = new SocketReceiveContext(e);
         }
         
@@ -38,7 +32,7 @@ public class ReceiveContextFactory : IPoolObjectFactory<SocketReceiveContext>
     }
 }
 
-public class TcpSendingQueueFactory(int queueCapacity) : IPoolObjectFactory<SegmentQueue>
+internal class TcpSendingQueueFactory(int queueCapacity) : IPoolObjectFactory<SegmentQueue>
 {
     public SegmentQueue[] Create(int size)
     {
@@ -52,24 +46,12 @@ public class TcpSendingQueueFactory(int queueCapacity) : IPoolObjectFactory<Segm
     }
 }
 
-public class UdpSocketEventArgsCreator : IPoolObjectFactory<SocketAsyncEventArgs>
-{
-    public SocketAsyncEventArgs[] Create(int size)
-    {
-        var items = new SocketAsyncEventArgs[size];
-        for (var i = 0; i < size; i++)
-            items[i] = new SocketAsyncEventArgs();
-        return items;
-    }
-}
-
-internal sealed class SocketServer(IBaseEngine engine, ListenerInfo[] listenerInfos) : IDisposable
+internal sealed class SocketServer(BaseEngine engine, ListenerInfo[] listenerInfos) : IDisposable
 {
     private bool _disposed;
     private byte[] _keepAliveOptionValues;
     private ExpandablePool<SocketReceiveContext> _tcpReceiveContextPool;
     private ExpandablePool<SegmentQueue> _tcpSendingQueuePool;
-    private ExpandablePool<SocketAsyncEventArgs> _udpEventArgsPool;
     
     private List<ISocketListener> Listeners { get; } = new(listenerInfos.Length);
     private ListenerInfo[] ListenerInfos { get; } = listenerInfos;
@@ -99,15 +81,9 @@ internal sealed class SocketServer(IBaseEngine engine, ListenerInfo[] listenerIn
             , Math.Max(config.Session.MaxConnections * 3, 512)
             , new TcpSendingQueueFactory(config.Network.SendingQueueSize));
         
-        _udpEventArgsPool = new ExpandablePool<SocketAsyncEventArgs>();
-        _udpEventArgsPool.Initialize(
-            Math.Max(config.Session.MaxConnections / 4, 256),
-            config.Session.MaxConnections,
-            new UdpSocketEventArgsCreator());
-
         foreach (var info in ListenerInfos)
         {
-            var listener = CreateListener(info);
+            var listener = CreateListener(info, config);
             if (listener == null) continue;
             
             listener.Error += OnListenerError;
@@ -147,7 +123,6 @@ internal sealed class SocketServer(IBaseEngine engine, ListenerInfo[] listenerIn
         Listeners.Clear();
         _tcpReceiveContextPool.Dispose();
         _tcpSendingQueuePool.Dispose();
-        _udpEventArgsPool.Dispose();
     }
 
     private bool SetupKeepAlive(IEngineConfig config)
@@ -172,12 +147,12 @@ internal sealed class SocketServer(IBaseEngine engine, ListenerInfo[] listenerIn
         }
     }
 
-    private static ISocketListener CreateListener(ListenerInfo listenerInfo)
+    private static ISocketListener CreateListener(ListenerInfo listenerInfo, IEngineConfig config)
     {
         return listenerInfo.Mode switch
         {
             SocketMode.Tcp => new TcpNetworkListener(listenerInfo),
-            SocketMode.Udp => new UdpNetworkListener(listenerInfo),
+            SocketMode.Udp => new UdpNetworkListener(listenerInfo, config),
             _ => throw new ArgumentException($"Invalid socket mode: {listenerInfo.Mode}")
         };
     }
@@ -193,41 +168,29 @@ internal sealed class SocketServer(IBaseEngine engine, ListenerInfo[] listenerIn
                 ProcessTcpClient(socket);
                 break;
             case SocketMode.Udp:
-                ProcessUdpClient(socket, state);
+                if (state is (PooledBuffer buffer, IPEndPoint remoteEndPoint))
+                    engine.AsyncRun(() => ProcessUdpClient(socket, buffer, remoteEndPoint));
                 break;
             default:
                 throw new NotSupportedException($"{listener.Mode}");
         }
     }
-
-    private void ProcessUdpClient(Socket socket, object state)
+    
+    private void ProcessUdpClient(Socket socket, PooledBuffer buffer, IPEndPoint remoteEndPoint)
     {
-        if (state is not (ArraySegment<byte> segment, IPEndPoint remoteEndPoint)) return;
-
-        var header = UdpHeader.Read(segment);
-        var session = ((BaseEngine)engine).GetSession(header.SessionId);
-        if (session == null || session.IsClosed) return;
-
-        if (session.UdpSession == null)
+        using (buffer)
         {
-            lock (session)
-            {
-                if (session.UdpSession == null)
-                {
-                    var ns = new UdpNetworkSession(socket, remoteEndPoint, _udpEventArgsPool);
-                    ns.SetupAssembler(engine.Config.Network.UdpAssemblyTimeoutSec, engine.Config.Network.UdpMaxPendingMessageCount);
-                    ns.Session = session;
-                    session.BindUdpSession(ns);
-                    engine.Logger.Debug("UDP Session '{0}' bound.", session.SessionId);
-                }
-            }
-        }
+            if (!UdpHeader.TryRead(buffer.Memory.Span, out var header, out var headerConsumed)) return;
+            
+            var session = engine.GetSession(header.SessionId);
+            if (session == null || session.IsClosed) return;
+            
+            var udp = session.ResolveUdpSession(socket, remoteEndPoint);
+            if (udp == null) return;
 
-        if (session.UdpSession == null) return;
-        
-        // 이동통신망(LTE/5G <-> Wi-Fi) 전환 등으로 인한 IP 변경 대응
-        session.UdpSession.UpdateRemoteEndPoint(remoteEndPoint);
-        session.ProcessUdpBuffer(segment.Array, segment.Offset, segment.Count);
+            var bodyData = buffer.Slice(headerConsumed, header.BodyLength);
+            session.HandleUdpMessage(header, bodyData);
+        }
     }
 
     private void ProcessTcpClient(Socket client)

@@ -12,7 +12,7 @@ public sealed record NetworkConfig
     public int KeepAliveTimeSec { get; init; } = 30;
     public int KeepAliveIntervalSec { get; init; } = 2;
     public bool UseEncrypt { get; init; } = true;
-    public bool UseCompress { get; init; } = false;
+    public bool UseCompress { get; init; } = true;
     public ushort CompressionThreshold { get; init; } = 2048;
     public int MaxRetransmissionCount { get; init; } = 5;
 
@@ -25,7 +25,7 @@ public sealed record NetworkConfig
     public int MaxUdpHealthFail { get; init; } = 3;
     public int MaxOutOfOderCount { get; init; } = 1024;
     
-    public bool EnableUdp { get; init; } = false;
+    public bool EnableUdp { get; init; } = true;
     public ushort UdpMinMtu { get; init; } = 576;
     public ushort UdpMaxMtu { get; init; } = 1200;
     public int UdpCleanupIntervalSec { get; init; } = 2;

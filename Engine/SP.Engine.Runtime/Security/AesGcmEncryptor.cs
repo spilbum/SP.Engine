@@ -1,5 +1,4 @@
 using System;
-using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Threading;
 
@@ -7,7 +6,7 @@ namespace SP.Engine.Runtime.Security
 {
     public class AesGcmEncryptor : IEncryptor, IDisposable
     {
-        private const int NonceSize = 12;
+        private const int NonceSize = SaltSize + CounterSize;
         private const int TagSize = 16;
         private const int SaltSize = 4;
         private const int CounterSize = 8;
@@ -17,6 +16,7 @@ namespace SP.Engine.Runtime.Security
         
         private readonly byte[] _salt = new byte[SaltSize];
         private long _counter;
+        private readonly object _lock = new object();
 
         public AesGcmEncryptor(byte[] key)
         {
@@ -35,22 +35,25 @@ namespace SP.Engine.Runtime.Security
         public int Encrypt(ReadOnlySpan<byte> source, Span<byte> destination)
         {
             ThrowIfDisposed();
+        
+            lock (_lock)
+            {
+                // nonce 구성: salt(4) + counter(8)
+                var nonce = destination[..NonceSize];
+                var counter = Interlocked.Increment(ref _counter);
+                
+                _salt.CopyTo(nonce[..SaltSize]);
+                nonce.WriteInt64(SaltSize, counter);
             
-            var nonce = destination[..NonceSize];
-            var counter = Interlocked.Increment(ref _counter);
-            
-            // nonce 구성: salt(4) + counter(8)
-            _salt.CopyTo(nonce[..SaltSize]);
-            BinaryPrimitives.WriteInt64LittleEndian(nonce[SaltSize..], counter);
-
-            // 영역 분할: [Nonce(12)] [Ciphertext(N)] [Tag(16)]
-            var ciphertextLength = source.Length;
-            var ciphertext = destination.Slice(NonceSize, ciphertextLength);
-            var tag = destination.Slice(NonceSize + ciphertextLength, TagSize);
-
-            // 암호화 수행
-            _aesGcm.Encrypt(nonce, source, ciphertext, tag);  
-            return NonceSize + ciphertextLength + TagSize;
+                // 암호화 수행
+                _aesGcm.Encrypt(
+                    nonce, 
+                    source, 
+                    destination.Slice(NonceSize, source.Length), 
+                    destination.Slice(NonceSize + source.Length, TagSize));  
+                
+                return NonceSize + source.Length + TagSize;
+            }
         }
 
         public int Decrypt(ReadOnlySpan<byte> source, Span<byte> destination)
@@ -69,8 +72,11 @@ namespace SP.Engine.Runtime.Security
             // 2. 복호화 및 인증
             try
             {
-                _aesGcm.Decrypt(nonce, ciphertext, tag, destination[..ciphertextLength]);
-                return ciphertextLength;
+                lock (_lock)
+                {
+                    _aesGcm.Decrypt(nonce, ciphertext, tag, destination[..ciphertextLength]);
+                    return ciphertextLength;   
+                }
             }
             catch (CryptographicException e)
             {

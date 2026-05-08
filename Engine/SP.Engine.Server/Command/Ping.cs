@@ -9,7 +9,7 @@ internal class Ping : BaseCommand<Session, C2SEngineProtocolData.Ping>
 {
     protected override void ExecuteCommand(Session session, C2SEngineProtocolData.Ping protocol)
     {
-        session.Peer.OnPing(protocol.RawRttMs, protocol.AvgRttMs, protocol.JitterMs);
+        session.Peer?.RecordPingData(protocol.RawRttMs, protocol.AvgRttMs, protocol.JitterMs);
         session.SendPong(protocol.SendTimeMs);
     }
 }

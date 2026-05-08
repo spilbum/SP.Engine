@@ -227,22 +227,16 @@ public abstract class BasePeer : IPeer, IDisposable
                 var tcp = new TcpMessage();
                 using (tcp)
                 {
-                    var sc_serialize = new SlowChecker(50, "Serialize", Logger);
-                    using (sc_serialize)
-                    {
-                        tcp.Serialize(data, policy, encryptor, compressor);   
-                    }
+                    tcp.Serialize(data, policy, encryptor, compressor);
 
                     if (originalChannel == ChannelKind.Unreliable)
+                    {
                         return _session.TrySend(channel, tcp);   
+                    }
 
                     if (IsConnected)
                     {
-                        var sc_processor = new SlowChecker(50, "PrepareReliableSend", Logger);
-                        using (sc_processor)
-                        {
-                            _messageProcessor?.PrepareReliableSend(tcp);  
-                        }
+                        _messageProcessor?.PrepareReliableSend(tcp);  
                   
                         if (!_session.TrySend(channel, tcp)) return false; 
                         Interlocked.Exchange(ref _lastSentAck, tcp.AckNumber);
@@ -257,6 +251,8 @@ public abstract class BasePeer : IPeer, IDisposable
             }
             case ChannelKind.Unreliable:
             {
+                if (!IsConnected) return false;
+                
                 var udp = new UdpMessage();
                 using (udp)
                 {
@@ -348,16 +344,11 @@ public abstract class BasePeer : IPeer, IDisposable
         }
     }
 
-    internal void OnPing(ushort rttMs, ushort avgRttMs, ushort jitterMs)
+    internal void RecordPingData(ushort rttMs, ushort avgRttMs, ushort jitterMs)
     {
         _messageProcessor?.AddRtoSample(rttMs);
         LatencyAvgMs = avgRttMs;
         LatencyJitterMs = jitterMs;
-    }
-
-    internal void OnMessageAck(uint ackNumber)
-    {
-        HandleRemoteAck(ackNumber);
     }
 
     internal void HandleRemoteAck(uint remoteAckNumber)
@@ -396,10 +387,10 @@ public abstract class BasePeer : IPeer, IDisposable
         Interlocked.Exchange(ref _policySnapshot, snapshot);
     }
 
-    internal void Online(ISession session)
+    internal void Online(Session session)
     {
         Interlocked.Exchange(ref _stateCode, PeerStateConst.Online);
-        _session = (Session)session;
+        _session = session;
 
         if (_messageProcessor != null)
         {        

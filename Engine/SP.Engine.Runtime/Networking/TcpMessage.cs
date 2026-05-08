@@ -40,7 +40,7 @@ namespace SP.Engine.Runtime.Networking
             var total = hSize + BodyLength;
 
             if (destination.Length < total) return 0;
-            
+
             Header.WriteTo(destination[..hSize]);
             if (BodyLength > 0)
             {

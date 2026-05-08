@@ -44,7 +44,7 @@ public sealed class SessionManager
         }
     }
 
-    public Session CreateSession(BaseEngine engine, TcpNetworkSession networkSession)
+    public Session CreateSession(BaseEngine engine, TcpNetworkSession tcpSession)
     {
         lock (_lock)
         {
@@ -59,7 +59,7 @@ public sealed class SessionManager
 
             try
             {
-                session.Initialize(sessionId, engine, networkSession);
+                session.Initialize(sessionId, engine, tcpSession);
             }
             catch (Exception ex)
             {

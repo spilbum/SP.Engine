@@ -1,8 +1,6 @@
 using System;
 using System.Buffers;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Data;
 using System.Threading;
 using SP.Core;
 
@@ -10,30 +8,40 @@ namespace SP.Engine.Runtime.Networking
 {
     internal sealed class FragmentState : IDisposable
     {
+        private const int MaxAllowedFragments = 64;
         private readonly PooledBuffer[] _fragments;
+        private readonly int[] _lengths;
         private int _totalLength;
+        private int _disposed; // 0: alive, 1: disposed
         
         public readonly DateTime CreateAtUtc = DateTime.UtcNow;
-        public int ReceivedCount { get; private set; }
-        public byte ExpectedCount { get; }
+        public int AddedCount { get; private set; }
+        public byte TotalCount { get; }
 
         public FragmentState(byte count)
         {
-            ExpectedCount = count;
+            if (count > MaxAllowedFragments) throw new ArgumentOutOfRangeException(nameof(count));
+            
+            TotalCount = count;
             _fragments = ArrayPool<PooledBuffer>.Shared.Rent(count);
+            _lengths = ArrayPool<int>.Shared.Rent(count);
+            
             Array.Clear(_fragments, 0, count);
+            Array.Clear(_lengths, 0, count);
         }
 
         public bool Add(byte index, ReadOnlySpan<byte> span)
         {
-            if (index >= ExpectedCount || _fragments[index].Capacity > 0) return false;
+            if (Interlocked.CompareExchange(ref _disposed, 0, 0) != 0) return false;
+            if (index >= TotalCount || _fragments[index] != null && _fragments[index].Capacity > 0) return false;
 
             var pooled = new PooledBuffer(span.Length);
             span.CopyTo(pooled.GetSpan());
 
             _fragments[index] = pooled;
-            _totalLength += span.Length;
-            ReceivedCount++;
+            _lengths[index] = span.Length;
+            Interlocked.Add(ref _totalLength, span.Length);
+            AddedCount++;
             return true;
         }
 
@@ -43,11 +51,14 @@ namespace SP.Engine.Runtime.Networking
             var dest = result.GetSpan();
             var offset = 0;
             
-            for (var i = 0; i < ExpectedCount; i++)
+            for (var i = 0; i < TotalCount; i++)
             {
-                var src = _fragments[i].GetSpan();
+                var len = _lengths[i];
+                if (_fragments[i] == null) continue;
+                
+                var src = _fragments[i].Slice(0, len);
                 src.CopyTo(dest[offset..]);
-                offset += src.Length;
+                offset += len;
             }
     
             length = offset;
@@ -56,10 +67,13 @@ namespace SP.Engine.Runtime.Networking
 
         public void Dispose()
         {
-            for (var i = 0; i < ExpectedCount; i++)
-                _fragments[i].Dispose();
+            if (Interlocked.Exchange(ref _disposed, 1) == 1) return;
+            
+            for (var i = 0; i < TotalCount; i++)
+                _fragments[i]?.Dispose();
 
             ArrayPool<PooledBuffer>.Shared.Return(_fragments);
+            ArrayPool<int>.Shared.Return(_lengths);
         }
     }
     
@@ -70,7 +84,8 @@ namespace SP.Engine.Runtime.Networking
 
         private readonly int _cleanupTimeoutSec;
         private readonly int _maxPendingMessageCount;
-
+        private bool _disposed;
+        
         public UdpFragmentAssembler(int cleanupTimeoutSec, int maxPendingMessageCount)
         {
             _cleanupTimeoutSec = cleanupTimeoutSec;
@@ -91,37 +106,24 @@ namespace SP.Engine.Runtime.Networking
             }
         }
 
-        public bool TryPush(ReadOnlySpan<byte> data, out UdpMessage message)
+        public bool TryPush(UdpHeader header, ReadOnlySpan<byte> bodyData, out UdpMessage message)
         {
             message = null;
+            if (_disposed) return false;
 
-            var header = UdpHeader.Read(data);
-            var span = data.Slice(UdpHeader.ByteSize, header.BodyLength);
-
-            if (header.IsFragmented)
-            {
-                var fragHeader = UdpFragmentHeader.Read(data);
-                var fragData = data[UdpFragmentHeader.ByteSize..];
+            if (!UdpFragmentHeader.TryRead(bodyData, out var fragHeader, out var fragHeaderConsumed)) return false;
                 
-                if (!_assembles.ContainsKey(fragHeader.FragId) && _assembles.Count >= _maxPendingMessageCount) 
-                    return false;
+            Console.WriteLine("TryPush - FragId: {0}, Index: {1}, Length: {2}, TotalCount: {3}", fragHeader.FragId, fragHeader.Index, fragHeader.FragLength, fragHeader.TotalCount);
                 
-                if (!TryAssembleInternal(fragHeader, fragData, out var bodyOwner, out var bodyLength)) 
-                    return false;
+            var fragData = bodyData[fragHeaderConsumed..];
                 
-                message = new UdpMessage(header, bodyOwner, bodyLength);
-                return true;
-            }
-            
-            IMemoryOwner<byte> owner = null;
-            if (header.BodyLength > 0)
-            {
-                var pooled = new PooledBuffer(header.BodyLength);
-                span.CopyTo(pooled.GetSpan());
-                owner = pooled;
-            }
-            
-            message = new UdpMessage(header, owner, header.BodyLength);
+            if (!_assembles.ContainsKey(fragHeader.FragId) && _assembles.Count >= _maxPendingMessageCount) 
+                return false;
+                
+            if (!TryAssembleInternal(fragHeader, fragData, out var bodyOwner, out var bodyLength)) 
+                return false;
+                
+            message = new UdpMessage(header, bodyOwner, bodyLength);
             return true;
         }
         
@@ -138,19 +140,17 @@ namespace SP.Engine.Runtime.Networking
 
             lock (state)
             {
-                if (!state.Add(fragHeader.Index, fragData))
-                    return false;
+                if (!state.Add(fragHeader.Index, fragData)) return false;
 
-                if (state.ReceivedCount < state.ExpectedCount) 
-                    return false;
+                if (state.AddedCount < state.TotalCount) return false;
 
-                if (!_assembles.TryRemove(fragHeader.FragId, out _)) 
-                    return true;
+                if (!_assembles.TryRemove(fragHeader.FragId, out _)) return true;
                 
                 using (state)
                 {
                     bodyOwner = state.Combine(out var length);
                     bodyLength = length;
+                    Console.WriteLine("Combine - {0} - {1} ({2}bytes)", state.CreateAtUtc, state.TotalCount, length);
                     return true;
                 }
             }
@@ -158,6 +158,7 @@ namespace SP.Engine.Runtime.Networking
 
         public void Dispose()
         {
+            _disposed = true;
             foreach (var key in _assembles.Keys)
             {
                 if (_assembles.TryRemove(key, out var state))

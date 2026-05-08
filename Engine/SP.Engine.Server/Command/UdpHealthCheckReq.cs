@@ -9,6 +9,7 @@ internal class UdpHealthCheckReq : BaseCommand<Session, C2SEngineProtocolData.Ud
 {
     protected override void ExecuteCommand(Session session, C2SEngineProtocolData.UdpHealthCheckReq protocol)
     {
-        session.OnUdpHealthCheckReq();
+        session.InvalidateUdpHealth(session.Config.Network.MaxUdpHealthFail);
+        session.InternalSend(new S2CEngineProtocolData.UdpHealthCheckAck());
     }
 }

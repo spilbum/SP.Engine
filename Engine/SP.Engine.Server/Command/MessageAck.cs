@@ -9,6 +9,6 @@ internal class MessageAck : BaseCommand<Session, C2SEngineProtocolData.MessageAc
 {
     protected override void ExecuteCommand(Session session, C2SEngineProtocolData.MessageAck protocol)
     {
-        session.Peer?.OnMessageAck(protocol.AckNumber);
+        session.Peer?.HandleRemoteAck(protocol.AckNumber);
     }
 }

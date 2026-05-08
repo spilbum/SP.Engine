@@ -9,6 +9,9 @@ namespace GameClient;
 public class Client : BaseNetPeer
 {
     private int _seqNo = 1;
+    private CancellationTokenSource? _echoCts;
+    
+    public UdpQualityTracker Tracker = new();
 
     public Client(EngineConfig config, ILogger logger)
     {
@@ -189,11 +192,34 @@ public class Client : BaseNetPeer
     {
         _seqNo = 1;
     }
-
-    public UdpQualityTracker Tracker { get; } = new();
-
-    public async Task RunSender(string sendType, int period, int batchCount, CancellationToken ct)
+    
+    public void StartEcho(string type, int period, int batchCount)
     {
+        _echoCts ??= new CancellationTokenSource();
+
+        if (type.Equals("tcp", StringComparison.OrdinalIgnoreCase) ||
+            type.Equals("both", StringComparison.OrdinalIgnoreCase))
+        {
+            _ = Task.Run(() => EchoLoop("tcp", period, batchCount, _echoCts.Token));
+        }
+
+        if (type.Equals("udp", StringComparison.OrdinalIgnoreCase) ||
+            type.Equals("both", StringComparison.OrdinalIgnoreCase))
+        {
+            _ = Task.Run(() => EchoLoop("udp", period, batchCount, _echoCts.Token));
+        }
+    }
+
+    public void StopEcho()
+    {
+        _echoCts?.Cancel();
+        _echoCts = null;
+    }
+
+    private async Task EchoLoop(string sendType, int period, int batchCount, CancellationToken ct)
+    {
+        Logger.Debug("[EchoStart] Type: {0}, Period: {1}ms", sendType, period);
+
         while (!ct.IsCancellationRequested)
         {
             for (var i = 0; i < batchCount; i++)
@@ -202,13 +228,14 @@ public class Client : BaseNetPeer
                 IProtocolData packet = sendType == "tcp"
                     ? new C2GProtocolData.EchoReq { Seq = seq, SentTicks = DateTime.UtcNow.Ticks }
                     : new C2GProtocolData.UdpEchoReq { Seq = seq, SentTicks = DateTime.UtcNow.Ticks, Data = GetRandomBytes(5000)};
-                
+
                 Send(packet);
             }
             
             if (period > 0) await Task.Delay(period, ct);
         }
     }
+
 
     private static byte[] GetRandomBytes(int count)
     {

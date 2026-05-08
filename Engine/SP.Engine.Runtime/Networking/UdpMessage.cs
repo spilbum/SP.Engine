@@ -45,21 +45,21 @@ namespace SP.Engine.Runtime.Networking
         public void WriteFragmentTo(Span<byte> destination, 
             uint fragId, byte index, byte totalCount, int bodyOffset, ushort fragLen)
         {
-            const int hSize = UdpHeader.ByteSize;
-            const int fHeaderSize = UdpFragmentHeader.ByteSize;
+            const int headerSize = UdpHeader.ByteSize;
+            const int fragHeaderSize = UdpFragmentHeader.ByteSize;
             
-            var nHeader = new UdpHeaderBuilder()
+            var normalizedHeader = new UdpHeaderBuilder()
                 .From(Header)
                 .WithFragmented(1)
-                .WithBodyLength(fHeaderSize + fragLen)
+                .WithBodyLength(fragHeaderSize + fragLen)
                 .Build();
             
-            nHeader.WriteTo(destination[..hSize]);
+            normalizedHeader.WriteTo(destination[..headerSize]);
 
-            var fh = new UdpFragmentHeader(fragId, index, totalCount, fragLen);
-            fh.WriteTo(destination.Slice(hSize, fHeaderSize));
+            var fragHeader = new UdpFragmentHeader(fragId, index, totalCount, fragLen);
+            fragHeader.WriteTo(destination.Slice(headerSize, fragHeaderSize));
             
-            BodySpan.Slice(bodyOffset, fragLen).CopyTo(destination.Slice(hSize + fHeaderSize, fragLen));
+            BodySpan.Slice(bodyOffset, fragLen).CopyTo(destination.Slice(headerSize + fragHeaderSize, fragLen));
         }
 
         protected override UdpHeader CreateHeader(HeaderFlags flags, ushort protocolId, int bodyLength)

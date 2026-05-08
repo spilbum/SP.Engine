@@ -1,23 +1,44 @@
 ﻿using System;
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
+using SP.Core;
 using SP.Engine.Runtime;
+using SP.Engine.Server.Configuration;
 
 namespace SP.Engine.Server;
 
-internal class UdpNetworkListener(ListenerInfo listenerInfo) : BaseNetworkListener(listenerInfo)
+internal class UdpReceiveEventArgsFactory(int bufferSize) : IPoolObjectFactory<SocketAsyncEventArgs>
+{
+    private byte[] _globalBuffer;
+
+    public SocketAsyncEventArgs[] Create(int size)
+    {
+        var totalSize = bufferSize * size;
+        _globalBuffer = new byte[totalSize];
+        
+        var contexts = new SocketAsyncEventArgs[size];
+        for (var i = 0; i < size; i++)
+        {
+            var e = new SocketAsyncEventArgs();
+            e.SetBuffer(_globalBuffer, i * bufferSize, bufferSize);
+            contexts[i] = e;
+        }
+        return contexts;
+    }
+}
+
+internal class UdpNetworkListener(ListenerInfo listenerInfo, IEngineConfig config) : BaseNetworkListener(listenerInfo)
 {
     private readonly object _lock = new();
     private Socket _listenSocket;
-    private SocketAsyncEventArgs _receiveEventArgs;
-    private byte[] _receiveBuffer;
+    private ExpandablePool<SocketAsyncEventArgs> _receiveArgsPool;
     private volatile bool _stopping;
 
     public override bool Start()
     {
         try
         {
-            _stopping = false;
             _listenSocket = new Socket(EndPoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
             _listenSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
 
@@ -30,14 +51,21 @@ internal class UdpNetworkListener(ListenerInfo listenerInfo) : BaseNetworkListen
             
             _listenSocket.Bind(EndPoint);
 
-            _receiveEventArgs = new SocketAsyncEventArgs();
-            _receiveEventArgs.Completed += OnReceiveCompleted;
-            _receiveEventArgs.RemoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
+            _receiveArgsPool = new ExpandablePool<SocketAsyncEventArgs>();
+            _receiveArgsPool.Initialize(
+                config.Session.MaxConnections,
+                config.Session.MaxConnections * 2,
+                new UdpReceiveEventArgsFactory(config.Network.ReceiveBufferSize));
 
-            _receiveBuffer = new byte[ushort.MaxValue];
-            _receiveEventArgs.SetBuffer(_receiveBuffer, 0, _receiveBuffer.Length);
+            var initialLanes = Math.Min(32, config.Session.MaxConnections);
+            for (var i = 0; i < initialLanes; i++)
+            {
+                if (!_receiveArgsPool.TryRent(out var e)) continue;
+                e.Completed += OnReceiveCompleted;
+                e.RemoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
+                StartReceive(e);
+            }
             
-            StartReceive(_receiveEventArgs);
             return true;
         }
         catch (Exception ex)
@@ -58,70 +86,88 @@ internal class UdpNetworkListener(ListenerInfo listenerInfo) : BaseNetworkListen
                 OnReceiveCompleted(this, e);
             }
         }
-        catch (ObjectDisposedException) {}
         catch (Exception ex)
         {
-            OnError(ex);
+            HandleNetworkError(ex);
         }
     }
-
+    
     private void OnReceiveCompleted(object sender, SocketAsyncEventArgs e)
     {
-        var pending = false;
-        while (!pending)
+        try
         {
-            if (_stopping) return;
-            
-            if (e.SocketError != SocketError.Success)
+            do
             {
-                HandleSocketError(e);
-                return;
-            }
+                if (e.SocketError == SocketError.Success && e.BytesTransferred > 0)
+                {
+                    var pooled = new PooledBuffer(e.BytesTransferred);
+                    e.Buffer.AsSpan(e.Offset, e.BytesTransferred).CopyTo(pooled.Memory.Span);
 
-            if (e.BytesTransferred > 0 && e.RemoteEndPoint != null)
-            {
-                try
-                {
-                    var segment = new ArraySegment<byte>(e.Buffer!, e.Offset, e.BytesTransferred);
-                    var remote = (IPEndPoint)e.RemoteEndPoint;
+                    if (e.RemoteEndPoint is not IPEndPoint ep) break;
                     
-                    OnNewClientAccepted(_listenSocket, (segment, remote));
+                    var remoteEndPoint = new IPEndPoint(ep.Address, ep.Port);
+                    OnNewClientAccepted(_listenSocket, (pooled, remoteEndPoint));
                 }
-                catch (Exception ex)
+                else if (e.SocketError != SocketError.Success)
                 {
-                    OnError(new Exception($"[UDP] Packet processing error: {ex.Message}", ex));
+                    if (!IsIgnoreSocketError(e.SocketError))
+                        OnError(new SocketException((int)e.SocketError));
+
+                    if (e.SocketError == SocketError.OperationAborted)
+                    {
+                        ReturnToReceiveArgsPool(e);
+                        break;
+                    }
                 }
-            }
+
+                if (_stopping)
+                {
+                    ReturnToReceiveArgsPool(e);
+                    break;
+                }
         
-            // 다음 수신을 위한 초기화
-            e.RemoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
-            
-            try
-            {
-                if (_stopping) break;
-                // 다시 수신 시도
-                pending = _listenSocket.ReceiveFromAsync(e);
-            }
-            catch (ObjectDisposedException)
-            {
-                pending = true;
-            }
-            catch (Exception ex)
-            {
-                OnError(ex);
-                pending = true;
-            }
+                // 재 사용을 위한 초기화
+                e.RemoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
+                
+            } while (!_listenSocket.ReceiveFromAsync(e));
+        }
+        catch (Exception ex)
+        {
+            HandleNetworkError(ex);
+            ReturnToReceiveArgsPool(e);
         }
     }
 
-    private void HandleSocketError(SocketAsyncEventArgs e)
+    private void ReturnToReceiveArgsPool(SocketAsyncEventArgs e)
     {
-        var errorCode = (int)e.SocketError;
-        // 995: Operation Aborted (소켓 닫힘), 10004: Interrupted, 10038: Not a socket
-        if (!_stopping && errorCode is not (995 or 10004 or 10038))
+        e.Completed -= OnReceiveCompleted;
+        _receiveArgsPool.Return(e);
+    }
+
+    private void HandleNetworkError(Exception e)
+    {
+        switch (e)
         {
-            OnError(new SocketException(errorCode));
+            case SocketException se when IsIgnoreSocketError(se.SocketErrorCode):
+            case ObjectDisposedException or InvalidOperationException:
+            case OperationCanceledException:
+                    return;
+            default:
+                OnError(e);
+                return;
         }
+    }
+
+    private static bool IsIgnoreSocketError(SocketError errorCode)
+    {
+        return errorCode switch
+        {
+            SocketError.OperationAborted => true,
+            SocketError.Interrupted => true,
+            SocketError.NotSocket => true,
+            SocketError.ConnectionReset => true,
+            _ => false
+        };
     }
 
     public override void Stop()
@@ -137,14 +183,7 @@ internal class UdpNetworkListener(ListenerInfo listenerInfo) : BaseNetworkListen
                 _listenSocket = null;
             }
             
-            if (_receiveEventArgs != null)
-            {
-                var tempArgs = _receiveEventArgs;
-                _receiveEventArgs = null;
-                
-                tempArgs.Completed -= OnReceiveCompleted;
-                tempArgs.Dispose();
-            }
+            _receiveArgsPool.Dispose();
         }
 
         OnStopped();

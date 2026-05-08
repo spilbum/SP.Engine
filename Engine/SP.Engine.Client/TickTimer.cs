@@ -1,68 +1,77 @@
 using System;
+using System.Diagnostics;
 using System.Threading;
 
 namespace SP.Engine.Client
 {
     public sealed class TickTimer : IDisposable
     {
-        private readonly int _dueTimeMs;
-        private readonly int _intervalMs;
         private readonly object _state;
         private Action<object> _callback;
-        private bool _isFirstExecution;
-        private DateTime _lastExecutionTime;
+        private long _periodTicks;
+        private long _nextExecutionTicks;
+        private bool _disposed;
+        
+        public bool IsRunning { get; private set; }
 
-        public TickTimer(Action<object> callback, object state, int dueTimeMs, int intervalMs)
+        public TickTimer(Action<object> callback, object state, TimeSpan dueTime, TimeSpan period)
         {
             _callback = callback ?? throw new ArgumentNullException(nameof(callback));
             _state = state;
-            _dueTimeMs = dueTimeMs;
-            _intervalMs = intervalMs;
-            _lastExecutionTime = DateTime.UtcNow;
-            _isFirstExecution = true;
+            Change(dueTime, period);
+        }
+
+        public void Change(TimeSpan dueTime, TimeSpan period)
+        {
+            var nowTimestamp = Stopwatch.GetTimestamp();
+            
+            _periodTicks = period == Timeout.InfiniteTimeSpan
+                ? long.MaxValue
+                : (long)(period.TotalSeconds * Stopwatch.Frequency);
+            
+            _nextExecutionTicks = dueTime == Timeout.InfiniteTimeSpan
+                ? long.MaxValue
+                : nowTimestamp + (long)(dueTime.TotalSeconds * Stopwatch.Frequency);
+            
             IsRunning = true;
         }
-
-        public bool IsRunning { get; private set; }
-
-        public void Dispose()
-        {
-            IsRunning = false;
-            _callback = null;
-        }
-
+        
         public void Tick()
         {
-            if (!IsRunning)
-                return;
+            if (!IsRunning || _disposed) return;
 
-            var now = DateTime.UtcNow;
-            var elapsedMs = (int)(now - _lastExecutionTime).TotalMilliseconds;
-
-            if (_isFirstExecution)
+            var nowTicks = Stopwatch.GetTimestamp();
+            if (nowTicks >= _nextExecutionTicks)
             {
-                if (_dueTimeMs == Timeout.Infinite || elapsedMs < _dueTimeMs)
-                    return;
+                Execute(nowTicks);
+            }
+        }
 
-                Execute(now);
-                _isFirstExecution = false;
+        private void Execute(long nowTicks)
+        {
+            _callback?.Invoke(_state);
 
-                if (_intervalMs == Timeout.Infinite)
-                    Dispose();
+            if (_periodTicks == long.MaxValue)
+            {
+                Stop();
             }
             else
             {
-                if (_intervalMs == Timeout.Infinite || elapsedMs < _intervalMs)
-                    return;
+                _nextExecutionTicks += _periodTicks;
 
-                Execute(now);
+                if (_nextExecutionTicks < nowTicks)
+                    _nextExecutionTicks = nowTicks + _periodTicks;
             }
         }
 
-        private void Execute(DateTime now)
+        public void Stop() => IsRunning = false;
+        
+        public void Dispose()
         {
-            _lastExecutionTime = now;
-            _callback?.Invoke(_state);
+            if (_disposed) return;
+            IsRunning = false;
+            _callback = null;
+            _disposed = true;
         }
     }
 }

@@ -47,8 +47,8 @@ internal static class Program
 
     private static void HandleCommand(string line)
     {
-        var args = line.Split(' ');
-        switch (args[0])
+        var args = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        switch (args[0].ToLower())
         {
             case "connect":
                 var count = int.Parse(args[1]);
@@ -61,19 +61,24 @@ internal static class Program
                 break;
             
             case "start":
-                var type = args[1].ToLower();
-                var period = int.Parse(args[2]);
-                var batch = int.Parse(args[3]);
-                _manager?.StartEchoTest(type, period, batch);
+                var targetCount = int.Parse(args[1]);
+                var sendType = args[2];
+                var period = int.Parse(args[3]);
+                var batchCount = int.Parse(args[4]);
+                
+                _manager?.StartEchoTest(targetCount, sendType, period, batchCount);
                 break;
             
             case "stop":
-                _manager?.StopAll();
+                _manager?.StopEchoTest();
                 break;
-            
             case "reconnect":
                 _manager?.Test_Reconnect();
                 break;
+            case "disconnect":
+                _manager?.Stop();
+                break;
+            
             case "quit":
 #if DEBUG
                 BufferTracker.DumpLeaks(_manager?.Logger);
