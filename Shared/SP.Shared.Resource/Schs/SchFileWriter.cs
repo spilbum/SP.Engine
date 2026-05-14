@@ -52,7 +52,7 @@ public static class SchFileWriter
         CancellationToken ct = default)
     {
         var buf = new PooledBuffer();
-        var w = new NetWriter();
+        var w = new NetWriter(buf);
 
         try
         {
