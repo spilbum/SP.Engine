@@ -7,7 +7,7 @@ using SP.Engine.Runtime.Protocol;
 namespace SP.Engine.Server.Command;
 
 [ProtocolCommand(C2SEngineProtocolId.SessionAuthReq)]
-internal class SessionAuth : BaseCommand<Session, C2SEngineProtocolData.SessionAuthReq>
+internal class SessionAuth : CommandBase<Session, C2SEngineProtocolData.SessionAuthReq>
 {
     protected override void ExecuteCommand(Session session, C2SEngineProtocolData.SessionAuthReq protocol)
     {
@@ -43,7 +43,7 @@ internal class SessionAuth : BaseCommand<Session, C2SEngineProtocolData.SessionA
         }
     }
     
-    private static (SessionAuthResult, BasePeer) HandleNewSession(Session session, Engine engine, C2SEngineProtocolData.SessionAuthReq req)
+    private static (SessionAuthResult, PeerBase) HandleNewSession(Session session, EngineBase engine, C2SEngineProtocolData.SessionAuthReq req)
     {
         if (session.Peer != null) return (SessionAuthResult.InvalidRequest, null);
 
@@ -56,10 +56,10 @@ internal class SessionAuth : BaseCommand<Session, C2SEngineProtocolData.SessionA
         return (SessionAuthResult.Ok, peer);
     }
 
-    private static (SessionAuthResult, BasePeer) HandleReconnection(Session session, Engine engine, C2SEngineProtocolData.SessionAuthReq req)
+    private static (SessionAuthResult, PeerBase) HandleReconnection(Session session, EngineBase engine, C2SEngineProtocolData.SessionAuthReq req)
     {
         var prevSession = engine.GetSession(req.SessionId);
-        BasePeer targetPeer;
+        PeerBase targetPeer;
         
         if (prevSession != null)
         {
@@ -83,36 +83,37 @@ internal class SessionAuth : BaseCommand<Session, C2SEngineProtocolData.SessionA
 
 public static class SessionAuthAckExtensions
 {
-    public static void FillSuccess(this S2CEngineProtocolData.SessionAuthAck ack, Session session, BasePeer peer)
+    public static void FillSuccess(this S2CEngineProtocolData.SessionAuthAck ack, Session session, PeerBase peer)
     {
-        var net = session.Config.Network;
+
         var engine = session.Engine;
         
         ack.SessionId = session.SessionId;
         ack.PeerId = peer.PeerId;
         
-        ack.MaxFrameBytes = net.MaxFrameBytes;
-        ack.SendTimeoutMs = net.SendTimeoutMs;
-        ack.MaxRetries = net.MaxRetransmissionCount;
-        ack.MaxAckDelayMs = net.MaxAckDelayMs;
-        ack.AckStepThreshold = net.AckStepThreshold;
-        ack.MaxOutOfOrderCount = net.MaxOutOfOderCount;
+        var network = session.Config.Network;
+        ack.MaxFrameBytes = network.MaxFrameBytes;
+        ack.SendTimeoutMs = network.SendTimeoutMs;
+        ack.MaxRetries = network.MaxRetransmissionCount;
+        ack.MaxAckDelayMs = network.MaxAckDelayMs;
+        ack.AckStepThreshold = network.AckFrequency;
+        ack.MaxOutOfOrderCount = network.MaxOutOfOrderCount;
         
         ack.UdpOpenPort = engine.GetOpenPort(SocketMode.Udp);
-        ack.UdpAssemblyTimeoutSec = net.UdpAssemblyTimeoutSec;
-        ack.UdpMaxPendingMessageCount = net.UdpMaxPendingMessageCount;
-        ack.UdpCleanupIntervalSec = net.UdpCleanupIntervalSec;
+        ack.UdpAssemblyTimeoutSec = network.UdpAssemblyTimeoutSec;
+        ack.UdpMaxPendingMessageCount = network.UdpMaxPendingMessageCount;
+        ack.UdpCleanupIntervalSec = network.UdpCleanupPeriodSec;
         
-        if (net.UseEncrypt)
+        if (network.UseEncrypt)
         {
             ack.UseEncrypt = true;
             ack.ServerPublicKey = peer.LocalPublicKey;
         }
 
-        if (net.UseCompress)
+        if (network.UseCompress)
         {
             ack.UseCompress = true;
-            ack.CompressionThreshold = net.CompressionThreshold;
+            ack.CompressionThreshold = network.CompressionThreshold;
         }
     }
 }

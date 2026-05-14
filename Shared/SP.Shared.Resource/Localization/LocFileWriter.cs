@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using SP.Core;
 using SP.Core.Serialization;
 
 namespace SP.Shared.Resource.Localization;
@@ -16,22 +17,30 @@ public static class LocFileWriter
         string path,
         CancellationToken ct = default)
     {
-        var w = new NetWriter();
-        
-        w.WriteByte((byte)'L');
-        w.WriteByte((byte)'L');
-        w.WriteByte((byte)'O');
-        w.WriteByte((byte)'C');
-        w.WriteString(language);
+        var buf = new PooledBuffer();
+        var w = new NetWriter(buf);
 
-        var ordered = map.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).ToList();
-        w.WriteVarUInt((uint)ordered.Count);
-        foreach (var (key, value) in ordered)
+        try
         {
-            w.WriteString(key);
-            w.WriteString(value ?? string.Empty);
-        }
+            w.WriteByte((byte)'L');
+            w.WriteByte((byte)'L');
+            w.WriteByte((byte)'O');
+            w.WriteByte((byte)'C');
+            w.WriteString(language);
 
-        await File.WriteAllBytesAsync(path, w.ToArray(), ct);
+            var ordered = map.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).ToList();
+            w.WriteVarUInt((uint)ordered.Count);
+            foreach (var (key, value) in ordered)
+            {
+                w.WriteString(key);
+                w.WriteString(value ?? string.Empty);
+            }
+
+            await File.WriteAllBytesAsync(path, w.WrittenSpan.ToArray(), ct);
+        }
+        finally
+        {
+            buf.Dispose();
+        }
     }
 }

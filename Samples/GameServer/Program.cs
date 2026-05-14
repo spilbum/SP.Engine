@@ -1,5 +1,8 @@
 ﻿
+using System.Reflection;
+using Common;
 using SP.Core;
+using SP.Engine.Server;
 
 namespace GameServer;
 
@@ -37,14 +40,46 @@ internal static class Program
         GameServer? server = null;
         try
         {
-            var config = JsonConfigLoader.Load<AppConfig>("config.json", "config.dev.json");
-            if (config == null)
+            var appConfig = JsonConfigLoader.Load<AppConfig>("config.json", "config.dev.json");
+            if (appConfig == null)
                 throw new InvalidOperationException("Failed to load config file(s).");
 
-            server = new GameServer();
-            if (!server.Initialize(config)) throw new InvalidOperationException("Failed to initialize server.");
-            if (!server.Start()) throw new InvalidOperationException("Failed to start server.");
+            var builder = EngineBuilder<GameServer>.Create()
+                .SetName(appConfig.Server.Name)
+                .Listen(appConfig.Server.Port)
+                .Listen(20000, mode: SocketMode.Udp)
+                .AddAssembly(typeof(C2GProtocolData.LoginReq).Assembly)
+                .ConfigureNetwork(network => network with
+                {
+                    SendingQueueSize = 128
+                })
+                .ConfigureSession(session => session with
+                {
+                    IdleSessionTimeoutSec = 60
+                    #if DEBUG
+                    , PeerJobSlowThresholdMs = 200
+                    #endif
+                })
+                .ConfigurePerformance(perf => perf with
+                {
+                })
+                .Setup(s =>
+                {
+                    if (!s.Setup(appConfig))
+                        throw new InvalidOperationException("Failed to setup server.");
+                });
 
+            foreach (var connector in appConfig.Connector)
+            {
+                builder.AddConnector(connector.Name, connector.Host, connector.Port);   
+            }
+
+            server = builder.Build();
+            if (!server.Start())
+            {
+                throw new InvalidOperationException("Failed to start server.");
+            }
+            
             await Task.Delay(Timeout.Infinite, cts.Token);
         }
         catch (OperationCanceledException)

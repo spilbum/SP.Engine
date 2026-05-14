@@ -5,7 +5,7 @@ using SP.Engine.Runtime.Protocol;
 namespace GameClient.Command;
 
 [ProtocolCommand(G2CProtocol.RoomMemberLeaveNtf)]
-public class RoomMemberLeaveNtf : BaseCommand<Client, G2CProtocolData.RoomMemberLeaveNtf>
+public class RoomMemberLeaveNtf : CommandBase<Client, G2CProtocolData.RoomMemberLeaveNtf>
 {
     protected override void ExecuteCommand(Client context, G2CProtocolData.RoomMemberLeaveNtf protocol)
     {

@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using SP.Core;
 using SP.Core.Serialization;
 using SP.Shared.Resource.Table;
 
@@ -11,33 +12,41 @@ public static class RefFileWriter
 {
     public static void Write(RefTableSchema schema, RefTableData data, string path)
     {
-        var w = new NetWriter();
-        
-        // magic
-        w.WriteByte((byte)'R');
-        w.WriteByte((byte)'R');
-        w.WriteByte((byte)'E');
-        w.WriteByte((byte)'F');
-        
-        // 테이블 명
-        w.WriteString(schema.Name);
-        
-        // 행 개수
-        w.WriteVarUInt((uint)data.Rows.Count);
-        
-        foreach (var row in data.Rows)
-        {
-            for (var i = 0; i < schema.Columns.Count; i++)
-            {
-                var column = schema.Columns[i];
-                var value = row.Get(i);
-                WriteValue(ref w, column.Type, value);
-            }
-        }
+        var buf = new PooledBuffer();
+        var w = new NetWriter(buf);
 
-        var bytes = w.ToArray();
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllBytes(path, bytes);
+        try
+        {
+            // magic
+            w.WriteByte((byte)'R');
+            w.WriteByte((byte)'R');
+            w.WriteByte((byte)'E');
+            w.WriteByte((byte)'F');
+        
+            // 테이블 명
+            w.WriteString(schema.Name);
+        
+            // 행 개수
+            w.WriteVarUInt((uint)data.Rows.Count);
+        
+            foreach (var row in data.Rows)
+            {
+                for (var i = 0; i < schema.Columns.Count; i++)
+                {
+                    var column = schema.Columns[i];
+                    var value = row.Get(i);
+                    WriteValue(ref w, column.Type, value);
+                }
+            }
+
+            var bytes = w.WrittenSpan.ToArray();
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllBytes(path, bytes);
+        }
+        finally
+        {
+            buf.Dispose();
+        }
     }
 
     public static async Task WriteAsync(
@@ -46,29 +55,37 @@ public static class RefFileWriter
         string path,
         CancellationToken ct = default)
     {
-        var w = new NetWriter();
-        
-        w.WriteByte((byte)'R');
-        w.WriteByte((byte)'R');
-        w.WriteByte((byte)'E');
-        w.WriteByte((byte)'F');
-        
-        w.WriteString(schema.Name);
-        w.WriteVarUInt((uint)data.Rows.Count);
+        var buf = new PooledBuffer();
+        var w = new NetWriter(buf);
 
-        foreach (var row in data.Rows)
+        try
         {
-            for (var i = 0; i < schema.Columns.Count; i++)
-            {
-                var column = schema.Columns[i];
-                var value = row.Get(i);
-                WriteValue(ref w, column.Type, value);
-            }
-        }
+            w.WriteByte((byte)'R');
+            w.WriteByte((byte)'R');
+            w.WriteByte((byte)'E');
+            w.WriteByte((byte)'F');
         
-        var bytes = w.ToArray();
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await File.WriteAllBytesAsync(path, bytes, ct);
+            w.WriteString(schema.Name);
+            w.WriteVarUInt((uint)data.Rows.Count);
+
+            foreach (var row in data.Rows)
+            {
+                for (var i = 0; i < schema.Columns.Count; i++)
+                {
+                    var column = schema.Columns[i];
+                    var value = row.Get(i);
+                    WriteValue(ref w, column.Type, value);
+                }
+            }
+        
+            var bytes = w.WrittenSpan.ToArray();
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            await File.WriteAllBytesAsync(path, bytes, ct);
+        }
+        finally
+        {
+            buf.Dispose();
+        }
     }
 
     private static void WriteValue(ref NetWriter w, ColumnType type, object? value)

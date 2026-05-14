@@ -2,7 +2,7 @@ using System;
 
 namespace SP.Core
 {
-    public struct EwmaFilter
+    public sealed class EwmaFilter
     {
         // 최신 값에 반영할 가중치 계수 (0 ~ 1)
         // 값이 클수록 최신 값 반영이 빠름

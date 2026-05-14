@@ -6,7 +6,7 @@ using SP.Engine.Runtime.Protocol;
 namespace GameServer.Command;
 
 [ProtocolCommand(C2GProtocol.RoomSearchReq)]
-public class RoomSearchReq : BaseCommand<GamePeer, C2GProtocolData.RoomSearchReq>
+public class RoomSearchReq : CommandBase<GamePeer, C2GProtocolData.RoomSearchReq>
 {
     protected override void ExecuteCommand(GamePeer context, C2GProtocolData.RoomSearchReq protocol)
     {

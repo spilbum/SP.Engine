@@ -1,83 +1,106 @@
 ﻿using System;
-using System.Net;
 using System.Threading;
-using SP.Core.Logging;
 using SP.Engine.Protocol;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Channel;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
-using SP.Engine.Server.Configuration;
 
 namespace SP.Engine.Server;
 
-public interface ISession
+public sealed class Session : SessionBase
 {
-    long SessionId { get; }
-    ILogger Logger { get; }
-    IPEndPoint LocalEndPoint { get; }
-    IPEndPoint RemoteEndPoint { get; }
-    IEngineConfig Config { get; }
-}
-
-public sealed class Session : BaseSession, ISession
-{
+    private long _lastUdpCheckTimeTicks;
     private int _udpHealthFailCount;
-    private BasePeer _peer;
+    private IDisposable _udpHealthCheckTimer;
+    private PeerBase _peer;
 
-    public BasePeer Peer
+    public PeerBase Peer
     {
         get => _peer;
         set => Interlocked.Exchange(ref _peer, value);
     }
     
-    public Engine Engine { get; private set; }
+    public EngineBase Engine { get; private set; }
 
-    public override void Initialize(long sessionId, IBaseEngine baseEngine, TcpNetworkSession tcpSession)
+    public override void Initialize(long sessionId, EngineCore engineCore, TcpNetworkSession tcpSession)
     {
-        base.Initialize(sessionId, baseEngine, tcpSession);
-        Engine = (Engine)baseEngine;
+        base.Initialize(sessionId, engineCore, tcpSession);
+        Engine = (EngineBase)engineCore;
     }
 
-    internal void Authenticate(BasePeer peer)
+    internal void StartUdpHealthCheck()
+    {
+        if (_udpHealthCheckTimer == null) return;
+        _udpHealthCheckTimer = Engine.GlobalScheduler.Schedule(
+            Engine.Fiber, 
+            TickUdpHealthCheck, 
+            TimeSpan.Zero, 
+            TimeSpan.FromSeconds(Config.Session.UdpHealthCheckIntervalSec));
+    }
+
+    private void TickUdpHealthCheck()
+    {
+        var nowTicks = DateTime.UtcNow.Ticks;
+        var elapsedMs = (nowTicks - _lastUdpCheckTimeTicks) / TimeSpan.TicksPerMillisecond;
+        var timeoutMs = Math.Max(Config.Session.UdpHealthCheckMinTimeoutMs, _peer.AvgRTTMs * 3);
+        if (elapsedMs >= timeoutMs)
+        {
+            if (InvalidateUdpHealth(Config.Session.UdpHealthCheckMaxFailCount))
+            {
+                SendUdpStatusNotify(false);
+                Logger.Warn("Session {0} UDP disabled.", SessionId);
+            }
+            
+            SendUdpHealthCheck();
+        }
+    }
+
+    internal void SendUdpStatusNotify(bool enabled)
+    {
+        InternalSend(new S2CEngineProtocolData.UdpStatusNotify { IsEnabled = enabled });
+    }
+
+    private void SendUdpHealthCheck()
+    {
+        _lastUdpCheckTimeTicks = DateTime.UtcNow.Ticks;
+        InternalSend(new S2CEngineProtocolData.UdpHealthCheck());
+    }
+
+    private bool InvalidateUdpHealth(int maxFailCount)
+    {
+        var count = Interlocked.Increment(ref _udpHealthFailCount);
+        if (count < maxFailCount || !IsUdpAvailable) return false;
+        
+        DisableUdp();
+        return true;
+    }
+
+    internal bool RecoverUdpHealth()
+    {
+        if (IsUdpAvailable) return false;
+        
+        Interlocked.Exchange(ref _udpHealthFailCount, 0);
+        _lastUdpCheckTimeTicks = DateTime.UtcNow.Ticks;
+        
+        EnableUdp();
+        return true;
+    }
+    
+    internal void Authenticate(PeerBase peer)
     {
         Peer = peer;
         IsAuthenticated = true;
         peer.OnSessionAuthCompleted();
     }
 
-    internal void SetupMaxFrameSize(ushort mtu)
+    internal void SetupFrameSize(ushort mtu)
     {
-        _udpSession?.SetupMaxFrameSize(mtu);
-    }
-
-    internal void InvalidateUdpHealth(int maxFailCount)
-    {
-        var count = Interlocked.Increment(ref _udpHealthFailCount);
-        if (count < maxFailCount) return;
-        
-        Interlocked.Exchange(ref _udpHealthFailCount, 0);
-        if (!IsUdpAvailable) return;
-        
-        DisableUdp();
-        Logger.Warn("Session {0} UDP disabled due to health check failure.", SessionId);
-    }
-
-    internal bool RecoverUdpHealth()
-    {
-        Interlocked.Exchange(ref _udpHealthFailCount, 0);
-        if (IsUdpAvailable) return false;
-        
-        EnableUdp();
-        Logger.Info("Session {0} UDP capability has been restored and enabled.", SessionId);
-        return true;
+        _udpSession?.SetupFrameSize(mtu);
     }
 
     internal bool InternalSend(IProtocolData data)
     {
-        var policy = PolicyDefaults.InternalPolicy;
-        var encryptor = policy.UseEncrypt ? Peer?.Encryptor : null;
-        var compressor = policy.UseCompress ? Peer?.Compressor : null;
         var originalChannel = data.Channel;
         var channel = originalChannel == ChannelKind.Unreliable && !IsUdpAvailable
             ? ChannelKind.Reliable
@@ -90,8 +113,8 @@ public sealed class Session : BaseSession, ISession
                 var tcp = new TcpMessage();
                 using (tcp)
                 {
-                    tcp.Serialize(data, policy, encryptor, compressor);
-                    return TrySend(channel, tcp);
+                    tcp.Serialize(data);
+                    return Send(channel, tcp);
                 }
             }
             case ChannelKind.Unreliable:
@@ -99,9 +122,8 @@ public sealed class Session : BaseSession, ISession
                 var udp = new UdpMessage();
                 using (udp)
                 {
-                    udp.SetSessionId(SessionId);
-                    udp.Serialize(data, policy, encryptor, compressor);
-                    return TrySend(channel, udp);
+                    udp.Serialize(data);
+                    return Send(channel, udp);
                 }
             }
             default:
@@ -114,7 +136,7 @@ public sealed class Session : BaseSession, ISession
         InternalSend(new S2CEngineProtocolData.Pong
         {
             ClientSendTimeMs = clientSendTimeMs,
-            ServerTimeMs = Engine.NetworkTimeMs
+            ServerTimeMs = EngineBase.NetworkTimeMs
         });
     }
 
@@ -143,6 +165,7 @@ public sealed class Session : BaseSession, ISession
             return;
         }
         
+        _udpHealthCheckTimer?.Dispose();
         base.Close(reason);
     }
     
@@ -153,8 +176,6 @@ public sealed class Session : BaseSession, ISession
         {
             return;
         }
-        
-        Logger.Debug("Session {0} start closing...", SessionId);
         
         StartClosingTime = DateTime.UtcNow;
         Engine.EnqueueCloseHandshakePending(this);

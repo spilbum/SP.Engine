@@ -8,10 +8,8 @@ using SP.Engine.Server.Configuration;
 namespace SP.Engine.Server.Command;
 
 [ProtocolCommand(C2SEngineProtocolId.UdpHelloReq)]
-internal class UdpHelloReq : BaseCommand<Session, C2SEngineProtocolData.UdpHelloReq>
+internal class UdpHelloReq : CommandBase<Session, C2SEngineProtocolData.UdpHelloReq>
 {
-    private const ushort MinIpv4Mtu = 576;
-    
     protected override void ExecuteCommand(Session session, C2SEngineProtocolData.UdpHelloReq protocol)
     {
         var ack = new S2CEngineProtocolData.UdpHelloAck { Result = UdpHandshakeResult.None };
@@ -24,12 +22,15 @@ internal class UdpHelloReq : BaseCommand<Session, C2SEngineProtocolData.UdpHello
                 return;
             }
 
-            var negotiatedMtu = NegotiateMtu(session.Config.Network, protocol.Mtu);
-            session.SetupMaxFrameSize(negotiatedMtu);
+            var mtu = NegotiateMtu(session.Config.Network, protocol.Mtu);
+            session.SetupFrameSize(mtu);
             
-            ack.Mtu = negotiatedMtu;
+            // 상태 체크 타이머 시작
+            session.StartUdpHealthCheck();
+            
+            ack.Mtu = mtu;
             ack.Result = UdpHandshakeResult.Ok;
-            session.Logger.Debug("Session {0} UDP handshake succeeded with MTU: {1}", session.SessionId, negotiatedMtu);
+            session.Logger.Debug("Session {0} UDP handshake succeeded with MTU: {1}", session.SessionId, mtu);
         }
         catch (Exception ex)
         {
@@ -49,14 +50,13 @@ internal class UdpHelloReq : BaseCommand<Session, C2SEngineProtocolData.UdpHello
     {
         if (session.SessionId != req.SessionId || session.Peer?.PeerId != req.PeerId)
         {
-            session.Logger.Debug("UDP Hello: Identity mismatch. sessionId={0}", session.SessionId);
             result = UdpHandshakeResult.InvalidRequest;
             return false;
         }
 
         if (session.IsClosing || session.IsClosed)
         {
-            result = UdpHandshakeResult.InvalidRequest;
+            result = UdpHandshakeResult.SessionClosed;
             return false;
         }
 
@@ -72,7 +72,7 @@ internal class UdpHelloReq : BaseCommand<Session, C2SEngineProtocolData.UdpHello
 
     private static ushort NegotiateMtu(NetworkConfig config, ushort clientMtu)
     {
-        var minMtu = Math.Max(MinIpv4Mtu, clientMtu);
+        var minMtu = Math.Max(config.UdpMinMtu, clientMtu);
         var maxMtu = Math.Max(minMtu, config.UdpMaxMtu);
         return Math.Min(Math.Max(clientMtu, minMtu), maxMtu);
     }

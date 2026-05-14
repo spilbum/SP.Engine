@@ -79,7 +79,7 @@ public class GameRoom : BaseRoom
         : base(manager, fiber, roomId, idleTimeout)
     {
         _options = options;
-        GameServer.Instance.Scheduler.Schedule(fiber, Tick, TimeSpan.Zero, TimeSpan.FromMilliseconds(50));
+        GameServer.Instance.GlobalScheduler.Schedule(fiber, Tick, TimeSpan.Zero, TimeSpan.FromMilliseconds(50));
     }
 
     public RoomState State { get; private set; } = RoomState.Waiting;
@@ -191,7 +191,7 @@ public class GameRoom : BaseRoom
                     _members.Count, _options.ReadyTimeSec);
 
                 _readyTimer?.Dispose();
-                _readyTimer = GameServer.Instance.Scheduler.Schedule(Fiber, OnReadyTimeout, _options.ReadyTime, TimeSpan.Zero);
+                _readyTimer = GameServer.Instance.GlobalScheduler.Schedule(Fiber, OnReadyTimeout, _options.ReadyTime, TimeSpan.Zero);
                 break;
 
             case RoomState.Playing:
@@ -200,7 +200,7 @@ public class GameRoom : BaseRoom
                     _options.GameDurationSec);
 
                 _gameTimer?.Dispose();
-                _gameTimer = GameServer.Instance.Scheduler.Schedule(Fiber, EndGameByTimeout, _options.GameDurationMs, TimeSpan.Zero);
+                _gameTimer = GameServer.Instance.GlobalScheduler.Schedule(Fiber, EndGameByTimeout, _options.GameDurationMs, TimeSpan.Zero);
                 break;
 
             case RoomState.Ended:

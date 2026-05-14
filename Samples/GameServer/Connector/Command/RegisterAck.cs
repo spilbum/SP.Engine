@@ -5,7 +5,7 @@ using SP.Engine.Runtime.Protocol;
 namespace GameServer.Connector.Command;
 
 [ProtocolCommand(S2SProtocol.RegisterAck)]
-public class RegisterAck : BaseCommand<RankConnector, S2SProtocolData.RegisterAck>
+public class RegisterAck : CommandBase<RankConnector, S2SProtocolData.RegisterAck>
 {
     protected override void ExecuteCommand(RankConnector context, S2SProtocolData.RegisterAck protocol)
     {

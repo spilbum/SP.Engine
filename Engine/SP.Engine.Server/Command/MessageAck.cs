@@ -5,7 +5,7 @@ using SP.Engine.Runtime.Protocol;
 namespace SP.Engine.Server.Command;
 
 [ProtocolCommand(C2SEngineProtocolId.MessageAck)]
-internal class MessageAck : BaseCommand<Session, C2SEngineProtocolData.MessageAck>
+internal class MessageAck : CommandBase<Session, C2SEngineProtocolData.MessageAck>
 {
     protected override void ExecuteCommand(Session session, C2SEngineProtocolData.MessageAck protocol)
     {

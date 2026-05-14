@@ -5,7 +5,7 @@ using SP.Engine.Runtime.Protocol;
 namespace SP.Engine.Server.Command;
 
 [ProtocolCommand(C2SEngineProtocolId.Ping)]
-internal class Ping : BaseCommand<Session, C2SEngineProtocolData.Ping>
+internal class Ping : CommandBase<Session, C2SEngineProtocolData.Ping>
 {
     protected override void ExecuteCommand(Session session, C2SEngineProtocolData.Ping protocol)
     {

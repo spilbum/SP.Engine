@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
+using System.Xml.Schema;
 using SP.Core.Logging;
 
 namespace SP.Core
@@ -44,33 +45,27 @@ namespace SP.Core
     }
     #endif
     
-    public sealed class PooledBuffer : IBufferWriter<byte>, IMemoryOwner<byte>
+    public sealed class PooledBuffer : IMemoryOwner<byte>
     {
         private const int DefaultCapacity = 1024;
         
         private byte[] _buffer;
-        private int _index;
         private int _disposed;
 
         public Memory<byte> Memory => _buffer.AsMemory();
-        
         public int Capacity => _buffer.Length;
-        public int WrittenCount => _index;
-        public ReadOnlyMemory<byte> WrittenMemory => _buffer.AsMemory(0, _index);
-        public ReadOnlySpan<byte> WrittenSpan => _buffer.AsSpan(0, _index);
-
+        
         #if DEBUG
         public string StackTrace { get; }
         public DateTime CreatedTime { get; }
         public Guid Id { get; } = Guid.NewGuid();
         #endif
         
-        public PooledBuffer(int initialCapacity = DefaultCapacity)
+        public PooledBuffer(int capacity = DefaultCapacity)
         {
-            _buffer = ArrayPool<byte>.Shared.Rent(initialCapacity);
-            _index = 0;
-            
+            _buffer = ArrayPool<byte>.Shared.Rent(capacity);
             BufferMetrics.OnRent();
+            
 #if DEBUG
             StackTrace = Environment.StackTrace;
             CreatedTime = DateTime.UtcNow;
@@ -78,64 +73,78 @@ namespace SP.Core
 #endif
         }
 
-        public Memory<byte> GetMemory(int sizeHint = 0)
-        {
-            ThrowIfDisposed();
-            
-            CheckAndResizeBuffer(sizeHint);
-            return _buffer.AsMemory(_index);
-        }
-
-        public Span<byte> GetSpan(int sizeHint = 0)
-        {
-            ThrowIfDisposed();
-            
-            CheckAndResizeBuffer(sizeHint);
-            return _buffer.AsSpan(_index);
-        }
-
-        public void Advance(int count)
-        {
-            ThrowIfDisposed();
-            
-            if (count < 0 || _index + count > _buffer.Length)
-                throw new ArgumentOutOfRangeException(nameof(count));
-            _index += count;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void CheckAndResizeBuffer(int sizeHint)
+        public void ExpandLinear(int newCapacity, int writtenCount)
         {
             ThrowIfDisposed();
 
-            var size = sizeHint <= 0 ? 1 : sizeHint;
-            if (_index + size <= _buffer.Length) return;
+            if (newCapacity <= _buffer.Length)
+                return;
             
-            Grow(size);
-        }
+            var newBuffer = ArrayPool<byte>.Shared.Rent(newCapacity);
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        private void Grow(int sizeHint)
-        {
-            var minCap = _index + sizeHint;
-            var curCap = _buffer.Length;
-            var newCap = curCap == 0 ? DefaultCapacity : curCap * 2;
-            
-            if (newCap < minCap) newCap = minCap;
-            
-            var newBuffer = ArrayPool<byte>.Shared.Rent(newCap);
-            if (_index > 0)
+            try
             {
-                _buffer.AsSpan(0, _index).CopyTo(newBuffer);
+                if (writtenCount > 0)
+                {
+                    _buffer.AsSpan(0, writtenCount).CopyTo(newBuffer);
+                }
             }
-
+            catch
+            {
+                ArrayPool<byte>.Shared.Return(_buffer);
+                throw;
+            }
+            
             var oldBuffer = _buffer;
             _buffer = newBuffer;
 
-            if (oldBuffer != null)
+            if (oldBuffer == null) return;
+            ArrayPool<byte>.Shared.Return(oldBuffer);
+            BufferMetrics.OnReturn();
+            BufferMetrics.OnRent();
+        }
+
+        public int ExpandRingBuffer(int newCapacity, int head, int tail, int available)
+        {
+            ThrowIfDisposed();
+
+            if (newCapacity <= _buffer.Length)
+                return tail;
+            
+            var newBuffer = ArrayPool<byte>.Shared.Rent(newCapacity);
+
+            try
             {
-                ArrayPool<byte>.Shared.Return(oldBuffer);
+                if (available > 0)
+                {
+                    if (head < tail)
+                    {
+                        _buffer.AsSpan(head, available).CopyTo(newBuffer);
+                    }
+                    else
+                    {
+                        var distanceToEnd = _buffer.Length - head;
+                        _buffer.AsSpan(head, distanceToEnd).CopyTo(newBuffer);
+                        _buffer.AsSpan(0, tail).CopyTo(newBuffer.AsSpan(distanceToEnd));
+                    }
+                }
             }
+            catch
+            {
+                ArrayPool<byte>.Shared.Return(_buffer);
+                throw;
+            }
+            
+            var oldBuffer = _buffer;
+            _buffer = newBuffer;
+
+            if (oldBuffer == null) 
+                return available;
+            
+            ArrayPool<byte>.Shared.Return(oldBuffer);
+            BufferMetrics.OnReturn();
+            BufferMetrics.OnRent();
+            return available;
         }
 
         public Span<byte> Slice(int start, int length)
@@ -159,9 +168,7 @@ namespace SP.Core
         [method: MethodImpl(MethodImplOptions.NoInlining)]
         private static void ThrowObjectDisposedException() => throw new ObjectDisposedException(nameof(PooledBuffer));
 
-        public void Dispose() => Dispose(false);
-        
-        public void Dispose(bool clearArray)
+        public void Dispose()
         {
             if (Interlocked.Exchange(ref _disposed, 1) == 1) return;
             
@@ -170,7 +177,7 @@ namespace SP.Core
 
             if (buf != null)
             {
-                ArrayPool<byte>.Shared.Return(buf, clearArray);
+                ArrayPool<byte>.Shared.Return(buf, clearArray: false);
                 BufferMetrics.OnReturn();   
             }
             

@@ -11,7 +11,7 @@ namespace Common
     public static class S2SProtocolData
     {
         [Protocol(S2SProtocol.RegisterReq)]
-        public class RegisterReq : BaseProtocolData<RegisterReq>
+        public class RegisterReq : ProtocolDataBase<RegisterReq>
         {
             public string ServerKind = string.Empty;
             public string BuildVersion = string.Empty;
@@ -21,7 +21,7 @@ namespace Common
         }
 
         [Protocol(S2SProtocol.RegisterAck)]
-        public class RegisterAck : BaseProtocolData<RegisterAck>
+        public class RegisterAck : ProtocolDataBase<RegisterAck>
         {
             public ErrorCode Result;
         }

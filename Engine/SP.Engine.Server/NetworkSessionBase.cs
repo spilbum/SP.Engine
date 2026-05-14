@@ -28,10 +28,10 @@ public enum SocketMode
 
 public interface INetworkSession
 {
-    BaseSession Session { get; }
+    SessionBase Session { get; }
 }
 
-public abstract class BaseNetworkSession : INetworkSession, ILogContext
+public abstract class NetworkSessionBase : INetworkSession, ILogContext
 {
     private const string LogHeaderFormat = "[NetworkError] SessionId: {0}, Mode: {1}";
     private const string SocketInfoFormat = "SocketErrorCode: {0} ({1})";
@@ -44,7 +44,7 @@ public abstract class BaseNetworkSession : INetworkSession, ILogContext
     private protected IPEndPoint _remoteEndPoint;
     private CloseReason _finalReason;
     
-    protected BaseNetworkSession(SocketMode mode, Socket client)
+    protected NetworkSessionBase(SocketMode mode, Socket client)
     {
         _client = client;
         Mode = mode;
@@ -52,7 +52,7 @@ public abstract class BaseNetworkSession : INetworkSession, ILogContext
         RemoteEndPoint = (IPEndPoint)client.RemoteEndPoint;
     }
 
-    public BaseSession Session { get; internal set; }
+    public SessionBase Session { get; internal set; }
     public SocketMode Mode { get; }
     public IPEndPoint LocalEndPoint { get; }
     public IPEndPoint RemoteEndPoint

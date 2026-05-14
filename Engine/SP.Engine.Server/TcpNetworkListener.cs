@@ -4,7 +4,7 @@ using SP.Engine.Runtime;
 
 namespace SP.Engine.Server;
 
-internal class TcpNetworkListener(ListenerInfo info) : BaseNetworkListener(info)
+internal class TcpNetworkListener(ListenerInfo info) : NetworkListenerBase(info)
 {
     private readonly int _backLog = info.BackLog;
     private bool _disposed;
@@ -65,7 +65,7 @@ internal class TcpNetworkListener(ListenerInfo info) : BaseNetworkListener(info)
                 if (null == socket)
                     throw new SocketException((int)SocketError.SocketError);
 
-                OnNewClientAccepted(socket, null);
+                OnNewClientAccepted(socket);
             }
             else
             {

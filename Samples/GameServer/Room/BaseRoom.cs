@@ -55,7 +55,7 @@ public abstract class BaseRoom : IDisposable
         if (Interlocked.CompareExchange(ref _idleArmed, 1, 0) != 0) return false;
 
         _idleTimer?.Dispose();
-        _idleTimer = GameServer.Instance.Scheduler.Schedule(Fiber, OnIdleTimerFired, _idleTimeout, TimeSpan.Zero);
+        _idleTimer = GameServer.Instance.GlobalScheduler.Schedule(Fiber, OnIdleTimerFired, _idleTimeout, TimeSpan.Zero);
         LogManager.Debug("Entered idle (armed, timeout={0}ms).", _idleTimeout.TotalMilliseconds);
         return false;
     }

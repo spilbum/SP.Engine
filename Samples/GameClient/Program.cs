@@ -19,10 +19,6 @@ internal static class Program
     
     private static void Main(string[] args)
     {
-        var config = EngineConfigBuilder.Create()
-            .WithAutoPing(true, 2)
-            .Build();
-
         Host = args[0];
         Port = int.Parse(args[1]);
         
@@ -33,7 +29,7 @@ internal static class Program
         #endif
         
         var logger = new ConsoleLogger("MultiClient", minLevel: minLevel);
-        _manager = new ClientManager(config, logger);
+        _manager = new ClientManager(logger);
 
         while (true)
         {
@@ -86,6 +82,8 @@ internal static class Program
                 
                 Environment.Exit(0);
                 break;                
+            default:
+                throw new ArgumentException("Invalid command");
         }
     }
 }

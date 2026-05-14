@@ -24,7 +24,7 @@ public class ResourceConfig
     public int SyncPeriodSec { get; set; } = 0;
 }
 
-public class BuildConfig
+public class AppConfig
 {
     public ServerConfig Server { get; set; } = new();
     public DatabaseConfig[] Database { get; set; } = [];

@@ -6,7 +6,7 @@ using SP.Engine.Runtime.Protocol;
 namespace GameServer.Command;
 
 [ProtocolCommand(C2GProtocol.GameActionReq)]
-public class GameActionReq : BaseCommand<GamePeer, C2GProtocolData.GameActionReq>
+public class GameActionReq : CommandBase<GamePeer, C2GProtocolData.GameActionReq>
 {
     protected override void ExecuteCommand(GamePeer context, C2GProtocolData.GameActionReq protocol)
     {

@@ -5,7 +5,7 @@ using SP.Engine.Runtime.Protocol;
 namespace GameClient.Command;
 
 [ProtocolCommand(G2CProtocol.RankMyAck)]
-public class RankMyAck : BaseCommand<Client, G2CProtocolData.RankMyAck>
+public class RankMyAck : CommandBase<Client, G2CProtocolData.RankMyAck>
 {
     protected override void ExecuteCommand(Client context, G2CProtocolData.RankMyAck protocol)
     {

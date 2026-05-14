@@ -8,6 +8,6 @@ namespace SP.Engine.Runtime.Protocol
         ushort Id { get; }
         ChannelKind Channel { get; }
 
-        void Serialize(NetWriter writer);
+        void Serialize(ref NetWriter writer);
     }
 }

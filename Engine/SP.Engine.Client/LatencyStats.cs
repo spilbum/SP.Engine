@@ -1,39 +1,54 @@
+
 using System;
-using SP.Core;
 
 namespace SP.Engine.Client
 {
-    public class TrafficInfo
-    {
-        public long ReceivedBytes;
-        public long SentBytes;
-    }
-
     public sealed class LatencyStats
     {
-        private LatencyEstimator _estimator = new LatencyEstimator(0.125, 0.125);
+        private readonly LatencyEstimator _estimator = new LatencyEstimator();
+        private readonly object _lock = new object();
+        
         private uint _sentCount;
         private uint _receivedCount;
         private const uint StatsInterval = 100;
 
-        public ushort LastRttMs { get; private set; }
-        public ushort AvgRttMs => (ushort)_estimator.SmoothedRtt;
-        public ushort JitterMs => (ushort)_estimator.Jitter;
+        public double LastRttMs { get; private set; }
+        public double AvgRttMs { get; private set; }
+        public double JitterMs { get; private set; }
+        public double PacketLossRate { get; private set; }
 
         public void OnSent()
         {
-            _sentCount++;
-            if (_sentCount > StatsInterval) Reset();
+            lock (_lock)
+            {
+                _sentCount++;
+                if (_sentCount < StatsInterval) return;
+                CalculatePeriodStats();
+                ResetCounters();
+            }
         }
 
         public void OnReceived(double rawRtt)
         {
-            LastRttMs = (ushort)rawRtt;
-            _receivedCount++;
-            _estimator.AddSample(rawRtt);
+            lock (_lock)
+            {
+                LastRttMs = (ushort)rawRtt;
+                _receivedCount++;
+                _estimator.AddSample(rawRtt);
+
+                AvgRttMs = _estimator.SmoothedRtt;
+                JitterMs = _estimator.Jitter;
+            }
         }
 
-        private void Reset()
+        private void CalculatePeriodStats()
+        {
+            if (_sentCount == 0) return;
+            var loss = (double)(_sentCount - _receivedCount) / _sentCount;
+            PacketLossRate = Math.Max(0, loss);
+        }
+
+        private void ResetCounters()
         {
             _sentCount = 0;
             _receivedCount = 0;

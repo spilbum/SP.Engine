@@ -5,7 +5,7 @@ using SP.Engine.Runtime.Protocol;
 namespace GameClient.Command;
 
 [ProtocolCommand(G2CProtocol.RoomJoinAck)]
-public class RoomJoinAck : BaseCommand<Client, G2CProtocolData.RoomJoinAck>
+public class RoomJoinAck : CommandBase<Client, G2CProtocolData.RoomJoinAck>
 {
     protected override void ExecuteCommand(Client context, G2CProtocolData.RoomJoinAck protocol)
     {

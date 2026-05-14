@@ -1,13 +1,14 @@
 ﻿using System;
 using System.Net;
 using System.Net.Sockets;
-using System.Threading.Tasks;
 
 namespace SP.Engine.Server;
 
-internal delegate void ErrorHandler(ISocketListener listener, Exception e);
+internal delegate void ErrorHandler(INetworkListener listener, Exception e);
 
-internal delegate void NewClientAcceptHandler(ISocketListener listener, Socket socket, object state);
+internal delegate void NewClientAcceptHandler(Socket client);
+
+internal delegate void DataReceivedHandler(Socket listenSocket, ReadOnlySpan<byte> buffer, IPEndPoint remoteEndPoint);
 
 public class ListenerInfo
 {
@@ -16,7 +17,7 @@ public class ListenerInfo
     public SocketMode Mode { get; init; }
 }
 
-internal interface ISocketListener
+internal interface INetworkListener
 {
     SocketMode Mode { get; }
     IPEndPoint EndPoint { get; }
@@ -24,12 +25,13 @@ internal interface ISocketListener
     event EventHandler Stopped;
     event ErrorHandler Error;
     event NewClientAcceptHandler NewClientAccepted;
+    event DataReceivedHandler DataReceived;
 
     bool Start();
     void Stop();
 }
 
-internal abstract class BaseNetworkListener(ListenerInfo info) : ISocketListener, IDisposable
+internal abstract class NetworkListenerBase(ListenerInfo info) : INetworkListener, IDisposable
 {
     public void Dispose()
     {
@@ -44,6 +46,7 @@ internal abstract class BaseNetworkListener(ListenerInfo info) : ISocketListener
     public event EventHandler Stopped;
     public event ErrorHandler Error;
     public event NewClientAcceptHandler NewClientAccepted;
+    public event DataReceivedHandler DataReceived;
 
     public abstract bool Start();
     public abstract void Stop();
@@ -58,12 +61,17 @@ internal abstract class BaseNetworkListener(ListenerInfo info) : ISocketListener
         Error?.Invoke(this, e);
     }
 
-    protected void OnNewClientAccepted(Socket socket, object state)
+    protected void OnNewClientAccepted(Socket client)
     {
         var handler = NewClientAccepted;
-        handler?.Invoke(this, socket, state);
+        handler?.Invoke(client);
     }
 
+    protected void OnDataReceived(Socket listenSocket, ReadOnlySpan<byte> buffer, IPEndPoint remoteEndPoint)
+    {
+        var handler = DataReceived;
+        handler?.Invoke(listenSocket, buffer, remoteEndPoint);
+    }
 
     protected virtual void Dispose(bool disposing)
     {

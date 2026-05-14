@@ -5,10 +5,11 @@ using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Runtime.Command
 {
-    public abstract class BaseCommand<TContext, TProtocol> : ICommand
+    public abstract class CommandBase<TContext, TProtocol> : ICommand
         where TContext : ICommandContext
         where TProtocol : IProtocolData
     {
+        public string Name => GetType().Name;
         public Type ContextType => typeof(TContext);
 
         public void Execute(ICommandContext context, IProtocolData protocol)

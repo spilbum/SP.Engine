@@ -21,7 +21,7 @@ namespace SP.Core.Fiber
         private static readonly ConcurrentQueue<T> _global = new ConcurrentQueue<T>();
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static T Get()
+        public static T Rent()
         {
             var local = _local;
             if (local != null && local.Count > 0)
@@ -53,28 +53,28 @@ namespace SP.Core.Fiber
     {
         public static IWorkJob From(Action action)
         {
-            var job = SimplePool<DelegateJob>.Get();
+            var job = SimplePool<DelegateJob>.Rent();
             job.Init(action);
             return job;
         }
 
         public static IWorkJob From<T>(Action<T> action, T state)
         {
-            var job = SimplePool<StateJob<T>>.Get();
+            var job = SimplePool<StateJob<T>>.Rent();
             job.Init(action, state);
             return job;
         }
         
         public static IWorkJob From<T1, T2>(Action<T1, T2> action, T1 state1, T2 state2)
         {
-            var job = SimplePool<StateJob<T1, T2>>.Get();
+            var job = SimplePool<StateJob<T1, T2>>.Rent();
             job.Init(action, state1, state2);
             return job;
         }
 
         public static IWorkJob From<T1, T2, T3>(Action<T1, T2, T3> action, T1 state1, T2 state2, T3 state3)
         {
-            var job = SimplePool<StateJob<T1, T2, T3>>.Get();
+            var job = SimplePool<StateJob<T1, T2, T3>>.Rent();
             job.Init(action, state1, state2, state3);
             return job;
         }

@@ -6,6 +6,7 @@ namespace SP.Engine.Runtime.Command
 {
     public interface ICommand
     {
+        string Name { get; }
         Type ContextType { get; }
         void Execute(ICommandContext context, IProtocolData protocol);
         void Execute(ICommandContext context, IMessage message);

@@ -6,7 +6,7 @@ using SP.Engine.Runtime.Protocol;
 namespace GameServer.Command;
 
 [ProtocolCommand(C2GProtocol.GameReadyCompletedNtf)]
-public class GameReadyCompletedNtf : BaseCommand<GamePeer, C2GProtocolData.GameReadyCompletedNtf>
+public class GameReadyCompletedNtf : CommandBase<GamePeer, C2GProtocolData.GameReadyCompletedNtf>
 {
     protected override void ExecuteCommand(GamePeer context, C2GProtocolData.GameReadyCompletedNtf protocol)
     {

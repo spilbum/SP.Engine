@@ -3,32 +3,45 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using SP.Engine.Runtime.Networking;
-using SP.Engine.Server.Configuration;
 
 namespace SP.Engine.Server;
 
-public class UdpNetworkSession : BaseNetworkSession, IUnreliableSender
+public class UdpNetworkSession : NetworkSessionBase, IUnreliableSender
 {
-    private readonly SessionSendBuffer _sendBuffer;
-    private uint _fragSeq;
-    private ushort _maxFrameSize = 512;
+    private SegmentQueue _sendingQueue;
+    private readonly IObjectPool<SegmentQueue> _sendingQueuePool;
     private SocketAsyncEventArgs _sendArgs;
-    private readonly object _sendLock = new();
-
+    private volatile int _inSendingFlag;
+    private readonly SessionSendBuffer _sendBuffer;
+    
+    private uint _fragSeq;
+    private ushort _maxFrameSize;
+    
     public UdpFragmentAssembler Assembler { get; }
 
     public UdpNetworkSession(
-        BaseSession session,
+        SessionBase session,
         Socket client,
         IPEndPoint remoteEndPoint,
-        NetworkConfig config)
+        IObjectPool<SegmentQueue> sendingQueuePool)
         : base (SocketMode.Udp, client)
     {
         Session = session;
         RemoteEndPoint = remoteEndPoint;
-        Assembler = new UdpFragmentAssembler(config.UdpCleanupIntervalSec, config.UdpMaxPendingMessageCount);
-        _sendBuffer = new SessionSendBuffer(config.SendBufferSize);
+        
+        _sendingQueuePool = sendingQueuePool;
+        if (!_sendingQueuePool.TryRent(out _sendingQueue))
+        {
+            throw new InvalidOperationException("Failed to rent segment queue for UDP session.");
+        }
+        
+        _sendingQueue.StartEnqueue();
+        _sendBuffer = new SessionSendBuffer(session.Config.Network.UdpMaxMtu + 1024);
+        
+        Assembler = new UdpFragmentAssembler(session.Config.Network.UdpCleanupPeriodSec, session.Config.Network.UdpMaxPendingMessageCount);
+        
         SetupSendArgs(remoteEndPoint);
+        SetupFrameSize(session.Config.Network.UdpMinMtu);
     }
 
     private void SetupSendArgs(IPEndPoint ep)
@@ -41,18 +54,29 @@ public class UdpNetworkSession : BaseNetworkSession, IUnreliableSender
     public bool TrySend(UdpMessage message)
     {
         if (IsClosed) return false;
-
-        // 파편화 여부 확인
-        if (message.Size > _maxFrameSize) 
-            return SendFragments(message);
         
-        // 단일 패킷 전송
-        if (!_sendBuffer.TryReserve(message.Size, out var segment)) return false;
-        message.WriteTo(segment.AsSpan());
-        return Send(segment);
+        if (message.Size > _maxFrameSize)
+        {
+            // 패킷 파편화
+            if (!EnqueueFragments(message)) return false;   
+        }
+        else
+        {
+            // 단일 패킷 전송
+            if (!_sendBuffer.TryReserve(message.Size, out var segment)) return false;
+            message.WriteTo(segment.AsSpan());
+            if (!_sendingQueue.Enqueue(segment, _sendingQueue.TrackId)) return false;
+        }
+
+        if (Interlocked.CompareExchange(ref _inSendingFlag, 1, 0) == 0)
+        {
+            ExecuteSend(false);
+        }
+        
+        return true;
     }
 
-    private bool SendFragments(UdpMessage message)
+    private bool EnqueueFragments(UdpMessage message)
     {
         const int hSize = UdpHeader.ByteSize;
         const int fHeaderSize = UdpFragmentHeader.ByteSize;
@@ -70,57 +94,97 @@ public class UdpNetworkSession : BaseNetworkSession, IUnreliableSender
             if (!_sendBuffer.TryReserve(totalSize, out var segment)) return false;
             
             message.WriteFragmentTo(segment.AsSpan(), fragId, index, totalCount, bodyOffset, fragLength);
-            if (!Send(segment)) return false;
+            
+            if (!_sendingQueue.Enqueue(segment, _sendingQueue.TrackId)) return false;
         }
         return true;
     }
-    
-    private bool Send(ArraySegment<byte> segment)
-    {
-        if (IsClosed) return false;
 
-        lock (_sendLock)
+    private void ExecuteSend(bool isContinuation)
+    {
+        if (!isContinuation)
         {
-            var e = _sendArgs;
-            if (e == null) return false;
-        
+            if (!IncrementIo()) return;
+            if (!TryAddState(SocketState.InSending))
+            {
+                Interlocked.Exchange(ref _inSendingFlag, 0);
+                DecrementIo();
+                return;
+            }
+        }
+
+        while (true)
+        {
+            if (IsClosed || _client == null)
+            {
+                FinalizeSend();
+                return;
+            }
+
             try
             {
-                e.SetBuffer(segment.Array, segment.Offset, segment.Count);
-                
-                if (!_client.SendToAsync(e))
+                if (_sendingQueue.Count == 0)
                 {
-                    OnSendCompleted(null, e);
+                    Interlocked.Exchange(ref _inSendingFlag, 0);
+                    if (_sendingQueue.Count > 0 && Interlocked.CompareExchange(ref _inSendingFlag, 1, 0) == 0)
+                        continue;
+
+                    FinalizeSend();
+                    return;
                 }
-            
-                return true;
+
+                // 하나씩 전송
+                var segment = _sendingQueue[0];
+                _sendArgs.SetBuffer(segment.Array, segment.Offset, segment.Count);
+
+                if (_client.SendToAsync(_sendArgs))
+                    return;
+
+                if (!HandleSendResult(_sendArgs))
+                    return;
             }
             catch (Exception ex)
             {
                 HandleNetworkError(ex);
-                return false;
-            }   
+                FinalizeSend();
+                return;
+            }
         }
+    }
+
+    private bool HandleSendResult(SocketAsyncEventArgs e)
+    {
+        if (e.SocketError != SocketError.Success)
+        {
+            LogError(new SocketException((int)e.SocketError));
+            _sendingQueue.Clear();
+            FinalizeSend();
+            return false;
+        }
+
+        if (e.BytesTransferred <= 0) return true;
+        
+        _sendBuffer.Release(e.BytesTransferred);
+        _sendingQueue.TrimSentBytes(e.BytesTransferred);
+        return true;
     }
 
     private void OnSendCompleted(object sender, SocketAsyncEventArgs e)
     {
-        try
+        if (HandleSendResult(e))
         {
-            if (e.SocketError != SocketError.Success)
-            {
-                LogError(new SocketException((int)e.SocketError));
-            }
-        
-            _sendBuffer.Release(e.Count);
-        }
-        finally
-        {
-            e.SetBuffer(null, 0, 0);
+            ExecuteSend(true);
         }
     }
 
-    public void SetupMaxFrameSize(ushort mtu)
+    private void FinalizeSend()
+    {
+        if (!RemoveState(SocketState.InSending)) return;
+        Interlocked.Exchange(ref _inSendingFlag, 0);
+        DecrementIo();
+    }
+    
+    public void SetupFrameSize(ushort mtu)
     {
         // IP(20) + UDP(8) 헤더를 제외한 실제 데이터 가용 크기 계산
         _maxFrameSize = (ushort)(mtu - 28);
@@ -128,33 +192,26 @@ public class UdpNetworkSession : BaseNetworkSession, IUnreliableSender
 
     public void UpdateRemoteEndPoint(IPEndPoint remoteEndPoint)
     {
-        lock (_sendLock)
-        {
-            var current = RemoteEndPoint;
-            if (current != null && current.Equals(remoteEndPoint)) return;
-            
-            Interlocked.Exchange(ref _remoteEndPoint, remoteEndPoint);
-
-            if (_sendArgs != null)
-            {
-                _sendArgs.Completed -= OnSendCompleted;
-                _sendArgs.Dispose();                
-            }
-
-            SetupSendArgs(remoteEndPoint);   
-        }
+        var ep = RemoteEndPoint;
+        if (ep != null && ep.Equals(remoteEndPoint)) return;
+        Interlocked.Exchange(ref _remoteEndPoint, remoteEndPoint);
+        _sendArgs.RemoteEndPoint = remoteEndPoint;
     }
 
     protected override void OnRelease()
     {
-        lock (_sendLock)
+        var e = Interlocked.Exchange(ref _sendArgs, null);
+        if (e != null)
         {
-            if (_sendArgs != null)
-            {
-                _sendArgs.Completed -= OnSendCompleted;
-                _sendArgs.Dispose();
-                _sendArgs = null;
-            } 
+            e.Completed -= OnSendCompleted;
+            e.Dispose();
+        }
+        
+        var queue = Interlocked.Exchange(ref _sendingQueue, null);
+        if (queue != null)
+        {
+            queue.Clear();
+            _sendingQueuePool.Return(queue);
         }
         
         _sendBuffer.Dispose();

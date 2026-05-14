@@ -5,7 +5,7 @@ using SP.Engine.Runtime.Protocol;
 namespace GameServer.Connector.Command;
 
 [ProtocolCommand(R2GProtocol.RankRangeAck)]
-public class RankRangeAck : BaseCommand<RankConnector, R2GProtocolData.RankRangeAck>
+public class RankRangeAck : CommandBase<RankConnector, R2GProtocolData.RankRangeAck>
 {
     protected override void ExecuteCommand(RankConnector context, R2GProtocolData.RankRangeAck protocol)
     {

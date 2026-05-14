@@ -3,10 +3,10 @@ using SP.Core;
 
 namespace SP.Engine.Client
 {
-    public struct LatencyEstimator
+    public class LatencyEstimator
     {
-        private EwmaFilter _rttFilter;
-        private EwmaFilter _jitterFilter;
+        private readonly EwmaFilter _rttFilter;
+        private readonly EwmaFilter _jitterFilter;
         private double _lastRttMs;
 
         public LatencyEstimator(double rttAlpha = 0.125, double jitterAlpha = 0.125)
@@ -21,10 +21,9 @@ namespace SP.Engine.Client
 
         public void AddSample(double rttMs)
         {
-            var wasInitialized = _rttFilter.IsInitialized;
             _rttFilter.Update(rttMs);
 
-            if (wasInitialized)
+            if (_lastRttMs > 0)
             {
                 var delta = Math.Abs(rttMs - _lastRttMs);
                 _jitterFilter.Update(delta);

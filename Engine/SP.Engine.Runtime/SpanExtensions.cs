@@ -49,7 +49,7 @@ namespace SP.Engine.Runtime
 
         public static void WriteUInt32(this Span<byte> span, int offset, uint value)
         {
-            BinaryPrimitives.WriteUInt32BigEndian(span.Slice(offset, sizeof(int)), value);
+            BinaryPrimitives.WriteUInt32BigEndian(span.Slice(offset, sizeof(uint)), value);
         }
     }
 }

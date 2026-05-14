@@ -5,7 +5,7 @@ using SP.Engine.Runtime.Protocol;
 namespace GameClient.Command;
 
 [ProtocolCommand(G2CProtocol.LoginAck)]
-public class LoginAck : BaseCommand<Client, G2CProtocolData.LoginAck>
+public class LoginAck : CommandBase<Client, G2CProtocolData.LoginAck>
 {
     protected override void ExecuteCommand(Client context, G2CProtocolData.LoginAck protocol)
     {

@@ -3,7 +3,7 @@ using System.Buffers;
 
 namespace SP.Engine.Runtime.Networking
 {
-    public class UdpMessage : BaseMessage<UdpHeader>
+    public class UdpMessage : MessageBase<UdpHeader>
     {
         public UdpMessage()
         {

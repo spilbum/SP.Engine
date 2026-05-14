@@ -1,19 +1,19 @@
 using System.Collections.Concurrent;
+using System.Reflection;
 using Common;
 using GameServer.Connector;
 using GameServer.Matchmaking;
 using GameServer.Room;
 using GameServer.UserPeer;
 using SP.Core;
-using SP.Engine.Runtime;
 using SP.Engine.Server;
-using SP.Engine.Server.Configuration;
 using SP.Engine.Server.Connector;
 using DatabaseHandler;
+using Version;
 
 namespace GameServer;
 
-public class GameServer : Engine
+public class GameServer : EngineBase
 {
     private readonly ConcurrentDictionary<long, uint> _byUid = new();
     private HostNetworkInfo? _networkInfo;
@@ -28,16 +28,16 @@ public class GameServer : Engine
 
     private readonly MySqlDbConnector _connector = new();
 
-    public string ServerGroupType { get; private set; } = "";
+    public string ServerGroupType { get; set; } = "";
     public NetworkEnv Env => _networkInfo?.Env ?? NetworkEnv.Unknown;
     public string Region => _networkInfo?.Region ?? string.Empty;
     public string PublicIpAddress => _networkInfo?.PublicIpAddress ?? string.Empty;
     public string PrivateIpAddress => _networkInfo?.PrivateIpAddress ?? string.Empty;
     public string PublicDnsName => _networkInfo?.DnsName ?? string.Empty;
-    public int OpenPort { get; private set; }
+    public int OpenPort => GetOpenPort(SocketMode.Tcp);
     public string BuildVersion { get; private set; }
 
-    public GameRoomManager RoomManager { get; private set; } = null!;
+    public GameRoomManager RoomManager { get; private set; } = new();
     public Matchmaker Matchmaker { get; private set; } = null!;
     public GameRepository Repository { get; private set; } = null!;
 
@@ -51,69 +51,51 @@ public class GameServer : Engine
         };
     }
 
-    public bool Initialize(AppConfig appConfig)
+    protected override void OnStarted()
     {
-        var builder = EngineConfigBuilder.Create()
-            .WithNetwork(n => n with
-            {
-                SendingQueueSize = 128
-            })
-            .WithSession(s => s with
-            {
-                IdleSessionTimeoutSec = 60
-            })
-            .WithPerf(r => r with
-            {
-                MonitorEnabled = true,
-                SamplePeriod = TimeSpan.FromSeconds(3),
-                LoggerEnabled = true,
-                LoggingPeriod = TimeSpan.FromSeconds(10),
-            })
-            .AddListener(new ListenerConfig { Ip = "Any", Port = appConfig.Server.Port, Mode = SocketMode.Tcp })
-            .AddListener(new ListenerConfig { Ip = "Any", Port = appConfig.Server.Port + 1, Mode = SocketMode.Udp });
+        Logger.Info("Group={0}, Name={1}, Env={2}, Region={3}, Public={4}, Private={5}, DnsName={6}",
+            ServerGroupType, Name, Env, Region, PublicIpAddress, PrivateIpAddress, PublicDnsName);
+    }
 
-        foreach (var connector in appConfig.Connector)
-        {
-            builder.AddConnector(new SP.Engine.Server.Configuration.ConnectorConfig
-                { Name = connector.Name, Host = connector.Host, Port = connector.Port });   
-        }
-
-        var config = builder.Build();
-        if (!base.Initialize(appConfig.Server.Name, config))
+    public bool Setup(AppConfig config)
+    {
+        ServerGroupType = config.Server.Group;
+        
+        if (!SetupDatabases(config.Database))
             return false;
+        
+        if (!SetupMatchmaker())
+            return false;
+        
+        if (!HostNetworkInfoProvider.TryGet(out _networkInfo, TimeSpan.FromSeconds(5)))
+            Logger.Warn("No network info available.");
 
-        ServerGroupType = appConfig.Server.Group;
-        OpenPort = appConfig.Server.Port;
+        return true;
+    }
 
-        foreach (var database in appConfig.Database)
-        {
-            if (!Enum.TryParse(database.Kind, true, out DbKind kind) ||
-                string.IsNullOrEmpty(database.ConnectionString))
-                return false;
-
-            _connector.Register(kind, database.ConnectionString);
-        }
-
-        Repository = new GameRepository(_connector);
-        RoomManager = new GameRoomManager();
+    private bool SetupMatchmaker()
+    {
         Matchmaker = new Matchmaker(
             RoomManager,
             TimeSpan.FromMilliseconds(200),
             TimeSpan.FromSeconds(5));
-        
-        if (!HostNetworkInfoProvider.TryGet(out _networkInfo, TimeSpan.FromSeconds(5)))
-            Logger.Warn("No network info available.");
-        
         return true;
     }
 
-    public override bool Start()
+    private bool SetupDatabases(DatabaseConfig[] configs)
     {
-        if (!base.Start())
-            return false;
+        foreach (var config in configs)
+        {
+            if (!Enum.TryParse(config.Kind, true, out DbKind kind) ||
+                string.IsNullOrEmpty(config.ConnectionString))
+            {
+                return false;
+            }
+
+            _connector.Register(kind, config.ConnectionString);
+        }
         
-        Logger.Info("Group={0}, Name={1}, Env={2}, Region={3}, Public={4}, Private={5}, DnsName={6}",
-            ServerGroupType, Name, Env, Region, PublicIpAddress, PrivateIpAddress, PublicDnsName);
+        Repository = new GameRepository(_connector);
         return true;
     }
 
@@ -127,7 +109,7 @@ public class GameServer : Engine
         base.Dispose(disposing);
     }
 
-    protected override IPeer CreatePeer(ISession session)
+    protected override IPeer CreatePeer(Session session)
     {
         return new GamePeer(session);
     }

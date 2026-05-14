@@ -5,7 +5,7 @@ using SP.Engine.Server;
 
 namespace GameServer.UserPeer;
 
-public partial class GamePeer(ISession session) : BasePeer(PeerKind.User, session)
+public partial class GamePeer(Session session) : PeerBase(PeerKind.User, session)
 {
     public long Uid { get; private set; }
     public string Name { get; private set; } = "none";

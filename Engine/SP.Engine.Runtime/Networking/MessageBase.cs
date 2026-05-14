@@ -1,6 +1,5 @@
 using System;
 using System.Buffers;
-using System.Security.Cryptography;
 using System.Threading;
 using SP.Core;
 using SP.Core.Logging;
@@ -11,7 +10,7 @@ using SP.Engine.Runtime.Security;
 
 namespace SP.Engine.Runtime.Networking
 {
-    public abstract class BaseMessage<THeader> : IMessage where THeader : IHeader
+    public abstract class MessageBase<THeader> : IMessage where THeader : IHeader
     {
         private int _refCount;
         private IMemoryOwner<byte> _bodyOwner;
@@ -20,11 +19,11 @@ namespace SP.Engine.Runtime.Networking
         public int BodyLength { get; private set; }
         public ushort Id => Header?.ProtocolId ?? 0;
         
-        protected BaseMessage()
+        protected MessageBase()
         {
         }
 
-        protected BaseMessage(THeader header, IMemoryOwner<byte> bodyOwner, int bodyLength)
+        protected MessageBase(THeader header, IMemoryOwner<byte> bodyOwner, int bodyLength)
         {
             Header = header;
             _bodyOwner = bodyOwner;
@@ -46,54 +45,58 @@ namespace SP.Engine.Runtime.Networking
             _bodyOwner = null;
         }
 
-        public void Serialize(IProtocolData protocol, IPolicy policy, IEncryptor encryptor, ICompressor compressor)
+        public void Serialize(
+            IProtocolData protocol,
+            IPolicy policy = null, 
+            IEncryptor encryptor = null, 
+            ICompressor compressor = null)
         {
             if (protocol is null) throw new ArgumentNullException(nameof(protocol));
 
-            using var writer = new NetWriter();
-            protocol.Serialize(writer);
+            var buffer = new PooledBuffer();
+            var writer = new NetWriter(buffer);
+            protocol.Serialize(ref writer);   
 
-            var bufferOwner = writer.DetachBufferOwner(out var bufferLength);
+            var bufferOwner = buffer;
+            var written = writer.WrittenCount;
             var flags = HeaderFlags.None;
 
             try
             {
-                if (policy.UseCompress && compressor != null && bufferLength >= policy.CompressionThreshold)
+                if (policy is { UseCompress: true } && compressor != null && written >= policy.CompressionThreshold)
                 {
-                    var maxLen = compressor.GetMaxCompressedLength(bufferLength);
+                    var maxLen = compressor.GetMaxCompressedLength(written);
                     var compressedOwner = new PooledBuffer(maxLen);
 
-                    var written = compressor.Compress(bufferOwner.Memory.Span[..bufferLength],
+                    written = compressor.Compress(bufferOwner.Memory.Span[..written],
                         compressedOwner.Memory.Span);
 
                     bufferOwner.Dispose();
                     bufferOwner = compressedOwner;
-                    bufferLength = written;
                     flags |= HeaderFlags.Compressed;
                 }
-
-                if (policy.UseEncrypt && encryptor != null)
+                
+                if (policy is { UseEncrypt: true } && encryptor != null)
                 {
-                    var maxLen = encryptor.GetCiphertextLength(bufferLength);
+                    var maxLen = encryptor.GetCiphertextLength(written);
                     var encryptedOwner = new PooledBuffer(maxLen);
 
-                    var written = encryptor.Encrypt(bufferOwner.Memory.Span[..bufferLength],
+                    written = encryptor.Encrypt(bufferOwner.Memory.Span[..written],
                         encryptedOwner.Memory.Span);
 
                     bufferOwner.Dispose();
                     bufferOwner = encryptedOwner;
-                    bufferLength = written;
                     flags |= HeaderFlags.Encrypted;
                 }
 
                 _bodyOwner = bufferOwner;
-                BodyLength = bufferLength;
+                BodyLength = written;
                 Header = CreateHeader(flags, protocol.Id, BodyLength);
                 Retain();
             }
             catch
             {
-                bufferOwner?.Dispose();
+                bufferOwner.Dispose();
                 throw;
             }
         }

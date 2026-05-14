@@ -2,12 +2,10 @@ using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using SP.Core;
-using SP.Core.Logging;
 using SP.Engine.Client.Configuration;
 using SP.Engine.Runtime.Networking;
 
@@ -32,7 +30,7 @@ namespace SP.Engine.Client
             _sendBufferSize = config.SendBufferSize;
             _receiveBufferSize = config.ReceiveBufferSize;
             _sendQueue = new SwapQueue<ArraySegment<byte>>(config.SendQueueSize);
-            _sendBuffer = new SessionSendBuffer(1024 * 32);
+            _sendBuffer = new SessionSendBuffer(4 * 1024);
         }
 
         public bool IsConnected { get; private set; }

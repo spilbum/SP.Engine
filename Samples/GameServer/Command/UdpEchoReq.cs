@@ -6,7 +6,7 @@ using SP.Engine.Runtime.Protocol;
 namespace GameServer.Command;
 
 [ProtocolCommand(C2GProtocol.UdpEchoReq)]
-public class UdpEchoReq : BaseCommand<GamePeer, C2GProtocolData.UdpEchoReq>
+public class UdpEchoReq : CommandBase<GamePeer, C2GProtocolData.UdpEchoReq>
 {
     protected override void ExecuteCommand(GamePeer context, C2GProtocolData.UdpEchoReq protocol)
     {

@@ -46,7 +46,7 @@ public abstract class BaseRoomManager : IDisposable
         _roomPins[roomId] = pin;
 
         if (timeout <= TimeSpan.Zero) return pin;
-        GameServer.Instance.Scheduler.Schedule(_fiber, RemovePin, roomId, timeout, TimeSpan.Zero);
+        GameServer.Instance.GlobalScheduler.Schedule(_fiber, RemovePin, roomId, timeout, TimeSpan.Zero);
         return pin;
     }
 

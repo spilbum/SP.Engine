@@ -14,9 +14,9 @@ namespace SP.Engine.Runtime.Networking
         private bool _wrapped;
         private bool _disposed;
         
-        public SessionSendBuffer(int initialCapacity)
+        public SessionSendBuffer(int capacity)
         {
-            _buffer = new PooledBuffer(initialCapacity);
+            _buffer = new PooledBuffer(capacity);
             _capacity = _buffer.Capacity;
         }
 

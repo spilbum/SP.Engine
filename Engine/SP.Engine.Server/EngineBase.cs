@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using SP.Core;
 using SP.Core.Fiber;
 using SP.Core.Logging;
 using SP.Engine.Protocol;
@@ -18,42 +17,35 @@ using SP.Engine.Server.Logging;
 
 namespace SP.Engine.Server;
 
-public interface IEngine : ILogContext
-{
-    IEngineConfig Config { get; }
-    bool Start();
-    void Stop();
-}
-
-public abstract class Engine : BaseEngine, IEngine
+public abstract class EngineBase : EngineCore
 {
     private readonly Dictionary<ushort, ICommand> _userCommands = new();
     private readonly Dictionary<ushort, ICommand> _internalCommands = new();
     private readonly List<ConnectorFiber> _connectorFibers = [];
-    private readonly List<PeerFiber> _peerFibers = [];
+    private readonly List<PeerGroup> _peerFibers = [];
     private PeerManager _peerManager;
     private PerfMonitor _perfMonitor;
     private ILogger _perfLogger;
     private IDisposable _waitingReconnectCheckingTimer;
-    private IFiber _perfMonitorFiber;
+    private ThreadFiber _perfMonitorFiber;
     
     private static readonly long _baseUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     public static long UtcNowMs => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     internal static uint NetworkTimeMs => (uint)(UtcNowMs - _baseUnixMs);
 
-    protected override bool Initialize(string name, EngineConfig config)
+    internal override bool InternalInitialize(Assembly[] assemblies, string name, EngineConfig config)
     {
-        if (!base.Initialize(name, config))
+        if (!base.InternalInitialize(assemblies, name, config))
             return false;
         
         _peerManager = new PeerManager(Logger, config);
-
-        if (!SetupCommand())
+        
+        if (!SetupCommand(assemblies))
             return false;
 
-        if (!SetupConnectorFiber(config.Connectors))
+        if (!SetupConnectorFiber(assemblies, config.Connectors))
             return false;
-
+        
         SetupPeerFiber();
         SetupPerfMonitor(config.Perf);
         
@@ -61,19 +53,30 @@ public abstract class Engine : BaseEngine, IEngine
         return true;
     }
 
-    public override bool Start()
+    internal override bool InternalStart()
     {
-        if (!base.Start())
+        if (!base.InternalStart())
             return false;
         
         foreach (var fiber in _connectorFibers)
             fiber.Start();
         
         StartReconnectTimer();
+        
+        try
+        {
+            OnStarted();
+        }
+        catch (Exception ex)
+        {
+            Logger.Fatal("An exception occurred in the method 'OnStarted()': {0}", ex.Message);
+            return false;
+        }
+
         return true;
     }
 
-    public override void Stop()
+    internal override void InternalStop()
     {
         _perfMonitor?.Dispose();
         _perfMonitorFiber?.Dispose();
@@ -81,50 +84,69 @@ public abstract class Engine : BaseEngine, IEngine
         foreach (var fiber in _connectorFibers) fiber.Dispose();
         StopReconnectTimer();
 
-        base.Stop();
+        base.InternalStop();
+        OnStopped();
     }
     
-    protected TPeer GetActivePeer<TPeer>(uint peerId) where TPeer : BasePeer
+    protected abstract IPeer CreatePeer(Session session);
+    protected abstract IConnector CreateConnector(string name);
+    protected virtual void OnStarted() { }
+    protected virtual void OnStopped() { }
+    
+    public bool Start() => InternalStart();
+    public void Stop() => InternalStop();
+    
+    protected TPeer GetActivePeer<TPeer>(uint peerId) where TPeer : PeerBase
         => _peerManager.GetActivePeer(peerId) as TPeer;
 
-    protected bool TransitionTo(BasePeer newPeer)
+    protected bool TransitionTo(PeerBase newPeer)
         => _peerManager.TransitionTo(newPeer);
     
-    internal BasePeer GetWaitingPeer(uint peerId)
+    internal PeerBase GetWaitingPeer(uint peerId)
         => _peerManager.GetWaitingPeer(peerId);
-    
-    private PeerFiber GetPeerFiber()
-        => _peerFibers.OrderBy(f => f.PeerCount).First();
 
-    internal bool OnlinePeer(BasePeer peer, Session session)
+    private PeerGroup AllocateFiber()
+    {
+        var minFiber = _peerFibers[0];
+        var minCount = minFiber.PeerCount;
+
+        foreach (var fiber in _peerFibers)
+        {
+            var count = fiber.PeerCount;
+            if (count >= minCount) continue;
+            minCount = count;
+            minFiber = fiber;
+        }
+        return minFiber;
+    }
+
+    internal bool OnlinePeer(PeerBase peer, Session session)
     {
         if (!_peerManager.TransitionToOnline(peer.PeerId, session))
             return false;
 
         // 파이버 재할당
-        var fiber = GetPeerFiber();
+        var fiber = AllocateFiber();
         fiber.AddPeer(peer);
         return true;
     }
 
-    internal void JoinPeer(BasePeer peer)
+    internal void JoinPeer(PeerBase peer)
     {
         // 파이버 할당
-        var fiber = GetPeerFiber();
+        var fiber = AllocateFiber();
         fiber.AddPeer(peer);
         
         // 매니저에 피어 등록
         _peerManager.Register(peer);
     }
     
-    internal bool NewPeer(ISession session, out BasePeer peer)
+    internal bool NewPeer(Session session, out PeerBase peer)
     {
-        peer = CreatePeer(session) as BasePeer;
+        peer = CreatePeer(session) as PeerBase;
         return peer != null;
     }
     
-    protected abstract IPeer CreatePeer(ISession session);
-
     internal override void OnSessionClosed(Session session, CloseReason reason)
     {
         base.OnSessionClosed(session, reason);
@@ -154,8 +176,8 @@ public abstract class Engine : BaseEngine, IEngine
     
     private void StartReconnectTimer()
     {
-        var ts = TimeSpan.FromSeconds(Config.Session.WaitingReconnectTimerIntervalSec);
-        _waitingReconnectCheckingTimer = Scheduler.Schedule(Fiber, OnCheckWaitingReconnectCallback, ts, ts);
+        var ts = TimeSpan.FromSeconds(Config.Session.WaitingReconnectTimerPeriodSec);
+        _waitingReconnectCheckingTimer = GlobalScheduler.Schedule(Fiber, OnCheckWaitingReconnectCallback, ts, ts);
     }
 
     private void StopReconnectTimer()
@@ -175,38 +197,16 @@ public abstract class Engine : BaseEngine, IEngine
             Logger.Error(e, "Error checking reconnect timeouts");
         }
     }
-    
+
     private void SetupPeerFiber()
     {
         var fiberCnt = Environment.ProcessorCount;
         fiberCnt = Math.Clamp(fiberCnt, 4, 32); // todo:환경에 맞게 튜닝
         
-        var tickInterval = TimeSpan.FromMilliseconds(Config.Session.PeerUpdateIntervalMs);
-        
-        for (var i = 0; i < fiberCnt; i++)
+        for (byte index = 0; index < fiberCnt; index++)
         {
-            var fiber = new ThreadFiber($"PeerFiber_{i:D2}",
-                maxBatchSize: 2048,
-                capacity: 1024 * 64,
-                onError: ex =>
-                {
-                    switch (ex)
-                    {
-                        case FiberException e:
-                            Logger.Error(e.InnerException, "Fiber: {0}, Job: {1}", e.FiberName, e.Job?.Name ?? "unknown");
-                            break;
-                        case FiberQueueFullException e:
-                            if (e.DroppedCount % 100 == 1)
-                            {
-                                Logger.Warn("Fiber '{0}' is overwhelmed. Pending: {1}, Dropped: {2}",
-                                    e.FiberName, e.PendingCount, e.DroppedCount);
-                            }
-                            break;
-                    }
-                });
-            
-            var peerFiber = new PeerFiber(fiber, Scheduler, Logger, tickInterval);
-            _peerFibers.Add(peerFiber);
+            var fiber = new PeerGroup(index, this);
+            _peerFibers.Add(fiber);
         }
         
         Logger.Info("PeerFiber setup completed. FiberCount: {0}, Shared Sessions per fiber: ~{1}", 
@@ -222,13 +222,13 @@ public abstract class Engine : BaseEngine, IEngine
         _perfMonitorFiber = fiber;
         
         _perfMonitor = new PerfMonitor();
-        Scheduler.Schedule(fiber, PerfMonitorTick, TimeSpan.Zero, config.SamplePeriod);
+        GlobalScheduler.Schedule(fiber, PerfMonitorTick, TimeSpan.Zero, config.SamplePeriod);
 
         if (!config.LoggerEnabled)
             return;
 
         _perfLogger = LogManager.GetLogger("PerfMonitor");
-        Scheduler.Schedule(fiber, () =>
+        GlobalScheduler.Schedule(fiber, () =>
         {
             if (_perfMonitor.TryGetLast(out var metrics))
                 _perfLogger.Info(metrics.ToString());
@@ -241,21 +241,21 @@ public abstract class Engine : BaseEngine, IEngine
         _perfMonitor?.Tick(sessions.Length, _peerManager);
     }
 
-    private bool SetupConnectorFiber(List<ConnectorConfig> configs)
+    private bool SetupConnectorFiber(Assembly[] assemblies, List<ConnectorConfig> configs)
     {
         foreach (var config in configs)
         {
-            var fiber = new ThreadFiber($"ConnectorFiber_{config.Name}",
+            var fiber = new ThreadFiber($"ConnectorFiber-{config.Name}",
                 onError: ex =>
                 {
                     Logger.Error(ex.Message);
                 });
 
             var cf = new ConnectorFiber(
-                fiber, Scheduler, Logger,
-                TimeSpan.FromMilliseconds(Config.Session.ConnectorTickPeriodMs));
+                fiber, GlobalScheduler, Logger,
+                TimeSpan.FromMilliseconds(Config.Session.ConnectorUpdateIntervalMs));
 
-            if (!cf.RegisterConnector(config, CreateConnector(config.Name)))
+            if (!cf.RegisterConnector(assemblies, config, CreateConnector(config.Name)))
                 return false;
             
             _connectorFibers.Add(cf);
@@ -263,24 +263,25 @@ public abstract class Engine : BaseEngine, IEngine
 
         return true;
     }
-    
-    protected abstract IConnector CreateConnector(string name);
 
-    private bool SetupCommand()
+    private bool SetupCommand(Assembly[] assemblies)
     {
         try
         {
+            // 엔진 명령어 등록
             RegisterInternalCommand<SessionAuth>(C2SEngineProtocolId.SessionAuthReq);
             RegisterInternalCommand<Close>(C2SEngineProtocolId.Close);
             RegisterInternalCommand<Ping>(C2SEngineProtocolId.Ping);
             RegisterInternalCommand<MessageAck>(C2SEngineProtocolId.MessageAck);
             RegisterInternalCommand<UdpHelloReq>(C2SEngineProtocolId.UdpHelloReq);
-            RegisterInternalCommand<UdpHealthCheckReq>(C2SEngineProtocolId.UdpHealthCheckReq);
             RegisterInternalCommand<UdpHealthCheckConfirm>(C2SEngineProtocolId.UdpHealthCheckConfirm);
 
-            var assembly = GetType().Assembly;
-            DiscoverUserCommands(assembly);
-        
+            // 유저 명령어 추출
+            foreach (var assembly in assemblies)
+            {
+                DiscoverUserCommands(assembly);    
+            }
+            
             return true;
         }
         catch (Exception e)
@@ -295,14 +296,19 @@ public abstract class Engine : BaseEngine, IEngine
 
     private void DiscoverUserCommands(Assembly assembly)
     {
-        var commandTypes = assembly.GetTypes();
-        var peerTypes = commandTypes.Where(t => typeof(IPeer).IsAssignableFrom(t)).ToList();
+        var commandTypes = assembly.GetTypes()
+            .Where(t => typeof(ICommand).IsAssignableFrom(t) && t.IsClass && !t.IsAbstract)
+            .ToList();
+        
+        var peerTypes = assembly.GetTypes()
+            .Where(t => typeof(IPeer).IsAssignableFrom(t))
+            .ToList();
+
+        if (commandTypes.Count == 0 || peerTypes.Count == 0)
+            return;
 
         foreach (var t in commandTypes)
         {
-            if (!t.IsClass || t.IsAbstract) continue;
-            if (!typeof(ICommand).IsAssignableFrom(t)) continue;
-            
             var attr = t.GetCustomAttribute<ProtocolCommandAttribute>();
             if (attr == null)
             {
@@ -356,7 +362,7 @@ public abstract class Engine : BaseEngine, IEngine
         }
     }
 
-    private void DispatchCommand(BaseSession session, BasePeer peer, IMessage message)
+    private void DispatchCommand(SessionBase session, PeerBase peer, IMessage message)
     {
         var internalCommand = GetInternalCommand(message.Id);
         if (internalCommand != null)
@@ -379,7 +385,7 @@ public abstract class Engine : BaseEngine, IEngine
             return;
         }
 
-        peer.EnqueueJob(command.Execute, peer, protocol);
+        peer.EnqueueCommand(command, protocol);
     }
 
     public IEnumerable<IConnector> GetAllConnectors()

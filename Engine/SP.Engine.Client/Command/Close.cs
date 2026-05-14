@@ -5,9 +5,9 @@ using SP.Engine.Runtime.Protocol;
 namespace SP.Engine.Client.Command
 {
     [ProtocolCommand(S2CEngineProtocolId.Close)]
-    public class Close : BaseCommand<BaseNetPeer, S2CEngineProtocolData.Close>
+    public class Close : CommandBase<NetPeerBase, S2CEngineProtocolData.Close>
     {
-        protected override void ExecuteCommand(BaseNetPeer context, S2CEngineProtocolData.Close protocol)
+        protected override void ExecuteCommand(NetPeerBase context, S2CEngineProtocolData.Close protocol)
         {
             if (context.State == NetPeerState.Closing)
             {

@@ -5,7 +5,7 @@ using SP.Engine.Runtime.Protocol;
 namespace GameClient.Command;
 
 [ProtocolCommand(G2CProtocol.RoomMemberEnterNtf)]
-public class RoomMemberEnterNtf : BaseCommand<Client, G2CProtocolData.RoomMemberEnterNtf>
+public class RoomMemberEnterNtf : CommandBase<Client, G2CProtocolData.RoomMemberEnterNtf>
 {
     protected override void ExecuteCommand(Client context, G2CProtocolData.RoomMemberEnterNtf protocol)
     {

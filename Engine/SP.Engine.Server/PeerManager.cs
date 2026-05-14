@@ -10,16 +10,16 @@ namespace SP.Engine.Server;
 
 public class PeerManager(ILogger logger, IEngineConfig config)
 {
-    private readonly ConcurrentDictionary<uint, BasePeer> _activePeers = [];
+    private readonly ConcurrentDictionary<uint, PeerBase> _activePeers = [];
     private readonly ConcurrentDictionary<uint, PendingReconnect> _reconnectPendingPeers = [];
 
-    public BasePeer GetActivePeer(uint peerId)
+    public PeerBase GetActivePeer(uint peerId)
         => _activePeers.GetValueOrDefault(peerId);
 
-    public BasePeer GetWaitingPeer(uint peerId)
+    public PeerBase GetWaitingPeer(uint peerId)
         => _reconnectPendingPeers.TryGetValue(peerId, out var waiting) ? waiting.Peer : null;
 
-    public BasePeer GetAnyPeer(uint peerId)
+    public PeerBase GetAnyPeer(uint peerId)
         => _activePeers.TryGetValue(peerId, out var peer) 
             ? peer 
             : _reconnectPendingPeers.TryGetValue(peerId, out var waiting) ? waiting.Peer : null;
@@ -52,7 +52,7 @@ public class PeerManager(ILogger logger, IEngineConfig config)
             globalPendingJobs);
     }
     
-    public void Register(BasePeer peer)
+    public void Register(PeerBase peer)
     {
         if (!_activePeers.TryAdd(peer.PeerId, peer))
         {
@@ -85,7 +85,7 @@ public class PeerManager(ILogger logger, IEngineConfig config)
         return true;
     }
 
-    public void TransitionToOffline(BasePeer peer, CloseReason reason)
+    public void TransitionToOffline(PeerBase peer, CloseReason reason)
     {
         if (!_activePeers.TryRemove(peer.PeerId, out _))
             return;
@@ -116,7 +116,7 @@ public class PeerManager(ILogger logger, IEngineConfig config)
             pending.Peer.LeaveServer(reason);
     }
 
-    public bool TransitionTo(BasePeer newPeer)
+    public bool TransitionTo(PeerBase newPeer)
     {
         return _activePeers.TryGetValue(newPeer.PeerId, out var oldPeer) 
                && _activePeers.TryUpdate(newPeer.PeerId, newPeer, oldPeer);
@@ -146,9 +146,9 @@ public class PeerManager(ILogger logger, IEngineConfig config)
         }
     }
     
-    private readonly struct PendingReconnect(BasePeer peer, int timeoutSec)
+    private readonly struct PendingReconnect(PeerBase peer, int timeoutSec)
     {
-        public BasePeer Peer { get; } = peer;
+        public PeerBase Peer { get; } = peer;
         public DateTime ExpireTime { get; } = DateTime.UtcNow.AddSeconds(timeoutSec);
         public bool IsExpired(DateTime now) => now >= ExpireTime;
     }

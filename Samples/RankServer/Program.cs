@@ -1,4 +1,8 @@
 ﻿
+using Common;
+using SP.Engine.Server;
+using SP.Engine.Server.Configuration;
+
 namespace RankServer;
 
 internal static class Program
@@ -40,13 +44,34 @@ internal static class Program
         RankServer? server = null;
         try
         {
-            var config = JsonConfigLoader.Load<BuildConfig>("config.json", "config.dev.json");
-            if (config == null)
-                throw new InvalidOperationException("Failed to load config file(s).");
+            var appConfig = JsonConfigLoader.Load<AppConfig>("config.json", "config.dev.json");
+            if (appConfig == null) throw new InvalidOperationException("Failed to load config file(s).");
 
-            server = new RankServer(cts.Token);
-            if (!server.Initialize(config)) throw new InvalidOperationException("Failed to initialize.");
-            if (!server.Start()) throw new InvalidOperationException("Failed to start.");
+            server = EngineBuilder<RankServer>.Create()
+                .ConfigureNetwork(n => n with
+                {
+                })
+                .ConfigureSession(s => s with
+                {
+                    MaxConnections = 100
+                })
+                .ConfigurePerformance(r => r with
+                {
+                    MonitorEnabled = true,
+                    SamplePeriod = TimeSpan.FromSeconds(1),
+                    LoggerEnabled = true,
+                    LoggingPeriod = TimeSpan.FromSeconds(30)
+                })
+                .Setup(s =>
+                {
+                    if (!s.Setup(appConfig))
+                        throw new InvalidOperationException("Failed to setup server.");
+                })
+                .Listen(appConfig.Server.Port)
+                .AddAssembly(typeof(R2GProtocolData.RankMyAck).Assembly)
+                .Build();
+            
+            if (!server.Start()) throw new InvalidOperationException("Failed to start server.");
 
             await Task.Delay(Timeout.Infinite, cts.Token);
         }

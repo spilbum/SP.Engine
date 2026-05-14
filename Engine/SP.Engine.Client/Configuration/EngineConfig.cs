@@ -23,7 +23,7 @@ namespace SP.Engine.Client.Configuration
         public ushort UdpMtu { get; set; } = 1200;
 
         // Udp HealthCheck 최대 실패 횟수 (기본값: 3회)
-        public int MaxUdpHealthFail { get; set; } = 3;
+        public int UdpHealthCheckThreshold { get; set; } = 3;
 
         // UDP HealthCheck 주기 (기본값: 10초)
         public int UdpHealthCheckIntervalSec { get; set; } = 10;
@@ -117,7 +117,7 @@ namespace SP.Engine.Client.Configuration
         public EngineConfigBuilder WithUdpHealthCheck(int intervalSec, int maxFailCount)
         {
             _config.UdpHealthCheckIntervalSec = intervalSec;
-            _config.MaxUdpHealthFail = maxFailCount;
+            _config.UdpHealthCheckThreshold = maxFailCount;
             return this;
         }
 

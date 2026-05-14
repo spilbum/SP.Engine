@@ -9,24 +9,14 @@ namespace SP.Engine.Runtime.Networking
     public sealed class SessionReceiveBuffer : IDisposable
     {
         private readonly PooledBuffer _buffer;
-        private readonly int _mask;
-        private readonly int _capacity;
+        private int _mask;
+        private int _capacity;
         private int _head;
         private int _tail;
         private int _available;
         private bool _disposed;
         private readonly object _lock = new object();
 
-        public bool Disposed
-        {
-            get { lock (_lock) { return _disposed; } }
-        }
-
-        public int Available
-        {
-            get { lock (_lock) { return _available; } }
-        }
-        
         public SessionReceiveBuffer(int capacity)
         {
             // 2의 거듭제곱 크기로 보정하여 마스킹 연산이 가능하도록 함
@@ -45,7 +35,19 @@ namespace SP.Engine.Runtime.Networking
         {
             lock (_lock)
             {
-                if (_disposed || data.Length > _capacity - _available) return false;
+                if (_disposed) return false;
+
+                if (data.Length > _capacity - _available)
+                {
+                    var required = _available + data.Length;
+                    var newCap = _capacity;
+                    while (newCap < required) newCap <<= 1;
+
+                    _tail = _buffer.ExpandRingBuffer(newCap, _head, _tail, _available);
+                    _head = 0;
+                    _capacity = newCap;
+                    _mask = _capacity - 1;
+                }
 
                 var distanceToEnd = _capacity - _tail;
                 if (distanceToEnd >= data.Length)
@@ -81,7 +83,7 @@ namespace SP.Engine.Runtime.Networking
                 if (_disposed || _available < headerSize) return false;
                 
                 Span<byte> headerSpan = stackalloc byte[headerSize];
-                CopyToInternal(_head, headerSize, headerSpan);
+                CopyTo(_head, headerSize, headerSpan);
 
                 if (!TcpHeader.TryRead(headerSpan, out var tempHeader, out var byteConsumed)) return false;
                 
@@ -103,7 +105,7 @@ namespace SP.Engine.Runtime.Networking
                 {
                     var bodyStartIdx = (_head + byteConsumed) & _mask;
                     var pooled = new PooledBuffer(bodyLen);
-                    CopyToInternal(bodyStartIdx, bodyLen, pooled.Memory.Span);
+                    CopyTo(bodyStartIdx, bodyLen, pooled.Memory.Span);
                     
                     bodyOwner = pooled;
                     bodyLength = bodyLen;
@@ -127,7 +129,7 @@ namespace SP.Engine.Runtime.Networking
         /// 링 버퍼의 데이터를 연속된 Span으로 복사합니다.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void CopyToInternal(int head, int length, Span<byte> destination)
+        private void CopyTo(int head, int length, Span<byte> destination)
         {
             var distanceToEnd = _capacity - head;
             if (distanceToEnd >= length)

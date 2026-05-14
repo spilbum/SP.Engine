@@ -6,16 +6,15 @@ using SP.Engine.Runtime.Protocol;
 
 namespace GameClient;
 
-public class Client : BaseNetPeer
+public class Client : NetPeerBase
 {
     private int _seqNo = 1;
     private CancellationTokenSource? _echoCts;
     
     public UdpQualityTracker Tracker = new();
 
-    public Client(EngineConfig config, ILogger logger)
+    public Client()
     {
-        Initialize(config, logger);
         Connected += OnConnected;
         Disconnected += OnDisconnected;
         Offline += OnOffline;
@@ -227,7 +226,7 @@ public class Client : BaseNetPeer
                 var seq = Tracker.RecordSend();
                 IProtocolData packet = sendType == "tcp"
                     ? new C2GProtocolData.EchoReq { Seq = seq, SentTicks = DateTime.UtcNow.Ticks }
-                    : new C2GProtocolData.UdpEchoReq { Seq = seq, SentTicks = DateTime.UtcNow.Ticks, Data = GetRandomBytes(5000)};
+                    : new C2GProtocolData.UdpEchoReq { Seq = seq, SentTicks = DateTime.UtcNow.Ticks, Data = GetRandomBytes(128)};
 
                 Send(packet);
             }

@@ -44,7 +44,7 @@ public sealed class SessionManager
         }
     }
 
-    public Session CreateSession(BaseEngine engine, TcpNetworkSession tcpSession)
+    public Session CreateSession(EngineCore engine, TcpNetworkSession tcpSession)
     {
         lock (_lock)
         {

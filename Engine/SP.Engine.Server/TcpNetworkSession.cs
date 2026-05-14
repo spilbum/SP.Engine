@@ -13,7 +13,7 @@ public interface ITcpNetworkSession : IReliableSender, ILogContext
     SocketReceiveContext ReceiveContext { get; }
 }
 
-public class TcpNetworkSession : BaseNetworkSession, ITcpNetworkSession
+public class TcpNetworkSession : NetworkSessionBase, ITcpNetworkSession
 {
     private SegmentQueue _sendingQueue;
     private readonly IObjectPool<SegmentQueue> _sendingQueuePool;
@@ -41,7 +41,7 @@ public class TcpNetworkSession : BaseNetworkSession, ITcpNetworkSession
         
         _sendEventArgs = new SocketAsyncEventArgs();
         _sendEventArgs.Completed += OnSendCompleted;
-        _sendBuffer = new SessionSendBuffer(1024 * 64);
+        _sendBuffer = new SessionSendBuffer(1024 * 4);
     }
 
     public void Start()

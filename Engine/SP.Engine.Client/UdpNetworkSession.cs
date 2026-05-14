@@ -5,7 +5,6 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using SP.Core;
-using SP.Core.Logging;
 using SP.Engine.Client.Configuration;
 using SP.Engine.Runtime.Networking;
 
@@ -36,7 +35,7 @@ namespace SP.Engine.Client
             _sendQueue = new SwapQueue<ArraySegment<byte>>(config.SendQueueSize);
             _sendBufferSize = config.SendBufferSize;
             _receiveBuffer = new byte[config.ReceiveBufferSize];
-            _sendBuffer = new SessionSendBuffer(config.ReceiveBufferSize);
+            _sendBuffer = new SessionSendBuffer(2048);
         }
 
         public bool IsRunning { get; private set; }
@@ -106,7 +105,7 @@ namespace SP.Engine.Client
             return unchecked((uint)Interlocked.Increment(ref _fragSeq));
         }
 
-        public void SetMaxFrameSize(ushort mtu)
+        public void SetupFrameSize(ushort mtu)
         {
             _maxFrameSize = (ushort)(mtu - 20 /* IP header size */ - 8 /* UDP header size*/);
         }

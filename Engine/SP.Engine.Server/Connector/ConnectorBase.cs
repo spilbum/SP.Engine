@@ -1,28 +1,28 @@
 using System;
+using System.Reflection;
 using System.Threading;
 using SP.Core.Fiber;
 using SP.Core.Logging;
 using SP.Engine.Client;
+using SP.Engine.Client.Configuration;
 using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Server.Configuration;
-using EngineConfigBuilder = SP.Engine.Client.Configuration.EngineConfigBuilder;
 
 namespace SP.Engine.Server.Connector;
 
-public abstract class BaseConnector : BaseNetPeer, IConnector, ICommandContext
+public abstract class ConnectorBase : NetPeerBase, IConnector, ICommandContext
 {
     private volatile int _connecting;
     private IDisposable _reconnectTimer;
     private IFiber _fiber;
     private IScheduler _globalScheduler;
-    private ILogger _logger;
 
     public string Name { get; private set; }
     public string Host { get; private set; }
     public int Port { get; private set; }
-
-    public virtual bool Initialize(ConnectorConfig config, IFiber fiber, IScheduler globalScheduler, ILogger logger)
+    
+    public virtual bool Initialize(Assembly[] assemblies, ConnectorConfig config, IFiber fiber, IScheduler globalScheduler, ILogger logger)
     {
         if (config == null || string.IsNullOrEmpty(config.Host) || 0 >= config.Port)
         {
@@ -36,17 +36,19 @@ public abstract class BaseConnector : BaseNetPeer, IConnector, ICommandContext
         
         _fiber = fiber;
         _globalScheduler = globalScheduler;
-        _logger = logger;
 
         try
         {
-            var engineConfig = EngineConfigBuilder.Create()
+            var builder = NetPeerBuilder.Create()
+                .WithLogger(logger)
                 .WithAutoPing(config.EnableAutoPing, config.AutoPingIntervalSec)
-                .WithConnectAttempt(config.MaxConnectAttempts, config.ConnectAttemptIntervalSec)
-                .WithReconnectAttempt(config.MaxReconnectAttempts, config.ReconnectAttemptIntervalSec)
-                .Build();
-
-            base.Initialize(engineConfig, logger);
+                .WithConnectionAttempts(config.MaxConnectAttempts, config.ConnectAttemptIntervalSec)
+                .WithReconnectAttempts(config.MaxReconnectAttempts, config.ReconnectAttemptIntervalSec);
+            
+            foreach (var assembly in assemblies) builder.WithAssembly(assembly);
+ 
+            if (!builder.Apply(this))
+                return false;
 
             Connected += OnConnected;
             Disconnected += OnDisconnected;

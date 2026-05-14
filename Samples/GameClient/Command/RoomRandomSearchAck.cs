@@ -5,7 +5,7 @@ using SP.Engine.Runtime.Protocol;
 namespace GameClient.Command;
 
 [ProtocolCommand(G2CProtocol.RoomRandomSearchAck)]
-public class RoomRandomSearchAck : BaseCommand<Client, G2CProtocolData.RoomRandomSearchAck>
+public class RoomRandomSearchAck : CommandBase<Client, G2CProtocolData.RoomRandomSearchAck>
 {
     protected override void ExecuteCommand(Client context, G2CProtocolData.RoomRandomSearchAck protocol)
     {

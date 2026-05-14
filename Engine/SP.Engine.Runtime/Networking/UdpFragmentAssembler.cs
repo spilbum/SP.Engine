@@ -36,7 +36,7 @@ namespace SP.Engine.Runtime.Networking
             if (index >= TotalCount || _fragments[index] != null && _fragments[index].Capacity > 0) return false;
 
             var pooled = new PooledBuffer(span.Length);
-            span.CopyTo(pooled.GetSpan());
+            span.CopyTo(pooled.Memory.Span);
 
             _fragments[index] = pooled;
             _lengths[index] = span.Length;
@@ -48,7 +48,7 @@ namespace SP.Engine.Runtime.Networking
         public PooledBuffer Combine(out int length)
         {
             var result = new PooledBuffer(_totalLength);
-            var dest = result.GetSpan();
+            var dest = result.Memory.Span;
             var offset = 0;
             
             for (var i = 0; i < TotalCount; i++)
@@ -112,9 +112,7 @@ namespace SP.Engine.Runtime.Networking
             if (_disposed) return false;
 
             if (!UdpFragmentHeader.TryRead(bodyData, out var fragHeader, out var fragHeaderConsumed)) return false;
-                
-            Console.WriteLine("TryPush - FragId: {0}, Index: {1}, Length: {2}, TotalCount: {3}", fragHeader.FragId, fragHeader.Index, fragHeader.FragLength, fragHeader.TotalCount);
-                
+            
             var fragData = bodyData[fragHeaderConsumed..];
                 
             if (!_assembles.ContainsKey(fragHeader.FragId) && _assembles.Count >= _maxPendingMessageCount) 
@@ -150,7 +148,6 @@ namespace SP.Engine.Runtime.Networking
                 {
                     bodyOwner = state.Combine(out var length);
                     bodyLength = length;
-                    Console.WriteLine("Combine - {0} - {1} ({2}bytes)", state.CreateAtUtc, state.TotalCount, length);
                     return true;
                 }
             }

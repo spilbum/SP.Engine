@@ -31,7 +31,7 @@ public class Matchmaker : IDisposable
 
         var logger = LogManager.GetLogger();
         _fiber = new ThreadFiber("MatchmakerFiber");
-        _tickTimer = GameServer.Instance.Scheduler.Schedule(_fiber, Searching, TimeSpan.Zero, searchingPeriod);
+        _tickTimer = GameServer.Instance.GlobalScheduler.Schedule(_fiber, Searching, TimeSpan.Zero, searchingPeriod);
     }
 
     public void Dispose()

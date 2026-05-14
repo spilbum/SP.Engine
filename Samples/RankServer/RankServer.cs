@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net;
+using System.Reflection;
 using Common;
 using RankServer.Season;
 using RankServer.ServerPeer;
@@ -69,7 +70,7 @@ public static class RankSeasonExtensions
     }
 }
 
-public class RankServer : Engine
+public class RankServer : EngineBase
 {
     private static readonly HttpClient Http = new(
         new SocketsHttpHandler
@@ -85,82 +86,78 @@ public class RankServer : Engine
     private readonly ConcurrentDictionary<SeasonKind, IRankSeason> _seasons = new();
     private readonly MySqlDbConnector _dbConnector = new();
     private readonly List<string> _acceptServers = [];
-    private readonly CancellationToken _shutdown;
     private HttpRpc? _resourceRpc;
+    private ThreadFiber? _serverFiber;
+    private CancellationTokenSource _shutdownCts = new();
 
     public ServerGroupType ServerGroupType { get; private set; }
     
-    public RankServer(CancellationToken shutdown)
+    public RankServer()
     {
         Instance = this;
-        _shutdown = shutdown;
     }
 
     public static RankServer Instance { get; private set; } = null!;
     public RankRepository Repository { get; private set; } = null!;
 
-    public bool Initialize(BuildConfig buildConfig)
+    public bool Setup(AppConfig config)
     {
-        var config = EngineConfigBuilder.Create()
-            .WithNetwork(n => n with
-            {
-            })
-            .WithSession(s => s with
-            {
-                MaxConnections = 100
-            })
-            .WithPerf(r => r with
-            {
-                MonitorEnabled = true,
-                SamplePeriod = TimeSpan.FromSeconds(1),
-                LoggerEnabled = true,
-                LoggingPeriod = TimeSpan.FromSeconds(30)
-            })
-            .AddListener(new ListenerConfig { Ip = "Any", Port = buildConfig.Server.Port })
-            .Build();
-
-        if (!base.Initialize(buildConfig.Server.Name, config))
-            return false;
-
-        if (!Enum.TryParse(buildConfig.Server.Group, out ServerGroupType group))
-            return false;
-        
+        if (!Enum.TryParse(config.Server.Group, out ServerGroupType group)) return false;
         ServerGroupType = group;
-
-        foreach (var database in buildConfig.Database)
-        {
-            if (!Enum.TryParse(database.Kind, true, out DbKind kind) ||
-                string.IsNullOrEmpty(database.ConnectionString))
-                return false;
         
-            _dbConnector.Register(kind, database.ConnectionString);
-        }
-
-        foreach (var allowed in buildConfig.Server.AcceptServers)
+        _serverFiber = new ThreadFiber("ServerFiber",
+            capacity: 8 * 1024,
+            maxBatchSize: 1024,
+            onError: ex => Logger.Error(ex));
+        
+        foreach (var allowed in config.Server.AcceptServers)
         {
             _acceptServers.Add(allowed);
         }
-
-        Repository = new RankRepository(_dbConnector);
-        CreateDailyRankSeason();
         
-        SetupResource(buildConfig.Resource);
+        if (!SetupDatabases(config.Database))
+            return false;
+        
+        if (!SetupResource(config.Resource))
+            return false;
+        
+        SetupDailyRankSeason();
         return true;
     }
 
-    private void SetupResource(ResourceConfig config)
+    private bool SetupDatabases(DatabaseConfig[] configs)
     {
+        foreach (var config in configs)
+        {
+            if (!Enum.TryParse(config.Kind, true, out DbKind kind) ||
+                string.IsNullOrEmpty(config.ConnectionString))
+            {
+                return false;
+            }
+
+            _dbConnector.Register(kind, config.ConnectionString);
+        }
+        
+        Repository = new RankRepository(_dbConnector);
+        return true;
+    }
+
+    private bool SetupResource(ResourceConfig config)
+    {
+        if (string.IsNullOrEmpty(config.BaseUrl))
+            return false;
+        
         _resourceRpc = new HttpRpc(Http, config.BaseUrl);
         
-        var ts = TimeSpan.FromSeconds(config.SyncPeriodSec);
-        Scheduler.Schedule(Fiber, SyncServerListSchedule, TimeSpan.Zero, ts);
+        GlobalScheduler.Schedule(
+            _serverFiber, SyncServerListSchedule, 
+            TimeSpan.Zero, TimeSpan.FromSeconds(config.SyncPeriodSec));
+        return true;
     }
 
     private void SyncServerListSchedule()
     {
-        var sessions = GetAllSessions().ToList(); 
-        var list = sessions
-            .OfType<Session>()
+        var list = GetAllSessions()
             .Where(s => s.Peer is GameServerPeer)
             .Select(s => {
                 var game = (GameServerPeer)s.Peer;
@@ -180,10 +177,10 @@ public class RankServer : Engine
 
         if (list.Count == 0) return;
         
-        Fiber.RunAsync(ct => SyncServerListAsync(list, ct), null, ex =>
+        _serverFiber.RunAsync(ct => SyncServerListAsync(list, ct), null, ex =>
         {
             Logger.Error("Failed to sync server list: {0}", ex.Message);
-        }, _shutdown);
+        }, _shutdownCts.Token);
     }
     
     private async Task SyncServerListAsync(List<ServerSyncInfo> list, CancellationToken ct)
@@ -202,7 +199,7 @@ public class RankServer : Engine
         }
     }
 
-    private void CreateDailyRankSeason()
+    private void SetupDailyRankSeason()
     {
         var options = new RankSeasonOptions
         {
@@ -218,18 +215,17 @@ public class RankServer : Engine
         _seasons[daily.Kind] = daily;
     }
 
-    public override bool Start()
+    protected override void OnStarted()
     {
-        if (!base.Start())
-            return false;
-
-        foreach (var season in _seasons.Values)
-            season.Start();
-
-        return true;
+        foreach (var season in _seasons.Values) season.Start();
     }
 
-    protected override IPeer CreatePeer(ISession session)
+    protected override void OnStopped()
+    {
+        _shutdownCts.Cancel();
+    }
+
+    protected override IPeer CreatePeer(Session session)
     {
         return new BaseServerPeer(session);
     }
@@ -244,7 +240,7 @@ public class RankServer : Engine
         if (!_acceptServers.Contains(req.ServerKind))
             return ErrorCode.InternalError;
         
-        BasePeer newPeer;
+        PeerBase newPeer;
         switch (req.ServerKind)
         {
             case "Game":

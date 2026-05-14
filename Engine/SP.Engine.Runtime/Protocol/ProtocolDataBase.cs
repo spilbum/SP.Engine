@@ -4,13 +4,13 @@ using SP.Engine.Runtime.Channel;
 
 namespace SP.Engine.Runtime.Protocol
 {
-    public abstract class BaseProtocolData<T> : IProtocolData
-        where T : BaseProtocolData<T>
+    public abstract class ProtocolDataBase<T> : IProtocolData
+        where T : ProtocolDataBase<T>
     {
         [Member(IgnoreGet = true)] public ushort Id => ProtocolMetadata<T>.Id;
         [Member(IgnoreGet = true)] public ChannelKind Channel => ProtocolMetadata<T>.Channel;
 
-        public void Serialize(NetWriter w)
+        public void Serialize(ref NetWriter w)
         {
             NetSerializer<T>.Serialize(ref w, (T)this);
         }

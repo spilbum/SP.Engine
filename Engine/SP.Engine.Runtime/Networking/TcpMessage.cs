@@ -3,7 +3,7 @@ using System.Buffers;
 
 namespace SP.Engine.Runtime.Networking
 {
-    public class TcpMessage : BaseMessage<TcpHeader>
+    public class TcpMessage : MessageBase<TcpHeader>
     {
         public TcpMessage()
         {

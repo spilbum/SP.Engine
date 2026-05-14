@@ -12,8 +12,7 @@ namespace SP.Engine.Protocol
         public const ushort Ping = 102;
         public const ushort Close = 103;
         public const ushort UdpHelloReq = 104;
-        public const ushort UdpHealthCheckReq = 105;
-        public const ushort UdpHealthCheckConfirm = 106;
+        public const ushort UdpHealthCheckConfirm = 105;
     }
 
     public static class S2CEngineProtocolId
@@ -23,13 +22,14 @@ namespace SP.Engine.Protocol
         public const ushort Pong = 202;
         public const ushort Close = 203;
         public const ushort UdpHelloAck = 204;
-        public const ushort UdpHealthCheckAck = 205;
+        public const ushort UdpHealthCheck = 205;
+        public const ushort UdpStatusNotify = 206;
     }
 
     public static class C2SEngineProtocolData
     {
-        [Protocol(C2SEngineProtocolId.SessionAuthReq, encrypt: Toggle.Off, compress: Toggle.Off)]
-        public class SessionAuthReq : BaseProtocolData<SessionAuthReq>
+        [Protocol(C2SEngineProtocolId.SessionAuthReq)]
+        public class SessionAuthReq : ProtocolDataBase<SessionAuthReq>
         {
             public byte[]? ClientPublicKey;
             public DhKeySize KeySize;
@@ -38,57 +38,51 @@ namespace SP.Engine.Protocol
         }
 
         [Protocol(C2SEngineProtocolId.MessageAck)]
-        public class MessageAck : BaseProtocolData<MessageAck>
+        public class MessageAck : ProtocolDataBase<MessageAck>
         {
             public uint AckNumber;
         }
 
         [Protocol(C2SEngineProtocolId.Ping)]
-        public class Ping : BaseProtocolData<Ping>
+        public class Ping : ProtocolDataBase<Ping>
         {
             public uint SendTimeMs;
             // 최신 RTT
-            public ushort RawRttMs;
+            public double RawRttMs;
             // EWMA 평균 RTT
-            public ushort AvgRttMs;
+            public double AvgRttMs;
             // EWMA 지터
-            public ushort JitterMs;
+            public double JitterMs;
         }
 
         [Protocol(C2SEngineProtocolId.Close)]
-        public class Close : BaseProtocolData<Close>
+        public class Close : ProtocolDataBase<Close>
         {
         }
 
         [Protocol(C2SEngineProtocolId.UdpHelloReq, ChannelKind.Unreliable)]
-        public class UdpHelloReq : BaseProtocolData<UdpHelloReq>
+        public class UdpHelloReq : ProtocolDataBase<UdpHelloReq>
         {
             public ushort Mtu;
             public uint PeerId;
             public long SessionId;
         }
 
-        [Protocol(C2SEngineProtocolId.UdpHealthCheckReq)]
-        public class UdpHealthCheckReq : BaseProtocolData<UdpHealthCheckReq>
-        {
-        }
-        
         [Protocol(C2SEngineProtocolId.UdpHealthCheckConfirm, ChannelKind.Unreliable)]
-        public class UdpHealthCheckConfirm : BaseProtocolData<UdpHealthCheckConfirm>
+        public class UdpHealthCheckConfirm : ProtocolDataBase<UdpHealthCheckConfirm>
         {
         }
     }
 
     public static class S2CEngineProtocolData
     {
-        [Protocol(S2CEngineProtocolId.SessionAuthAck, encrypt: Toggle.Off, compress: Toggle.Off)]
-        public class SessionAuthAck : BaseProtocolData<SessionAuthAck>
+        [Protocol(S2CEngineProtocolId.SessionAuthAck)]
+        public class SessionAuthAck : ProtocolDataBase<SessionAuthAck>
         {
             public int CompressionThreshold;
             public int MaxFrameBytes;
             public int MaxRetries;
             public uint PeerId;
-            public string? Reason;
             public SessionAuthResult Result;
             public int SendTimeoutMs;
             public byte[]? ServerPublicKey;
@@ -105,7 +99,7 @@ namespace SP.Engine.Protocol
         }
 
         [Protocol(S2CEngineProtocolId.Pong)]
-        public class Pong : BaseProtocolData<Pong>
+        public class Pong : ProtocolDataBase<Pong>
         {
             // 클라이언트가 핑 보낸 시간
             public uint ClientSendTimeMs;
@@ -114,26 +108,32 @@ namespace SP.Engine.Protocol
         }
 
         [Protocol(S2CEngineProtocolId.MessageAck)]
-        public class MessageAck : BaseProtocolData<MessageAck>
+        public class MessageAck : ProtocolDataBase<MessageAck>
         {
             public uint AckNumber;
         }
 
         [Protocol(S2CEngineProtocolId.Close)]
-        public class Close : BaseProtocolData<Close>
+        public class Close : ProtocolDataBase<Close>
         {
         }
 
         [Protocol(S2CEngineProtocolId.UdpHelloAck, ChannelKind.Unreliable)]
-        public class UdpHelloAck : BaseProtocolData<UdpHelloAck>
+        public class UdpHelloAck : ProtocolDataBase<UdpHelloAck>
         {
             public ushort Mtu;
             public UdpHandshakeResult Result;
         }
         
-        [Protocol(S2CEngineProtocolId.UdpHealthCheckAck, ChannelKind.Unreliable)]
-        public class UdpHealthCheckAck : BaseProtocolData<UdpHealthCheckAck>
+        [Protocol(S2CEngineProtocolId.UdpHealthCheck, ChannelKind.Unreliable)]
+        public class UdpHealthCheck : ProtocolDataBase<UdpHealthCheck>
         {
+        }
+        
+        [Protocol(S2CEngineProtocolId.UdpStatusNotify)]
+        public class UdpStatusNotify : ProtocolDataBase<UdpStatusNotify>
+        {
+            public bool IsEnabled;
         }
     }
 }

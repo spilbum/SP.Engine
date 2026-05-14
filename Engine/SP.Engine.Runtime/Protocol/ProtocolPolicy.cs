@@ -1,5 +1,5 @@
-using System;
 using System.Collections.Generic;
+using System.Net.Sockets;
 
 namespace SP.Engine.Runtime.Protocol
 {
@@ -50,35 +50,42 @@ namespace SP.Engine.Runtime.Protocol
         }
     }
 
-    public interface IProtocolPolicySnapshot
+    public interface IPolicySnapshot
     {
+        ProtocolPolicy Globals { get; }
         ProtocolPolicy Resolve(ushort protocolId);
     }
 
-    public sealed class PolicySnapshot : IProtocolPolicySnapshot
+    public sealed class PolicySnapshot : IPolicySnapshot
     {
+        private const int MinCompressionThreshold = 128;
         private readonly ProtocolPolicy[] _cache = new ProtocolPolicy[ushort.MaxValue];
-        private readonly ProtocolPolicy _fallbackPolicy;
 
-        public PolicySnapshot(PolicyGlobals globals, Dictionary<ushort, ProtocolOverrides> overrides)
+        public ProtocolPolicy Globals { get; }
+
+        public PolicySnapshot(PolicyGlobals g, Dictionary<ushort, ProtocolOverrides> overrides)
         {
-            _fallbackPolicy = new ProtocolPolicy(globals.UseEncrypt, globals.UseCompress, globals.CompressionThreshold);
-            
+            Globals = new ProtocolPolicy(g.UseEncrypt, g.UseCompress, g.CompressionThreshold);
             foreach (var (id, ov) in overrides)
             {
-                _cache[id] = ProtocolPolicyRegistry.ComputePolicy(ov, globals);
+                _cache[id] = ComputePolicy(ov, g);
             }
         }
         
-        public ProtocolPolicy Resolve(ushort protocolId)
-            => _cache[protocolId] ?? _fallbackPolicy;
-    }
+        private static ProtocolPolicy ComputePolicy(ProtocolOverrides ov, PolicyGlobals g)
+        {
+            // 글로벌 설정을 우선으로 함
+            var useEncrypt = g.UseEncrypt && (ov.Encrypt == Toggle.Inherit || ov.Encrypt == Toggle.On);
+            var useCompress = g.UseCompress && (ov.Encrypt == Toggle.Inherit || ov.Compress == Toggle.On);
 
-    public static class PolicyDefaults
-    {
-        // 내부 프로토콜용 정책
-        public static readonly ProtocolPolicy InternalPolicy = new ProtocolPolicy(false, false, 0);
-        // 설정된 정책이 없을때 적용되는 기본 정책
-        public static readonly PolicyGlobals FallbackGlobals = new PolicyGlobals(true, false, 0);
+            if (!useCompress)
+                return new ProtocolPolicy(useEncrypt, false, 0);
+
+            var threshold = g.CompressionThreshold < MinCompressionThreshold ? MinCompressionThreshold : g.CompressionThreshold;
+            return new ProtocolPolicy(useEncrypt, true, threshold);
+        }
+        
+        public ProtocolPolicy Resolve(ushort protocolId)
+            => _cache[protocolId] ?? Globals;
     }
 }

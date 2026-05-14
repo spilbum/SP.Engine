@@ -13,11 +13,6 @@ using SP.Engine.Server.Configuration;
 
 namespace SP.Engine.Server;
 
-public interface IBaseSession : ICommandContext
-{
-    public long SessionId { get; }
-}
-
 public enum SessionState
 {
     None = 0,
@@ -26,10 +21,10 @@ public enum SessionState
     Closed
 }
 
-public abstract class BaseSession : IBaseSession, IDisposable
+public abstract class SessionBase : ICommandContext, IDisposable
 {
     private readonly MessageChannelRouter _router = new();
-    private BaseEngine _engine;
+    private EngineCore _engine;
     private SessionReceiveBuffer _receiveBuffer;
     private long _sessionId;
     private volatile TcpNetworkSession _tcpSession;
@@ -42,7 +37,6 @@ public abstract class BaseSession : IBaseSession, IDisposable
     public void PauseReceive() => _tcpSession?.PauseReceive();
     public void ResumeReceive() => _tcpSession?.ResumeReceive();
 
-    public UdpNetworkSession UdpSession => _udpSession;
     public long SessionId
     {
         get => Interlocked.Read(ref _sessionId);
@@ -68,19 +62,19 @@ public abstract class BaseSession : IBaseSession, IDisposable
     
     public DateTime StartClosingTime { get; protected set; }
     
-    protected BaseSession()
+    protected SessionBase()
     {
         StartTime = DateTime.UtcNow;
         LastActiveTimeTicks = DateTime.UtcNow.Ticks;
     }
     
-    public virtual void Initialize(long sessionId, IBaseEngine baseEngine, TcpNetworkSession tcpSession)
+    public virtual void Initialize(long sessionId, EngineCore engineCore, TcpNetworkSession tcpSession)
     {
         SessionId = sessionId;
-        _engine = (BaseEngine)baseEngine;
+        _engine = engineCore;
         _tcpSession = tcpSession;
         _router.Bind(new ReliableChannel(tcpSession));
-        _receiveBuffer = new SessionReceiveBuffer(Config.Network.ReceiveBufferSize);
+        _receiveBuffer = new SessionReceiveBuffer(4 * 1024);
         
         tcpSession.Closed += OnTcpSessionClosed;
     }
@@ -124,7 +118,7 @@ public abstract class BaseSession : IBaseSession, IDisposable
     
     public bool IsUdpAvailable => _router.IsUdpAvailable;
 
-    public bool TrySend(ChannelKind channel, IMessage message)
+    public bool Send(ChannelKind channel, IMessage message)
     {
         switch (channel)
         {
@@ -157,7 +151,7 @@ public abstract class BaseSession : IBaseSession, IDisposable
         }
     }
 
-    public UdpNetworkSession ResolveUdpSession(Socket socket, IPEndPoint remoteEndPoint)
+    public UdpNetworkSession ResolveUdpSession(Socket socket, IPEndPoint remoteEndPoint, IObjectPool<SegmentQueue> sendingQueuePool)
     {
         if (_udpSession == null)
         {
@@ -165,10 +159,9 @@ public abstract class BaseSession : IBaseSession, IDisposable
             {
                 if (_udpSession == null)
                 {
-                    var ns = new UdpNetworkSession(this, socket, remoteEndPoint, Config.Network);
+                    var ns = new UdpNetworkSession(this, socket, remoteEndPoint, sendingQueuePool);
                     _udpSession = ns; 
                     _router.Bind(new UnreliableChannel(ns));
-                    Logger.Debug("Binding UDP session {0}. EP: {1}", _sessionId, remoteEndPoint);
                 }
             }
         }

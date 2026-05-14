@@ -6,7 +6,7 @@ using SP.Engine.Runtime.Protocol;
 namespace GameServer.Command;
 
 [ProtocolCommand(C2GProtocol.RoomJoinReq)]
-public class RoomJoinReq : BaseCommand<GamePeer, C2GProtocolData.RoomJoinReq>
+public class RoomJoinReq : CommandBase<GamePeer, C2GProtocolData.RoomJoinReq>
 {
     protected override void ExecuteCommand(GamePeer context, C2GProtocolData.RoomJoinReq protocol)
     {

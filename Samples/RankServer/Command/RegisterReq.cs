@@ -6,7 +6,7 @@ using SP.Engine.Runtime.Protocol;
 namespace RankServer.Command;
 
 [ProtocolCommand(S2SProtocol.RegisterReq)]
-public class RegisterReq : BaseCommand<BaseServerPeer, S2SProtocolData.RegisterReq>
+public class RegisterReq : CommandBase<BaseServerPeer, S2SProtocolData.RegisterReq>
 {
     protected override void ExecuteCommand(BaseServerPeer context, S2SProtocolData.RegisterReq protocol)
     {

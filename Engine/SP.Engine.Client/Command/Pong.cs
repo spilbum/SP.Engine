@@ -5,11 +5,17 @@ using SP.Engine.Runtime.Protocol;
 namespace SP.Engine.Client.Command
 {
     [ProtocolCommand(S2CEngineProtocolId.Pong)]
-    public class Pong : BaseCommand<BaseNetPeer, S2CEngineProtocolData.Pong>
+    public class Pong : CommandBase<NetPeerBase, S2CEngineProtocolData.Pong>
     {
-        protected override void ExecuteCommand(BaseNetPeer context, S2CEngineProtocolData.Pong protocol)
+        protected override void ExecuteCommand(NetPeerBase context, S2CEngineProtocolData.Pong protocol)
         {
-            context.OnPong(protocol.ClientSendTimeMs, protocol.ServerTimeMs);
+            var nowMs = NetPeerBase.NetworkTimeMs;
+            var rttMs = nowMs - protocol.ClientSendTimeMs;
+            context.SetRttMs(rttMs);
+
+            var estimatedServerNetworkTime = protocol.ServerTimeMs + rttMs / 2;
+            var offset = (long)estimatedServerNetworkTime - nowMs;
+            context.SetServerTimeOffset(offset);
         }
     }
 }

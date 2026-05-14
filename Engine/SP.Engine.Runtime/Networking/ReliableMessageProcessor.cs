@@ -64,12 +64,12 @@ namespace SP.Engine.Runtime.Networking
         public (List<TcpMessage> Retries, List<TcpMessage> Failed) ProcessRetransmissions(RtoEstimator rto)
         {
             var now = DateTime.UtcNow;
-            List<TcpMessage> retries = null;
-            List<TcpMessage> failed = null;
+            var retries = new List<TcpMessage>();
+            var failed = new List<TcpMessage>();
 
             lock (_lock)
             {
-                if (_disposed) return default;
+                if (_disposed) throw new ObjectDisposedException(nameof(ReliableMessageProcessor));
 
                 while (_timeoutOrder.Count > 0)
                 {
@@ -80,20 +80,17 @@ namespace SP.Engine.Runtime.Networking
 
                     if (minTracker.IsExhausted)
                     {
-                        failed ??= new List<TcpMessage>();
-                        failed.Add(minTracker.Message);
                         _states.Remove(minTracker.Message.SequenceNumber);
                         _pool.Return(minTracker);
+                        
+                        failed.Add(minTracker.Message);
                     }
                     else
                     {
-                        var nextRto = rto.GetRtoMs(minTracker.CurrentAttempt);
-                        minTracker.RecordRetryAttempt(nextRto);
-                        
-                        retries ??= new List<TcpMessage>();
-                        retries.Add(minTracker.Message);
-
+                        minTracker.RecordRetryAttempt(rto.GetRtoMs(minTracker.CurrentAttempt));
                         _timeoutOrder.Add(minTracker);
+                        
+                        retries.Add(minTracker.Message);
                     }
                 }
             }
@@ -222,13 +219,13 @@ namespace SP.Engine.Runtime.Networking
         private readonly int _minRtoMs;
         private readonly int _maxRtoMs;
         private readonly int _minRtoVarianceMs;
-        private double _lastRtt;
-        
-        private EwmaFilter _rttVar = new EwmaFilter(0.25);
-        private EwmaFilter _rttFilter = new EwmaFilter(0.125);
+
+        private readonly EwmaFilter _rttVar = new EwmaFilter(0.25);
+        private readonly EwmaFilter _rttFilter = new EwmaFilter(0.125);
 
         public double SRttMs => _rttFilter.Value;
         public double JitterMs => _rttVar.Value;
+        public double LastRttMs { get; private set; }
 
         public RtoEstimator(int minRtoMs = 200, int maxRtoMs = 5000, int minRtoVarianceMs = 100)
         {
@@ -255,7 +252,7 @@ namespace SP.Engine.Runtime.Networking
                 _rttFilter.Update(rttMs);
             }
             
-            _lastRtt = rttMs;
+            LastRttMs = rttMs;
         }
 
         public int GetRtoMs(int retryCount)
@@ -358,13 +355,13 @@ namespace SP.Engine.Runtime.Networking
         public double JitterMs => _rtoEstimator.JitterMs;
         
         public int MaxAckDelayMs { get; private set; } = 30;
-        public int AckStepThreshold { get; private set; } = 10;
+        public int AckFrequency { get; private set; } = 10;
         public uint LastReceivedSeq => reorderer.NextExpectedSeq;
 
         public void SetSendTimeoutMs(int ms) => _initSendTimeoutMs = ms;
         public void SetMaxRetransmissionCount(int count) => _maxRetransmissionCount = count;
         public void SetMaxAckDelayMs(int ms) => MaxAckDelayMs = ms;
-        public void SetAckStepThreshold(int count) => AckStepThreshold = count;
+        public void SetAckFrequency(int count) => AckFrequency = count;
         
         public void SetMaxOutOfOrder(int count) => _maxOutOfOrder = count;
         

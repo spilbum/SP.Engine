@@ -6,7 +6,7 @@ using SP.Engine.Runtime.Protocol;
 namespace GameServer.Command;
 
 [ProtocolCommand(C2GProtocol.RoomCreateReq)]
-public class RoomCreateReq : BaseCommand<GamePeer, C2GProtocolData.RoomCreateReq>
+public class RoomCreateReq : CommandBase<GamePeer, C2GProtocolData.RoomCreateReq>
 {
     protected override void ExecuteCommand(GamePeer context, C2GProtocolData.RoomCreateReq protocol)
     {

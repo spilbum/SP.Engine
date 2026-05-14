@@ -1,52 +1,56 @@
 using System;
-using System.Buffers;
 using System.Buffers.Binary;
+using System.ComponentModel;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace SP.Core.Serialization
 {
-    public sealed class NetWriter : IDisposable
+    public ref struct NetWriter
     {
-        private PooledBuffer _buffer;
-        private bool _disposed;
+        private readonly PooledBuffer _owner;
+        private Span<byte> _buffer;
+        private int _position;
 
-        public NetWriter(int initialCapacity = 1024)
+        public NetWriter(PooledBuffer owner)
         {
-            _buffer = new PooledBuffer(initialCapacity);
+            _owner = owner ?? throw new ArgumentNullException(nameof(owner));
+            _buffer = owner.Memory.Span;
+            _position = 0;
         }
-
-        public void Dispose()
-        {
-            if (_disposed) return;
-            _disposed = true;
-            
-            _buffer?.Dispose();
-            _buffer = null;
-        }
-
-        public IMemoryOwner<byte> DetachBufferOwner(out int length)
-        {
-            if (_disposed || _buffer == null) throw new ObjectDisposedException(nameof(NetWriter));
-            
-            length = _buffer.WrittenCount;
-            var owner = _buffer;
-            
-            _buffer = null;
-            _disposed = true;
-            
-            return owner;
-        }
-
-        public byte[] ToArray() => _buffer.WrittenSpan.ToArray();
-        public ReadOnlySpan<byte> WrittenSpan => _buffer.WrittenSpan;
-        public int WrittenCount => _buffer.WrittenCount;
+        
+        public int WrittenCount => _position;
+        public Span<byte> WrittenSpan => _buffer[.._position];
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private Span<byte> GetSpan(int sizeHint) => _buffer.GetSpan(sizeHint);
+        private Span<byte> GetSpan(int sizeHint)
+        {
+            if (_position + sizeHint > _buffer.Length)
+            {
+                // 확장
+                Grow(sizeHint);
+            }
+            
+            return _buffer[_position..];
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void Advance(int count) => _buffer.Advance(count);
+        private void Grow(int sizeHint)
+        {
+            var required = _position + sizeHint;
+            var newCap = _buffer.Length > 0 ? _buffer.Length : 256;
+            while (newCap < required) newCap <<= 1;
+
+            _owner.ExpandLinear(newCap, _position);
+            _buffer = _owner.Memory.Span;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void Advance(int count)
+        {
+            _position += count;
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteByte(byte value)
@@ -255,12 +259,6 @@ namespace SP.Core.Serialization
                     }
                 }
             }
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        private static void ThrowNotSupportedType(Type t)
-        {
-            throw new NotSupportedException($"Type '{t.Name}' is not supported by NetWriter.Write<T>. Only primitives are allowed.");
         }
     }
 }

@@ -6,7 +6,7 @@ using SP.Engine.Runtime.Protocol;
 namespace RankServer.Command;
 
 [ProtocolCommand(G2RProtocol.RankTopReq)]
-public class RankTopReq : BaseCommand<GameServerPeer, G2RProtocolData.RankTopReq>
+public class RankTopReq : CommandBase<GameServerPeer, G2RProtocolData.RankTopReq>
 {
     protected override void ExecuteCommand(GameServerPeer context, G2RProtocolData.RankTopReq protocol)
     {

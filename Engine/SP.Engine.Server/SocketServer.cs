@@ -1,10 +1,10 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using SP.Core;
-using SP.Engine.Protocol;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Server.Configuration;
@@ -32,28 +32,43 @@ internal class ReceiveContextFactory(int bufferSize) : IPoolObjectFactory<Socket
     }
 }
 
-internal class TcpSendingQueueFactory(int queueCapacity) : IPoolObjectFactory<SegmentQueue>
+internal class TcpSendingQueueFactory(int queueSize) : IPoolObjectFactory<SegmentQueue>
 {
     public SegmentQueue[] Create(int size)
     {
-        var source = new ArraySegment<byte>[size * queueCapacity];
+        var source = new ArraySegment<byte>[size * queueSize];
         var items = new SegmentQueue[size];
 
         for (var i = 0; i < size; i++)
-            items[i] = new SegmentQueue(source, i * queueCapacity, queueCapacity);
+            items[i] = new SegmentQueue(source, i * queueSize, queueSize);
 
         return items;
     }
 }
 
-internal sealed class SocketServer(BaseEngine engine, ListenerInfo[] listenerInfos) : IDisposable
+internal class UdpSendingQueueFactory(int queueSize) : IPoolObjectFactory<SegmentQueue>
+{
+    public SegmentQueue[] Create(int size)
+    {
+        var source = new ArraySegment<byte>[size * queueSize];
+        var items = new SegmentQueue[size];
+        
+        for (var i = 0; i < size; i++)
+            items[i] = new SegmentQueue(source, i * queueSize, queueSize);
+        
+        return items;
+    }
+}
+
+internal sealed class SocketServer(EngineCore engine, ListenerInfo[] listenerInfos) : IDisposable
 {
     private bool _disposed;
     private byte[] _keepAliveOptionValues;
     private ExpandablePool<SocketReceiveContext> _tcpReceiveContextPool;
     private ExpandablePool<SegmentQueue> _tcpSendingQueuePool;
+    private ExpandablePool<SegmentQueue> _udpSendingQueuePool;
     
-    private List<ISocketListener> Listeners { get; } = new(listenerInfos.Length);
+    private List<INetworkListener> Listeners { get; } = new(listenerInfos.Length);
     private ListenerInfo[] ListenerInfos { get; } = listenerInfos;
     private bool IsStopped { get; set; }
     
@@ -77,9 +92,16 @@ internal sealed class SocketServer(BaseEngine engine, ListenerInfo[] listenerInf
             new ReceiveContextFactory(config.Network.ReceiveBufferSize));
 
         _tcpSendingQueuePool = new ExpandablePool<SegmentQueue>();
-        _tcpSendingQueuePool.Initialize(Math.Max(config.Session.MaxConnections / 2, 512)
-            , Math.Max(config.Session.MaxConnections * 3, 512)
-            , new TcpSendingQueueFactory(config.Network.SendingQueueSize));
+        _tcpSendingQueuePool.Initialize(
+            Math.Max(config.Session.MaxConnections / 2, 512),
+            Math.Max(config.Session.MaxConnections * 3, 512),
+            new TcpSendingQueueFactory(config.Network.SendingQueueSize));
+        
+        _udpSendingQueuePool = new ExpandablePool<SegmentQueue>();
+        _udpSendingQueuePool.Initialize(
+            Math.Max(config.Session.MaxConnections / 2, 512),
+            Math.Max(config.Session.MaxConnections * 3, 512),
+            new UdpSendingQueueFactory(config.Network.SendingQueueSize));
         
         foreach (var info in ListenerInfos)
         {
@@ -89,6 +111,7 @@ internal sealed class SocketServer(BaseEngine engine, ListenerInfo[] listenerInf
             listener.Error += OnListenerError;
             listener.Stopped += OnListenerStopped;
             listener.NewClientAccepted += OnNewClientAccepted;
+            listener.DataReceived += OnDataReceived;
 
             if (listener.Start())
             {
@@ -147,50 +170,48 @@ internal sealed class SocketServer(BaseEngine engine, ListenerInfo[] listenerInf
         }
     }
 
-    private static ISocketListener CreateListener(ListenerInfo listenerInfo, IEngineConfig config)
+    private static INetworkListener CreateListener(ListenerInfo info, IEngineConfig config)
     {
-        return listenerInfo.Mode switch
+        return info.Mode switch
         {
-            SocketMode.Tcp => new TcpNetworkListener(listenerInfo),
-            SocketMode.Udp => new UdpNetworkListener(listenerInfo, config),
-            _ => throw new ArgumentException($"Invalid socket mode: {listenerInfo.Mode}")
+            SocketMode.Tcp => new TcpNetworkListener(info),
+            SocketMode.Udp => UdpNetworkListenerFactory.Create(info, config),
+            _ => throw new ArgumentException($"Invalid socket mode: {info.Mode}")
         };
     }
 
-    private void OnNewClientAccepted(ISocketListener listener, Socket socket, object state)
+    private void OnNewClientAccepted(Socket socket)
     {
-        if (IsStopped)
-            return;
-
-        switch (listener.Mode)
-        {
-            case SocketMode.Tcp:
-                ProcessTcpClient(socket);
-                break;
-            case SocketMode.Udp:
-                if (state is (PooledBuffer buffer, IPEndPoint remoteEndPoint))
-                    engine.AsyncRun(() => ProcessUdpClient(socket, buffer, remoteEndPoint));
-                break;
-            default:
-                throw new NotSupportedException($"{listener.Mode}");
-        }
+        if (IsStopped) return;
+        ProcessTcpClient(socket);
     }
     
-    private void ProcessUdpClient(Socket socket, PooledBuffer buffer, IPEndPoint remoteEndPoint)
+    private void OnDataReceived(Socket listenSocket, ReadOnlySpan<byte> buffer, IPEndPoint remoteEndPoint)
     {
-        using (buffer)
-        {
-            if (!UdpHeader.TryRead(buffer.Memory.Span, out var header, out var headerConsumed)) return;
+        if (!UdpHeader.TryRead(buffer, out var header, out var headerConsumed)) return;
             
-            var session = engine.GetSession(header.SessionId);
-            if (session == null || session.IsClosed) return;
+        var session = engine.GetSession(header.SessionId);
+        if (session == null || session.IsClosed) return;
             
-            var udp = session.ResolveUdpSession(socket, remoteEndPoint);
-            if (udp == null) return;
+        var udp = session.ResolveUdpSession(listenSocket, remoteEndPoint, _udpSendingQueuePool);
+        if (udp == null) return;
 
-            var bodyData = buffer.Slice(headerConsumed, header.BodyLength);
-            session.HandleUdpMessage(header, bodyData);
-        }
+        var bodyBuffer = new PooledBuffer(header.BodyLength);
+        buffer.Slice(headerConsumed, header.BodyLength).CopyTo(bodyBuffer.Memory.Span);
+
+        var state = (session, header, bodyBuffer);
+        
+        session.AsyncRun(state, static s =>
+        {
+            try
+            {
+                s.session.HandleUdpMessage(s.header, s.bodyBuffer.Memory.Span);
+            }
+            finally
+            {
+                s.bodyBuffer.Dispose();
+            }
+        });
     }
 
     private void ProcessTcpClient(Socket client)
@@ -227,16 +248,16 @@ internal sealed class SocketServer(BaseEngine engine, ListenerInfo[] listenerInf
 
     private void OnListenerStopped(object sender, EventArgs e)
     {
-        if (sender is ISocketListener listener)
+        if (sender is INetworkListener listener)
             engine.Logger.Info("Listener ({0}) was stopped.", listener.EndPoint);
     }
 
-    private void OnListenerError(ISocketListener listener, Exception e)
+    private void OnListenerError(INetworkListener listener, Exception e)
     {
         engine.Logger.Error($"Listener ({listener.EndPoint}) error: {e.Message}\r\nstackTrace={e.StackTrace}");
     }
 
-    private IBaseSession CreateSession(Socket client, TcpNetworkSession networkSession)
+    private Session CreateSession(Socket client, TcpNetworkSession networkSession)
     {
         var config = engine.Config;
         if (0 < config.Network.SendTimeoutMs)

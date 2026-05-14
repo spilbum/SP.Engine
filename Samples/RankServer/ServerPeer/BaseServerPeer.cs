@@ -2,9 +2,9 @@ using SP.Engine.Server;
 
 namespace RankServer.ServerPeer;
 
-public class BaseServerPeer : BasePeer
+public class BaseServerPeer : PeerBase
 {
-    public BaseServerPeer(ISession session)
+    public BaseServerPeer(Session session)
         : base(PeerKind.Server, session)
     {
     }

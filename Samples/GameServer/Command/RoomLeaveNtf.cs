@@ -6,7 +6,7 @@ using SP.Engine.Runtime.Protocol;
 namespace GameServer.Command;
 
 [ProtocolCommand(C2GProtocol.RoomLeaveNtf)]
-public class RoomLeaveNtf : BaseCommand<GamePeer, C2GProtocolData.RoomLeaveNtf>
+public class RoomLeaveNtf : CommandBase<GamePeer, C2GProtocolData.RoomLeaveNtf>
 {
     protected override void ExecuteCommand(GamePeer context, C2GProtocolData.RoomLeaveNtf protocol)
     {

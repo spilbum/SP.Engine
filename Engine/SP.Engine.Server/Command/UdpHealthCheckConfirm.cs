@@ -5,10 +5,14 @@ using SP.Engine.Runtime.Protocol;
 namespace SP.Engine.Server.Command;
 
 [ProtocolCommand(C2SEngineProtocolId.UdpHealthCheckConfirm)]
-public class UdpHealthCheckConfirm : BaseCommand<Session, C2SEngineProtocolData.UdpHealthCheckConfirm>
+public class UdpHealthCheckConfirm : CommandBase<Session, C2SEngineProtocolData.UdpHealthCheckConfirm>
 {
-    protected override void ExecuteCommand(Session session, C2SEngineProtocolData.UdpHealthCheckConfirm protocol)
+    protected override void ExecuteCommand(Session context, C2SEngineProtocolData.UdpHealthCheckConfirm protocol)
     {
-        session.RecoverUdpHealth();
+        if (context.RecoverUdpHealth())
+        {
+            context.SendUdpStatusNotify(true);
+            context.Logger.Info("Session {0} UDP restored.", context.SessionId);
+        }
     }
 }

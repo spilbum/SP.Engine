@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using SP.Core.Fiber;
@@ -20,15 +21,6 @@ public static class TickExtensions
     {
         return new DateTime(ticks, kind);
     }
-}
-
-public interface IBaseEngine : ILogContext
-{
-}
-
-internal interface ISocketServerAccessor
-{
-    SocketServer SocketServer { get; }
 }
 
 public enum EServerState
@@ -51,10 +43,10 @@ public struct ServerStateConst
     public const int Stopping = 5;
 }
 
-public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposable
+public abstract class EngineCore : ILogContext, IDisposable
 {
-    private readonly ConcurrentQueue<BaseSession> _authHandshakePendingQueue = new();
-    private readonly ConcurrentQueue<BaseSession> _closeHandshakePendingQueue = new();
+    private readonly ConcurrentQueue<SessionBase> _authHandshakePendingQueue = new();
+    private readonly ConcurrentQueue<SessionBase> _closeHandshakePendingQueue = new();
     private IDisposable _clearIdleSessionTimer;
     private IDisposable _handshakePendingTimer;
     private IDisposable _sessionSnapshotTimer;
@@ -67,6 +59,7 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
     private readonly Scheduler _globalScheduler = new();
     private SessionManager _sessionManager;
     private IDisposable _udpCleanupTimer;
+    private readonly Dictionary<ushort, ProtocolOverrides> _protocolOverrides = new();
     
     public string Name { get; private set; }
 
@@ -80,11 +73,11 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
         }
     }
 
-    protected IFiber Fiber => _engineFiber;
     public ILogger Logger { get; private set; }
     public IEngineConfig Config { get; private set; }
-    public IScheduler Scheduler => _globalScheduler;
-    SocketServer ISocketServerAccessor.SocketServer => _socketServer;
+    
+    internal IFiber Fiber => _engineFiber; 
+    public IScheduler GlobalScheduler => _globalScheduler;
 
     public void Dispose()
     {
@@ -92,16 +85,13 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
         GC.SuppressFinalize(this);
     }
 
-    protected virtual bool Initialize(string name, EngineConfig config)
+    internal virtual bool InternalInitialize(Assembly[] assemblies, string name, EngineConfig config)
     {
         if (Interlocked.CompareExchange(ref _stateCode, ServerStateConst.Initializing, ServerStateConst.NotInitialized)
             != ServerStateConst.NotInitialized)
             throw new InvalidOperationException(
                 "The server has been initialized already, you cannot initialize it again!");
 
-        // 프로토콜 별 정책 초기화
-        ProtocolPolicyRegistry.Initialize();
-        
         Name = !string.IsNullOrEmpty(name) ? name : $"{GetType().Name}-{Math.Abs(GetHashCode())}";
         Config = config ?? throw new ArgumentNullException(nameof(config));
         
@@ -114,15 +104,16 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
         if (!SetupSocketServer())
             return false;
 
+        if (!SetupPolicy(assemblies))
+            return false;
+
         _sessionManager = new SessionManager(config.Session.MaxConnections);
         _engineFiber = new ThreadFiber("EngineFiber", onError: ex => Logger.Error(ex));
-        
         _stateCode = ServerStateConst.NotStarted;
         return true;
     }
-    
 
-    public virtual bool Start()
+    internal virtual bool InternalStart()
     {
         var oldState =
             Interlocked.CompareExchange(ref _stateCode, ServerStateConst.Starting, ServerStateConst.NotStarted);
@@ -151,21 +142,12 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
             StartUdpCleanupTimer();
 
         StartHandshakePendingTimer();
-
-        try
-        {
-            OnStarted();
-        }
-        catch (Exception ex)
-        {
-            Logger.Fatal("An exception occurred in the method 'OnStarted()': {0}", ex.Message);
-        }
-
+        
         Logger.Info("The server instance {0} was been started!", Name);
         return true;
     }
 
-    public virtual void Stop()
+    internal virtual void InternalStop()
     {
         if (Interlocked.CompareExchange(ref _stateCode, ServerStateConst.Stopping, ServerStateConst.Running)
             != ServerStateConst.Running)
@@ -198,8 +180,6 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
             });
         }
 
-        OnStopped();
-
         Logger.Debug("The server instance {0} has been stopped!", Name);
     }
 
@@ -219,14 +199,6 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
     {
         var sessions = SessionsSource;
         return sessions;
-    }
-
-    protected virtual void OnStarted()
-    {
-    }
-
-    protected virtual void OnStopped()
-    {
     }
 
     private bool SetupLogger()
@@ -283,7 +255,26 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
         return "IPv6Any".Equals(ip, StringComparison.OrdinalIgnoreCase) ? IPAddress.IPv6Any : IPAddress.Parse(ip);
     }
 
+    private bool SetupPolicy(Assembly[] assemblies)
+    {
+        foreach (var assembly in assemblies)
+        {
+            var types = assembly.GetTypes().Where(
+                t => typeof(IProtocolData).IsAssignableFrom(t) && !t.IsInterface);
 
+            foreach (var type in types)
+            {
+                var attr = type.GetCustomAttribute<ProtocolAttribute>();
+                if (attr == null) continue;
+                _protocolOverrides[attr.Id] = new ProtocolOverrides(attr.Encrypt, attr.Compress);
+            }
+        }
+
+        return _protocolOverrides.Count != 0;
+    }
+    
+    internal IPolicySnapshot CreatePolicySnapshot(PolicyGlobals globals)
+        => new PolicySnapshot(globals, _protocolOverrides);
 
     internal virtual void OnSessionClosed(Session session, CloseReason reason)
     {
@@ -291,7 +282,7 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
 
     private void StartUdpCleanupTimer()
     {
-        var period = TimeSpan.FromSeconds(Config.Network.UdpCleanupIntervalSec);
+        var period = TimeSpan.FromSeconds(Config.Network.UdpCleanupPeriodSec);
         _udpCleanupTimer = _globalScheduler.Schedule(_engineFiber, CleanupUdpFragment, TimeSpan.Zero, period);
     }
 
@@ -309,7 +300,7 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
 
     private void StartClearIdleSessionTimer()
     {
-        var period = TimeSpan.FromSeconds(Config.Session.ClearIdleSessionIntervalSec);
+        var period = TimeSpan.FromSeconds(Config.Session.ClearIdleSessionPeriodSec);
         _clearIdleSessionTimer = _globalScheduler.Schedule(_engineFiber, ClearIdleSession, TimeSpan.Zero, period);
     }
 
@@ -347,7 +338,7 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
 
     private void StartSessionSnapshotTimer()
     {
-        var period = TimeSpan.FromSeconds(Config.Session.SessionSnapshotIntervalSec);
+        var period = TimeSpan.FromSeconds(Config.Session.SessionSnapshotPeriodSec);
         _sessionSnapshotTimer = _globalScheduler.Schedule(_engineFiber, TakeSessionSnapshot, TimeSpan.Zero, period);
     }
 
@@ -374,7 +365,7 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
             _globalScheduler.Dispose();
             
             if (_stateCode == ServerStateConst.Running)
-                Stop();
+                InternalStop();
         }
 
         _disposed = true;
@@ -382,7 +373,7 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
 
     private void StartHandshakePendingTimer()
     {
-        var period = TimeSpan.FromSeconds(Config.Session.HandshakePendingTimerIntervalSec);
+        var period = TimeSpan.FromSeconds(Config.Session.HandshakePendingTimerPeriodSec);
         _handshakePendingTimer = _globalScheduler.Schedule(_engineFiber, ProcessPendingQueue, TimeSpan.Zero, period);
     }
 
@@ -445,7 +436,7 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
         }
     }
     
-    internal IBaseSession CreateSession(TcpNetworkSession ns)
+    internal Session CreateSession(TcpNetworkSession ns)
     {
         var session = _sessionManager.CreateSession(this, ns);
         if (session == null) return null;
@@ -469,12 +460,12 @@ public abstract class BaseEngine : IBaseEngine, ISocketServerAccessor, IDisposab
         OnSessionClosed((Session)session, reason);
     }
 
-    private void EnqueueAuthHandshakePending(BaseSession session)
+    private void EnqueueAuthHandshakePending(SessionBase session)
     {
         _authHandshakePendingQueue.Enqueue(session);
     }
 
-    internal void EnqueueCloseHandshakePending(BaseSession session)
+    internal void EnqueueCloseHandshakePending(SessionBase session)
     {
         _closeHandshakePendingQueue.Enqueue(session);
     }

@@ -5,7 +5,7 @@ using SP.Engine.Runtime.Protocol;
 namespace GameClient.Command;
 
 [ProtocolCommand(G2CProtocol.GameReadyNtf)]
-public class GameReadyNtf : BaseCommand<Client, G2CProtocolData.GameReadyNtf>
+public class GameReadyNtf : CommandBase<Client, G2CProtocolData.GameReadyNtf>
 {
     protected override void ExecuteCommand(Client context, G2CProtocolData.GameReadyNtf protocol)
     {

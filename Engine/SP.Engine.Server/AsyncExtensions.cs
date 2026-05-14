@@ -15,13 +15,16 @@ public static class AsyncExtensions
             TaskContinuationOptions.OnlyOnFaulted);
     }
 
-    public static Task AsyncRun(this ILogContext logContext,
-        Action<object> task,
-        object state,
+    public static Task AsyncRun<T>(
+        this ILogContext logContext,
+        T state,
+        Action<T> task,
         Action<Exception> onError = null)
     {
-        return Task.Run(() => task(state)).ContinueWith(t => { HandleException(logContext, t, onError); },
-            TaskContinuationOptions.OnlyOnFaulted);
+        return Task.Run(() => task(state)).ContinueWith(t =>
+        {
+            HandleException(logContext, t, onError);
+        }, TaskContinuationOptions.OnlyOnFaulted);
     }
 
     private static void HandleException(ILogContext logContext, Task task, Action<Exception> exceptionHandler)

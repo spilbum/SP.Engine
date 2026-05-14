@@ -1,10 +1,11 @@
 using System.Collections.Concurrent;
+using Common;
 using SP.Core.Logging;
 using SP.Engine.Client.Configuration;
 
 namespace GameClient;
 
-public class ClientManager(EngineConfig config, ILogger logger)
+public class ClientManager(ILogger logger)
 {
     private readonly ConcurrentBag<Client> _clients = [];
     private string? _host;
@@ -41,13 +42,25 @@ public class ClientManager(EngineConfig config, ILogger logger)
     {
         if (!IsRunning) return;
 
-        for (var i = 0; i < count; i++)
+        try
         {
-            var client = new Client(config, logger);
-            client.Connect(_host, _port);
-            _clients.Add(client);
+            for (var i = 0; i < count; i++)
+            {
+                var client = NetPeerBuilder.Create()
+                    .WithLogger(logger)
+                    .WithAutoPing(true, 2)
+                    .WithAssembly(typeof(C2GProtocolData.EchoReq).Assembly)
+                    .Build<Client>();
             
-            if (delayMs > 0) await Task.Delay(delayMs);
+                client.Connect(_host, _port);
+                _clients.Add(client);
+            
+                if (delayMs > 0) await Task.Delay(delayMs);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex);
         }
     }
 

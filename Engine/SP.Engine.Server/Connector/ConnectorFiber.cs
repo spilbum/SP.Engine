@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using SP.Core.Fiber;
 using SP.Core.Logging;
 using SP.Engine.Server.Configuration;
@@ -11,7 +12,7 @@ public class ConnectorFiber : IDisposable
     private readonly IScheduler _globalScheduler;
     private readonly IDisposable _tickTimer;
     private readonly ILogger _logger;
-    private BaseConnector _connector;
+    private ConnectorBase _connector;
     private bool _disposed;
     
     public string Name => _connector?.Name;
@@ -40,11 +41,11 @@ public class ConnectorFiber : IDisposable
         }
     }
 
-    public bool RegisterConnector(ConnectorConfig config, IConnector baseConnector)
+    public bool RegisterConnector(Assembly[] assemblies, ConnectorConfig config, IConnector baseConnector)
     {
         if (_connector != null) return false;
-        var connector = (BaseConnector)baseConnector;
-        if (!connector.Initialize(config, _fiber, _globalScheduler, _logger))
+        var connector = (ConnectorBase)baseConnector;
+        if (!connector.Initialize(assemblies, config, _fiber, _globalScheduler, _logger))
         {
             _logger.Error("Connector '{0}' initialize failed", baseConnector.Name);
             return false;

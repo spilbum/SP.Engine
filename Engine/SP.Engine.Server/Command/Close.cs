@@ -6,7 +6,7 @@ using SP.Engine.Runtime.Protocol;
 namespace SP.Engine.Server.Command;
 
 [ProtocolCommand(C2SEngineProtocolId.Close)]
-internal class Close : BaseCommand<Session, C2SEngineProtocolData.Close>
+internal class Close : CommandBase<Session, C2SEngineProtocolData.Close>
 {
     protected override void ExecuteCommand(Session session, C2SEngineProtocolData.Close protocol)
     {

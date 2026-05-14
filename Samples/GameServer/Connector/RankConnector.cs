@@ -6,7 +6,7 @@ using SP.Engine.Server.Connector;
 
 namespace GameServer.Connector;
 
-public class RankConnector : BaseConnector
+public class RankConnector : ConnectorBase
 {
     public RankConnector()
     {
