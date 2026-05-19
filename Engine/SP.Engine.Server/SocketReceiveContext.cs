@@ -17,9 +17,9 @@ public sealed class SocketReceiveContext : IDisposable
         SocketEventArgs.Completed += OnReceiveCompleted;
     }
     
-    public void Initialize(ITcpNetworkSession tcpSession)
+    public void Initialize(TcpNetworkSession ns)
     {
-        SocketEventArgs.UserToken = tcpSession;
+        SocketEventArgs.UserToken = ns;
     }
     
     private static void OnReceiveCompleted(object sender, SocketAsyncEventArgs e)

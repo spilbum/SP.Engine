@@ -13,13 +13,8 @@ namespace SP.Engine.Runtime.Channel
         ChannelKind Kind { get; }
         bool TrySend(IMessage message);
     }
-
-    public interface IMessageChannel<in T> : IMessageChannel where T : IMessage
-    {
-        bool TrySend(T message);
-    }
-
-    public abstract class BaseMessageChannel<T> : IMessageChannel<T> where T : IMessage
+    
+    public abstract class BaseMessageChannel<T> : IMessageChannel
     {
         public abstract ChannelKind Kind { get; }
         public abstract bool TrySend(T message);

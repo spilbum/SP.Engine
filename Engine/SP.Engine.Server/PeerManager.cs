@@ -141,7 +141,7 @@ public class PeerManager(ILogger logger, IEngineConfig config)
         foreach (var peerId in targets)
         {
             if (!_reconnectPendingPeers.TryRemove(peerId, out var pending)) continue;
-            logger.Debug("Reconnect timeout for PeerId: {0}.", peerId);
+            logger.Debug("Timeout reconnect for peer: {0}.", peerId);
             pending.Peer.LeaveServer(CloseReason.TimeOut);
         }
     }

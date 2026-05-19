@@ -702,15 +702,17 @@ namespace SP.Engine.Client
         {
             try
             {
-                if (!InternalSend(new C2SEngineProtocolData.SessionAuthReq
-                    {
-                        SessionId = _sessionId,
-                        PeerId = _peerId,
-                        ClientPublicKey = _diffieHellman.PublicKey,
-                        KeySize = _diffieHellman.KeySize
-                    }))
+                var success = InternalSend(new C2SEngineProtocolData.SessionAuthReq
                 {
-                    throw new Exception("Failed to send auth handshake");
+                    SessionId = _sessionId,
+                    PeerId = _peerId,
+                    ClientPublicKey = _diffieHellman.PublicKey,
+                    KeySize = _diffieHellman.KeySize
+                });
+                
+                if (!success && _sessionId == 0)
+                {
+                    throw new InvalidOperationException("Failed to send SessionAuthReq");
                 }
             }
             catch (Exception e)
@@ -722,7 +724,9 @@ namespace SP.Engine.Client
         private void SendCloseHandshake()
         {
             if (!InternalSend(new C2SEngineProtocolData.Close()))
-                throw new Exception("Failed to send Close");
+            {
+                CloseWithoutHandshake();
+            }
         }
 
         private void OnAckTimerTick(object state)
@@ -934,15 +938,12 @@ namespace SP.Engine.Client
 
         private void SendUdpHandshake()
         {
-            if (!InternalSend(new C2SEngineProtocolData.UdpHelloReq
-                {
-                    SessionId = _sessionId,
-                    PeerId = PeerId,
-                    Mtu = Config.UdpMtu
-                }))
+            InternalSend(new C2SEngineProtocolData.UdpHelloReq
             {
-                throw new Exception("Failed to send UDP handshake");   
-            }
+                SessionId = _sessionId,
+                PeerId = PeerId,
+                Mtu = Config.UdpMtu
+            });
         }
         
         internal void SetServerTimeOffset(long offset)
@@ -997,9 +998,7 @@ namespace SP.Engine.Client
 
             _udpSession = session;
             _channelRouter.Bind(new UnreliableChannel(session));
-            
             StartUdpHandshakeTimer();
-            SendUdpHandshake();
         }
 
         internal void SessionAuthCompleted(long sessionId, uint peerId)
@@ -1063,7 +1062,7 @@ namespace SP.Engine.Client
                 }
                 
                 SendUdpHandshake();
-            }, null, TimeSpan.FromSeconds(Config.UdpHandshakeTimeSec), TimeSpan.FromSeconds(Config.UdpHandshakeTimeSec));
+            }, null, TimeSpan.Zero, TimeSpan.FromSeconds(Config.UdpHandshakeTimeSec));
         }
 
         private void StopUdpHandshakeTimer()

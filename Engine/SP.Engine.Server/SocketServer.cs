@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Buffers;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
@@ -13,18 +12,15 @@ namespace SP.Engine.Server;
 
 internal class ReceiveContextFactory(int bufferSize) : IPoolObjectFactory<SocketReceiveContext>
 {
-    private byte[] _globalBuffer;
-
     public SocketReceiveContext[] Create(int size)
     {
-        var totalBytes = bufferSize * size;
-        _globalBuffer = new byte[totalBytes];
+        var globalBuffer = GC.AllocateArray<byte>(bufferSize * size);
         
         var contexts = new SocketReceiveContext[size];
         for (var i = 0; i < size; i++)
         {
             var e = new SocketAsyncEventArgs();
-            e.SetBuffer(_globalBuffer, i * bufferSize, bufferSize);
+            e.SetBuffer(globalBuffer, i * bufferSize, bufferSize);
             contexts[i] = new SocketReceiveContext(e);
         }
         
@@ -32,7 +28,7 @@ internal class ReceiveContextFactory(int bufferSize) : IPoolObjectFactory<Socket
     }
 }
 
-internal class TcpSendingQueueFactory(int queueSize) : IPoolObjectFactory<SegmentQueue>
+internal class SendingQueueFactory(int queueSize) : IPoolObjectFactory<SegmentQueue>
 {
     public SegmentQueue[] Create(int size)
     {
@@ -42,20 +38,6 @@ internal class TcpSendingQueueFactory(int queueSize) : IPoolObjectFactory<Segmen
         for (var i = 0; i < size; i++)
             items[i] = new SegmentQueue(source, i * queueSize, queueSize);
 
-        return items;
-    }
-}
-
-internal class UdpSendingQueueFactory(int queueSize) : IPoolObjectFactory<SegmentQueue>
-{
-    public SegmentQueue[] Create(int size)
-    {
-        var source = new ArraySegment<byte>[size * queueSize];
-        var items = new SegmentQueue[size];
-        
-        for (var i = 0; i < size; i++)
-            items[i] = new SegmentQueue(source, i * queueSize, queueSize);
-        
         return items;
     }
 }
@@ -64,13 +46,13 @@ internal sealed class SocketServer(EngineCore engine, ListenerInfo[] listenerInf
 {
     private bool _disposed;
     private byte[] _keepAliveOptionValues;
-    private ExpandablePool<SocketReceiveContext> _tcpReceiveContextPool;
-    private ExpandablePool<SegmentQueue> _tcpSendingQueuePool;
-    private ExpandablePool<SegmentQueue> _udpSendingQueuePool;
+    private readonly object _udpSessionLock = new();
+    private ExpandablePool<SegmentQueue> _sendingQueuePool;
+    private ExpandablePool<SocketReceiveContext> _receiveContextPool;
     
     private List<INetworkListener> Listeners { get; } = new(listenerInfos.Length);
     private ListenerInfo[] ListenerInfos { get; } = listenerInfos;
-    private bool IsStopped { get; set; }
+    private bool IsRunning { get; set; }
     
     public void Dispose()
     {
@@ -81,27 +63,21 @@ internal sealed class SocketServer(EngineCore engine, ListenerInfo[] listenerInf
 
     public bool Start()
     {
-        IsStopped = false;
+        if (IsRunning) return false;
 
         var config = engine.Config;
-
-        _tcpReceiveContextPool = new ExpandablePool<SocketReceiveContext>();
-        _tcpReceiveContextPool.Initialize(
-            config.Session.MaxConnections,
-            config.Session.MaxConnections,
-            new ReceiveContextFactory(config.Network.ReceiveBufferSize));
-
-        _tcpSendingQueuePool = new ExpandablePool<SegmentQueue>();
-        _tcpSendingQueuePool.Initialize(
-            Math.Max(config.Session.MaxConnections / 2, 512),
-            Math.Max(config.Session.MaxConnections * 3, 512),
-            new TcpSendingQueueFactory(config.Network.SendingQueueSize));
         
-        _udpSendingQueuePool = new ExpandablePool<SegmentQueue>();
-        _udpSendingQueuePool.Initialize(
-            Math.Max(config.Session.MaxConnections / 2, 512),
-            Math.Max(config.Session.MaxConnections * 3, 512),
-            new UdpSendingQueueFactory(config.Network.SendingQueueSize));
+        _sendingQueuePool = new ExpandablePool<SegmentQueue>();
+        _sendingQueuePool.Initialize(
+            Math.Max(config.Session.MaxConnections, 512),
+            Math.Max(config.Session.MaxConnections * 4, 512),
+            new SendingQueueFactory(config.Network.SendingQueueSize));
+
+        _receiveContextPool = new ExpandablePool<SocketReceiveContext>();
+        _receiveContextPool.Initialize(
+            Math.Max(config.Session.MaxConnections, 512),
+            Math.Max(config.Session.MaxConnections * 2, 512),
+            new ReceiveContextFactory(config.Network.ReceiveBufferSize));
         
         foreach (var info in ListenerInfos)
         {
@@ -133,19 +109,20 @@ internal sealed class SocketServer(EngineCore engine, ListenerInfo[] listenerInf
         if (!SetupKeepAlive(config))
             return false;
 
+        IsRunning = true;
         return true;
     }
 
     public void Stop()
     {
-        IsStopped = true;
+        if (!IsRunning) return;
+        IsRunning = false;
 
         foreach (var listener in Listeners)
             listener.Stop();
 
         Listeners.Clear();
-        _tcpReceiveContextPool.Dispose();
-        _tcpSendingQueuePool.Dispose();
+        _receiveContextPool.Dispose();
     }
 
     private bool SetupKeepAlive(IEngineConfig config)
@@ -182,20 +159,32 @@ internal sealed class SocketServer(EngineCore engine, ListenerInfo[] listenerInf
 
     private void OnNewClientAccepted(Socket socket)
     {
-        if (IsStopped) return;
+        if (!IsRunning) return;
         ProcessTcpClient(socket);
     }
     
-    private void OnDataReceived(Socket listenSocket, ReadOnlySpan<byte> buffer, IPEndPoint remoteEndPoint)
+    private void OnDataReceived(Socket socket, ReadOnlySpan<byte> buffer, IPEndPoint remoteEndPoint)
     {
         if (!UdpHeader.TryRead(buffer, out var header, out var headerConsumed)) return;
             
         var session = engine.GetSession(header.SessionId);
         if (session == null || session.IsClosed) return;
-            
-        var udp = session.ResolveUdpSession(listenSocket, remoteEndPoint, _udpSendingQueuePool);
-        if (udp == null) return;
 
+        if (session.UdpSession == null)
+        {
+            lock (_udpSessionLock)
+            {
+                if (session.UdpSession == null)
+                {
+                    var ns = new UdpNetworkSession(session, socket, remoteEndPoint);
+                    session.UdpSession = ns;
+                }
+            }
+        }
+
+        if (session.UdpSession == null) return;
+        session.UdpSession.UpdateRemoteEndPoint(remoteEndPoint);
+        
         var bodyBuffer = new PooledBuffer(header.BodyLength);
         buffer.Slice(headerConsumed, header.BodyLength).CopyTo(bodyBuffer.Memory.Span);
 
@@ -216,14 +205,14 @@ internal sealed class SocketServer(EngineCore engine, ListenerInfo[] listenerInf
 
     private void ProcessTcpClient(Socket client)
     {
-        if (!_tcpReceiveContextPool.TryRent(out var context))
+        if (!_receiveContextPool.TryRent(out var context))
         {
+            engine.Logger.Warn("Failed to rent receive context. (Count: {0})", _receiveContextPool.ItemCount);
             engine.AsyncRun(client.SafeClose);
-            engine.Logger.Error("Limit connection count {0} was reached.", engine.Config.Session.MaxConnections);
             return;
         }
 
-        var ns = new TcpNetworkSession(client, context, _tcpSendingQueuePool);
+        var ns = new TcpNetworkSession(client, context, _sendingQueuePool);
         ns.Closed += OnTcpSessionClosed;
 
         var session = CreateSession(client, ns);
@@ -239,11 +228,14 @@ internal sealed class SocketServer(EngineCore engine, ListenerInfo[] listenerInf
 
     private void OnTcpSessionClosed(INetworkSession session, CloseReason reason)
     {
-        if (session is not ITcpNetworkSession s) return;
+        if (session is not TcpNetworkSession s) return;
+        
         var context = s.ReceiveContext;
-        if (context == null) return;
-        context.Reset();
-        _tcpReceiveContextPool?.Return(context);
+        if (context != null)
+        {
+            context.Reset();
+            _receiveContextPool.Return(context);
+        }
     }
 
     private void OnListenerStopped(object sender, EventArgs e)

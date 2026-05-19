@@ -22,15 +22,14 @@ public abstract class EngineBase : EngineCore
     private readonly Dictionary<ushort, ICommand> _userCommands = new();
     private readonly Dictionary<ushort, ICommand> _internalCommands = new();
     private readonly List<ConnectorFiber> _connectorFibers = [];
-    private readonly List<PeerGroup> _peerFibers = [];
+    private readonly List<PeerGroup> _peerGroups = [];
     private PeerManager _peerManager;
     private PerfMonitor _perfMonitor;
-    private ILogger _perfLogger;
     private IDisposable _waitingReconnectCheckingTimer;
     private ThreadFiber _perfMonitorFiber;
     
     private static readonly long _baseUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-    public static long UtcNowMs => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+    private static long UtcNowMs => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     internal static uint NetworkTimeMs => (uint)(UtcNowMs - _baseUnixMs);
 
     internal override bool InternalInitialize(Assembly[] assemblies, string name, EngineConfig config)
@@ -46,7 +45,7 @@ public abstract class EngineBase : EngineCore
         if (!SetupConnectorFiber(assemblies, config.Connectors))
             return false;
         
-        SetupPeerFiber();
+        SetupPeerGroup();
         SetupPerfMonitor(config.Perf);
         
         Logger.Info("The server {0} is initialized.", name);
@@ -80,7 +79,7 @@ public abstract class EngineBase : EngineCore
     {
         _perfMonitor?.Dispose();
         _perfMonitorFiber?.Dispose();
-        foreach (var fiber in _peerFibers) fiber.Dispose();
+        foreach (var group in _peerGroups) group.Dispose();
         foreach (var fiber in _connectorFibers) fiber.Dispose();
         StopReconnectTimer();
 
@@ -105,19 +104,20 @@ public abstract class EngineBase : EngineCore
     internal PeerBase GetWaitingPeer(uint peerId)
         => _peerManager.GetWaitingPeer(peerId);
 
-    private PeerGroup AllocateFiber()
+    private PeerGroup AllocateGroup()
     {
-        var minFiber = _peerFibers[0];
-        var minCount = minFiber.PeerCount;
+        var minGroup = _peerGroups[0];
+        var minCount = minGroup.PeerCount;
 
-        foreach (var fiber in _peerFibers)
+        foreach (var group in _peerGroups)
         {
-            var count = fiber.PeerCount;
+            var count = group.PeerCount;
             if (count >= minCount) continue;
             minCount = count;
-            minFiber = fiber;
+            minGroup = group;
         }
-        return minFiber;
+        
+        return minGroup;
     }
 
     internal bool OnlinePeer(PeerBase peer, Session session)
@@ -125,17 +125,17 @@ public abstract class EngineBase : EngineCore
         if (!_peerManager.TransitionToOnline(peer.PeerId, session))
             return false;
 
-        // 파이버 재할당
-        var fiber = AllocateFiber();
-        fiber.AddPeer(peer);
+        // 그룹 재할당
+        var group = AllocateGroup();
+        group.AddPeer(peer);
         return true;
     }
 
     internal void JoinPeer(PeerBase peer)
     {
-        // 파이버 할당
-        var fiber = AllocateFiber();
-        fiber.AddPeer(peer);
+        // 그룹 할당
+        var group = AllocateGroup();
+        group.AddPeer(peer);
         
         // 매니저에 피어 등록
         _peerManager.Register(peer);
@@ -147,10 +147,8 @@ public abstract class EngineBase : EngineCore
         return peer != null;
     }
     
-    internal override void OnSessionClosed(Session session, CloseReason reason)
+    protected override void OnSessionClosed(Session session, CloseReason reason)
     {
-        base.OnSessionClosed(session, reason);
-
         var peer = session.Peer;
         if (null == peer) return;
         
@@ -198,41 +196,45 @@ public abstract class EngineBase : EngineCore
         }
     }
 
-    private void SetupPeerFiber()
+    private void SetupPeerGroup()
     {
-        var fiberCnt = Environment.ProcessorCount;
-        fiberCnt = Math.Clamp(fiberCnt, 4, 32); // todo:환경에 맞게 튜닝
+        var groupCount = Environment.ProcessorCount;
+        groupCount = Math.Clamp(groupCount, 4, 32); // todo:환경에 맞게 튜닝
         
-        for (byte index = 0; index < fiberCnt; index++)
+        for (byte index = 0; index < groupCount; index++)
         {
-            var fiber = new PeerGroup(index, this);
-            _peerFibers.Add(fiber);
+            var group = new PeerGroup(index, this);
+            _peerGroups.Add(group);
         }
         
-        Logger.Info("PeerFiber setup completed. FiberCount: {0}, Shared Sessions per fiber: ~{1}", 
-            fiberCnt, Config.Session.MaxConnections / fiberCnt);
+        Logger.Info("PeerGroup setup completed. GroupCount: {0}, Shared sessions per group: ~{1}", 
+            groupCount, Config.Session.MaxConnections / groupCount);
     }
     
     private void SetupPerfMonitor(PerfConfig config)
     {
-        if (!config.MonitorEnabled)
-            return;
+        if (!config.MonitorEnabled) return;
 
         var fiber = new ThreadFiber("PerfMonitorFiber");
         _perfMonitorFiber = fiber;
-        
         _perfMonitor = new PerfMonitor();
-        GlobalScheduler.Schedule(fiber, PerfMonitorTick, TimeSpan.Zero, config.SamplePeriod);
+        
+        GlobalScheduler.Schedule(fiber, PerfMonitorTick, TimeSpan.Zero, TimeSpan.FromSeconds(config.SamplePeriodSec));
 
-        if (!config.LoggerEnabled)
-            return;
+        if (!config.LoggerEnabled) return;
 
-        _perfLogger = LogManager.GetLogger("PerfMonitor");
-        GlobalScheduler.Schedule(fiber, () =>
-        {
-            if (_perfMonitor.TryGetLast(out var metrics))
-                _perfLogger.Info(metrics.ToString());
-        }, TimeSpan.Zero, config.LoggingPeriod);
+        var logger = LogManager.GetLogger("PerfMonitor");
+        GlobalScheduler.Schedule(
+            fiber,
+            PerfMonitorLogging, 
+            logger, 
+            TimeSpan.Zero, TimeSpan.FromSeconds(config.LoggingPeriodSec));
+    }
+
+    private void PerfMonitorLogging(ILogger logger)
+    {
+        if (_perfMonitor.TryGetLast(out var metrics))
+            logger.Info(metrics.ToString());
     }
 
     private void PerfMonitorTick()

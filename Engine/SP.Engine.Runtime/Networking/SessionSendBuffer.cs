@@ -17,7 +17,7 @@ namespace SP.Engine.Runtime.Networking
         public SessionSendBuffer(int capacity)
         {
             _buffer = new PooledBuffer(capacity);
-            _capacity = _buffer.Capacity;
+            _capacity = _buffer.Length;
         }
 
         /// <summary>

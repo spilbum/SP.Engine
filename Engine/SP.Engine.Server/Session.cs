@@ -8,7 +8,7 @@ using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Server;
 
-public sealed class Session : SessionBase
+public sealed class Session(long sessionId) : SessionBase(sessionId)
 {
     private long _lastUdpCheckTimeTicks;
     private int _udpHealthFailCount;
@@ -23,9 +23,9 @@ public sealed class Session : SessionBase
     
     public EngineBase Engine { get; private set; }
 
-    public override void Initialize(long sessionId, EngineCore engineCore, TcpNetworkSession tcpSession)
+    public override void Initialize(EngineCore engineCore, TcpNetworkSession ns)
     {
-        base.Initialize(sessionId, engineCore, tcpSession);
+        base.Initialize(engineCore, ns);
         Engine = (EngineBase)engineCore;
     }
 
@@ -96,7 +96,7 @@ public sealed class Session : SessionBase
 
     internal void SetupFrameSize(ushort mtu)
     {
-        _udpSession?.SetupFrameSize(mtu);
+        UdpSession?.SetupFrameSize(mtu);
     }
 
     internal bool InternalSend(IProtocolData data)
@@ -185,5 +185,15 @@ public sealed class Session : SessionBase
     internal void SendClose()
     {
         InternalSend(new S2CEngineProtocolData.Close());
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+
+        if (disposing)
+        {
+            _udpHealthCheckTimer?.Dispose();
+        }
     }
 }

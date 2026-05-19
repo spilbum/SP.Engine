@@ -57,10 +57,6 @@ internal static class Program
                 })
                 .ConfigurePerformance(r => r with
                 {
-                    MonitorEnabled = true,
-                    SamplePeriod = TimeSpan.FromSeconds(1),
-                    LoggerEnabled = true,
-                    LoggingPeriod = TimeSpan.FromSeconds(30)
                 })
                 .Setup(s =>
                 {

@@ -195,12 +195,6 @@ public abstract class EngineCore : ILogContext, IDisposable
     public Session GetSession(long sessionId)
         => _sessionManager.GetSession(sessionId);
 
-    public IEnumerable<Session> GetAllSessions()
-    {
-        var sessions = SessionsSource;
-        return sessions;
-    }
-
     private bool SetupLogger()
     {
         LogManager.Initialize(Name, new SerilogFactory());
@@ -276,7 +270,7 @@ public abstract class EngineCore : ILogContext, IDisposable
     internal IPolicySnapshot CreatePolicySnapshot(PolicyGlobals globals)
         => new PolicySnapshot(globals, _protocolOverrides);
 
-    internal virtual void OnSessionClosed(Session session, CloseReason reason)
+    protected virtual void OnSessionClosed(Session session, CloseReason reason)
     {
     }
 
@@ -327,7 +321,7 @@ public abstract class EngineCore : ILogContext, IDisposable
             if (lastActive > timeoutTicks) continue;
 
             Logger.Debug(
-                "[IdleTimeout] Session {0} idle for {1}s. LastActive: {2}",
+                "[TimeOut] Session {0} idle for {1}s. LastActive: {2}",
                 s.SessionId,
                 TimeSpan.FromTicks(nowUtc.Ticks - lastActive).TotalSeconds,
                 lastActive.ToDateTime());
@@ -441,7 +435,6 @@ public abstract class EngineCore : ILogContext, IDisposable
         var session = _sessionManager.CreateSession(this, ns);
         if (session == null) return null;
         
-        ns.Session = session;
         ns.Closed += OnTcpSessionClosed;
         
         // 인증 해드쉐이크 대기 등록

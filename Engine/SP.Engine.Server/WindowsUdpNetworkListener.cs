@@ -17,11 +17,13 @@ internal sealed class WindowsUdpNetworkListener(ListenerInfo info, IEngineConfig
             InitializePool();
             _socket = new Socket(EndPoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
             _socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-            _socket.ReceiveBufferSize = 1024 * 1024 * 32;
+            _socket.SendBufferSize = Config.Network.SendBufferSize;
+            _socket.ReceiveBufferSize = Config.Network.ReceiveBufferSize;
             
-            // Windows에서 ICMP Port Unreachable 에러 무시
             const int SIO_UDP_CONNRESET = -1744830452;
-            _socket.IOControl(SIO_UDP_CONNRESET, [0], null);
+            var inValue = new byte[] {0};
+            var outValue = new byte[] {0};
+            _socket.IOControl(SIO_UDP_CONNRESET, inValue, outValue);
             
             _socket.Bind(EndPoint);
 

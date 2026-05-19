@@ -2,42 +2,31 @@
 using System.Linq;
 using System.Net.Sockets;
 using System.Threading;
-using SP.Core.Logging;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Networking;
 
 namespace SP.Engine.Server;
 
-public interface ITcpNetworkSession : IReliableSender, ILogContext
+public class TcpNetworkSession : NetworkSessionBase, IReliableSender
 {
-    SocketReceiveContext ReceiveContext { get; }
-}
-
-public class TcpNetworkSession : NetworkSessionBase, ITcpNetworkSession
-{
-    private SegmentQueue _sendingQueue;
-    private readonly IObjectPool<SegmentQueue> _sendingQueuePool;
-    private SocketAsyncEventArgs _sendEventArgs;
-    private volatile int _inSendingFlag;
     private readonly SessionSendBuffer _sendBuffer;
-    private Timer _resumePendingTimeoutTimer;
-    private readonly object _timerLock = new();
+    private SocketAsyncEventArgs _sendEventArgs;
+    private readonly IObjectPool<SegmentQueue> _sendingQueuePool;
+    private SegmentQueue _sendingQueue;
+    private Timer _resumeTimeoutTimer;
     
     public SocketReceiveContext ReceiveContext { get; }
-    
-    public TcpNetworkSession(Socket client, SocketReceiveContext context, IObjectPool<SegmentQueue> sendingQueuePool) 
+
+    public TcpNetworkSession(
+        Socket client, 
+        SocketReceiveContext context, 
+        IObjectPool<SegmentQueue> sendingQueuePool) 
         : base (SocketMode.Tcp, client)
     {
         ReceiveContext = context;
         ReceiveContext.Initialize(this);
         
         _sendingQueuePool = sendingQueuePool;
-        if (!_sendingQueuePool.TryRent(out _sendingQueue))
-        {
-            throw new InvalidOperationException("Failed to rent segment queue.");
-        }
-        
-        _sendingQueue.StartEnqueue();
         
         _sendEventArgs = new SocketAsyncEventArgs();
         _sendEventArgs.Completed += OnSendCompleted;
@@ -46,6 +35,14 @@ public class TcpNetworkSession : NetworkSessionBase, ITcpNetworkSession
 
     public void Start()
     {
+        if (!_sendingQueuePool.TryRent(out var queue) || queue == null)
+        {
+            Close(CloseReason.InternalError);
+            return;
+        }
+        
+        _sendingQueue = queue;
+        _sendingQueue.StartEnqueue();
         StartReceive(ReceiveContext.SocketEventArgs);
     }
     
@@ -68,7 +65,9 @@ public class TcpNetworkSession : NetworkSessionBase, ITcpNetworkSession
         try
         {
             if (!_client.ReceiveAsync(e))
+            {
                 ProcessReceive(e);
+            }
         }
         catch (Exception ex)
         {
@@ -109,7 +108,7 @@ public class TcpNetworkSession : NetworkSessionBase, ITcpNetworkSession
     
     private void OnReceiveTerminated(CloseReason reason)
     {
-        Logger.Debug("Session {0} receive terminated. Reason: {1}", Session.SessionId, reason);
+        Session.Logger.Debug("Session {0} receive terminated. Reason: {1}", Session.SessionId, reason);
         OnReceiveEnded();
         Close(reason);
     }
@@ -118,122 +117,192 @@ public class TcpNetworkSession : NetworkSessionBase, ITcpNetworkSession
     {
         if (IsClosed) return false;
 
-        if (!_sendBuffer.TryReserve(message.Size, out var segment)) 
-            return false;
-        
-        message.WriteTo(segment.AsSpan());
-        
-        if (!_sendingQueue.Enqueue(segment, _sendingQueue.TrackId)) 
-            return false;
+        if (!_sendBuffer.TryReserve(message.Size, out var segment)) return false;
+        message.WriteTo(segment);
 
-        if (Interlocked.CompareExchange(ref _inSendingFlag, 1, 0) == 0)
-            ExecuteSend(false);
+        while (true)
+        {
+            var queue = _sendingQueue;
+            if (queue == null || queue.IsFull) return false;
+
+            if (queue.Enqueue(segment, queue.TrackId))
+            {
+                ExecuteSend(queue, queue.TrackId, false);
+                break;
+            }
+            
+            if (IsClosed) return false;
+        }
         
         return true;
     }
     
-    private void ExecuteSend(bool isContinuation)
+    private void ExecuteSend(SegmentQueue queue, int trackId, bool isContinuation)
     {
+        if (queue == null) return;
+        
         if (!isContinuation)
         {
             if (!IncrementIo()) return;
             if (!TryAddState(SocketState.InSending))
             {
-                Interlocked.Exchange(ref _inSendingFlag, 0);
                 DecrementIo();
                 return;
             }
+
+            var currQueue = _sendingQueue;
+            if (queue != currQueue || trackId != currQueue.TrackId)
+            {
+                HandleSendEnd();
+                return;
+            }
         }
 
-        while (true)
+        if (IsInClosingOrClosed)
         {
-            var client = _client;
-            if (client == null || IsClosed)
-            {
-                FinalizeSend();
-                return;
-            }
+            HandleSendEnd();
+            return;
+        }
+
+        if (!_sendingQueuePool.TryRent(out var newQueue))
+        {
+            HandleSendError(queue);
+            Close(CloseReason.InternalError);
+            return;
+        }
         
-            try
+        var oldQueue = Interlocked.CompareExchange(ref _sendingQueue, newQueue, queue);
+        if (!ReferenceEquals(oldQueue, queue))
+        {
+            if (newQueue != null) _sendingQueuePool.Return(newQueue);
+            HandleSendEnd();
+            return;
+        }
+
+        queue.StopEnqueue();
+        newQueue.StartEnqueue();
+
+        if (queue.Count == 0)
+        {
+            HandleSendEnd();
+            Close(CloseReason.InternalError);
+            return;
+        }
+        
+        Send(queue);
+    }
+
+    private void Send(SegmentQueue queue)
+    {
+        var e = _sendEventArgs;
+        
+        try
+        {
+            e.UserToken = queue;
+            
+            if (queue.Count > 1)
             {
-                var e = _sendEventArgs;
-                HandleArgsCleanup(e);
-
-                if (_sendingQueue.Count == 0)
-                {
-                    Interlocked.Exchange(ref _inSendingFlag, 0);
-                    if (_sendingQueue.Count > 0 && Interlocked.CompareExchange(ref _inSendingFlag, 1, 0) == 0)
-                        continue;
-
-                    FinalizeSend();
-                    return;
-                }
-
-                var segment = _sendingQueue[0];
-                if (_sendingQueue.Count == 1)
-                    e.SetBuffer(segment.Array, segment.Offset, segment.Count);
-                else
-                    e.BufferList = _sendingQueue;
-
-                if (_client.SendAsync(e))
-                    return;
-
-                if (!HandleSendResult(e))
-                    return;
+                e.BufferList = queue;
             }
-            catch (Exception ex)
+            else
             {
-                HandleNetworkError(ex);
-                FinalizeSend();
+                var segment = queue[0];
+                e.SetBuffer(segment.Array, segment.Offset, segment.Count); 
+            }
+
+            var client = _client;
+            if (client == null)
+            {
+                HandleSendError(queue);
                 return;
             }
+
+            if (!_client.SendAsync(e))
+            {
+                OnSendCompleted(client, e);
+            }
+        }
+        catch (Exception ex)
+        {
+            LogError(ex);
+            HandleArgsCleanup(e);
+            HandleSendError(queue);
         }
     }
 
-    private bool HandleSendResult(SocketAsyncEventArgs e)
+    private void OnSendCompleted(object sender, SocketAsyncEventArgs e)
     {
+        if (e.UserToken is not SegmentQueue queue)
+            return;
+        
         if (e.SocketError != SocketError.Success)
         {
-            Close(CloseReason.SocketError);
-            FinalizeSend();
-            return false;
+            HandleArgsCleanup(e);
+            HandleSendError(queue);
+            return;
         }
         
         if (e.BytesTransferred > 0)
             _sendBuffer.Release(e.BytesTransferred);
 
-        var totalRequested = e.BufferList != null
-            ? _sendingQueue.Sum(s => s.Count)
-            : e.Count;
-
-        if (e.BytesTransferred < totalRequested)
+        var count = queue.Sum(segment => segment.Count);
+        if (count > e.BytesTransferred)
         {
-            Session.Logger.Debug("[TCP] Partial send occurred: {0}/{1} bytes.",
-                e.BytesTransferred, totalRequested);
+            queue.TrimSentBytes(e.BytesTransferred);
+            HandleArgsCleanup(e);
+            Send(queue);
             
-            _sendingQueue.TrimSentBytes(e.BytesTransferred);
+            Session.Logger.Debug("[TCP] Partial send occurred: {0}/{1} bytes.", 
+                e.BytesTransferred, count);
+            
+            return;
+        }
+        
+        HandleArgsCleanup(e);
+        HandleSendCompleted(queue);
+    }
+
+    private void HandleSendCompleted(SegmentQueue queue)
+    {
+        queue.Clear();
+        _sendingQueuePool.Return(queue);
+        
+        var newQueue = _sendingQueue;
+        if (IsInClosingOrClosed)
+        {
+            if (newQueue is { Count: > 0 } && _client != null)
+            {
+                ExecuteSend(newQueue, newQueue.TrackId, true);
+                return;
+            }
+            
+            HandleSendEnd();
+            return;
+        }
+
+        if (newQueue == null || newQueue.Count == 0)
+        {
+            HandleSendEnd();
         }
         else
         {
-            _sendingQueue.Clear();
+            ExecuteSend(newQueue, newQueue.TrackId, true);
         }
-        
-        return true;
     }
 
-    private void FinalizeSend()
+    private void HandleSendEnd()
     {
-        if (!RemoveState(SocketState.InSending)) return;
-        Interlocked.Exchange(ref _inSendingFlag, 0);
-        DecrementIo();
-    }
-
-    private void OnSendCompleted(object sender, SocketAsyncEventArgs e)
-    {
-        if (HandleSendResult(e))
+        if (RemoveState(SocketState.InSending))
         {
-            ExecuteSend(isContinuation: true);
+            DecrementIo();
         }
+    }
+
+    private void HandleSendError(SegmentQueue queue)
+    {
+        queue.Clear();
+        _sendingQueuePool.Return(queue);
+        HandleSendEnd();
     }
 
     public void PauseReceive()
@@ -241,19 +310,16 @@ public class TcpNetworkSession : NetworkSessionBase, ITcpNetworkSession
         if (IsPaused) return;
         if (!TryAddState(SocketState.Paused)) return;
         
-        Logger.Debug("Session {0} is Paused", Session.SessionId);
+        Session.Logger.Debug("Session {0} is Paused", Session.SessionId);
         
-        lock (_timerLock)
+        _resumeTimeoutTimer?.Dispose();
+        _resumeTimeoutTimer = new Timer(_ =>
         {
-            _resumePendingTimeoutTimer?.Dispose();
-            _resumePendingTimeoutTimer = new Timer(_ =>
-            {
-                Logger.Warn("Resume pending timeout reached. Force closing session due to back-pressure: {0}",
-                    Session.SessionId);
+            Session.Logger.Warn("Resume pending timeout reached. Force closing session due to back-pressure: {0}",
+                Session.SessionId);
                 
-                Close(CloseReason.ServerBusy);
-            }, null, 10000, Timeout.Infinite);
-        }
+            Close(CloseReason.ServerBusy);
+        }, null, 10000, Timeout.Infinite);
     }
 
     public void ResumeReceive()
@@ -261,12 +327,12 @@ public class TcpNetworkSession : NetworkSessionBase, ITcpNetworkSession
         if (!IsPaused) return;
         if (!RemoveState(SocketState.Paused)) return;
 
-        Logger.Debug("Session {0} is Resume.", Session.SessionId);
+        Session.Logger.Debug("Session {0} is Resume.", Session.SessionId);
         
-        lock (_timerLock)
+        if (_resumeTimeoutTimer != null)
         {
-            _resumePendingTimeoutTimer?.Dispose();
-            _resumePendingTimeoutTimer = null;
+            _resumeTimeoutTimer.Dispose();
+            _resumeTimeoutTimer = null;   
         }
 
         if (!HasState(SocketState.InReceiving))
@@ -277,10 +343,10 @@ public class TcpNetworkSession : NetworkSessionBase, ITcpNetworkSession
     
     protected override void OnRelease()
     {
-        lock (_timerLock)
+        if (_resumeTimeoutTimer != null)
         {
-            _resumePendingTimeoutTimer?.Dispose();
-            _resumePendingTimeoutTimer = null;   
+            _resumeTimeoutTimer.Dispose();
+            _resumeTimeoutTimer = null;   
         }
         
         var e = Interlocked.Exchange(ref _sendEventArgs, null);
@@ -289,7 +355,7 @@ public class TcpNetworkSession : NetworkSessionBase, ITcpNetworkSession
             e.Completed -= OnSendCompleted;
             e.Dispose();
         }
-
+        
         var queue = Interlocked.Exchange(ref _sendingQueue, null);
         if (queue != null)
         {

@@ -27,6 +27,8 @@ public sealed class ExpandablePool<T> : IObjectPool<T>
     private int _expanding;
     private volatile bool _disposed;
     
+    public int ItemCount => _totalItemCount;
+    
     public void Initialize(int minPoolSize, int maxPoolSize, IPoolObjectFactory<T> factory)
     {
         ArgumentNullException.ThrowIfNull(factory);

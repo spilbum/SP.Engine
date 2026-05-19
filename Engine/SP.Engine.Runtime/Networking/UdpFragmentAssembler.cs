@@ -33,7 +33,7 @@ namespace SP.Engine.Runtime.Networking
         public bool Add(byte index, ReadOnlySpan<byte> span)
         {
             if (Interlocked.CompareExchange(ref _disposed, 0, 0) != 0) return false;
-            if (index >= TotalCount || _fragments[index] != null && _fragments[index].Capacity > 0) return false;
+            if (index >= TotalCount || _fragments[index] != null && _fragments[index].Length > 0) return false;
 
             var pooled = new PooledBuffer(span.Length);
             span.CopyTo(pooled.Memory.Span);

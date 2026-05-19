@@ -53,7 +53,7 @@ namespace SP.Core
         private int _disposed;
 
         public Memory<byte> Memory => _buffer.AsMemory();
-        public int Capacity => _buffer.Length;
+        public int Length => _buffer.Length;
         
         #if DEBUG
         public string StackTrace { get; }

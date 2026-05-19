@@ -44,7 +44,7 @@ public sealed class SessionManager
         }
     }
 
-    public Session CreateSession(EngineCore engine, TcpNetworkSession tcpSession)
+    public Session CreateSession(EngineCore engine, TcpNetworkSession ns)
     {
         lock (_lock)
         {
@@ -52,18 +52,18 @@ public sealed class SessionManager
             
             var index = _freeIndices.Pop();
             var salt = (uint)RandomNumberGenerator.GetInt32(1, int.MaxValue);
-            
             var sessionId = ((long)salt << 32) | (uint)index;
 
-            var session = new Session();
+            var session = new Session(sessionId);
 
             try
             {
-                session.Initialize(sessionId, engine, tcpSession);
+                session.Initialize(engine, ns);
             }
             catch (Exception ex)
             {
                 engine.Logger.Error(ex);
+                _freeIndices.Push(index);
                 return null;
             }
       

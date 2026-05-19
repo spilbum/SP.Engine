@@ -157,7 +157,7 @@ public static class ReferenceCodeGenerator
     private static string ToPascal(string name)
     {
         var parts = name
-            .Split(['_', ' ', '-'], StringSplitOptions.RemoveEmptyEntries);
+            .Split(new [] {'_', ' ', '-'}, StringSplitOptions.RemoveEmptyEntries);
 
         return string.Concat(
             parts.Select(p => char.ToUpperInvariant(p[0]) + p[1..]));

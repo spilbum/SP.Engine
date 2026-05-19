@@ -70,6 +70,44 @@ public static class RankSeasonExtensions
     }
 }
 
+public static class AsyncExtensions
+{
+    
+    public static void RunAsync(this IFiber fiber, Func<CancellationToken, Task> task, Action? callback = null, 
+        Action<Exception>? onError = null, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(fiber);
+
+        Task.Run(async () =>
+        {
+            try
+            {
+                await task(ct);
+
+                if (callback != null)
+                {
+                    fiber.Enqueue(callback);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // cancel
+            }
+            catch (Exception ex)
+            {
+                if (onError != null)
+                {
+                    fiber.Enqueue(onError, ex);
+                }
+                else
+                {
+                    Console.WriteLine($"[{fiber.Name}] Async task failed: {ex.Message}");
+                }
+            }
+        }, ct);
+    }
+}
+
 public class RankServer : EngineBase
 {
     private static readonly HttpClient Http = new(
@@ -157,7 +195,9 @@ public class RankServer : EngineBase
 
     private void SyncServerListSchedule()
     {
-        var list = GetAllSessions()
+        if (_serverFiber == null) return;
+        
+        var list = SessionsSource
             .Where(s => s.Peer is GameServerPeer)
             .Select(s => {
                 var game = (GameServerPeer)s.Peer;

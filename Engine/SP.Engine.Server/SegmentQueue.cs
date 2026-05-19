@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Threading;
 
 namespace SP.Engine.Server;
@@ -12,11 +11,24 @@ public sealed class SegmentQueue(ArraySegment<byte>[] globalQueue, int baseOffse
     private static readonly ArraySegment<byte> Null = default;
     private int _writeIndex;
     private int _readIndex;
-    private bool _enqueueBlocked;
-    private int _pendingWriteCount;
+    private int _pendingCount;
 
     public ushort TrackId { get; private set; } = 1;
     public int Count => _writeIndex - _readIndex;
+    public bool IsFull => _writeIndex >= capacity;
+    public bool IsReadOnly { get; private set; }
+
+    public void StartEnqueue() => IsReadOnly = false;
+
+    public void StopEnqueue()
+    {
+        if (IsReadOnly) return;
+        IsReadOnly = true;
+        
+        var spinWait = new SpinWait();
+        while (_pendingCount > 0)
+            spinWait.SpinOnce();
+    }
 
     public ArraySegment<byte> this[int index]
     {
@@ -47,35 +59,28 @@ public sealed class SegmentQueue(ArraySegment<byte>[] globalQueue, int baseOffse
 
     public bool Enqueue(ArraySegment<byte> item, ushort trackId)
     {
-        if (_enqueueBlocked) return false;
-        
-        // 진행 중인 쓰기 작업 카운팅
-        Interlocked.Increment(ref _pendingWriteCount);
-        
+        if (IsFull || IsReadOnly || trackId != TrackId) return false;
+
+        Interlocked.Increment(ref _pendingCount);
+
         try
         {
-            while (!_enqueueBlocked)
+            while (!IsReadOnly)
             {
-                var curPos = _writeIndex;
-
-                if (curPos >= capacity || trackId != TrackId) return false;
-
-                if (Interlocked.CompareExchange(ref _writeIndex, curPos + 1, curPos) == curPos)
-                {
-                    globalQueue[baseOffset + curPos] = item;
-                    return true;
-                }
-
-                // 경합 시 잠시 양보
-                Thread.Yield();
+                var oldIndex = _writeIndex;
+                if (Interlocked.CompareExchange(ref _writeIndex, oldIndex + 1, oldIndex) != oldIndex) 
+                    continue;
+                
+                globalQueue[baseOffset + oldIndex] = item;
+                return true;
             }
-
-            return false;
         }
         finally
         {
-            Interlocked.Decrement(ref _pendingWriteCount);
+            Interlocked.Decrement(ref _pendingCount);
         }
+        
+        return false;
     }
 
     public void TrimSentBytes(int sentByteCount)
@@ -111,8 +116,6 @@ public sealed class SegmentQueue(ArraySegment<byte>[] globalQueue, int baseOffse
         // 모든 데이터 송신 완료 시 상태 초기화
         Clear();
     }
-    
-    public void StartEnqueue() => _enqueueBlocked = false;
     
     bool ICollection<ArraySegment<byte>>.IsReadOnly => true;
     void ICollection<ArraySegment<byte>>.Add(ArraySegment<byte> item) => throw new NotSupportedException();

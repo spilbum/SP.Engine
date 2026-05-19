@@ -22,7 +22,8 @@ internal sealed class UnixUdpNetworkListener(ListenerInfo info, IEngineConfig co
             for (var i = 0; i < socketCount; i++)
             {
                 var s = CreateSocket();
-                s.ReceiveBufferSize = 1024 * 1024 * 32;
+                s.SendBufferSize = Config.Network.SendBufferSize;
+                s.ReceiveBufferSize = Config.Network.ReceiveBufferSize;
                 s.Bind(EndPoint);
                 _sockets[i] = s;
 

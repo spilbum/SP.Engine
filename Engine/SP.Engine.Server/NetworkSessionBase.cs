@@ -26,47 +26,52 @@ public enum SocketMode
     Udp = 1
 }
 
-public interface INetworkSession
+public interface INetworkSession : ILogContext
 {
     SessionBase Session { get; }
 }
 
-public abstract class NetworkSessionBase : INetworkSession, ILogContext
+public abstract class NetworkSessionBase : INetworkSession
 {
     private const string LogHeaderFormat = "[NetworkError] SessionId: {0}, Mode: {1}";
     private const string SocketInfoFormat = "SocketErrorCode: {0} ({1})";
     private const string CallerInfoFormat = "Location: {0} in {1}:{2}";
-
-    protected Socket _client;
+    
     private Action<INetworkSession, CloseReason> _closed;
     private volatile int _socketState;
     private int _pendingIoCount;
     private protected IPEndPoint _remoteEndPoint;
     private CloseReason _finalReason;
-    
-    protected NetworkSessionBase(SocketMode mode, Socket client)
+    private readonly SocketMode _mode;
+    private volatile SessionBase _session;
+    protected Socket _client;
+
+    public SessionBase Session
     {
-        _client = client;
-        Mode = mode;
-        LocalEndPoint = (IPEndPoint)client.LocalEndPoint;
-        RemoteEndPoint = (IPEndPoint)client.RemoteEndPoint;
+        get => _session;
+        internal set => Interlocked.Exchange(ref _session, value);
     }
 
-    public SessionBase Session { get; internal set; }
-    public SocketMode Mode { get; }
+    public ILogger Logger => _session?.Logger;
+    
     public IPEndPoint LocalEndPoint { get; }
     public IPEndPoint RemoteEndPoint
     {
         get => Volatile.Read(ref _remoteEndPoint);
-        protected set => Volatile.Write(ref _remoteEndPoint, value);
+        protected init => Volatile.Write(ref _remoteEndPoint, value);
     }
     
     public bool IsClosed => HasState(SocketState.Closed);
     public bool IsPaused => HasState(SocketState.Paused);
-    public bool IsIdle => (_socketState & ((int)SocketState.InSending | (int)SocketState.InReceiving)) == 0;
-    public bool IsInClosingOrClosed => _socketState >= (int)SocketState.InClosing;
+    protected bool IsInClosingOrClosed => _socketState >= (int)SocketState.InClosing;
     
-    public ILogger Logger => Session.Logger;
+    protected NetworkSessionBase(SocketMode mode, Socket client)
+    {
+        _mode = mode;
+        _client = client;
+        LocalEndPoint = (IPEndPoint)client.LocalEndPoint;
+        RemoteEndPoint = (IPEndPoint)client.RemoteEndPoint;
+    }
     
     public event Action<INetworkSession, CloseReason> Closed
     {
@@ -83,12 +88,10 @@ public abstract class NetworkSessionBase : INetworkSession, ILogContext
 
     protected void DecrementIo()
     {
-        if (Interlocked.Decrement(ref _pendingIoCount) == 0)
+        if (Interlocked.Decrement(ref _pendingIoCount) != 0) return;
+        if (IsInClosingOrClosed)
         {
-            if (IsInClosingOrClosed)
-            {
-                OnClosed(_finalReason);
-            }
+            OnClosed(_finalReason);
         }
     }
     
@@ -171,7 +174,7 @@ public abstract class NetworkSessionBase : INetworkSession, ILogContext
         var sessionId = Session.SessionId;
         var logBuilder = new StringBuilder();
 
-        logBuilder.AppendLine(string.Format(LogHeaderFormat, sessionId, Mode));
+        logBuilder.AppendLine(string.Format(LogHeaderFormat, sessionId, _mode));
         logBuilder.AppendLine($"Message: {e.Message}");
 
         if (e is SocketException socketEx)
@@ -185,7 +188,7 @@ public abstract class NetworkSessionBase : INetworkSession, ILogContext
         logBuilder.AppendLine("StackTrace:");
         logBuilder.AppendLine(e.StackTrace);
         
-        Logger.Error(logBuilder.ToString());
+       Session.Logger.Error(logBuilder.ToString());
     }
 
     private bool ShouldIgnoreError(Exception e)

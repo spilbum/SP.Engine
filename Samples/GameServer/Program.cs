@@ -55,7 +55,10 @@ internal static class Program
                 })
                 .ConfigureSession(session => session with
                 {
-                    IdleSessionTimeoutSec = 60
+                    IdleSessionTimeoutSec = 60,
+                    ClearIdleSessionPeriodSec = 30,
+                    WaitingReconnectTimeoutSec = 120,
+                    WaitingReconnectTimerPeriodSec = 60
                     #if DEBUG
                     , PeerJobSlowThresholdMs = 200
                     #endif
