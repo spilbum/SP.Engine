@@ -8,7 +8,7 @@ internal class TcpNetworkListener(ListenerInfo info) : NetworkListenerBase(info)
 {
     private readonly int _backLog = info.BackLog;
     private bool _disposed;
-    private Socket _socket;
+    private Socket _listenSocket;
     private SocketAsyncEventArgs _socketEventArgsAccept;
 
     public override bool Start()
@@ -16,21 +16,21 @@ internal class TcpNetworkListener(ListenerInfo info) : NetworkListenerBase(info)
         if (_disposed)
             return false;
 
-        _socket = new Socket(EndPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+        _listenSocket = new Socket(EndPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
 
         try
         {
-            _socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
-            _socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.NoDelay, true);
-            _socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Linger, new LingerOption(false, 0));
+            _listenSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+            _listenSocket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.NoDelay, true);
+            _listenSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Linger, new LingerOption(false, 0));
 
-            _socket.Bind(EndPoint);
-            _socket.Listen(_backLog);
+            _listenSocket.Bind(EndPoint);
+            _listenSocket.Listen(_backLog);
 
             _socketEventArgsAccept = new SocketAsyncEventArgs();
             _socketEventArgsAccept.Completed += AcceptCompleted;
 
-            if (!_socket.AcceptAsync(_socketEventArgsAccept))
+            if (!_listenSocket.AcceptAsync(_socketEventArgsAccept))
                 ProcessAccept(_socketEventArgsAccept);
 
             return true;
@@ -83,7 +83,7 @@ internal class TcpNetworkListener(ListenerInfo info) : NetworkListenerBase(info)
         finally
         {
             e.AcceptSocket = null;
-            if (!_disposed && !_socket.AcceptAsync(e))
+            if (!_disposed && !_listenSocket.AcceptAsync(e))
                 ProcessAccept(e);
         }
     }
@@ -95,7 +95,7 @@ internal class TcpNetworkListener(ListenerInfo info) : NetworkListenerBase(info)
 
         try
         {
-            _socket?.SafeClose();
+            _listenSocket?.SafeClose();
         }
         finally
         {
@@ -111,7 +111,7 @@ internal class TcpNetworkListener(ListenerInfo info) : NetworkListenerBase(info)
         if (disposing)
         {
             _socketEventArgsAccept?.Dispose();
-            _socket?.Dispose();
+            _listenSocket?.Dispose();
         }
 
         _disposed = true;

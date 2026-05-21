@@ -160,12 +160,6 @@ public abstract class NetworkSessionBase : INetworkSession
         }
     }
 
-    protected void HandleNetworkError(Exception e)
-    {
-        LogError(e);
-        Close(CloseReason.SocketError);
-    }
-
     protected void LogError(Exception e, [CallerMemberName] string caller = "", [CallerFilePath] string filePath = "",
         [CallerLineNumber] int lineNumber = -1)
     {

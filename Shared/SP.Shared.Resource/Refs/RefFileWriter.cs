@@ -12,8 +12,8 @@ public static class RefFileWriter
 {
     public static void Write(RefTableSchema schema, RefTableData data, string path)
     {
-        var buf = new PooledBuffer();
-        var w = new NetWriter(buf);
+        var buf = new PooledBuffer(65536);
+        var w = new NetWriter(buf.Memory.Span);
 
         try
         {
@@ -56,36 +56,44 @@ public static class RefFileWriter
         CancellationToken ct = default)
     {
         var buf = new PooledBuffer();
-        var w = new NetWriter(buf);
 
         try
         {
-            w.WriteByte((byte)'R');
-            w.WriteByte((byte)'R');
-            w.WriteByte((byte)'E');
-            w.WriteByte((byte)'F');
-        
-            w.WriteString(schema.Name);
-            w.WriteVarUInt((uint)data.Rows.Count);
-
-            foreach (var row in data.Rows)
-            {
-                for (var i = 0; i < schema.Columns.Count; i++)
-                {
-                    var column = schema.Columns[i];
-                    var value = row.Get(i);
-                    WriteValue(ref w, column.Type, value);
-                }
-            }
-        
-            var bytes = w.WrittenSpan.ToArray();
+            var written = SerializeToBuffer(buf.Memory.Span, schema, data);
+            var memory = buf.Memory[..written];
+            
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            await File.WriteAllBytesAsync(path, bytes, ct);
+            await File.WriteAllBytesAsync(path, memory.ToArray(), ct);
         }
         finally
         {
             buf.Dispose();
         }
+    }
+
+    private static int SerializeToBuffer(Span<byte> destination, RefTableSchema schema, RefTableData data)
+    {
+        var w = new NetWriter(destination);
+        
+        w.WriteByte((byte)'R');
+        w.WriteByte((byte)'R');
+        w.WriteByte((byte)'E');
+        w.WriteByte((byte)'F');
+        
+        w.WriteString(schema.Name);
+        w.WriteVarUInt((uint)data.Rows.Count);
+
+        foreach (var row in data.Rows)
+        {
+            for (var i = 0; i < schema.Columns.Count; i++)
+            {
+                var column = schema.Columns[i];
+                var value = row.Get(i);
+                WriteValue(ref w, column.Type, value);
+            }
+        }
+
+        return w.WrittenCount;
     }
 
     private static void WriteValue(ref NetWriter w, ColumnType type, object? value)

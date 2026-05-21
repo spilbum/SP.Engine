@@ -1,10 +1,7 @@
 using System;
-using System.Buffers;
-using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
-using System.Threading;
 using SP.Core;
 using SP.Engine.Client.Configuration;
 using SP.Engine.Runtime.Networking;
@@ -13,46 +10,25 @@ namespace SP.Engine.Client
 {
     public class TcpNetworkSession : IReliableSender
     {
-        private readonly List<ArraySegment<byte>> _itemsToSend = new List<ArraySegment<byte>>();
-        private readonly int _receiveBufferSize;
-        private readonly int _sendBufferSize;
-        private readonly SwapQueue<ArraySegment<byte>> _sendQueue;
+        private readonly ByteRingBuffer _sendBuffer;
+        private readonly object _sendLock = new object();
+        private bool _isSending;
+        private readonly PooledBuffer _localSendBuffer = new PooledBuffer(64 * 1024);
+        
         private bool _isConnecting;
-        private int _inSendingFlag;
-        private byte[] _receiveBuffer;
+        private PooledBuffer _receiveBuffer;
         private SocketAsyncEventArgs _receiveEventArgs;
         private SocketAsyncEventArgs _sendEventArgs;
         private Socket _socket;
-        private readonly SessionSendBuffer _sendBuffer;
+        private EngineConfig _config;
 
         public TcpNetworkSession(EngineConfig config)
         {
-            _sendBufferSize = config.SendBufferSize;
-            _receiveBufferSize = config.ReceiveBufferSize;
-            _sendQueue = new SwapQueue<ArraySegment<byte>>(config.SendQueueSize);
-            _sendBuffer = new SessionSendBuffer(4 * 1024);
+            _config = config;
+            _sendBuffer = new ByteRingBuffer(config.SendBufferSize);
         }
 
         public bool IsConnected { get; private set; }
-        
-        public bool TrySend(TcpMessage message)
-        {
-            if (!IsConnected)
-                return false;
-
-            if (!_sendBuffer.TryReserve(message.Size, out var segment)) 
-                return false;
-
-            message.WriteTo(segment.AsSpan());
-
-            var enqueued = _sendQueue.TryEnqueue(segment);
-            if (Interlocked.CompareExchange(ref _inSendingFlag, 1, 0) != 0)
-                return enqueued;
-            
-            DequeueSend();
-            return true;
-        }
-
         public event EventHandler Opened;
         public event EventHandler Closed;
         public event EventHandler<ErrorEventArgs> Error;
@@ -68,6 +44,33 @@ namespace SP.Engine.Client
 
             _isConnecting = true;
             remoteEndPoint.ResolveAndConnectAsync(ProcessConnect, null);
+        }
+        
+        public bool TrySend(TcpMessage message)
+        {
+            if (!IsConnected)
+                return false;
+
+            var messageSize = message.Size;
+            if (messageSize > _localSendBuffer.Length)
+                return false;
+
+            lock (_sendLock)
+            {
+                var span = _localSendBuffer.Slice(0, messageSize);
+                message.WriteTo(span);
+                
+                if (!_sendBuffer.TryWrite(span))
+                    return false;
+
+                if (_isSending)
+                    return true;
+                
+                _isSending = true;
+            }
+            
+            FlushSend();
+            return true;
         }
 
         private void ProcessConnect(Socket socket, object state, SocketAsyncEventArgs e, Exception error)
@@ -135,7 +138,7 @@ namespace SP.Engine.Client
 
             try
             {
-                _socket.SendBufferSize = _sendBufferSize;
+                _socket.SendBufferSize = _config.SendBufferSize;
                 _socket.NoDelay = true;
 
                 var vals = new byte[12];
@@ -174,9 +177,9 @@ namespace SP.Engine.Client
         private void GetSocket(SocketAsyncEventArgs e)
         {
             if (null == _receiveBuffer)
-                _receiveBuffer = ArrayPool<byte>.Shared.Rent(_receiveBufferSize);
+                _receiveBuffer = new PooledBuffer(_config.ReceiveBufferSize);
 
-            e.SetBuffer(_receiveBuffer, 0, _receiveBuffer.Length);
+            e.SetBuffer(_receiveBuffer.GetRawBuffer(), 0, _receiveBuffer.Length);
             _receiveEventArgs = e;
 
             OnConnected();
@@ -205,7 +208,10 @@ namespace SP.Engine.Client
             else
             {
                 _socket = null;
-                _inSendingFlag = 0;
+                lock (_sendLock)
+                {
+                    _isSending = false;
+                }
             }
 
             try
@@ -289,143 +295,86 @@ namespace SP.Engine.Client
             }
         }
 
-        private void DequeueSend()
-        {
-            _sendQueue.Exchange(_itemsToSend);
-            
-            if (_itemsToSend.Count == 0)
-            {
-                _inSendingFlag = 0;
-                return;
-            }
-
-            Send(_itemsToSend);
-        }
-
-        private void Send(List<ArraySegment<byte>> items)
+        private void FlushSend()
         {
             if (_sendEventArgs == null)
             {
                 _sendEventArgs = new SocketAsyncEventArgs();
                 _sendEventArgs.Completed += OnSendCompleted;
             }
-
-            try
+            
+            while (true)
             {
-                if (items == null || items.Count == 0)
-                    throw new ArgumentException("items cannot be null or empty.");
-
-                if (items.Count > 1)
+                var socket = _socket;
+                if (socket == null)
                 {
-                    _sendEventArgs.SetBuffer(null, 0, 0);
-                    _sendEventArgs.BufferList = items;
-                }
-                else
-                {
-                    _sendEventArgs.BufferList = null;
-                    var segment = items[0];
-                    _sendEventArgs.SetBuffer(segment.Array, segment.Offset, segment.Count);
+                    lock (_sendLock) _isSending = false;
+                    return;
                 }
 
-                if (!_socket.SendAsync(_sendEventArgs))
-                    OnSendCompleted(null, _sendEventArgs);
+                int length;
+                int offset;
+
+                lock (_sendLock)
+                {
+                    length = _sendBuffer.GetContiguousReadBlock(out offset);
+                    if (length == 0)
+                    {
+                        _isSending = false;
+                        return;
+                    }
+                }
+
+                try
+                {
+                    var e = _sendEventArgs;
+                    e.SetBuffer(_sendBuffer.GetRawBuffer(), offset, length);
+
+                    if (socket.SendAsync(e))
+                        return;
+
+                    if (!HandleSendResult(e))
+                        return;
+                }
+                catch (Exception ex)
+                {
+                    lock (_sendLock) _isSending = false;
+                    if (EnsureSocketClosed() && !IsIgnoreException(ex))
+                        OnError(ex);
+                }
             }
-            catch (Exception ex)
+        }
+        
+        private void OnSendCompleted(object sender, SocketAsyncEventArgs e)
+        {
+            if (HandleSendResult(e))
             {
-                if (EnsureSocketClosed() && !IsIgnoreException(ex))
-                    OnError(ex);
+                FlushSend();
             }
         }
 
-        private void OnSendCompleted(object sender, SocketAsyncEventArgs e)
+        private bool HandleSendResult(SocketAsyncEventArgs e)
         {
             if (e.SocketError != SocketError.Success || e.BytesTransferred == 0)
             {
-                if (EnsureSocketClosed()) OnClosed();
+                lock (_sendLock) _isSending = false;
+                if (EnsureSocketClosed()) 
+                    OnClosed();
 
-                if (e.SocketError == SocketError.Success) return;
-
+                if (e.SocketError == SocketError.Success) 
+                    return false;
+                
                 var ex = new SocketException((int)e.SocketError);
                 if (!IsIgnoreException(ex)) OnError(ex);
+                return false;
+            }
 
-                return;
+            lock (_sendLock)
+            {
+                _sendBuffer.Consume(e.BytesTransferred);
             }
             
-            var transferred = e.BytesTransferred;
-            var requested = 0;
-            if (e.BufferList != null)
-                foreach (var segment in e.BufferList) requested += segment.Count;
-            else
-                requested += e.Count;
-            
-            _sendBuffer.Release(transferred);
-
-            if (transferred < requested)
-            {
-                var originals = 
-                    e.BufferList ?? new List<ArraySegment<byte>> { new ArraySegment<byte>(e.Buffer, e.Offset, e.Count) };
-                var remaining = CreateRemainingItems(originals, transferred);
-        
-                e.SetBuffer(null, 0, 0);
-                e.BufferList = remaining;
-
-                if (!_socket.SendAsync(e))
-                    OnSendCompleted(sender, e);
-                return;
-            }
-
-            e.BufferList = null;
-            OnSendCompleted();
-        }
-
-        private static List<ArraySegment<byte>> CreateRemainingItems(IList<ArraySegment<byte>> originals, int bytesTransferred)
-        {
-            var remainingItems = new List<ArraySegment<byte>>();
-            var skipBytes = bytesTransferred;
-
-            foreach (var segment in originals)
-            {
-                if (segment.Array == null) continue;
-
-                if (skipBytes >= segment.Count)
-                {
-                    skipBytes -= segment.Count;
-                    continue;
-                }
-
-                if (skipBytes > 0)
-                {
-                    remainingItems.Add(new ArraySegment<byte>(
-                        segment.Array, 
-                        segment.Offset + skipBytes,
-                        segment.Count - skipBytes));
-
-                    skipBytes = 0;
-                }
-                else
-                {
-                    remainingItems.Add(segment);
-                }
-            }
-            
-            return remainingItems;
-        }
-
-        private void OnSendCompleted()
-        {
-            _itemsToSend.Clear();
-            _sendQueue.Exchange(_itemsToSend);
-
-            if (_itemsToSend.Count == 0)
-            {
-                Interlocked.Exchange(ref _inSendingFlag, 0);
-
-                _sendQueue.Exchange(_itemsToSend);
-                if (_itemsToSend.Count == 0 || Interlocked.CompareExchange(ref _inSendingFlag, 1, 0) != 0)
-                    return;
-            }
-
-            Send(_itemsToSend);
+            return true;
         }
 
         private void OnConnected()
@@ -438,12 +387,16 @@ namespace SP.Engine.Client
         private void OnClosed()
         {
             if (!IsConnected) return;
+
+            _receiveBuffer?.Dispose();
+
+            lock (_sendLock)
+            {
+                _isSending = false;
+                _sendBuffer.Clear();
+                _localSendBuffer.Dispose();
+            }
             
-            if (_receiveBuffer != null)
-                ArrayPool<byte>.Shared.Return(_receiveBuffer);
-            
-            _sendQueue.Dispose();
-            _sendBuffer.Dispose();
             _sendEventArgs?.Dispose();
             _receiveEventArgs?.Dispose();
             

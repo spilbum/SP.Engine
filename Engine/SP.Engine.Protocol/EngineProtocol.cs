@@ -80,21 +80,21 @@ namespace SP.Engine.Protocol
         public class SessionAuthAck : ProtocolDataBase<SessionAuthAck>
         {
             public int CompressionThreshold;
-            public int MaxFrameBytes;
-            public int MaxRetries;
+            public int MaxPayloadLength;
+            public int MaxRetransmitCount;
             public uint PeerId;
             public SessionAuthResult Result;
-            public int SendTimeoutMs;
+            public int InitialRetransmitTimeoutMs;
             public byte[]? ServerPublicKey;
             public long SessionId;
             public bool UseCompress;
             public bool UseEncrypt;
             public int MaxAckDelayMs;
-            public int AckStepThreshold;
+            public int AckFrequency;
             public int UdpOpenPort;
-            public int UdpAssemblyTimeoutSec;
-            public int UdpMaxPendingMessageCount;
-            public int UdpCleanupIntervalSec;
+            public int FragmentAssemblerClenupTimeoutSec;
+            public int FragmentAssemblerPendingMessageThreshold;
+            public int FragmentAssemblerCleanupIntervalSec;
             public int MaxOutOfOrderCount;
         }
 

@@ -17,17 +17,20 @@ namespace SP.Engine.Runtime.Protocol
             ushort id,
             ChannelKind channel = ChannelKind.Reliable,
             Toggle encrypt = Toggle.Inherit,
-            Toggle compress = Toggle.Inherit)
+            Toggle compress = Toggle.Inherit,
+            int maxPayloadLength = -1)
         {
             Id = id;
             Channel = channel;
             Encrypt = encrypt;
             Compress = compress;
+            MaxPayloadLength = maxPayloadLength;
         }
 
         public ushort Id { get; }
         public ChannelKind Channel { get; }
         public Toggle Encrypt { get; }
         public Toggle Compress { get; }
+        public int MaxPayloadLength { get; }
     }
 }

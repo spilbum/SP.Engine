@@ -52,42 +52,51 @@ namespace SP.Engine.Runtime.Networking
             ICompressor compressor = null)
         {
             if (protocol is null) throw new ArgumentNullException(nameof(protocol));
+            
+            var maxPayloadLength = policy?.MaxPayloadLength ?? 65536;
+            if (policy is { UseCompress: true } && compressor != null)
+            {
+                maxPayloadLength = compressor.GetMaxCompressedLength(maxPayloadLength);
+            }
 
-            var buffer = new PooledBuffer();
-            var writer = new NetWriter(buffer);
-            protocol.Serialize(ref writer);   
+            if (policy is { UseEncrypt: true } && encryptor != null)
+            {
+                maxPayloadLength = encryptor.GetCiphertextLength(maxPayloadLength);
+            }
 
-            var bufferOwner = buffer;
+            var bufferOwner = new PooledBuffer(maxPayloadLength);
+            var span = bufferOwner.Memory.Span;
+            var writer = new NetWriter(span);
+            protocol.Serialize(ref writer);      
+            
             var written = writer.WrittenCount;
             var flags = HeaderFlags.None;
-
+            
             try
             {
                 if (policy is { UseCompress: true } && compressor != null && written >= policy.CompressionThreshold)
                 {
-                    var maxLen = compressor.GetMaxCompressedLength(written);
-                    var compressedOwner = new PooledBuffer(maxLen);
+                    var srcSpan = span[..written];
+                    var destSpan = span[written..];
+                        
+                    var compressedLen = compressor.Compress(srcSpan, destSpan);
 
-                    written = compressor.Compress(bufferOwner.Memory.Span[..written],
-                        compressedOwner.Memory.Span);
-
-                    bufferOwner.Dispose();
-                    bufferOwner = compressedOwner;
+                    destSpan[..compressedLen].CopyTo(span);
+                    written = compressedLen;
                     flags |= HeaderFlags.Compressed;
-                }
-                
+                }   
+
                 if (policy is { UseEncrypt: true } && encryptor != null)
                 {
-                    var maxLen = encryptor.GetCiphertextLength(written);
-                    var encryptedOwner = new PooledBuffer(maxLen);
+                    var srcSpan = span[..written];
+                    var destSpan = span[written..];
+                        
+                    var encryptedLen = encryptor.Encrypt(srcSpan, destSpan);
 
-                    written = encryptor.Encrypt(bufferOwner.Memory.Span[..written],
-                        encryptedOwner.Memory.Span);
-
-                    bufferOwner.Dispose();
-                    bufferOwner = encryptedOwner;
+                    destSpan[..encryptedLen].CopyTo(span);
+                    written = encryptedLen;
                     flags |= HeaderFlags.Encrypted;
-                }
+                }   
 
                 _bodyOwner = bufferOwner;
                 BodyLength = written;
@@ -106,39 +115,44 @@ namespace SP.Engine.Runtime.Networking
         {
             if (_bodyOwner == null) return default;
 
-            var bodySpan = BodySpan;
-            IMemoryOwner<byte> tempOwner = null;
+            var srcSpan = BodySpan;
+            if (srcSpan.IsEmpty) return default;
+
+            var maxPlaintextLen = srcSpan.Length;
+            if (HasFlag(HeaderFlags.Encrypted) && compressor != null)
+            {
+                maxPlaintextLen = encryptor.GetPlaintextLength(maxPlaintextLen);
+            }
+
+            if (HasFlag(HeaderFlags.Compressed) && compressor != null)
+            {
+                maxPlaintextLen = compressor.GetDecompressedLength(srcSpan);
+            }
+            
+            var owner = new PooledBuffer(maxPlaintextLen);
+            var span = owner.Memory.Span;
 
             try
             {
                 if (HasFlag(HeaderFlags.Encrypted) && encryptor != null)
                 {
-                    var maxLen = encryptor.GetPlaintextLength(bodySpan.Length);
-                    var decryptedOwner = new PooledBuffer(maxLen);
-
-                    var written = encryptor.Decrypt(bodySpan, decryptedOwner.Memory.Span);
-                    
-                    bodySpan = decryptedOwner.Memory.Span[..written];
-                    tempOwner = decryptedOwner;
+                    var written = encryptor.Decrypt(srcSpan, span);
+                    srcSpan = span[..written];
                 }
 
                 if (HasFlag(HeaderFlags.Compressed) && compressor != null)
                 {
-                    var decompressedOwner = new PooledBuffer(compressor.GetDecompressedLength(bodySpan));
-                    var written = compressor.Decompress(bodySpan, decompressedOwner.Memory.Span);
-                    
-                    tempOwner?.Dispose();
-                    
-                    bodySpan = decompressedOwner.Memory.Span[..written];
-                    tempOwner = decompressedOwner;
+                    var destSpan = span[srcSpan.Length..];
+                    var written = compressor.Decompress(srcSpan, destSpan);
+                    srcSpan = destSpan[..written];
                 }
 
-                var reader = new NetReader(bodySpan);
+                var reader = new NetReader(srcSpan);
                 return NetSerializer.Deserialize<TProtocol>(ref reader);
             }
             finally
             {
-               tempOwner?.Dispose();
+                owner?.Dispose();
             }
         }
 

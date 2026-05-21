@@ -3,21 +3,21 @@ namespace SP.Engine.Server.Configuration;
 public sealed record NetworkConfig
 {
     /// <summary>
-    /// 송신 타임아웃
+    /// 소켓 송신 타임아웃
     /// </summary>
     public int SendTimeoutMs { get; init; } = 5_000;
     /// <summary>
-    /// 커널 수신 버퍼 크기
+    /// 소켓 수신 버퍼 크기
     /// </summary>
     public int ReceiveBufferSize { get; init; } = 64 * 1024;
     /// <summary>
-    /// 커널 송신 버퍼 크기
+    /// 소켓 송신 버퍼 크기
     /// </summary>
     public int SendBufferSize { get; init; } = 4 * 1024;
     /// <summary>
-    /// 단일 프레임 최대 허용 크기
+    /// 단일 패킷 최대 허용 크기
     /// </summary>
-    public int MaxFrameBytes { get; init; } = 64 * 1024;
+    public int MaxPayloadLength { get; init; } = 64 * 1024;
 
     /// <summary>
     /// 세션당 동시 전송 가능 큐 크기
@@ -47,16 +47,20 @@ public sealed record NetworkConfig
     /// <summary>
     /// 압축을 시도할 최소 패킷 크기 (Bytes)
     /// </summary>
-    public ushort CompressionThreshold { get; init; } = 2048;
+    public ushort CompressionThreshold { get; init; } = 512;
     
     /// <summary>
-    /// 최대 패킷 재전송 횟수
+    /// 최대 재전송 횟수
     /// </summary>
-    public int MaxRetransmissionCount { get; init; } = 5;
+    public int MaxRetransmitCount { get; init; } = 5;
+    /// <summary>
+    /// 초기 재전송 타임아웃 
+    /// </summary>
+    public int InitialRetransmitTimeoutMs { get; init; } = 500;
     /// <summary>
     /// Delayed ACK 대기 시간 (송신 데이터가 없을 때)
     /// </summary>
-    public int MaxAckDelayMs { get; init; } = 40;
+    public int MaxAckDelayMs { get; init; } = 50;
     /// <summary>
     /// ACK 없이 수신 가능한 최대 패킷 수 (도달 시 즉시 ACK)
     /// </summary>
@@ -77,17 +81,17 @@ public sealed record NetworkConfig
     /// <summary>
     /// 최대 전송 단위 (MTU)
     /// </summary>
-    public ushort UdpMaxMtu { get; init; } = 1200;
+    public ushort UdpMaxMtu { get; init; } = 1400;
     /// <summary>
-    /// 조각난 UDP 패킷 정리 주기
+    /// UDP 파편화 조립기 정리 주기
     /// </summary>
-    public int UdpCleanupPeriodSec { get; init; } = 2;
+    public int FragmentAssemblerCleanupPeriodSec { get; init; } = 3;
     /// <summary>
-    /// 조각난 패킷 조립 타임아웃
+    /// UDP 파편화 조립기 정리 타임아웃
     /// </summary>
-    public int UdpAssemblyTimeoutSec { get; init; } = 3;
+    public int FragmentAssemblerCleanupTimeoutSec { get; init; } = 3;
     /// <summary>
-    /// 처리를 기다리는 최대 UDP 메시지 수
+    /// UDP 파편화 조립기 대기 메시지 임계치
     /// </summary>
-    public int UdpMaxPendingMessageCount { get; init; } = 100;
+    public int FragmentAssemblerPendingMessageThreshold { get; init; } = 100;
 }

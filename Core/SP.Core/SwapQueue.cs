@@ -59,7 +59,7 @@ namespace SP.Core
             }
         }
 
-        public void Exchange(List<T> destination)
+        public void Extract(List<T> destination)
         {
             if (_disposed) return;
             Node nodeToProcess;

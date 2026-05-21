@@ -1,5 +1,5 @@
 using System;
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -10,89 +10,72 @@ using SP.Engine.Runtime.Networking;
 
 namespace SP.Engine.Client
 {
-    public class PostList<T> : List<T>
-    {
-        public int Position { get; set; }
-    }
-
     public class UdpNetworkSession : IUnreliableSender
     {
-        private readonly PostList<ArraySegment<byte>> _itemsToSend = new PostList<ArraySegment<byte>>();
         private readonly SocketAsyncEventArgs _receiveEventArgs = new SocketAsyncEventArgs();
-        private readonly byte[] _receiveBuffer;
+        private readonly PooledBuffer _receiveBuffer;
         private readonly int _sendBufferSize;
-        private readonly SwapQueue<ArraySegment<byte>> _sendQueue;
+        private readonly ConcurrentQueue<PooledBuffer> _sendingQueue = new ConcurrentQueue<PooledBuffer>();
         private int _fragSeq = 1;
-        private int _sendingFlag;
-        private ushort _maxFrameSize = 512;
+        private int _inSendingFlag;
+        private ushort _maxFragmentSize = 512;
         private IPEndPoint _remoteEndPoint;
         private SocketAsyncEventArgs _sendEventArgs;
-        private readonly SessionSendBuffer _sendBuffer;
         private Socket _socket;
         
         public UdpNetworkSession(EngineConfig config)
         {
-            _sendQueue = new SwapQueue<ArraySegment<byte>>(config.SendQueueSize);
             _sendBufferSize = config.SendBufferSize;
-            _receiveBuffer = new byte[config.ReceiveBufferSize];
-            _sendBuffer = new SessionSendBuffer(2048);
+            _receiveBuffer = new PooledBuffer(config.ReceiveBufferSize);
         }
 
         public bool IsRunning { get; private set; }
-        public UdpFragmentAssembler Assembler { get; private set; }
-
-        public void SetupAssembler(int assemblyTimeoutSec, int maxPendingMessageCount)
-        {
-            Assembler?.Dispose();
-            Assembler = new UdpFragmentAssembler(assemblyTimeoutSec, maxPendingMessageCount);
-        }
 
         public bool TrySend(UdpMessage message)
         {
             if (!IsRunning) return false;
 
-            const int headerSize = UdpHeader.ByteSize;
-            const int fragHeaderSize = UdpFragmentHeader.ByteSize;
-            var maxBodyPerFrag = _maxFrameSize - headerSize - fragHeaderSize;
-
-            if (message.Size <= _maxFrameSize)
+            if (message.Size > _maxFragmentSize)
             {
-                if (!_sendBuffer.TryReserve(message.Size, out var segment)) return false;
-                message.WriteTo(segment.AsSpan());
-                return EnqueueSendingQueue(new List<ArraySegment<byte>> { segment });
+                // 패킷 파편화
+                if (!EnqueueFragments(message)) return false;   
+            }
+            else
+            {
+                // 단일 패킷 전송
+                var buffer = new PooledBuffer(message.Size);
+                message.WriteTo(buffer.Memory.Span);
+                _sendingQueue.Enqueue(buffer);
             }
 
-            // 조각화 계산
-            var totalCount = (byte)((message.BodyLength + maxBodyPerFrag - 1) / maxBodyPerFrag);
-            var fragId = AllocateFragId();
-            var fragments = new List<ArraySegment<byte>>(totalCount);
+            if (Interlocked.CompareExchange(ref _inSendingFlag, 1, 0) == 0)
+            {
+                ExecuteSend();
+            }
+        
+            return true;
+        }
+        
+        private bool EnqueueFragments(UdpMessage message)
+        {
+            const int headerSize = UdpHeader.ByteSize;
+            const int fragHeaderSize = FragmentHeader.ByteSize;
+
+            var fragId = unchecked((uint)Interlocked.Increment(ref _fragSeq));
+            var maxBodyPerFrag = _maxFragmentSize - headerSize - fragHeaderSize;
+            var totalCount = (byte)Math.Ceiling((double)message.BodyLength / maxBodyPerFrag);
 
             for (byte index = 0; index < totalCount; index++)
             {
                 var bodyOffset = index * maxBodyPerFrag;
-                var fragLen = (ushort)Math.Min(message.BodyLength - bodyOffset, maxBodyPerFrag);
-                var totalSize = headerSize + fragHeaderSize + fragLen;
-
-                if (!_sendBuffer.TryReserve(totalSize, out var segment))
-                {
-                    return false;
-                }
-
-                message.WriteFragmentTo(segment.AsSpan(), fragId, index, totalCount, bodyOffset, fragLen);
-                fragments.Add(segment);
+                var fragLength = (ushort)Math.Min(message.BodyLength - bodyOffset, maxBodyPerFrag);
+                var totalSize = headerSize + fragHeaderSize + fragLength;
+            
+                var buffer = new PooledBuffer(totalSize);
+                message.WriteFragmentTo(buffer.Memory.Span, fragId, index, totalCount, bodyOffset, fragLength);
+            
+                _sendingQueue.Enqueue(buffer);
             }
-
-            return EnqueueSendingQueue(fragments);
-        }
-
-        private bool EnqueueSendingQueue(List<ArraySegment<byte>> items)
-        {
-            if (!_sendQueue.TryEnqueue(items))
-                return false;
-
-            if (Interlocked.CompareExchange(ref _sendingFlag, 1, 0) == 0)
-                DequeueSend();
-
             return true;
         }
 
@@ -100,14 +83,9 @@ namespace SP.Engine.Client
         public event EventHandler<ErrorEventArgs> Error;
         public event EventHandler Closed;
 
-        private uint AllocateFragId()
+        public void SetMaxFragmentSize(ushort mtu)
         {
-            return unchecked((uint)Interlocked.Increment(ref _fragSeq));
-        }
-
-        public void SetupFrameSize(ushort mtu)
-        {
-            _maxFrameSize = (ushort)(mtu - 20 /* IP header size */ - 8 /* UDP header size*/);
+            _maxFragmentSize = (ushort)(mtu - 20 /* IP header size */ - 8 /* UDP header size*/);
         }
 
         public bool Connect(string ip, int port)
@@ -119,7 +97,7 @@ namespace SP.Engine.Client
                 _socket.Connect(_remoteEndPoint);
                 _socket.SendBufferSize = _sendBufferSize;
 
-                _receiveEventArgs.SetBuffer(_receiveBuffer, 0, _receiveBuffer.Length);
+                _receiveEventArgs.SetBuffer(_receiveBuffer.GetRawBuffer(), 0, _receiveBuffer.Length);
                 _receiveEventArgs.RemoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
                 _receiveEventArgs.Completed += OnReceiveCompleted;
                 _socket.ReceiveFromAsync(_receiveEventArgs);
@@ -164,29 +142,24 @@ namespace SP.Engine.Client
             {
                 OnError(e);
             }
-
-            _itemsToSend.Clear();
-            _itemsToSend.Position = 0;
             
-            _sendQueue.Dispose();
-            _sendBuffer.Dispose();
+            _receiveBuffer.Dispose();
+            while (_sendingQueue.TryDequeue(out var buffer)) buffer.Dispose();
             OnClose();
         }
 
-        private void DequeueSend()
+        private void ExecuteSend()
         {
-            _sendQueue.Exchange(_itemsToSend);
-
-            if (_itemsToSend.Count == 0)
+            if (!_sendingQueue.TryPeek(out var buffer))
             {
-                _sendingFlag = 0;
+                Interlocked.Exchange(ref _inSendingFlag, 0);
                 return;
             }
 
-            Send(_itemsToSend);
+            Send(buffer);
         }
 
-        private void Send(PostList<ArraySegment<byte>> items)
+        private void Send(PooledBuffer buffer)
         {
             if (_sendEventArgs == null)
             {
@@ -196,8 +169,7 @@ namespace SP.Engine.Client
 
             try
             {
-                var segment = items[items.Position];
-                _sendEventArgs.SetBuffer(segment.Array, segment.Offset, segment.Count);
+                _sendEventArgs.SetBuffer(buffer.Memory);
                 _sendEventArgs.RemoteEndPoint = _remoteEndPoint;
 
                 if (!_socket.SendAsync(_sendEventArgs))
@@ -209,51 +181,27 @@ namespace SP.Engine.Client
                     OnError(ex);
             }
         }
-
+        
         private void OnSendCompleted(object sender, SocketAsyncEventArgs e)
         {
-            if (e.SocketError != SocketError.Success || e.BytesTransferred <= 0)
+            if (_sendingQueue.TryDequeue(out var completed))
             {
-                _itemsToSend.Clear();
-                _itemsToSend.Position = 0;
-                Interlocked.Exchange(ref _sendingFlag, 0);
+                completed.Dispose();
+            }
 
+            if (e.SocketError != SocketError.Success)
+            {
+                while (_sendingQueue.TryDequeue(out var buffer)) buffer.Dispose();
+                Interlocked.Exchange(ref _inSendingFlag, 0);
+                
                 var ex = new SocketException((int)e.SocketError);
                 if (!IsIgnoreException(ex))
                     OnError(ex);
-                return;
-            }
-            
-            _sendBuffer.Release(e.BytesTransferred);
-            
-            // UDP는 부분 전송이 없으므로 다음 데이텀 단위로
-            _itemsToSend.Position++;
-            if (_itemsToSend.Position < _itemsToSend.Count)
-            {
-                Send(_itemsToSend);
+
                 return;
             }
 
-            OnSendCompleted();
-        }
-
-        private void OnSendCompleted()
-        {
-            _itemsToSend.Clear();
-            _itemsToSend.Position = 0;
-            _sendQueue.Exchange(_itemsToSend);
-
-            if (_itemsToSend.Count == 0)
-            {
-                Interlocked.Exchange(ref _sendingFlag, 0);
-
-                // 더블 체크
-                _sendQueue.Exchange(_itemsToSend);
-                if (_itemsToSend.Count == 0 || Interlocked.CompareExchange(ref _sendingFlag, 1, 0) != 0)
-                    return;
-            }
-
-            Send(_itemsToSend);
+            ExecuteSend();
         }
 
         private void OnReceiveCompleted(object sender, SocketAsyncEventArgs e)

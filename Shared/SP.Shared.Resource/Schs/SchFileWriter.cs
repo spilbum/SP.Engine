@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,7 +13,7 @@ public static class SchFileWriter
     public static void Write(RefTableSchema schema, string path)
     {
         var buf = new PooledBuffer();
-        var w = new NetWriter(buf);
+        var w = new NetWriter(buf.Memory.Span);
 
         try
         {
@@ -52,33 +53,41 @@ public static class SchFileWriter
         CancellationToken ct = default)
     {
         var buf = new PooledBuffer();
-        var w = new NetWriter(buf);
+
 
         try
         {
-            w.WriteByte((byte)'R');
-            w.WriteByte((byte)'S');
-            w.WriteByte((byte)'C');
-            w.WriteByte((byte)'H');
-        
-            w.WriteString(schema.Name);
-            w.WriteVarUInt((uint)schema.Columns.Count);
-
-            foreach (var column in schema.Columns)
-            {
-                w.WriteString(column.Name);
-                w.WriteByte((byte)column.Type);
-                w.WriteBool(column.IsKey);
-                w.WriteInt32(column.Length ?? 0);
-            }
-        
-            var bytes = w.WrittenSpan.ToArray();
+            var written = SerializeToBuffer(buf.Memory.Span, schema);
+            var memory = buf.Memory[..written];
+            
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            await File.WriteAllBytesAsync(path, bytes, ct);
+            await File.WriteAllBytesAsync(path, memory.ToArray(), ct);
         }
         finally
         {
             buf.Dispose();
         }
+    }
+
+    private static int SerializeToBuffer(Span<byte> destination, RefTableSchema schema)
+    {
+        var w = new NetWriter(destination);
+        w.WriteByte((byte)'R');
+        w.WriteByte((byte)'S');
+        w.WriteByte((byte)'C');
+        w.WriteByte((byte)'H');
+        
+        w.WriteString(schema.Name);
+        w.WriteVarUInt((uint)schema.Columns.Count);
+
+        foreach (var column in schema.Columns)
+        {
+            w.WriteString(column.Name);
+            w.WriteByte((byte)column.Type);
+            w.WriteBool(column.IsKey);
+            w.WriteInt32(column.Length ?? 0);
+        }
+
+        return w.WrittenCount;
     }
 }

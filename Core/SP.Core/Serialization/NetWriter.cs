@@ -6,22 +6,26 @@ using System.Text;
 
 namespace SP.Core.Serialization
 {
-    public class NetWriter : IBufferWriter<byte>
+    public interface IBufferResizer
     {
-        private readonly PooledBuffer _owner;
-        private Memory<byte> _buffer;
+        Span<byte> Resize(int size, int position);
+    }
+    
+    public ref struct NetWriter
+    {
+        private Span<byte> _buffer;
         private int _position;
+        private readonly IBufferResizer _resizer;
 
-        public NetWriter(PooledBuffer owner)
+        public NetWriter(Span<byte> buffer, IBufferResizer resizer = null)
         {
-            _owner = owner ?? throw new ArgumentNullException(nameof(owner));
-            _buffer = owner.Memory;
+            _buffer = buffer;
+            _resizer = resizer;
             _position = 0;
         }
         
         public int WrittenCount => _position;
-        public ReadOnlySpan<byte> WrittenSpan => _buffer.Span[.._position];
-        public ReadOnlyMemory<byte> WrittenMemory => _buffer[_position..];
+        public ReadOnlySpan<byte> WrittenSpan => _buffer[.._position];
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Advance(int count)
@@ -31,40 +35,23 @@ namespace SP.Core.Serialization
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Memory<byte> GetMemory(int sizeHint = 0)
+        public Span<byte> GetSpan(int sizeHint = 0)
         {
             CheckAndGrow(sizeHint);
             return _buffer[_position..];
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Span<byte> GetSpan(int sizeHint = 0)
-        {
-            CheckAndGrow(sizeHint);
-            return _buffer.Span[_position..];
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void CheckAndGrow(int sizeHint)
         {
             var size = sizeHint <= 0 ? 1 : sizeHint;
-            if (_position + size > _buffer.Length)
-            {
-                Grow(size);
-            }
+            if (_position + size <= _buffer.Length) return;
+            if (_resizer == null) throw new InvalidOperationException("Buffer overflow and no resizer provided.");
+                
+            var required = _position + size;
+            _buffer = _resizer.Resize(required, _position);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void Grow(int sizeHint)
-        {
-            var required = _position + sizeHint;
-            var newCap = _buffer.Length > 0 ? _buffer.Length : 256;
-            while (newCap < required) newCap <<= 1;
-
-            _owner.ExpandLinear(newCap, _position);
-            _buffer = _owner.Memory;
-        }
-        
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteByte(byte value)
         {

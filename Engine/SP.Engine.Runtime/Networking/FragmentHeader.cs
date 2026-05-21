@@ -2,24 +2,24 @@ using System;
 
 namespace SP.Engine.Runtime.Networking
 {
-    public readonly struct UdpFragmentHeader
+    public readonly struct FragmentHeader
     {
         public const int ByteSize = 8; // 4 + 1 + 1 + 2 = 8 bytes
 
         public uint FragId { get; }
         public byte Index { get; }
         public byte TotalCount { get; }
-        public ushort FragLength { get; }
+        public ushort Length { get; }
 
-        public UdpFragmentHeader(uint fragId, byte index, byte totalCount, ushort fragLength)
+        public FragmentHeader(uint fragId, byte index, byte totalCount, ushort length)
         {
             FragId = fragId;
             Index = index;
             TotalCount = totalCount;
-            FragLength = fragLength;
+            Length = length;
         }
 
-        public static bool TryRead(ReadOnlySpan<byte> source, out UdpFragmentHeader header, out int byteConsumed)
+        public static bool TryRead(ReadOnlySpan<byte> source, out FragmentHeader header, out int byteConsumed)
         {
             header = default;
             byteConsumed = 0;
@@ -29,8 +29,8 @@ namespace SP.Engine.Runtime.Networking
             var fragId = source.ReadUInt32(0);
             var index = source[4];
             var totalCount = source[5];
-            var fragLength = source.ReadUInt16(6);
-            header = new UdpFragmentHeader(fragId, index, totalCount, fragLength);
+            var length = source.ReadUInt16(6);
+            header = new FragmentHeader(fragId, index, totalCount, length);
             byteConsumed = ByteSize;
             return true;
         }
@@ -41,7 +41,7 @@ namespace SP.Engine.Runtime.Networking
             dst.WriteUInt32(0, FragId);
             dst[4] = Index;
             dst[5] = TotalCount;
-            dst.WriteUInt16(6, FragLength);
+            dst.WriteUInt16(6, Length);
         }
     }
 }

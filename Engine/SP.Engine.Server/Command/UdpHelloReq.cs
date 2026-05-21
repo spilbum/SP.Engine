@@ -23,7 +23,7 @@ internal class UdpHelloReq : CommandBase<Session, C2SEngineProtocolData.UdpHello
             }
 
             var mtu = NegotiateMtu(session.Config.Network, protocol.Mtu);
-            session.SetupFrameSize(mtu);
+            session.SetMaxFragmentSize(mtu);
             
             // 상태 체크 타이머 시작
             session.StartUdpHealthCheck();

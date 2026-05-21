@@ -6,8 +6,7 @@ using SP.Engine.Server.Configuration;
 
 namespace SP.Engine.Server;
 
-internal sealed class UnixUdpNetworkListener(ListenerInfo info, IEngineConfig config) 
-    : UdpNetworkListenerBase(info, config)
+internal sealed class UnixUdpNetworkListener(ListenerInfo info, IEngineConfig config) : UdpNetworkListenerBase(info, config)
 {
     private Socket[] _sockets;
     
@@ -22,8 +21,8 @@ internal sealed class UnixUdpNetworkListener(ListenerInfo info, IEngineConfig co
             for (var i = 0; i < socketCount; i++)
             {
                 var s = CreateSocket();
-                s.SendBufferSize = Config.Network.SendBufferSize;
-                s.ReceiveBufferSize = Config.Network.ReceiveBufferSize;
+                s.SendBufferSize = Config.Network.UdpMaxMtu + 1024;
+                s.ReceiveBufferSize = Config.Network.UdpMaxMtu * 32;
                 s.Bind(EndPoint);
                 _sockets[i] = s;
 

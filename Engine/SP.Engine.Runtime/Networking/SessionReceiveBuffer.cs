@@ -3,6 +3,7 @@ using System.Buffers;
 using System.IO;
 using System.Runtime.CompilerServices;
 using SP.Core;
+using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Runtime.Networking
 {
@@ -70,7 +71,7 @@ namespace SP.Engine.Runtime.Networking
         /// <summary>
         /// 완성된 패킷 프레임을 추출합니다.
         /// </summary>
-        public bool TryExtract(int maxFrameBytes, out TcpHeader header, out IMemoryOwner<byte> bodyOwner, out int bodyLength)
+        public bool TryExtract(IPolicySnapshot policySnapshot, out TcpHeader header, out IMemoryOwner<byte> bodyOwner, out int bodyLength)
         {
             header = default;
             bodyOwner = null;
@@ -93,9 +94,10 @@ namespace SP.Engine.Runtime.Networking
                 
                 if (_available < totalNeed) return false;
 
-                if (bodyLen < 0 || bodyLen > maxFrameBytes)
+                var maxPayloadLength = policySnapshot.Resolve(header.ProtocolId)?.MaxPayloadLength ?? 65536;
+                if (bodyLen < 0 || bodyLen > maxPayloadLength)
                 {
-                    throw new InvalidDataException($"Corrupted packet detected. PID: {tempHeader.ProtocolId}, BodyLen: {bodyLen}, A: {_available}, C: {_capacity}, H: {_head}, T: {_tail}");
+                    throw new InvalidDataException($"Corrupted payload detected. ID: {tempHeader.ProtocolId}, BodyLen: {bodyLen}, Max: {maxPayloadLength}");
                 }
                 
                 header = tempHeader;

@@ -91,12 +91,12 @@ public sealed class Session(long sessionId) : SessionBase(sessionId)
     {
         Peer = peer;
         IsAuthenticated = true;
-        peer.OnSessionAuthCompleted();
+        SetupProtocolPolicy();
     }
 
-    internal void SetupFrameSize(ushort mtu)
+    internal void SetMaxFragmentSize(ushort mtu)
     {
-        UdpSession?.SetupFrameSize(mtu);
+        UdpNetworkSession?.SetMaxFragmentSize(mtu);
     }
 
     internal bool InternalSend(IProtocolData data)
@@ -111,18 +111,20 @@ public sealed class Session(long sessionId) : SessionBase(sessionId)
             case ChannelKind.Reliable:
             {
                 var tcp = new TcpMessage();
+                tcp.Serialize(data);
+                
                 using (tcp)
                 {
-                    tcp.Serialize(data);
                     return Send(channel, tcp);
                 }
             }
             case ChannelKind.Unreliable:
             {
                 var udp = new UdpMessage();
+                udp.Serialize(data);
+                
                 using (udp)
                 {
-                    udp.Serialize(data);
                     return Send(channel, udp);
                 }
             }

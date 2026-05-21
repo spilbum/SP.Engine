@@ -92,17 +92,17 @@ public static class SessionAuthAckExtensions
         ack.PeerId = peer.PeerId;
         
         var network = session.Config.Network;
-        ack.MaxFrameBytes = network.MaxFrameBytes;
-        ack.SendTimeoutMs = network.SendTimeoutMs;
-        ack.MaxRetries = network.MaxRetransmissionCount;
+        ack.MaxPayloadLength = network.MaxPayloadLength;
+        ack.InitialRetransmitTimeoutMs = network.InitialRetransmitTimeoutMs;
+        ack.MaxRetransmitCount = network.MaxRetransmitCount;
         ack.MaxAckDelayMs = network.MaxAckDelayMs;
-        ack.AckStepThreshold = network.AckFrequency;
+        ack.AckFrequency = network.AckFrequency;
         ack.MaxOutOfOrderCount = network.MaxOutOfOrderCount;
         
         ack.UdpOpenPort = engine.GetOpenPort(SocketMode.Udp);
-        ack.UdpAssemblyTimeoutSec = network.UdpAssemblyTimeoutSec;
-        ack.UdpMaxPendingMessageCount = network.UdpMaxPendingMessageCount;
-        ack.UdpCleanupIntervalSec = network.UdpCleanupPeriodSec;
+        ack.FragmentAssemblerClenupTimeoutSec = network.FragmentAssemblerCleanupTimeoutSec;
+        ack.FragmentAssemblerPendingMessageThreshold = network.FragmentAssemblerPendingMessageThreshold;
+        ack.FragmentAssemblerCleanupIntervalSec = network.FragmentAssemblerCleanupPeriodSec;
         
         if (network.UseEncrypt)
         {

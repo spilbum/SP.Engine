@@ -5,8 +5,6 @@ namespace SP.Engine.Server;
 
 public sealed class SocketReceiveContext : IDisposable
 {
-    private bool _disposed;
-    
     public SocketAsyncEventArgs SocketEventArgs { get; }
     public int OriginOffset { get; }
 
@@ -24,11 +22,10 @@ public sealed class SocketReceiveContext : IDisposable
     
     private static void OnReceiveCompleted(object sender, SocketAsyncEventArgs e)
     {
-        if (e.UserToken is not TcpNetworkSession ns) return;
-        if (e.LastOperation == SocketAsyncOperation.Receive)
-        {
-            ns.AsyncRun(() => ns.ProcessReceive(e));
-        }
+        if (e.UserToken is not TcpNetworkSession session) return;
+        if (e.LastOperation != SocketAsyncOperation.Receive) return;
+        var state = (session, e);
+        session.AsyncRun(state, static s => s.session.ProcessReceive(s.e));
     }
 
     public void Reset()
@@ -38,9 +35,7 @@ public sealed class SocketReceiveContext : IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
         SocketEventArgs.Completed -= OnReceiveCompleted;
         SocketEventArgs.Dispose();
-        _disposed = true;
     }
 }

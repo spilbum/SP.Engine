@@ -69,7 +69,7 @@ public sealed record SessionConfig
     /// <summary>
     /// 느린 처리를 경고하거나 기록할 임계치
     /// </summary>
-    public int PeerJobSlowThresholdMs { get; init; } = 100;
+    public int PeerJobSlowThresholdMs { get; init; } = 200;
     
     /// <summary>
     /// UDP 상태 체크 주기

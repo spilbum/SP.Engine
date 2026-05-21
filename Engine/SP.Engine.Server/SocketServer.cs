@@ -28,26 +28,11 @@ internal class ReceiveContextFactory(int bufferSize) : IPoolObjectFactory<Socket
     }
 }
 
-internal class SendingQueueFactory(int queueSize) : IPoolObjectFactory<SegmentQueue>
-{
-    public SegmentQueue[] Create(int size)
-    {
-        var source = new ArraySegment<byte>[size * queueSize];
-        var items = new SegmentQueue[size];
-
-        for (var i = 0; i < size; i++)
-            items[i] = new SegmentQueue(source, i * queueSize, queueSize);
-
-        return items;
-    }
-}
-
 internal sealed class SocketServer(EngineCore engine, ListenerInfo[] listenerInfos) : IDisposable
 {
     private bool _disposed;
     private byte[] _keepAliveOptionValues;
     private readonly object _udpSessionLock = new();
-    private ExpandablePool<SegmentQueue> _sendingQueuePool;
     private ExpandablePool<SocketReceiveContext> _receiveContextPool;
     
     private List<INetworkListener> Listeners { get; } = new(listenerInfos.Length);
@@ -66,13 +51,6 @@ internal sealed class SocketServer(EngineCore engine, ListenerInfo[] listenerInf
         if (IsRunning) return false;
 
         var config = engine.Config;
-        
-        _sendingQueuePool = new ExpandablePool<SegmentQueue>();
-        _sendingQueuePool.Initialize(
-            Math.Max(config.Session.MaxConnections, 512),
-            Math.Max(config.Session.MaxConnections * 4, 512),
-            new SendingQueueFactory(config.Network.SendingQueueSize));
-
         _receiveContextPool = new ExpandablePool<SocketReceiveContext>();
         _receiveContextPool.Initialize(
             Math.Max(config.Session.MaxConnections, 512),
@@ -170,20 +148,20 @@ internal sealed class SocketServer(EngineCore engine, ListenerInfo[] listenerInf
         var session = engine.GetSession(header.SessionId);
         if (session == null || session.IsClosed) return;
 
-        if (session.UdpSession == null)
+        if (session.UdpNetworkSession == null)
         {
             lock (_udpSessionLock)
             {
-                if (session.UdpSession == null)
+                if (session.UdpNetworkSession == null)
                 {
                     var ns = new UdpNetworkSession(session, socket, remoteEndPoint);
-                    session.UdpSession = ns;
+                    session.UdpNetworkSession = ns;
                 }
             }
         }
 
-        if (session.UdpSession == null) return;
-        session.UdpSession.UpdateRemoteEndPoint(remoteEndPoint);
+        if (session.UdpNetworkSession == null) return;
+        session.UdpNetworkSession.UpdateRemoteEndPoint(remoteEndPoint);
         
         var bodyBuffer = new PooledBuffer(header.BodyLength);
         buffer.Slice(headerConsumed, header.BodyLength).CopyTo(bodyBuffer.Memory.Span);
@@ -212,7 +190,7 @@ internal sealed class SocketServer(EngineCore engine, ListenerInfo[] listenerInf
             return;
         }
 
-        var ns = new TcpNetworkSession(client, context, _sendingQueuePool);
+        var ns = new TcpNetworkSession(client, context);
         ns.Closed += OnTcpSessionClosed;
 
         var session = CreateSession(client, ns);

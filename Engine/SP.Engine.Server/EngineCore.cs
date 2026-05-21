@@ -58,7 +58,7 @@ public abstract class EngineCore : ILogContext, IDisposable
     private ThreadFiber _engineFiber;
     private readonly Scheduler _globalScheduler = new();
     private SessionManager _sessionManager;
-    private IDisposable _udpCleanupTimer;
+    private IDisposable _fragmentAssemblerCleanupTimer;
     private readonly Dictionary<ushort, ProtocolOverrides> _protocolOverrides = new();
     
     public string Name { get; private set; }
@@ -67,7 +67,7 @@ public abstract class EngineCore : ILogContext, IDisposable
     {
         get
         {
-            if (!Config.Session.EnableSessionSnapshot) return _sessionSnapshot;
+            if (!Config.Session.EnableSessionSnapshot) return _sessionManager.GetActiveSnapshot();
             var snap = Volatile.Read(ref _sessionSnapshot);
             return snap ?? [];
         }
@@ -139,7 +139,7 @@ public abstract class EngineCore : ILogContext, IDisposable
             StartClearIdleSessionTimer();
         
         if (Config.Network.EnableUdp)
-            StartUdpCleanupTimer();
+            StartFragmentAssemblerCleanupTimer();
 
         StartHandshakePendingTimer();
         
@@ -160,7 +160,7 @@ public abstract class EngineCore : ILogContext, IDisposable
         StopSessionSnapshotTimer();
         StopClearIdleSessionTimer();
         StopHandshakePendingTimer();
-        StopUdpCleanupTimer();
+        StopFragmentAssemblerCleanupTimer();
         LogManager.Dispose();
 
         var snapshot = _sessionManager.GetActiveSnapshot();
@@ -260,7 +260,7 @@ public abstract class EngineCore : ILogContext, IDisposable
             {
                 var attr = type.GetCustomAttribute<ProtocolAttribute>();
                 if (attr == null) continue;
-                _protocolOverrides[attr.Id] = new ProtocolOverrides(attr.Encrypt, attr.Compress);
+                _protocolOverrides[attr.Id] = new ProtocolOverrides(attr.Encrypt, attr.Compress, attr.MaxPayloadLength);
             }
         }
 
@@ -274,19 +274,19 @@ public abstract class EngineCore : ILogContext, IDisposable
     {
     }
 
-    private void StartUdpCleanupTimer()
+    private void StartFragmentAssemblerCleanupTimer()
     {
-        var period = TimeSpan.FromSeconds(Config.Network.UdpCleanupPeriodSec);
-        _udpCleanupTimer = _globalScheduler.Schedule(_engineFiber, CleanupUdpFragment, TimeSpan.Zero, period);
+        var period = TimeSpan.FromSeconds(Config.Network.FragmentAssemblerCleanupPeriodSec);
+        _fragmentAssemblerCleanupTimer = _globalScheduler.Schedule(_engineFiber, CleanupAssembler, TimeSpan.Zero, period);
     }
 
-    private void StopUdpCleanupTimer()
+    private void StopFragmentAssemblerCleanupTimer()
     {
-        _udpCleanupTimer?.Dispose();
-        _udpCleanupTimer = null;
+        _fragmentAssemblerCleanupTimer?.Dispose();
+        _fragmentAssemblerCleanupTimer = null;
     }
 
-    private void CleanupUdpFragment()
+    private void CleanupAssembler()
     {
         var sessions = SessionsSource;
         Parallel.ForEach(sessions, s => s.CleanupFragmentAssembler());

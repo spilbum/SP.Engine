@@ -13,8 +13,8 @@ namespace SP.Engine.Runtime.Security
 
         private AesGcm _aesGcm;
         private bool _disposed;
-        
-        private readonly byte[] _salt = new byte[SaltSize];
+
+        private readonly uint _salt;
         private long _counter;
 
         public AesGcmEncryptor(byte[] key)
@@ -22,7 +22,10 @@ namespace SP.Engine.Runtime.Security
             if (key == null) throw new ArgumentNullException(nameof(key));
             if (key.Length != 32) throw new ArgumentException("AES-256 requires a 32-byte key.");
             _aesGcm = new AesGcm(key);
-            RandomNumberGenerator.Fill(_salt);
+            
+            Span<byte> saltSpan = stackalloc byte[SaltSize];
+            RandomNumberGenerator.Fill(saltSpan);
+            _salt = BitConverter.ToUInt32(saltSpan);
         }
 
         public int GetCiphertextLength(int plainLength)
@@ -37,10 +40,10 @@ namespace SP.Engine.Runtime.Security
         
             // nonce 구성: salt(4) + counter(8)
             var nonce = destination[..NonceSize];
-            var counter = Interlocked.Increment(ref _counter);
-                
-            _salt.CopyTo(nonce[..SaltSize]);
-            nonce.WriteInt64(SaltSize, counter);
+            var counter = ++_counter;
+
+            BitConverter.TryWriteBytes(nonce[..SaltSize], _salt);
+            BitConverter.TryWriteBytes(nonce.Slice(SaltSize, CounterSize), counter);
             
             // 암호화 수행
             _aesGcm.Encrypt(

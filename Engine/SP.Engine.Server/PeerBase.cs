@@ -56,9 +56,9 @@ public abstract class PeerBase : IPeer, IDisposable
     private DiffieHellman _diffieHellman;
     private Lz4Compressor _compressor;
     private AesGcmEncryptor _encryptor;
-    private IPolicySnapshot _policySnapshot;
+
     private Session _session;
-    private ReliableMessageProcessor _messageProcessor = new();
+    private readonly ReliableMessageProcessor _messageProcessor = new();
     private int _stateCode = PeerStateConst.NotAuthenticated;
     private uint _lastSentAck;
     private DateTime _lastAckTime;
@@ -80,17 +80,14 @@ public abstract class PeerBase : IPeer, IDisposable
         Logger = session.Logger;
         _session = session;
         _session.Peer = this;
-
-        var globals = new PolicyGlobals(false, false, 0);
-        _policySnapshot = session.Engine.CreatePolicySnapshot(globals);
         
         var config = session.Config;
-        _compressor = new Lz4Compressor(config.Network.MaxFrameBytes);
-        _messageProcessor.SetSendTimeoutMs(config.Network.SendTimeoutMs);
-        _messageProcessor.SetMaxRetransmissionCount(config.Network.MaxRetransmissionCount);
+        _compressor = new Lz4Compressor(config.Network.MaxPayloadLength);
+        _messageProcessor.SetInitialRetransmitTimeoutMs(config.Network.InitialRetransmitTimeoutMs);
+        _messageProcessor.SetMaxRetransmitCount(config.Network.MaxRetransmitCount);
         _messageProcessor.SetMaxAckDelayMs(config.Network.MaxAckDelayMs);
         _messageProcessor.SetAckFrequency(config.Network.AckFrequency);
-        _messageProcessor.SetMaxOutOfOrder(config.Network.MaxOutOfOrderCount);
+        _messageProcessor.SetMaxOutOfOrderCount(config.Network.MaxOutOfOrderCount);
     }
 
     protected PeerBase(PeerBase other)
@@ -112,12 +109,9 @@ public abstract class PeerBase : IPeer, IDisposable
         _compressor = other._compressor;
         other._compressor = null;
         
-        _policySnapshot = other._policySnapshot;
         _pendingJobCount = Interlocked.Exchange(ref other._pendingJobCount, 0);
         
         _messageProcessor = other._messageProcessor;
-        other._messageProcessor = null;
-        
         _session = other._session;
         _session.Peer = this;
     }
@@ -203,7 +197,7 @@ public abstract class PeerBase : IPeer, IDisposable
     {
         if (IsClosed) return false;
         
-        var policy = _policySnapshot.Resolve(data.Id);
+        var policy = _session.PolicySnapshot.Resolve(data.Id);
         var encryptor = policy.UseEncrypt ? Encryptor : null;
         var compressor = policy.UseCompress ? Compressor : null;
         var originalChannel = data.Channel;
@@ -216,10 +210,10 @@ public abstract class PeerBase : IPeer, IDisposable
             case ChannelKind.Reliable:
             {
                 var tcp = new TcpMessage();
+                tcp.Serialize(data, policy, encryptor, compressor);   
+                
                 using (tcp)
                 {
-                    tcp.Serialize(data, policy, encryptor, compressor);
-
                     if (originalChannel == ChannelKind.Unreliable)
                     {
                         return _session.Send(channel, tcp);   
@@ -227,13 +221,13 @@ public abstract class PeerBase : IPeer, IDisposable
 
                     if (IsConnected)
                     {
-                        _messageProcessor?.PrepareReliableSend(tcp);  
+                        _messageProcessor.PrepareReliableSend(tcp);  
                         if (!_session.Send(channel, tcp)) return false; 
                         Interlocked.Exchange(ref _lastSentAck, tcp.AckNumber);
                     }
                     else
                     {
-                        _messageProcessor?.EnqueuePendingMessage(tcp);
+                        _messageProcessor.EnqueuePendingMessage(tcp);
                     }
                 }
                 
@@ -244,9 +238,10 @@ public abstract class PeerBase : IPeer, IDisposable
                 if (!IsConnected) return false;
                 
                 var udp = new UdpMessage();
+                udp.Serialize(data, policy, encryptor, compressor);  
+                
                 using (udp)
                 {
-                    udp.Serialize(data, policy, encryptor, compressor);   
                     return _session.Send(channel, udp);   
                 }
             }
@@ -271,7 +266,7 @@ public abstract class PeerBase : IPeer, IDisposable
                 PeerIdGenerator.Free(PeerId);
             
             _diffieHellman?.Dispose();
-            _messageProcessor?.Dispose();
+            _messageProcessor.Dispose();
         }
 
         _disposed = true;
@@ -286,8 +281,6 @@ public abstract class PeerBase : IPeer, IDisposable
 
     private void ProcessRetransmission()
     {
-        if (_messageProcessor == null) return;
-
         try
         {
             var (retries, failed) = _messageProcessor.ProcessRetransmissions();
@@ -321,8 +314,7 @@ public abstract class PeerBase : IPeer, IDisposable
 
     private void MaintainAckStatus()
     {
-        if (_messageProcessor == null) return;
-        var ackNumber = _messageProcessor.LastReceivedSeq;
+        var ackNumber = _messageProcessor.NextExpectedSeq;
         if (ackNumber <= _lastSentAck) return;
         
         var now = DateTime.UtcNow;
@@ -346,19 +338,19 @@ public abstract class PeerBase : IPeer, IDisposable
 
     internal void RecordPingData(double rttMs, double avgRttMs, double jitterMs)
     {
-        _messageProcessor?.AddRtoSample(rttMs);
+        _messageProcessor.AddRtoSample(rttMs);
         AvgRTTMs = avgRttMs;
         LatencyJitterMs = jitterMs;
     }
 
     internal void HandleRemoteAck(uint remoteAckNumber)
     {
-        _messageProcessor?.AcknowledgeInFlight(remoteAckNumber);
+        _messageProcessor.AcknowledgeInFlight(remoteAckNumber);
     }
 
     internal List<TcpMessage> IngestReceivedMessage(TcpMessage message)
     {
-        return _messageProcessor?.IngestReceivedMessage(message);
+        return _messageProcessor.IngestReceivedMessage(message);
     }
 
     internal void SetPeerGroup(PeerGroup group)
@@ -378,31 +370,19 @@ public abstract class PeerBase : IPeer, IDisposable
         OnJoinServer();
     }
 
-    internal void OnSessionAuthCompleted()
-    {
-        // 정책 적용
-        var n = _session.Config.Network;
-        var g = new PolicyGlobals(n.UseEncrypt, n.UseCompress, n.CompressionThreshold);
-        var snapshot = _session.Engine.CreatePolicySnapshot(g);
-        Interlocked.Exchange(ref _policySnapshot, snapshot);
-    }
-
     internal void Online(Session session)
     {
         Interlocked.Exchange(ref _stateCode, PeerStateConst.Online);
         _session = session;
 
-        if (_messageProcessor != null)
-        {        
-            var pendingMessages = _messageProcessor.DequeuePendingMessages();
-            foreach (var message in pendingMessages)
+        var messages = _messageProcessor.DequeuePendingMessages();
+        foreach (var message in messages)
+        {
+            using (message)
             {
-                using (message)
-                {
-                    _messageProcessor.PrepareReliableSend(message);
-                    if (!session.Send(ChannelKind.Reliable, message)) continue;
-                    Interlocked.Exchange(ref _lastSentAck, message.AckNumber);
-                }
+                _messageProcessor.PrepareReliableSend(message);
+                if (!session.Send(ChannelKind.Reliable, message)) continue;
+                Interlocked.Exchange(ref _lastSentAck, message.AckNumber);
             }
         }
         
@@ -420,7 +400,7 @@ public abstract class PeerBase : IPeer, IDisposable
         Interlocked.Exchange(ref _stateCode, PeerStateConst.Closed);
         PeerIdGenerator.Free(PeerId);
         PeerId = 0;
-        _messageProcessor?.Dispose();
+        _messageProcessor.Dispose();
         _diffieHellman?.Dispose();
         _session.Peer = null;
         OnLeaveServer(reason);

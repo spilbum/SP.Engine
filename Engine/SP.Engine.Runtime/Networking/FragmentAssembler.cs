@@ -77,19 +77,19 @@ namespace SP.Engine.Runtime.Networking
         }
     }
     
-    public sealed class UdpFragmentAssembler : IDisposable
+    public sealed class FragmentAssembler : IDisposable
     {
         private readonly ConcurrentDictionary<uint, FragmentState> _assembles =
             new ConcurrentDictionary<uint, FragmentState>();
 
         private readonly int _cleanupTimeoutSec;
-        private readonly int _maxPendingMessageCount;
+        private readonly int _pendingMessageThreshold;
         private bool _disposed;
         
-        public UdpFragmentAssembler(int cleanupTimeoutSec, int maxPendingMessageCount)
+        public FragmentAssembler(int cleanupTimeoutSec, int pendingMessageThreshold)
         {
             _cleanupTimeoutSec = cleanupTimeoutSec;
-            _maxPendingMessageCount = maxPendingMessageCount;
+            _pendingMessageThreshold = pendingMessageThreshold;
         }
         
         public void Cleanup(DateTime now)
@@ -97,7 +97,6 @@ namespace SP.Engine.Runtime.Networking
             if (_assembles.IsEmpty) return;
 
             var timeout = TimeSpan.FromSeconds(_cleanupTimeoutSec);
-            
             foreach (var (key, state) in _assembles)
             {
                 if (now - state.CreateAtUtc < timeout) continue;
@@ -111,11 +110,11 @@ namespace SP.Engine.Runtime.Networking
             message = null;
             if (_disposed) return false;
 
-            if (!UdpFragmentHeader.TryRead(bodyData, out var fragHeader, out var fragHeaderConsumed)) return false;
+            if (!FragmentHeader.TryRead(bodyData, out var fragHeader, out var fragHeaderConsumed)) return false;
             
             var fragData = bodyData[fragHeaderConsumed..];
                 
-            if (!_assembles.ContainsKey(fragHeader.FragId) && _assembles.Count >= _maxPendingMessageCount) 
+            if (!_assembles.ContainsKey(fragHeader.FragId) && _assembles.Count >= _pendingMessageThreshold) 
                 return false;
                 
             if (!TryAssembleInternal(fragHeader, fragData, out var bodyOwner, out var bodyLength)) 
@@ -126,7 +125,7 @@ namespace SP.Engine.Runtime.Networking
         }
         
         private bool TryAssembleInternal(
-            UdpFragmentHeader fragHeader,
+            FragmentHeader fragHeader,
             ReadOnlySpan<byte> fragData, 
             out IMemoryOwner<byte> bodyOwner, 
             out int bodyLength)

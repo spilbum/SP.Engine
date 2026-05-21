@@ -72,6 +72,8 @@ namespace SP.Core
             BufferTracker.Register(this);
 #endif
         }
+        
+        public byte[] GetRawBuffer() => _buffer;
 
         public void ExpandLinear(int newCapacity, int writtenCount)
         {

@@ -46,7 +46,7 @@ namespace SP.Engine.Runtime.Networking
             uint fragId, byte index, byte totalCount, int bodyOffset, ushort fragLen)
         {
             const int headerSize = UdpHeader.ByteSize;
-            const int fragHeaderSize = UdpFragmentHeader.ByteSize;
+            const int fragHeaderSize = FragmentHeader.ByteSize;
             
             var normalizedHeader = new UdpHeaderBuilder()
                 .From(Header)
@@ -56,7 +56,7 @@ namespace SP.Engine.Runtime.Networking
             
             normalizedHeader.WriteTo(destination[..headerSize]);
 
-            var fragHeader = new UdpFragmentHeader(fragId, index, totalCount, fragLen);
+            var fragHeader = new FragmentHeader(fragId, index, totalCount, fragLen);
             fragHeader.WriteTo(destination.Slice(headerSize, fragHeaderSize));
             
             BodySpan.Slice(bodyOffset, fragLen).CopyTo(destination.Slice(headerSize + fragHeaderSize, fragLen));

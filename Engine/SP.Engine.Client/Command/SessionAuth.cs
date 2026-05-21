@@ -18,25 +18,25 @@ namespace SP.Engine.Client.Command
                 return;
             }
 
-            if (protocol.SendTimeoutMs > 0) context.MessageProcessor.SetSendTimeoutMs(protocol.SendTimeoutMs);
-            if (protocol.MaxRetries > 0) context.MessageProcessor.SetMaxRetransmissionCount(protocol.MaxRetries);
+            if (protocol.InitialRetransmitTimeoutMs > 0) context.MessageProcessor.SetInitialRetransmitTimeoutMs(protocol.InitialRetransmitTimeoutMs);
+            if (protocol.MaxRetransmitCount > 0) context.MessageProcessor.SetMaxRetransmitCount(protocol.MaxRetransmitCount);
             if (protocol.MaxAckDelayMs > 0) context.MessageProcessor.SetMaxAckDelayMs(protocol.MaxAckDelayMs);
-            if (protocol.AckStepThreshold > 0) context.MessageProcessor.SetAckFrequency(protocol.AckStepThreshold);
-            if (protocol.MaxOutOfOrderCount > 0) context.MessageProcessor.SetMaxOutOfOrder(protocol.MaxOutOfOrderCount);
-            if (protocol.MaxFrameBytes > 0) context.SetMaxFrameSize(protocol.MaxFrameBytes);
+            if (protocol.AckFrequency > 0) context.MessageProcessor.SetAckFrequency(protocol.AckFrequency);
+            if (protocol.MaxOutOfOrderCount > 0) context.MessageProcessor.SetMaxOutOfOrderCount(protocol.MaxOutOfOrderCount);
             
             if (protocol.UseEncrypt) context.SetupEncryptor(protocol.ServerPublicKey);
-            if (protocol.UseCompress) context.SetupCompressor(protocol.MaxFrameBytes);
-            
-            context.SetupPolicy(protocol.UseEncrypt, protocol.UseCompress, protocol.CompressionThreshold);
+            if (protocol.UseCompress) context.SetupCompressor(protocol.MaxPayloadLength);
+            context.SetupPolicy(protocol.UseEncrypt, protocol.UseCompress, protocol.CompressionThreshold, protocol.MaxPayloadLength);
 
             if (protocol.UdpOpenPort > 0)
             {
-                context.ConnectUdpSocket(
-                    protocol.UdpOpenPort,
-                    protocol.UdpAssemblyTimeoutSec, 
-                    protocol.UdpMaxPendingMessageCount,
-                    protocol.UdpCleanupIntervalSec);
+                if (context.ConnectUdpSocket(protocol.UdpOpenPort))
+                {
+                    context.SetupFragmentAssembler(
+                        protocol.FragmentAssemblerCleanupIntervalSec,
+                        protocol.FragmentAssemblerClenupTimeoutSec,
+                        protocol.FragmentAssemblerPendingMessageThreshold);
+                }
             }
             
             context.SessionAuthCompleted(protocol.SessionId, protocol.PeerId);

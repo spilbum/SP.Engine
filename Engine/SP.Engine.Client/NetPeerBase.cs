@@ -87,26 +87,25 @@ namespace SP.Engine.Client
 
         private readonly Dictionary<ushort, ProtocolOverrides> _protocolOverrides = new Dictionary<ushort, ProtocolOverrides>();
         private IPolicySnapshot _policySnapshot;
-        private TcpNetworkSession _tcpSession;
+        private TcpNetworkSession _tcpNetworkSession;
         private long _sessionId;
         private volatile uint _peerId;
         private int _stateCode;
         private TickTimer _timer;
-        private UdpNetworkSession _udpSession;
+        private UdpNetworkSession _udpNetworkSession;
         
         private Timer _ackTimer;
         private uint _lastSentAck;
         private long _lastAckTimerResetTicks;
         private readonly object _ackLock = new object();
 
+        private FragmentAssembler _fragmentAssembler;
         private TickTimer _udpHandshakeTimer;
-        private TickTimer _udpCleanupTimer;
+        private TickTimer _fragmentAssemblerCleanupTimer;
         private int _udpHandshakeCount;
         
         private readonly EwmaFilter _serverTimeOffsetFilter = new EwmaFilter(0.1);
         private long _baseServerTimeOffsetMs;
-
-        private int _maxFrameSize = 1024;
         
         public ReliableMessageProcessor MessageProcessor { get; } = new ReliableMessageProcessor();
         public uint PeerId => _peerId;
@@ -145,7 +144,7 @@ namespace SP.Engine.Client
         
         public void Connect(string ip, int port)
         {
-            if (null != _tcpSession)
+            if (null != _tcpNetworkSession)
                 throw new InvalidOperationException("Already opened");
 
             if (string.IsNullOrEmpty(ip) || 0 >= port)
@@ -170,7 +169,7 @@ namespace SP.Engine.Client
             if (TrySetState(NetPeerState.Connecting, NetPeerState.Closing)
                 || TrySetState(NetPeerState.Reconnecting, NetPeerState.Closing))
             {
-                var session = _tcpSession;
+                var session = _tcpNetworkSession;
                 if (session != null && session.IsConnected)
                 {
                     // 세션이 연결되어 있으면 종료
@@ -205,7 +204,7 @@ namespace SP.Engine.Client
         {
             _timer?.Tick();
             _udpHandshakeTimer?.Tick();
-            _udpCleanupTimer?.Tick();
+            _fragmentAssemblerCleanupTimer?.Tick();
 
             DequeueMessageReceived();
             DequeuePendingMessage();
@@ -229,10 +228,10 @@ namespace SP.Engine.Client
                     case ChannelKind.Reliable:
                     {
                         var tcp = new TcpMessage();
+                        tcp.Serialize(data, policy, encryptor, compressor);
+                        
                         using (tcp)
                         {
-                            tcp.Serialize(data, policy, encryptor, compressor);
-
                             if (originalChannel == ChannelKind.Unreliable)
                                 return TrySend(channel, tcp);
 
@@ -260,10 +259,11 @@ namespace SP.Engine.Client
                         if (!IsConnected) return false;
                         
                         var udp = new UdpMessage();
+                        udp.SetSessionId(_sessionId);
+                        udp.Serialize(data, policy, encryptor, compressor);
+                        
                         using (udp)
                         {
-                            udp.SetSessionId(_sessionId);
-                            udp.Serialize(data, policy, encryptor, compressor);
                             return TrySend(channel, udp);   
                         }
                     }
@@ -307,7 +307,7 @@ namespace SP.Engine.Client
 
         public void Test_Reconnect()
         {
-            _tcpSession?.Close();
+            _tcpNetworkSession?.Close();
         }
 
         internal bool InternalInitialize(Assembly[] assemblies, EngineConfig config, ILogger logger)
@@ -332,7 +332,7 @@ namespace SP.Engine.Client
             if (!SetupPolicy(assemblies))
                 return false;
 
-            var defaultPolicy = new PolicyGlobals(false, false, 0);
+            var defaultPolicy = new PolicyGlobals(false, false, 0, 65536);
             _policySnapshot = CreatePolicySnapshot(defaultPolicy);
             return true;
         }
@@ -406,7 +406,7 @@ namespace SP.Engine.Client
                 {
                     var attr = type.GetCustomAttribute<ProtocolAttribute>();
                     if (attr == null) return false;
-                    _protocolOverrides[attr.Id] = new ProtocolOverrides(attr.Encrypt, attr.Compress);
+                    _protocolOverrides[attr.Id] = new ProtocolOverrides(attr.Encrypt, attr.Compress, attr.MaxPayloadLength);
                 }
             }
 
@@ -518,7 +518,7 @@ namespace SP.Engine.Client
                         message.Dispose();
                     MessageProcessor.RestartInFlightMessages();
                 
-                    _tcpSession?.Close();
+                    _tcpNetworkSession?.Close();
                     return;
                 }
 
@@ -552,19 +552,21 @@ namespace SP.Engine.Client
                 case ChannelKind.Reliable:
                 {
                     var tcp = new TcpMessage();
+                    tcp.Serialize(data);
+                    
                     using (tcp)
                     {
-                        tcp.Serialize(data);
                         return TrySend(channel, tcp);
                     }
                 }
                 case ChannelKind.Unreliable:
                 {
                     var udp = new UdpMessage();
+                    udp.SetSessionId(_sessionId);
+                    udp.Serialize(data);
+                    
                     using (udp)
                     {
-                        udp.SetSessionId(_sessionId);
-                        udp.Serialize(data);
                         return TrySend(channel, udp);  
                     }
                 }
@@ -574,16 +576,7 @@ namespace SP.Engine.Client
         }
 
         private bool TrySend(ChannelKind channel, IMessage message)
-        {
-            switch (channel)
-            {
-                case ChannelKind.Reliable when !(message is TcpMessage):
-                case ChannelKind.Unreliable when !(message is UdpMessage):
-                    return false;
-                default:
-                    return _channelRouter.TrySend(channel, message);
-            }
-        }
+            => _channelRouter.TrySend(channel, message);
 
         private bool TrySetState(NetPeerState compareState, NetPeerState nextState)
         {
@@ -634,7 +627,7 @@ namespace SP.Engine.Client
 
         private TcpNetworkSession CreateNetworkSession()
         {
-            var session = _tcpSession;
+            var session = _tcpNetworkSession;
             session?.Close();
             
             _receiveBuffer?.Dispose();
@@ -659,8 +652,8 @@ namespace SP.Engine.Client
 
             try
             {
-                _tcpSession = CreateNetworkSession();
-                _tcpSession.Connect(RemoteEndPoint);
+                _tcpNetworkSession = CreateNetworkSession();
+                _tcpNetworkSession.Connect(RemoteEndPoint);
             }
             catch (Exception e)
             {
@@ -689,8 +682,8 @@ namespace SP.Engine.Client
             try
             {
                 Logger.Debug("Reconnecting... {0}", ReconnectTryCount);
-                _tcpSession = CreateNetworkSession();
-                _tcpSession.Connect(RemoteEndPoint);
+                _tcpNetworkSession = CreateNetworkSession();
+                _tcpNetworkSession.Connect(RemoteEndPoint);
             }
             catch (Exception e)
             {
@@ -732,7 +725,7 @@ namespace SP.Engine.Client
         private void OnAckTimerTick(object state)
         {
             if (!IsConnected || _disposed) return;
-            var ackNum = MessageProcessor.LastReceivedSeq;
+            var ackNum = MessageProcessor.NextExpectedSeq;
 
             if (ackNum <= _lastSentAck) return;
             
@@ -755,8 +748,8 @@ namespace SP.Engine.Client
 
         internal void CloseWithoutHandshake()
         {
-            _tcpSession?.Close();
-            _udpSession?.Close();
+            _tcpNetworkSession?.Close();
+            _udpNetworkSession?.Close();
         }
         
         private void OnSessionDataReceived(object sender, DataEventArgs e)
@@ -769,7 +762,7 @@ namespace SP.Engine.Client
                 const long maxTicks = TimeSpan.TicksPerMillisecond * 5;
                 var sw = Stopwatch.StartNew();
                 var processed = 0;
-                while (_receiveBuffer.TryExtract(_maxFrameSize, out var header, out var bodyOwner, out var bodyLength))
+                while (_receiveBuffer.TryExtract(_policySnapshot, out var header, out var bodyOwner, out var bodyLength))
                 {
                     ProcessAckStatus(header.AckNumber);
                     var message = new TcpMessage(header, bodyOwner, bodyLength);
@@ -789,7 +782,7 @@ namespace SP.Engine.Client
         {
             MessageProcessor.AcknowledgeInFlight(remoteAckNumber);
                     
-            var ackNumber = MessageProcessor.LastReceivedSeq;
+            var ackNumber = MessageProcessor.NextExpectedSeq;
             if (ackNumber - _lastSentAck < MessageProcessor.AckFrequency) return;
             
             lock (_ackLock)
@@ -814,7 +807,7 @@ namespace SP.Engine.Client
 
         private void OnSessionOpened(object sender, EventArgs e)
         {
-            _channelRouter.Bind(new ReliableChannel(_tcpSession));
+            _channelRouter.Bind(new ReliableChannel(_tcpNetworkSession));
             SetState(NetPeerState.Handshake);
             SendAuthHandshake();
         }
@@ -850,12 +843,12 @@ namespace SP.Engine.Client
                     while (_messageReceivedQueue.TryDequeue(out var message)) message.Dispose();
                     _messageReceivedQueue.Clear();
                     
-                    _udpSession?.Close();
-                    _udpSession = null;
+                    _udpNetworkSession?.Close();
+                    _udpNetworkSession = null;
 
                     _peerId = 0;
                     _sessionId = 0;
-                    _tcpSession = null;
+                    _tcpNetworkSession = null;
 
                     SetState(NetPeerState.Closed);
                     Disconnected?.Invoke(this, EventArgs.Empty);
@@ -872,11 +865,9 @@ namespace SP.Engine.Client
             }
         }
 
-      
-
         private void OnUdpSocketClosed(object sender, EventArgs e)
         {
-            StopUdpCleanupTimer();
+            StopFragmentAssemblerCleanupTimer();
             _channelRouter.Unbind(ChannelKind.Unreliable);
         }
 
@@ -888,7 +879,7 @@ namespace SP.Engine.Client
 
         private void OnUdpSocketDataReceived(object sender, DataEventArgs e)
         {
-            if (_udpSession == null) return;
+            if (_udpNetworkSession == null) return;
 
             var span = e.Data.AsSpan(e.Offset, e.Length);
             if (!UdpHeader.TryRead(span, out var header, out var headerConsumed)) return;
@@ -898,7 +889,7 @@ namespace SP.Engine.Client
                 var bodyData = span.Slice(headerConsumed, header.BodyLength);
                 if (header.IsFragmented)
                 {
-                    if (_udpSession.Assembler.TryPush(header, bodyData, out var message))
+                    if (_fragmentAssembler.TryPush(header, bodyData, out var message))
                     {
                         MessageReceived(message);
                     }
@@ -964,41 +955,46 @@ namespace SP.Engine.Client
             _encryptor = new AesGcmEncryptor(sharedKey);
         }
 
-        internal void SetupCompressor(int maxFrameBytes)
+        internal void SetupCompressor(int maxPayloadLength)
         {
-            _compressor = new Lz4Compressor(maxFrameBytes);
+            _compressor = new Lz4Compressor(maxPayloadLength);
         }
         
-        internal void SetupPolicy(bool useEncrypt, bool useCompress, int compressionThreshold)
+        internal void SetupPolicy(bool useEncrypt, bool useCompress, int compressionThreshold, int maxPayloadLength)
         {
-            var g = new PolicyGlobals(useEncrypt, useCompress, compressionThreshold);
+            var g = new PolicyGlobals(useEncrypt, useCompress, compressionThreshold, maxPayloadLength);
             var snapshot = CreatePolicySnapshot(g);
             Interlocked.Exchange(ref _policySnapshot, snapshot);
         }
         
-        internal void ConnectUdpSocket(int openPort, int assemblyTimeoutSec, int maxPendingMessageCount, int cleanupIntervalSec)
+        internal bool ConnectUdpSocket(int openPort)
         {
-            if (openPort <= 0) return;
+            if (openPort <= 0) return false;
             
-            var session = new UdpNetworkSession(Config);
-            session.Error += OnUdpSocketError;
-            session.DataReceived += OnUdpSocketDataReceived;
-            session.Closed += OnUdpSocketClosed;
+            var ns = new UdpNetworkSession(Config);
+            ns.Error += OnUdpSocketError;
+            ns.DataReceived += OnUdpSocketDataReceived;
+            ns.Closed += OnUdpSocketClosed;
 
-            if (!(RemoteEndPoint is IPEndPoint ep)) return;
+            if (!(RemoteEndPoint is IPEndPoint ep)) return false;
             
-            if (!session.Connect(ep.Address.ToString(), openPort))
+            if (!ns.Connect(ep.Address.ToString(), openPort))
             {
                 Logger.Error("Failed to connect to UDP socket. ip={0}, port={1}", ep.Address, openPort);
-                return;
+                return false;
             }
             
-            session.SetupAssembler(assemblyTimeoutSec, maxPendingMessageCount);
-            StartUdpCleanupTimer(cleanupIntervalSec);
-
-            _udpSession = session;
-            _channelRouter.Bind(new UnreliableChannel(session));
+            _udpNetworkSession = ns;
+            _channelRouter.Bind(new UnreliableChannel(ns));
             StartUdpHandshakeTimer();
+            return true;
+        }
+
+        internal void SetupFragmentAssembler(int cleanupIntervalSec, int cleanupTimeoutSec, int pendingMessageThreshold)
+        {
+            if (_fragmentAssembler != null) return;
+            StartFragmentAssemblerCleanupTimer(cleanupIntervalSec);
+            _fragmentAssembler = new FragmentAssembler(cleanupTimeoutSec, pendingMessageThreshold);
         }
 
         internal void SessionAuthCompleted(long sessionId, uint peerId)
@@ -1019,15 +1015,14 @@ namespace SP.Engine.Client
         internal void UdpHandshakeFailed()
         {
             StopUdpHandshakeTimer();
-            _udpSession?.Close();
+            _udpNetworkSession?.Close();
         }
 
         internal void UdpHandshakeCompleted(ushort mtu)
         {
             StopUdpHandshakeTimer();
-            
             _channelRouter.SetUdpAvailable(true);
-            _udpSession.SetupFrameSize(mtu);
+            _udpNetworkSession.SetMaxFragmentSize(mtu);
         }
 
         internal bool EnableUdp()
@@ -1042,11 +1037,6 @@ namespace SP.Engine.Client
             if (!_channelRouter.IsUdpAvailable) return false;
             _channelRouter.SetUdpAvailable(false);
             return true;
-        }
-
-        internal void SetMaxFrameSize(int size)
-        {
-            _maxFrameSize = size;
         }
 
         private void StartUdpHandshakeTimer()
@@ -1071,20 +1061,18 @@ namespace SP.Engine.Client
             _udpHandshakeTimer = null;
         }
 
-        private void StartUdpCleanupTimer(int periodSec)
+        private void StartFragmentAssemblerCleanupTimer(int periodSec)
         {
-            if (_udpSession?.Assembler == null) return;
-            _udpCleanupTimer = new TickTimer(_ =>
+            _fragmentAssemblerCleanupTimer = new TickTimer(_ =>
             {
-                var now = DateTime.UtcNow;
-                _udpSession.Assembler.Cleanup(now);
-            }, null, TimeSpan.Zero, TimeSpan.FromSeconds(periodSec));
+                _fragmentAssembler.Cleanup(DateTime.UtcNow);
+            }, null, TimeSpan.FromSeconds(periodSec), TimeSpan.FromSeconds(periodSec));
         }
 
-        private void StopUdpCleanupTimer()
+        private void StopFragmentAssemblerCleanupTimer()
         {
-            _udpCleanupTimer?.Dispose();
-            _udpCleanupTimer = null;
+            _fragmentAssemblerCleanupTimer?.Dispose();
+            _fragmentAssemblerCleanupTimer = null;
         }
 
         private void StartAckTimer()
@@ -1116,11 +1104,11 @@ namespace SP.Engine.Client
             Offline?.Invoke(this, EventArgs.Empty);
             
             // UDP 타이머 해제
-            StopUdpCleanupTimer();
+            StopFragmentAssemblerCleanupTimer();
             
             // UDP 연결 해제
-            _udpSession?.Close();
-            _udpSession = null;
+            _udpNetworkSession?.Close();
+            _udpNetworkSession = null;
             
             // 재연결 시작
             StartReconnection();
@@ -1133,31 +1121,32 @@ namespace SP.Engine.Client
 
             if (disposing)
             {
-                var session = _tcpSession;
-                if (null != session)
+                var ns = _tcpNetworkSession;
+                _tcpNetworkSession = null;
+                
+                if (null != ns)
                 {
-                    session.Opened -= OnSessionOpened;
-                    session.Closed -= OnSessionClosed;
-                    session.Error -= OnSessionError;
-                    session.DataReceived -= OnSessionDataReceived;
+                    ns.Opened -= OnSessionOpened;
+                    ns.Closed -= OnSessionClosed;
+                    ns.Error -= OnSessionError;
+                    ns.DataReceived -= OnSessionDataReceived;
 
-                    if (session.IsConnected)
-                        session.Close();
-
-                    _tcpSession = null;
+                    if (ns.IsConnected)
+                        ns.Close();
                 }
 
                 StopUdpHandshakeTimer();
-                StopUdpCleanupTimer();
+                StopFragmentAssemblerCleanupTimer();
                 
-                if (_udpSession != null)
+                if (_udpNetworkSession != null)
                 {
-                    _udpSession.DataReceived -= OnUdpSocketDataReceived;
-                    _udpSession.Error -= OnUdpSocketError;
-                    _udpSession.Close();
-                    _udpSession = null;
+                    _udpNetworkSession.DataReceived -= OnUdpSocketDataReceived;
+                    _udpNetworkSession.Error -= OnUdpSocketError;
+                    _udpNetworkSession.Close();
+                    _udpNetworkSession = null;
                 }
                 
+                _fragmentAssembler.Dispose();
                 _diffieHellman.Dispose();
                 MessageProcessor.Dispose();
                 

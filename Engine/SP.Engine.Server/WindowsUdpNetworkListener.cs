@@ -17,8 +17,9 @@ internal sealed class WindowsUdpNetworkListener(ListenerInfo info, IEngineConfig
             InitializePool();
             _socket = new Socket(EndPoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
             _socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-            _socket.SendBufferSize = Config.Network.SendBufferSize;
-            _socket.ReceiveBufferSize = Config.Network.ReceiveBufferSize;
+            
+            _socket.SendBufferSize = Config.Network.UdpMaxMtu + 1024;
+            _socket.ReceiveBufferSize = Config.Network.UdpMaxMtu * 32;
             
             const int SIO_UDP_CONNRESET = -1744830452;
             var inValue = new byte[] {0};
