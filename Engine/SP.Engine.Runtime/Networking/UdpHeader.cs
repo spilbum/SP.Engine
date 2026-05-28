@@ -6,21 +6,22 @@ namespace SP.Engine.Runtime.Networking
     {
         public const int ByteSize = 1 + 8 + 2 + 1 + 4; // 16 bytes
 
+        public int HeaderLength => ByteSize;
         public HeaderFlags Flags { get; }
         public long SessionId { get; }
         public ushort ProtocolId { get; }
         public byte Fragmented { get; }
-        public int BodyLength { get; }
+        public int PayloadLength { get; }
         
         public bool IsFragmented => Fragmented == 1;
 
-        public UdpHeader(HeaderFlags flags, long sessionId, ushort protocolId, byte fragmented, int bodyLength)
+        public UdpHeader(HeaderFlags flags, long sessionId, ushort protocolId, byte fragmented, int payloadLength)
         {
             Flags = flags;
             SessionId = sessionId;
             ProtocolId = protocolId;
             Fragmented = fragmented;
-            BodyLength = bodyLength;
+            PayloadLength = payloadLength;
         }
 
         public bool HasFlag(HeaderFlags flags)
@@ -34,7 +35,7 @@ namespace SP.Engine.Runtime.Networking
             destination.WriteInt64(1, SessionId);
             destination.WriteUInt16(9, ProtocolId);
             destination[11] = Fragmented;
-            destination.WriteInt32(12, BodyLength);
+            destination.WriteInt32(12, PayloadLength);
         }
 
         public static bool TryRead(ReadOnlySpan<byte> source, out UdpHeader header, out int byteConsumed)
@@ -48,8 +49,8 @@ namespace SP.Engine.Runtime.Networking
             var sessionId = source.ReadInt64(1);
             var protocolId = source.ReadUInt16(9);
             var fragmented = source[11];
-            var bodyLength = source.ReadInt32(12);
-            header = new UdpHeader(flags, sessionId, protocolId, fragmented, bodyLength);
+            var payloadLength = source.ReadInt32(12);
+            header = new UdpHeader(flags, sessionId, protocolId, fragmented, payloadLength);
             byteConsumed = ByteSize;
             return true;
         }
@@ -61,7 +62,7 @@ namespace SP.Engine.Runtime.Networking
         private long _sessionId;
         private byte _fragmented;
         private ushort _protocolId;
-        private int _bodyLength;
+        private int _payloadLength;
 
         public UdpHeaderBuilder From(UdpHeader header)
         {
@@ -69,7 +70,7 @@ namespace SP.Engine.Runtime.Networking
             _sessionId = header.SessionId;
             _protocolId = header.ProtocolId;
             _fragmented = header.Fragmented;
-            _bodyLength = header.BodyLength;
+            _payloadLength = header.PayloadLength;
             return this;
         }
 
@@ -97,15 +98,15 @@ namespace SP.Engine.Runtime.Networking
             return this;
         }
 
-        public UdpHeaderBuilder WithBodyLength(int bodyLength)
+        public UdpHeaderBuilder WithPayloadLength(int payloadLength)
         {
-            _bodyLength = bodyLength;
+            _payloadLength = payloadLength;
             return this;
         }
 
         public UdpHeader Build()
         {
-            return new UdpHeader(_flags, _sessionId, _protocolId, _fragmented, _bodyLength);
+            return new UdpHeader(_flags, _sessionId, _protocolId, _fragmented, _payloadLength);
         }
     }
 }

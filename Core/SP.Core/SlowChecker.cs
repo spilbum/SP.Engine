@@ -23,7 +23,7 @@ namespace SP.Core
             var elapsedMs = (Stopwatch.GetTimestamp() - _startTicks) * 1000.0 / Stopwatch.Frequency;
             if (elapsedMs > _thresholdMs)
             {
-                _logger.Warn("[{0}] Slow: {1:F2}ms", _title, elapsedMs);
+                _logger?.Warn("[{0}] Slow: {1:F2}ms", _title, elapsedMs);
             }
         }
     }

@@ -14,11 +14,22 @@ public class ClientManager(ILogger logger)
     public bool IsRunning { get; private set; }
     public ILogger Logger => logger;
 
-    public void Test_Reconnect()
+    public void Test_Reconnect(int delayMs)
     {
-        foreach (var client in _clients)
+        if (delayMs == 0)
         {
-            client.Test_Reconnect();
+            foreach (var client in _clients) client.Test_Reconnect();
+        }
+        else
+        {
+            _ = Task.Run(async () =>
+            {
+                foreach (var client in _clients)
+                {
+                    client.Test_Reconnect();
+                    await Task.Delay(delayMs);
+                }
+            });
         }
     }
     
@@ -77,6 +88,11 @@ public class ClientManager(ILogger logger)
                     try
                     {
                         client.Tick();
+
+                        if (client.IsConnected)
+                        {
+                            client.ProcessPendingEcho();
+                        }
                     }
                     catch (Exception e)
                     {

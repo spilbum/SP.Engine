@@ -2,6 +2,7 @@
 using System.Reflection;
 using Common;
 using SP.Core;
+using SP.Core.Buffers;
 using SP.Engine.Server;
 
 namespace GameServer;
@@ -60,7 +61,7 @@ internal static class Program
                     WaitingReconnectTimeoutSec = 120,
                     WaitingReconnectTimerPeriodSec = 60
                     #if DEBUG
-                    , PeerJobSlowThresholdMs = 200
+                    , UserCommandSlowThresholdMs = 200
                     #endif
                 })
                 .ConfigurePerformance(perf => perf with
@@ -96,10 +97,6 @@ internal static class Program
         }
         finally
         {
-            #if DEBUG
-            BufferTracker.DumpLeaks(server?.Logger);
-            #endif
-            
             server?.Dispose();
         }
         

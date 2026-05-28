@@ -9,170 +9,186 @@ namespace SP.Core.Serialization
 {
     internal static class NetSerializerBuilder
     {
-        // public void Write<T>(T value) 
+        // NetWriter.Write<T>(T value);
         private static readonly MethodInfo WriteGeneric = typeof(NetWriter)
             .GetMethods(BindingFlags.Public | BindingFlags.Instance)
             .First(m => m.Name == "Write" && m.IsGenericMethod && m.GetParameters().Length == 1);
 
-        // public T Read<T>()
+        // T NetReader.Read<T>();
         private static readonly MethodInfo ReadGeneric = typeof(NetReader)
             .GetMethods(BindingFlags.Public | BindingFlags.Instance)
             .First(m => m.Name == "Read" && m.IsGenericMethod && m.GetParameters().Length == 0);
-
-        // public static void Serialize<T>(ref NetWriter w, T value)
+        
+        // NetSerializer.Serialize<T>(ref NetWriter w, T value)
         private static readonly MethodInfo SerializeGeneric = typeof(NetSerializer)
             .GetMethods(BindingFlags.Public | BindingFlags.Static)
             .First(m => m.Name == "Serialize" && m.IsGenericMethod && m.GetParameters().Length == 2);
         
-        // public static T Deserialize<T>(ref NetReader r)
+        // T NetSerializer.Deserialize<T>(ref NetReader r)
         private static readonly MethodInfo DeserializeGeneric = typeof(NetSerializer)
             .GetMethods(BindingFlags.Public | BindingFlags.Static)
             .First(m => m.Name == "Deserialize" && m.IsGenericMethod && m.GetParameters().Length == 1);
         
+        private static readonly MethodInfo ListClear = typeof(System.Collections.IList).GetMethod(nameof(System.Collections.IList.Clear));
+        private static readonly MethodInfo DictClear = typeof(System.Collections.IDictionary).GetMethod(nameof(System.Collections.IDictionary.Clear));
         private static readonly MethodInfo WriteBool = typeof(NetWriter).GetMethod(nameof(NetWriter.WriteBool));
         private static readonly MethodInfo ReadBool = typeof(NetReader).GetMethod(nameof(NetReader.ReadBool));
-
+        private static readonly MethodInfo WriteInt64 = typeof(NetWriter).GetMethod(nameof(NetWriter.WriteInt64));
+        private static readonly MethodInfo ReadInt64 = typeof(NetReader).GetMethod(nameof(NetReader.ReadInt64));
+        private static readonly PropertyInfo DateTimeTicks = typeof(DateTime).GetProperty(nameof(DateTime.Ticks));
+        private static readonly ConstructorInfo DateTimeCtor = typeof(DateTime).GetConstructor(new[] { typeof(long) });
+        
         public static SerializerPair Build(Type type)
         {
-            var writer = BuildWriter(type);
-            var reader = BuildReader(type);
-
             return new SerializerPair(
-                reader.ObjectFn,
-                writer.ObjectFn,
-                reader.GenericFn,
-                writer.GenericFn);
+                null,
+                null,
+                null, 
+                CompileWriter(type),
+                CompileReader(type),
+                CompileReset(type)
+            );
         }
         
-        private static (object GenericFn, SerializerPair.WriteFn ObjectFn) BuildWriter(Type type)
+        private static object CompileWriter(Type type)
         {
-            var w = Expression.Parameter(typeof(NetWriter).MakeByRefType(), "w");
-
-            var valParam = Expression.Parameter(type, "val");
-            var writeBlock = new List<Expression>
-            {
-                Expression.Call(w, WriteBool, Expression.Constant(true))
-            };
+            var writerParam = Expression.Parameter(typeof(NetWriter).MakeByRefType(), "writer");
+            var valueParam = Expression.Parameter(type, "value");
+            var bodyBlock = new List<Expression>();
             
-            var accessor = RuntimeTypeAccessor.GetOrCreate(type);
-            foreach (var member in accessor.Members.Where(m => m.CanGet && !m.IgnoreGet))
+            foreach (var member in RuntimeTypeAccessor
+                         .GetOrCreate(type)
+                         .Members
+                         .Where(m => m.CanGet && !m.IgnoreGet))
             {
-                var memberAccess = Expression.MakeMemberAccess(valParam, member.Info);
-                Expression writeCall;
-                
-                var writeMethod = GetNetWriterMethod(member.Type);
-                if (writeMethod != null)
+                var memberAccess = Expression.MakeMemberAccess(valueParam, member.Info);
+
+                if (member.Type.IsEnum)
                 {
-                    writeCall = Expression.Call(w, writeMethod, memberAccess);
+                    // Enum인 경우 기저 타입(int, byte...)으로 강제 캐스팅 후 NetWriter.Write<underlyingType>() 호출
+                    var underlyingType = Enum.GetUnderlyingType(member.Type);
+                    var casted = Expression.Convert(memberAccess, underlyingType);
+                    bodyBlock.Add(Expression.Call(writerParam, WriteGeneric.MakeGenericMethod(underlyingType), casted));
                 }
-                else if (member.Type.IsPrimitive || member.Type.IsEnum)
+                else if (member.Type == typeof(DateTime))
                 {
-                    writeCall = Expression.Call(w, WriteGeneric.MakeGenericMethod(member.Type), memberAccess);
+                    // DateTime인 경우 Ticks(long)를 추출하여 밀어넣음
+                    var ticks = Expression.Property(memberAccess, DateTimeTicks);
+                    bodyBlock.Add(Expression.Call(writerParam, WriteInt64, ticks));
+                }
+                else if (member.Type.IsValueType || member.Type.IsPrimitive)
+                {
+                    bodyBlock.Add(Expression.Call(writerParam, WriteGeneric.MakeGenericMethod(member.Type), memberAccess));
                 }
                 else
                 {
-                    writeCall = Expression.Call(SerializeGeneric.MakeGenericMethod(member.Type), w, memberAccess);
+                    // 참조 타입 처리
+                    var writeNull = Expression.Call(writerParam, WriteBool, Expression.Constant(false));
+                    var writeNotNull = Expression.Call(writerParam, WriteBool, Expression.Constant(true));
+                    var writeContent = Expression.Call(SerializeGeneric.MakeGenericMethod(member.Type), writerParam, memberAccess);
+                    
+                    bodyBlock.Add(Expression.IfThenElse(
+                        Expression.Equal(memberAccess, Expression.Constant(null, member.Type)),
+                        writeNull,
+                        Expression.Block(writeNotNull, writeContent)));                    
                 }
+            }
+            
+            if (bodyBlock.Count == 0) bodyBlock.Add(Expression.Empty());
 
-                writeBlock.Add(writeCall);
+            return Expression.Lambda(
+                typeof(SerializerPair.WriteGenericFn<>).MakeGenericType(type),
+                Expression.Block(bodyBlock),
+                writerParam,
+                valueParam
+            ).Compile();
+        }
+        
+        private static object CompileReader(Type type)
+        {
+            var readerParam = Expression.Parameter(typeof(NetReader).MakeByRefType(), "reader");
+            var instanceParam = Expression.Parameter(type, "instance");
+            var bodyBlock = new List<Expression>();
+            
+            foreach (var member in RuntimeTypeAccessor
+                         .GetOrCreate(type)
+                         .Members
+                         .Where(m => m.CanSet && !m.IgnoreSet))
+            {
+                var memberAccess = Expression.MakeMemberAccess(instanceParam, member.Info);
+
+                if (member.Type.IsEnum)
+                {
+                    // 스트림에서 기저 타입을 먼저 Read한 뒤, Enum 타입으로 명시적 캐스팅하여 할당
+                    var underlyingType = Enum.GetUnderlyingType(member.Type);
+                    var readCall = Expression.Call(readerParam, ReadGeneric.MakeGenericMethod(underlyingType));
+                    bodyBlock.Add(Expression.Assign(memberAccess, Expression.Convert(readCall, member.Type)));
+                }
+                else if (member.Type == typeof(DateTime))
+                {
+                    // 스트림에서 Int64(Ticks)를 읽어와 DateTime 객체를 생성 후 할당
+                    var readTicks = Expression.Call(readerParam, ReadInt64);
+                    var newDateTime = Expression.New(DateTimeCtor, readTicks);
+                    bodyBlock.Add(Expression.Assign(memberAccess, newDateTime));
+                }
+                else if (member.Type.IsValueType || member.Type.IsPrimitive)
+                {
+                    bodyBlock.Add(Expression.Assign(memberAccess, Expression.Call(readerParam, ReadGeneric.MakeGenericMethod(member.Type))));
+                }
+                else
+                {
+                    var deserializeCall = Expression.Call(DeserializeGeneric.MakeGenericMethod(member.Type), readerParam);
+                    bodyBlock.Add(Expression.IfThenElse(
+                        Expression.Call(readerParam, ReadBool),
+                        Expression.Assign(memberAccess, deserializeCall),
+                        Expression.Assign(memberAccess, Expression.Constant(null, member.Type))));
+                }
             }
 
-            var coreBlock = Expression.Block(writeBlock);
-            var genType = typeof(SerializerPair.WriteGenericFn<>).MakeGenericType(type);
-            var genericLambda = Expression.Lambda(genType, coreBlock, w, valParam).Compile();
+            if (bodyBlock.Count == 0) bodyBlock.Add(Expression.Empty());
 
-            var objParam = Expression.Parameter(typeof(object), "obj");
-            var objBody = Expression.IfThenElse(
-                Expression.Equal(objParam, Expression.Constant(null)),
-                Expression.Call(w, WriteBool, Expression.Constant(false)),
-                Expression.Invoke(Expression.Constant(genericLambda), w, Expression.Convert(objParam, type))
-            );
-
-            var objectLambda = Expression.Lambda<SerializerPair.WriteFn>(objBody, w, objParam).Compile();
-            return (genericLambda, objectLambda);
+            return Expression.Lambda(
+                typeof(SerializerPair.ReadIntoGenericFn<>).MakeGenericType(type),
+                Expression.Block(bodyBlock),
+                readerParam,
+                instanceParam
+            ).Compile();
         }
-
-        private static (object GenericFn, SerializerPair.ReadFn ObjectFn) BuildReader(Type type)
+        
+        private static object CompileReset(Type type)
         {
-            var r = Expression.Parameter(typeof(NetReader).MakeByRefType(), "r");
-            var instance = Expression.Variable(type, "instance");
-            var ctor = type.GetConstructor(Type.EmptyTypes) ??
-                       throw new InvalidOperationException($"{type.Name} needs ctor");
-            var readBlockExprs = new List<Expression> { Expression.Assign(instance, Expression.New(ctor)) };
+            var instanceParam = Expression.Parameter(type, "instance");
+            var bodyBlock = new List<Expression>();
             
             var accessor = RuntimeTypeAccessor.GetOrCreate(type);
             foreach (var member in accessor.Members.Where(m => m.CanSet && !m.IgnoreSet))
             {
-                Expression readCall;
-                var readerMethod = GetNetReaderMethod(member.Type);
-                if (readerMethod != null)
+                var memberAccess = Expression.MakeMemberAccess(instanceParam, member.Info);
+
+                if (member.Type.IsGenericType &&
+                    (member.Type.GetGenericTypeDefinition() == typeof(List<>) ||
+                    member.Type.GetGenericTypeDefinition() == typeof(Dictionary<,>)))
                 {
-                    readCall = Expression.Call(r, readerMethod);
-                }
-                else if (member.Type.IsPrimitive || member.Type.IsEnum)
-                {
-                    readCall = Expression.Call(r, ReadGeneric.MakeGenericMethod(member.Type));
+                    var clearMethod = member.Type.GetMethod("Clear", BindingFlags.Public | BindingFlags.Instance);
+                    if (clearMethod == null) continue;
+                    
+                    var methodCall = Expression.Call(memberAccess, clearMethod);
+                    bodyBlock.Add(Expression.IfThen(Expression.NotEqual(memberAccess, Expression.Constant(null)), methodCall));
                 }
                 else
                 {
-                    readCall = Expression.Call(DeserializeGeneric.MakeGenericMethod(member.Type), r);
+                    // 디폴트 값으로 설정
+                    bodyBlock.Add(Expression.Assign(memberAccess, Expression.Default(member.Type)));
                 }
-                
-                readBlockExprs.Add(Expression.Assign(Expression.MakeMemberAccess(instance, member.Info), readCall));
             }
 
-            readBlockExprs.Add(instance);
-            var readDataBlock = Expression.Block(new[] { instance }, readBlockExprs);
+            if (bodyBlock.Count == 0) bodyBlock.Add(Expression.Empty());
 
-            var genericBody = Expression.Condition(
-                Expression.Call(r, ReadBool),
-                readDataBlock,
-                Expression.Default(type)
-            );
-           
-            var genType = typeof(SerializerPair.ReadGenericFn<>).MakeGenericType(type);
-            var genericLambda = Expression.Lambda(genType, genericBody, r).Compile();
-
-            var objBody = Expression.Convert(
-                    Expression.Invoke(Expression.Constant(genericLambda), r),
-                    typeof(object)
-            );
-            
-            var objectLambda = Expression.Lambda<SerializerPair.ReadFn>(objBody, r).Compile();
-            return (genericLambda, objectLambda);
-        }
-
-        private static MethodInfo GetNetWriterMethod(Type t)
-        {
-            if (t == typeof(bool)) return typeof(NetWriter).GetMethod(nameof(NetWriter.WriteBool));
-            if (t == typeof(byte)) return typeof(NetWriter).GetMethod(nameof(NetWriter.WriteByte));
-            if (t == typeof(sbyte)) return typeof(NetWriter).GetMethod(nameof(NetWriter.WriteSByte));
-            if (t == typeof(short)) return typeof(NetWriter).GetMethod(nameof(NetWriter.WriteInt16));
-            if (t == typeof(ushort)) return typeof(NetWriter).GetMethod(nameof(NetWriter.WriteUInt16));
-            if (t == typeof(int)) return typeof(NetWriter).GetMethod(nameof(NetWriter.WriteInt32));
-            if (t == typeof(uint)) return typeof(NetWriter).GetMethod(nameof(NetWriter.WriteUInt32));
-            if (t == typeof(long)) return typeof(NetWriter).GetMethod(nameof(NetWriter.WriteInt64));
-            if (t == typeof(ulong)) return typeof(NetWriter).GetMethod(nameof(NetWriter.WriteUInt64));
-            if (t == typeof(float)) return typeof(NetWriter).GetMethod(nameof(NetWriter.WriteSingle));
-            if (t == typeof(double)) return typeof(NetWriter).GetMethod(nameof(NetWriter.WriteDouble));
-            return null;
-        }
-
-        private static MethodInfo GetNetReaderMethod(Type t)
-        {
-            if (t == typeof(bool)) return typeof(NetReader).GetMethod(nameof(NetReader.ReadBool));
-            if (t == typeof(byte)) return typeof(NetReader).GetMethod(nameof(NetReader.ReadByte));
-            if (t == typeof(sbyte)) return typeof(NetReader).GetMethod(nameof(NetReader.ReadSByte));
-            if (t == typeof(short)) return typeof(NetReader).GetMethod(nameof(NetReader.ReadInt16));
-            if (t == typeof(ushort)) return typeof(NetReader).GetMethod(nameof(NetReader.ReadUInt16));
-            if (t == typeof(int)) return typeof(NetReader).GetMethod(nameof(NetReader.ReadInt32));
-            if (t == typeof(uint)) return typeof(NetReader).GetMethod(nameof(NetReader.ReadUInt32));
-            if (t == typeof(long)) return typeof(NetReader).GetMethod(nameof(NetReader.ReadInt64));
-            if (t == typeof(ulong)) return typeof(NetReader).GetMethod(nameof(NetReader.ReadUInt64));
-            if (t == typeof(float)) return typeof(NetReader).GetMethod(nameof(NetReader.ReadSingle));
-            if (t == typeof(double)) return typeof(NetReader).GetMethod(nameof(NetReader.ReadDouble));
-            return null;
+            return Expression.Lambda(
+                typeof(SerializerPair.ResetGenericFn<>).MakeGenericType(type),
+                Expression.Block(bodyBlock),
+                instanceParam
+            ).Compile();
         }
     }
 }
-    

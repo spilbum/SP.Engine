@@ -13,6 +13,10 @@ public class Client : NetPeerBase
     
     public UdpQualityTracker Tracker = new();
 
+    private int _pendingEchoCount;
+    private string _echoType = "tcp";
+    private int _echoBatchCount = 1;
+    
     public Client()
     {
         Connected += OnConnected;
@@ -194,48 +198,52 @@ public class Client : NetPeerBase
     
     public void StartEcho(string type, int period, int batchCount)
     {
+        _echoType = type;
+        _echoBatchCount = batchCount;
         _echoCts ??= new CancellationTokenSource();
-
-        if (type.Equals("tcp", StringComparison.OrdinalIgnoreCase) ||
-            type.Equals("both", StringComparison.OrdinalIgnoreCase))
-        {
-            _ = Task.Run(() => EchoLoop("tcp", period, batchCount, _echoCts.Token));
-        }
-
-        if (type.Equals("udp", StringComparison.OrdinalIgnoreCase) ||
-            type.Equals("both", StringComparison.OrdinalIgnoreCase))
-        {
-            _ = Task.Run(() => EchoLoop("udp", period, batchCount, _echoCts.Token));
-        }
+        
+        _ = Task.Run(() => EchoScheduler(period, _echoCts.Token));
     }
 
     public void StopEcho()
     {
         _echoCts?.Cancel();
         _echoCts = null;
+        _pendingEchoCount = 0;
     }
 
-    private async Task EchoLoop(string sendType, int period, int batchCount, CancellationToken ct)
+    private async Task EchoScheduler(int period, CancellationToken ct)
     {
-        Logger.Debug("[EchoStart] Type: {0}, Period: {1}ms", sendType, period);
-
+        Logger.Debug("[EchoScheduler Started] Type: {0}, Period: {1}ms", _echoType, period);
+        
         while (!ct.IsCancellationRequested)
         {
-            for (var i = 0; i < batchCount; i++)
-            {
-                var seq = Tracker.RecordSend();
-                IProtocolData packet = sendType == "tcp"
-                    ? new C2GProtocolData.EchoReq { Seq = seq, SentTicks = DateTime.UtcNow.Ticks }
-                    : new C2GProtocolData.UdpEchoReq { Seq = seq, SentTicks = DateTime.UtcNow.Ticks, Data = GetRandomBytes(128)};
-
-                Send(packet);
-            }
+            // 원자적으로 발송해야 할 개수만 증가시킵니다. (Send를 직접 호출하지 않음)
+            Interlocked.Add(ref _pendingEchoCount, _echoBatchCount);
             
-            if (period > 0) await Task.Delay(period, ct);
+            if (period > 0) 
+                await Task.Delay(period, ct);
         }
     }
 
+    public void ProcessPendingEcho()
+    {
+        // 원자적으로 현재 쌓인 발송 요청 개수를 땡겨옵니다.
+        var count = Interlocked.Exchange(ref _pendingEchoCount, 0);
+        if (count <= 0) return;
 
+        for (var i = 0; i < count; i++)
+        {
+            var seq = Tracker.RecordSend();
+            IProtocolData packet = _echoType == "tcp"
+                ? new C2GProtocolData.EchoReq { Seq = seq, SentTicks = DateTime.UtcNow.Ticks }
+                : new C2GProtocolData.UdpEchoReq { Seq = seq, SentTicks = DateTime.UtcNow.Ticks, Data = GetRandomBytes(5000)};
+
+            // 안전하게 메인 스레드 컨텍스트에서 최신 ACK 정보를 달고 송신 채널로 들어갑니다.
+            Send(packet); 
+        }
+    }
+    
     private static byte[] GetRandomBytes(int count)
     {
         var bytes = new byte[count];

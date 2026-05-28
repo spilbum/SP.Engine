@@ -276,8 +276,11 @@ public abstract class EngineCore : ILogContext, IDisposable
 
     private void StartFragmentAssemblerCleanupTimer()
     {
-        var period = TimeSpan.FromSeconds(Config.Network.FragmentAssemblerCleanupPeriodSec);
-        _fragmentAssemblerCleanupTimer = _globalScheduler.Schedule(_engineFiber, CleanupAssembler, TimeSpan.Zero, period);
+        _fragmentAssemblerCleanupTimer = _globalScheduler.Schedule(
+            _engineFiber,
+            CleanupAssembler,
+            TimeSpan.Zero,
+            TimeSpan.FromSeconds(Config.Network.FragmentAssemblerCleanupPeriodSec));
     }
 
     private void StopFragmentAssemblerCleanupTimer()
@@ -294,8 +297,11 @@ public abstract class EngineCore : ILogContext, IDisposable
 
     private void StartClearIdleSessionTimer()
     {
-        var period = TimeSpan.FromSeconds(Config.Session.ClearIdleSessionPeriodSec);
-        _clearIdleSessionTimer = _globalScheduler.Schedule(_engineFiber, ClearIdleSession, TimeSpan.Zero, period);
+        _clearIdleSessionTimer = _globalScheduler.Schedule(
+            _engineFiber,
+            ClearIdleSession,
+            TimeSpan.Zero, 
+            TimeSpan.FromSeconds(Config.Session.ClearIdleSessionPeriodSec));
     }
 
     private void StopClearIdleSessionTimer()
@@ -332,8 +338,11 @@ public abstract class EngineCore : ILogContext, IDisposable
 
     private void StartSessionSnapshotTimer()
     {
-        var period = TimeSpan.FromSeconds(Config.Session.SessionSnapshotPeriodSec);
-        _sessionSnapshotTimer = _globalScheduler.Schedule(_engineFiber, TakeSessionSnapshot, TimeSpan.Zero, period);
+        _sessionSnapshotTimer = _globalScheduler.Schedule(
+            _engineFiber, 
+            TakeSessionSnapshot,
+            TimeSpan.Zero,
+            TimeSpan.FromSeconds(Config.Session.SessionSnapshotPeriodSec));
     }
 
     private void StopSessionSnapshotTimer()
@@ -367,8 +376,11 @@ public abstract class EngineCore : ILogContext, IDisposable
 
     private void StartHandshakePendingTimer()
     {
-        var period = TimeSpan.FromSeconds(Config.Session.HandshakePendingTimerPeriodSec);
-        _handshakePendingTimer = _globalScheduler.Schedule(_engineFiber, ProcessPendingQueue, TimeSpan.Zero, period);
+        _handshakePendingTimer = _globalScheduler.Schedule(
+            _engineFiber,
+            ProcessPendingQueue, 
+            TimeSpan.Zero, 
+            TimeSpan.FromSeconds(Config.Session.HandshakePendingTimerPeriodSec));
     }
 
     private void StopHandshakePendingTimer()

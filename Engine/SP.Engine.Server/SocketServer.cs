@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using SP.Core;
+using SP.Core.Buffers;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Server.Configuration;
@@ -148,36 +149,15 @@ internal sealed class SocketServer(EngineCore engine, ListenerInfo[] listenerInf
         var session = engine.GetSession(header.SessionId);
         if (session == null || session.IsClosed) return;
 
-        if (session.UdpNetworkSession == null)
-        {
-            lock (_udpSessionLock)
-            {
-                if (session.UdpNetworkSession == null)
-                {
-                    var ns = new UdpNetworkSession(session, socket, remoteEndPoint);
-                    session.UdpNetworkSession = ns;
-                }
-            }
-        }
-
-        if (session.UdpNetworkSession == null) return;
-        session.UdpNetworkSession.UpdateRemoteEndPoint(remoteEndPoint);
+        session.UpdateUdpNetworkSession(socket, remoteEndPoint);
         
-        var bodyBuffer = new PooledBuffer(header.BodyLength);
-        buffer.Slice(headerConsumed, header.BodyLength).CopyTo(bodyBuffer.Memory.Span);
+        var bufferOwner = new PooledBuffer(headerConsumed + header.PayloadLength);
+        buffer.CopyTo(bufferOwner.Memory.Span);
 
-        var state = (session, header, bodyBuffer);
-        
+        var state = (session, header, bufferOwner);
         session.AsyncRun(state, static s =>
         {
-            try
-            {
-                s.session.HandleUdpMessage(s.header, s.bodyBuffer.Memory.Span);
-            }
-            finally
-            {
-                s.bodyBuffer.Dispose();
-            }
+            s.session.HandleUdpMessage(s.header, s.bufferOwner);
         });
     }
 
@@ -196,7 +176,13 @@ internal sealed class SocketServer(EngineCore engine, ListenerInfo[] listenerInf
         var session = CreateSession(client, ns);
         if (session != null)
         {
-            engine.AsyncRun(ns.Start);
+            engine.AsyncRun(ns, static s =>
+            {
+                if (!s.Start())
+                {
+                    s.Close(CloseReason.InternalError);
+                }
+            });
         }
         else
         {

@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using ClosedXML.Excel;
 using SP.Shared.Resource;
-using UIKit;
 
 namespace OperationTool.Excel;
 

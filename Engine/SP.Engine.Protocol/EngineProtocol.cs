@@ -32,6 +32,7 @@ namespace SP.Engine.Protocol
         public class SessionAuthReq : ProtocolDataBase<SessionAuthReq>
         {
             public byte[]? ClientPublicKey;
+            public uint ClientNextExpectedSeq;
             public DhKeySize KeySize;
             public uint PeerId;
             public long SessionId;
@@ -79,23 +80,26 @@ namespace SP.Engine.Protocol
         [Protocol(S2CEngineProtocolId.SessionAuthAck)]
         public class SessionAuthAck : ProtocolDataBase<SessionAuthAck>
         {
-            public int CompressionThreshold;
-            public int MaxPayloadLength;
-            public int MaxRetransmitCount;
-            public uint PeerId;
             public SessionAuthResult Result;
-            public int InitialRetransmitTimeoutMs;
-            public byte[]? ServerPublicKey;
             public long SessionId;
+            public uint PeerId;
+            public byte[]? ServerPublicKey;
+            public uint ServerNextExpectedSeq;
+            public int MaxPayloadLength;
+            public int CompressionThreshold;
             public bool UseCompress;
             public bool UseEncrypt;
-            public int MaxAckDelayMs;
-            public int AckFrequency;
             public int UdpOpenPort;
-            public int FragmentAssemblerClenupTimeoutSec;
+            public int FragmentAssemblerCleanupTimeoutSec;
             public int FragmentAssemblerPendingMessageThreshold;
             public int FragmentAssemblerCleanupIntervalSec;
-            public int MaxOutOfOrderCount;
+            public int ReliableMaxOutOfOrderCount;
+            public int ReliablePendingQueueCapacity;
+            public int ReliableInFlightLimit;
+            public int ReliableMaxAckDelayMs;
+            public int ReliableAckFrequency;
+            public int ReliableMaxRetransmitCount;
+            public int ReliableInitialRetransmitTimeoutMs;
         }
 
         [Protocol(S2CEngineProtocolId.Pong)]

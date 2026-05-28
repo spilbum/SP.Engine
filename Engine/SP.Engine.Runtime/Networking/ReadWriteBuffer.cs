@@ -3,11 +3,12 @@ using System.Buffers;
 using System.IO;
 using System.Runtime.CompilerServices;
 using SP.Core;
+using SP.Core.Buffers;
 using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Runtime.Networking
 {
-    public sealed class SessionReceiveBuffer : IDisposable
+    public sealed class ReadWriteBuffer : IDisposable
     {
         private readonly PooledBuffer _buffer;
         private int _mask;
@@ -18,7 +19,7 @@ namespace SP.Engine.Runtime.Networking
         private bool _disposed;
         private readonly object _lock = new object();
 
-        public SessionReceiveBuffer(int capacity)
+        public ReadWriteBuffer(int capacity)
         {
             // 2의 거듭제곱 크기로 보정하여 마스킹 연산이 가능하도록 함
             var cap = 1;
@@ -29,10 +30,7 @@ namespace SP.Engine.Runtime.Networking
             _mask = _capacity - 1;
         }
 
-        /// <summary>
-        /// 수신된 데이터를 링 버퍼에 기록합니다.
-        /// </summary>
-        public bool Write(ReadOnlySpan<byte> data)
+        public bool TryWrite(ReadOnlySpan<byte> data)
         {
             lock (_lock)
             {
@@ -68,14 +66,13 @@ namespace SP.Engine.Runtime.Networking
             }
         }
         
-        /// <summary>
-        /// 완성된 패킷 프레임을 추출합니다.
-        /// </summary>
-        public bool TryExtract(IPolicySnapshot policySnapshot, out TcpHeader header, out IMemoryOwner<byte> bodyOwner, out int bodyLength)
+        public bool TryRead(
+            IPolicySnapshot policySnapshot, 
+            out TcpHeader header,
+            out IMemoryOwner<byte> bufferOwner)
         {
             header = default;
-            bodyOwner = null;
-            bodyLength = 0;
+            bufferOwner = null;
             const int headerSize = TcpHeader.ByteSize;
 
             lock (_lock)
@@ -86,36 +83,31 @@ namespace SP.Engine.Runtime.Networking
                 Span<byte> headerSpan = stackalloc byte[headerSize];
                 CopyTo(_head, headerSize, headerSpan);
 
-                if (!TcpHeader.TryRead(headerSpan, out var tempHeader, out var byteConsumed)) return false;
+                if (!TcpHeader.TryRead(headerSpan, out var tempHeader, out var headerConsumed)) return false;
                 
                 // 전체 패킷이 도착했는지 확인
-                var bodyLen = tempHeader.BodyLength;
-                var totalNeed = byteConsumed + bodyLen;
+                var payloadLen = tempHeader.PayloadLength;
+                var totalLength = headerConsumed + payloadLen;
                 
-                if (_available < totalNeed) return false;
+                if (_available < totalLength) return false;
 
+                // 패킷 별 최대 페이로드 용량 체크
                 var maxPayloadLength = policySnapshot.Resolve(header.ProtocolId)?.MaxPayloadLength ?? 65536;
-                if (bodyLen < 0 || bodyLen > maxPayloadLength)
+                if (payloadLen < 0 || payloadLen > maxPayloadLength)
                 {
-                    throw new InvalidDataException($"Corrupted payload detected. ID: {tempHeader.ProtocolId}, BodyLen: {bodyLen}, Max: {maxPayloadLength}");
+                    throw new InvalidDataException($"Corrupted payload detected. ID: {tempHeader.ProtocolId}, BodyLen: {payloadLen}, Max: {maxPayloadLength}");
                 }
                 
                 header = tempHeader;
+
+                var pooled = new PooledBuffer(totalLength);
+                CopyTo(_head, totalLength, pooled.Memory.Span);
                 
-                // 본문 데이터 추출
-                if (bodyLen > 0)
-                {
-                    var bodyStartIdx = (_head + byteConsumed) & _mask;
-                    var pooled = new PooledBuffer(bodyLen);
-                    CopyTo(bodyStartIdx, bodyLen, pooled.Memory.Span);
-                    
-                    bodyOwner = pooled;
-                    bodyLength = bodyLen;
-                }
+                bufferOwner = pooled;
                 
                 // 상태 갱신
-                _head = (_head + totalNeed) & _mask;
-                _available -= totalNeed;
+                _head = (_head + totalLength) & _mask;
+                _available -= totalLength;
                 
                 // 버퍼가 완전히 비었을 경우 포인터 초기화로 파편화 방지
                 if (_available == 0)

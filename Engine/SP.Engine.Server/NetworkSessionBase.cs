@@ -15,7 +15,6 @@ public enum SocketState
     None = 0,
     InSending = 1 << 0,
     InReceiving = 1 << 1,
-    Paused = 1 << 2,
     InClosing = 1 << 4,
     Closed = 1 << 24
 }
@@ -62,7 +61,6 @@ public abstract class NetworkSessionBase : INetworkSession
     }
     
     public bool IsClosed => HasState(SocketState.Closed);
-    public bool IsPaused => HasState(SocketState.Paused);
     protected bool IsInClosingOrClosed => _socketState >= (int)SocketState.InClosing;
     
     protected NetworkSessionBase(SocketMode mode, Socket client)

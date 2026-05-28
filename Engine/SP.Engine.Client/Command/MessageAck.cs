@@ -9,7 +9,8 @@ namespace SP.Engine.Client.Command
     {
         protected override void ExecuteCommand(NetPeerBase context, S2CEngineProtocolData.MessageAck protocol)
         {
-            context.MessageProcessor.AcknowledgeInFlight(protocol.AckNumber);
+            if (!context.IsConnected) return;
+            context.HandleRemoteAck(protocol.AckNumber);
         }
     }
 }

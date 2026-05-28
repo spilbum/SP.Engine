@@ -2,6 +2,7 @@ using System;
 using SP.Engine.Protocol;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Command;
+using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Client.Command
@@ -18,11 +19,18 @@ namespace SP.Engine.Client.Command
                 return;
             }
 
-            if (protocol.InitialRetransmitTimeoutMs > 0) context.MessageProcessor.SetInitialRetransmitTimeoutMs(protocol.InitialRetransmitTimeoutMs);
-            if (protocol.MaxRetransmitCount > 0) context.MessageProcessor.SetMaxRetransmitCount(protocol.MaxRetransmitCount);
-            if (protocol.MaxAckDelayMs > 0) context.MessageProcessor.SetMaxAckDelayMs(protocol.MaxAckDelayMs);
-            if (protocol.AckFrequency > 0) context.MessageProcessor.SetAckFrequency(protocol.AckFrequency);
-            if (protocol.MaxOutOfOrderCount > 0) context.MessageProcessor.SetMaxOutOfOrderCount(protocol.MaxOutOfOrderCount);
+            if (context.PeerId == 0)
+            {
+                // 최초 연결 시
+                var processor = ReliableMessageProcessor.CreateBuilder()
+                    .SetRetransmitPolicy(protocol.ReliableMaxRetransmitCount, protocol.ReliableInitialRetransmitTimeoutMs)
+                    .SetAckPolicy(protocol.ReliableMaxAckDelayMs, protocol.ReliableAckFrequency)
+                    .SetMaxOutOfOrderCount(protocol.ReliableMaxOutOfOrderCount)
+                    .SetPendingQueueCapacity(protocol.ReliablePendingQueueCapacity)
+                    .SetInFlightLimit(protocol.ReliableInFlightLimit)
+                    .Build();
+                context.SetReliableMessageProcessor(processor);
+            }
             
             if (protocol.UseEncrypt) context.SetupEncryptor(protocol.ServerPublicKey);
             if (protocol.UseCompress) context.SetupCompressor(protocol.MaxPayloadLength);
@@ -34,11 +42,12 @@ namespace SP.Engine.Client.Command
                 {
                     context.SetupFragmentAssembler(
                         protocol.FragmentAssemblerCleanupIntervalSec,
-                        protocol.FragmentAssemblerClenupTimeoutSec,
+                        protocol.FragmentAssemblerCleanupTimeoutSec,
                         protocol.FragmentAssemblerPendingMessageThreshold);
                 }
             }
             
+            context.HandleRemoteAck(protocol.ServerNextExpectedSeq);
             context.SessionAuthCompleted(protocol.SessionId, protocol.PeerId);
         }
     }

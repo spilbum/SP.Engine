@@ -7,6 +7,7 @@ using SP.Engine.Client;
 using SP.Engine.Client.Configuration;
 using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Networking;
+using SP.Engine.Runtime.Security;
 using SP.Engine.Server.Configuration;
 
 namespace SP.Engine.Server.Connector;
@@ -96,11 +97,6 @@ public abstract class ConnectorBase : NetPeerBase, IConnector, ICommandContext
             TimeSpan.FromSeconds(Config.ReconnectAttemptIntervalSec)); 
     }
     
-    TProtocol ICommandContext.Deserialize<TProtocol>(IMessage message)
-    {
-        return message.Deserialize<TProtocol>(Encryptor, Compressor);
-    }
-
     protected override void Dispose(bool disposing)
     {
         if (disposing)

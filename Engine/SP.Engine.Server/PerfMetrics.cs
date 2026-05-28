@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Threading;
 using SP.Core;
+using SP.Core.Buffers;
 
 namespace SP.Engine.Server
 {
@@ -20,10 +21,6 @@ namespace SP.Engine.Server
         public int SessionCount { get; set; }
         public long ActiveBufferCount { get; set; }
 
-        public double AvgFiberDwellMs { get; set; }
-        public double AvgFiberExecMs { get; set; }
-        public int PendingJobTotal { get; set; }
-
         public override string ToString()
         {
             var t = TimestampUtc.ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture);
@@ -32,8 +29,7 @@ namespace SP.Engine.Server
                    $"Heap:{FormatBytes(ManagedHeapBytes)} " +
                    $"GC_Delta(0/1/2):{GcDelta[0]}/{GcDelta[1]}/{GcDelta[2]} " +
                    $"Threads:{ThreadCount} " +
-                   $"Sessions:{SessionCount} | Buffers:{ActiveBufferCount} " +
-                   $"Fiber: [AvgDwell:{AvgFiberDwellMs:F2}ms | AvgExec:{AvgFiberExecMs:F2}ms | PendingJobs:{PendingJobTotal}]";
+                   $"Sessions:{SessionCount} | Buffers:{ActiveBufferCount}";
         }
 
         private static string FormatBytes(long bytes)
@@ -78,7 +74,7 @@ namespace SP.Engine.Server
             }
         }
 
-        public PerfMetrics Sample(int sessionCount, PeerManager manager)
+        public PerfMetrics Sample(int sessionCount)
         {
             lock (_lock)
             {
@@ -110,8 +106,6 @@ namespace SP.Engine.Server
 
                 var activeBuf = BufferMetrics.GetRentCount();
 
-                var fiberMetrics = manager.GetGlobalFiberMetrics();
-                
                 var metrics = new PerfMetrics
                 {
                     TimestampUtc = now,
@@ -122,10 +116,7 @@ namespace SP.Engine.Server
                     GcDelta = deltaGc,
                     ThreadCount = _proc.Threads.Count,
                     SessionCount = sessionCount,
-                    ActiveBufferCount = activeBuf,
-                    AvgFiberDwellMs = fiberMetrics.avgDwell,
-                    AvgFiberExecMs = fiberMetrics.avgExec,
-                    PendingJobTotal = fiberMetrics.pendingTotal
+                    ActiveBufferCount = activeBuf
                 };
 
                 _prevTotalCpu = totalCpu;
@@ -164,14 +155,14 @@ namespace SP.Engine.Server
             return metrics != null;
         }
 
-        public void Tick(int sessionCount, PeerManager manager)
+        public void Tick(int sessionCount)
         {
             if (Interlocked.Exchange(ref _sampling, 1) == 1)
                 return;
 
             try
             {
-                var m = _sampler.Sample(sessionCount, manager);
+                var m = _sampler.Sample(sessionCount);
                 _last = m;
                 var handler = OnSampled;
                 handler?.Invoke(_last);

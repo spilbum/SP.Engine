@@ -59,24 +59,27 @@ internal class SessionAuth : CommandBase<Session, C2SEngineProtocolData.SessionA
     private static (SessionAuthResult, PeerBase) HandleReconnection(Session session, EngineBase engine, C2SEngineProtocolData.SessionAuthReq req)
     {
         var prevSession = engine.GetSession(req.SessionId);
-        PeerBase targetPeer;
+        PeerBase peer;
         
         if (prevSession != null)
         {
             if (prevSession.CloseReason == CloseReason.Rejected)
                 return (SessionAuthResult.ReconnectionNotAllowed, null);
             
-            targetPeer = prevSession.Peer;
+            peer = prevSession.Peer;
             prevSession.Close(CloseReason.ServerClosing);
         }
         else
         {
-            targetPeer = engine.GetWaitingPeer(req.PeerId);
-            if (targetPeer == null) return (SessionAuthResult.PeerNotFound, null);
+            peer = engine.GetWaitingPeer(req.PeerId);
+            if (peer == null) return (SessionAuthResult.PeerNotFound, null);
         }
         
-        return engine.OnlinePeer(targetPeer, session) 
-            ? (SessionAuthResult.Ok, targetPeer)
+        // 클라가 받은 시퀀스 번호로 갱신
+        peer.HandleRemoteAck(req.ClientNextExpectedSeq);
+        
+        return engine.OnlinePeer(peer, session) 
+            ? (SessionAuthResult.Ok, targetPeer: peer)
             : (SessionAuthResult.InternalError, null);
     }
 }
@@ -91,29 +94,31 @@ public static class SessionAuthAckExtensions
         ack.SessionId = session.SessionId;
         ack.PeerId = peer.PeerId;
         
-        var network = session.Config.Network;
-        ack.MaxPayloadLength = network.MaxPayloadLength;
-        ack.InitialRetransmitTimeoutMs = network.InitialRetransmitTimeoutMs;
-        ack.MaxRetransmitCount = network.MaxRetransmitCount;
-        ack.MaxAckDelayMs = network.MaxAckDelayMs;
-        ack.AckFrequency = network.AckFrequency;
-        ack.MaxOutOfOrderCount = network.MaxOutOfOrderCount;
+        var config = session.Config.Network;
+        ack.MaxPayloadLength = config.MaxPayloadLength;
+        ack.ReliableInitialRetransmitTimeoutMs = config.ReliableInitialRetransmitTimeoutMs;
+        ack.ReliableMaxRetransmitCount = config.ReliableMaxRetransmitCount;
+        ack.ReliableMaxAckDelayMs = config.ReliableMaxAckDelayMs;
+        ack.ReliableAckFrequency = config.ReliableAckFrequency;
+        ack.ReliableMaxOutOfOrderCount = config.ReliableMaxOutOfOrderCount;
+        ack.ReliableInFlightLimit = config.ReliableInFlightLimit;
+        ack.ReliablePendingQueueCapacity = config.ReliablePendingQueueCapacity;
         
         ack.UdpOpenPort = engine.GetOpenPort(SocketMode.Udp);
-        ack.FragmentAssemblerClenupTimeoutSec = network.FragmentAssemblerCleanupTimeoutSec;
-        ack.FragmentAssemblerPendingMessageThreshold = network.FragmentAssemblerPendingMessageThreshold;
-        ack.FragmentAssemblerCleanupIntervalSec = network.FragmentAssemblerCleanupPeriodSec;
+        ack.FragmentAssemblerCleanupTimeoutSec = config.FragmentAssemblerCleanupTimeoutSec;
+        ack.FragmentAssemblerPendingMessageThreshold = config.FragmentAssemblerPendingMessageThreshold;
+        ack.FragmentAssemblerCleanupIntervalSec = config.FragmentAssemblerCleanupPeriodSec;
         
-        if (network.UseEncrypt)
+        if (config.UseEncrypt)
         {
             ack.UseEncrypt = true;
             ack.ServerPublicKey = peer.LocalPublicKey;
         }
 
-        if (network.UseCompress)
+        if (config.UseCompress)
         {
             ack.UseCompress = true;
-            ack.CompressionThreshold = network.CompressionThreshold;
+            ack.CompressionThreshold = config.CompressionThreshold;
         }
     }
 }

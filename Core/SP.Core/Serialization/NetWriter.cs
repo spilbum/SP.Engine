@@ -1,5 +1,4 @@
 using System;
-using System.Buffers;
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -47,99 +46,78 @@ namespace SP.Core.Serialization
             var size = sizeHint <= 0 ? 1 : sizeHint;
             if (_position + size <= _buffer.Length) return;
             if (_resizer == null) throw new InvalidOperationException("Buffer overflow and no resizer provided.");
-                
-            var required = _position + size;
-            _buffer = _resizer.Resize(required, _position);
+            
+            _buffer = _resizer.Resize(_position + size, _position);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteByte(byte value)
         {
-            var span = GetSpan(1);
-            span[0] = value;
+            GetSpan(1)[0] = value;
             Advance(1);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteSByte(sbyte value)
-        {
-            WriteByte(unchecked((byte)value));
-        }
+        public void WriteSByte(sbyte value) => WriteByte(unchecked((byte)value));
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteBool(bool value)
-        {
-            WriteByte(value ? (byte)1 : (byte)0);
-        }
+        public void WriteBool(bool value) => WriteByte(value ? (byte)1 : (byte)0);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteInt16(short value)
         {
-            var span = GetSpan(2);
-            BinaryPrimitives.WriteInt16BigEndian(span, value);
+            BinaryPrimitives.WriteInt16BigEndian(GetSpan(2), value);
             Advance(2);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUInt16(ushort value)
         {
-            var span = GetSpan(2);
-            BinaryPrimitives.WriteUInt16BigEndian(span, value);
+            BinaryPrimitives.WriteUInt16BigEndian( GetSpan(2), value);
             Advance(2);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteInt32(int value)
         {
-            var span = GetSpan(4);
-            BinaryPrimitives.WriteInt32BigEndian(span, value);
+            BinaryPrimitives.WriteInt32BigEndian(GetSpan(4), value);
             Advance(4);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUInt32(uint value)
         {
-            var span = GetSpan(4);
-            BinaryPrimitives.WriteUInt32BigEndian(span, value);
+            BinaryPrimitives.WriteUInt32BigEndian(GetSpan(4), value);
             Advance(4);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteInt64(long value)
         {
-            var span = GetSpan(8);
-            BinaryPrimitives.WriteInt64BigEndian(span, value);
+            BinaryPrimitives.WriteInt64BigEndian(GetSpan(8), value);
             Advance(8);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUInt64(ulong value)
         {
-            var span = GetSpan(8);
-            BinaryPrimitives.WriteUInt64BigEndian(span, value);
+            BinaryPrimitives.WriteUInt64BigEndian(GetSpan(8), value);
             Advance(8);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteSingle(float value)
         {
-            var span = GetSpan(4);
-            if (BitConverter.IsLittleEndian)
-            {
-                BinaryPrimitives.WriteInt32BigEndian(span, Unsafe.As<float, int>(ref value));
-            }
-            else
-            {
-                Unsafe.WriteUnaligned(ref span[0], value);
-            }
+            var i = Unsafe.As<float, int>(ref value);
+            BinaryPrimitives.WriteInt32BigEndian(GetSpan(4), i);
             Advance(4);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteDouble(double value)
         {
-            var span = GetSpan(8);
-            BinaryPrimitives.WriteInt64BigEndian(span, Unsafe.As<double, long>(ref value));
+            var l = Unsafe.As<double, long>(ref value);
+            BinaryPrimitives.WriteInt64BigEndian(GetSpan(8), l);
             Advance(8);
         }
 
@@ -234,31 +212,14 @@ namespace SP.Core.Serialization
             else if (typeof(T) == typeof(double)) WriteDouble(Unsafe.As<T, double>(ref value));
             else
             {
-                var size = Unsafe.SizeOf<T>();
-
-                switch (size)
-                {
-                    case 4:
-                        WriteInt32(Unsafe.As<T, int>(ref value));
-                        break;
-                    case 1:
-                        WriteByte(Unsafe.As<T, byte>(ref value));
-                        break;
-                    case 2:
-                        WriteInt16(Unsafe.As<T, short>(ref value));
-                        break;
-                    case 8:
-                        WriteInt64(Unsafe.As<T, long>(ref value));
-                        break;
-                    default:
-                    {
-                        var span = GetSpan(size);
-                        Unsafe.WriteUnaligned(ref span[0], value);
-                        Advance(size);
-                        break;
-                    }
-                }
+                ThrowNotSupportedType(typeof(T));
             }
+        }
+        
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void ThrowNotSupportedType(Type t)
+        {
+            throw new NotSupportedException($"Type '{t.Name}' is not supported by NetWriter.");
         }
     }
 }

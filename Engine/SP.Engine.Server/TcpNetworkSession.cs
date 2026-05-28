@@ -1,9 +1,9 @@
 ﻿using System;
+using System.Buffers;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
-using SP.Core;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Networking;
 
@@ -11,11 +11,8 @@ namespace SP.Engine.Server;
 
 public class TcpNetworkSession : NetworkSessionBase, IReliableSender
 {
-    private const int MessageBufferLength = 4096;
-    
-    private readonly Channel<(PooledBuffer Buffer, int Length)> _sendChannel;
     private readonly CancellationTokenSource _cts = new();
-    private Timer _resumeTimeoutTimer;
+    private Channel<(IMemoryOwner<byte> Buffer, int Length)> _sendChannel;
     
     public SocketReceiveContext ReceiveContext { get; }
 
@@ -24,27 +21,29 @@ public class TcpNetworkSession : NetworkSessionBase, IReliableSender
     {
         ReceiveContext = context;
         ReceiveContext.Initialize(this);
-
-        var channelOptions = new BoundedChannelOptions(2048)
-        {
-            SingleReader = true,  // ProcessSendLoopAsync 에서 Read 처리
-            SingleWriter = false, // 멀티스레드에서 Write 처리
-            FullMode = BoundedChannelFullMode.DropWrite // 버퍼가 꽉 차면 쓰기를 실패 처리하여 백업 제어
-        };
-        
-        _sendChannel = Channel.CreateBounded<(PooledBuffer, int)>(channelOptions);
-        _resumeTimeoutTimer = new Timer(OnResumeTimeout, null, Timeout.Infinite, Timeout.Infinite);
-        Task.Run(ProcessSendLoopAsync);
     }
 
-    public void Start()
+    public bool Start()
     {
+        if (Session == null) return false;
+
+        _sendChannel = Channel.CreateBounded<(IMemoryOwner<byte>, int)>(
+            new BoundedChannelOptions(Session.Config.Network.TcpSendQueueCapacity)
+            {
+                SingleReader = true, // ProcessSendLoopAsync 에서 Read 처리
+                SingleWriter = false, // 멀티스레드에서 Write 처리
+                FullMode = BoundedChannelFullMode.DropWrite // 버퍼가 꽉 차면 쓰기를 실패 처리하여 백업 제어
+            });
+        
+        Task.Run(ProcessSendLoopAsync);
+        
         StartReceive(ReceiveContext.SocketEventArgs);
+        return true;
     }
     
     private void StartReceive(SocketAsyncEventArgs e)
     {
-        if (IsPaused || IsClosed) return;
+        if (IsClosed) return;
         
         if (!IncrementIo()) return;
         
@@ -112,15 +111,12 @@ public class TcpNetworkSession : NetworkSessionBase, IReliableSender
     {
         if (IsClosed || IsInClosingOrClosed) return false;
 
-        var messageSize = message.Size;
-        var bufferCapacity = messageSize <= MessageBufferLength ? MessageBufferLength : messageSize;
-        var buffer = new PooledBuffer(bufferCapacity);
-
+        if (!message.TryExtractBuffer(out var buffer, out var length))
+            return false;
+        
         try
         {
-            message.WriteTo(buffer[..messageSize]);
-
-            if (!_sendChannel.Writer.TryWrite((buffer, messageSize)))
+            if (!_sendChannel.Writer.TryWrite((buffer, length)))
             {
                 buffer.Dispose();
                 return false;
@@ -201,40 +197,8 @@ public class TcpNetworkSession : NetworkSessionBase, IReliableSender
         }
     }
     
-    public void PauseReceive()
-    {
-        if (IsPaused) return;
-        if (!TryAddState(SocketState.Paused)) return;
-        
-        Session.Logger.Debug("Session {0} is Paused", Session.SessionId);
-        _resumeTimeoutTimer.Change(10000, Timeout.Infinite);
-    }
-
-    public void ResumeReceive()
-    {
-        if (!IsPaused) return;
-        if (!RemoveState(SocketState.Paused)) return;
-
-        Session.Logger.Debug("Session {0} is Resume.", Session.SessionId);
-        
-        _resumeTimeoutTimer.Change(Timeout.Infinite, Timeout.Infinite);
-        if (!HasState(SocketState.InReceiving))
-        {
-            Start();
-        }
-    }
-
-    private void OnResumeTimeout(object state)
-    {
-        Session.Logger.Warn("Resume pending timeout reached. Force closing session due to back-pressure: {0}",
-            Session.SessionId);
-        Close(CloseReason.ServerBusy);
-    }
-    
     protected override void OnRelease()
     {
-        _resumeTimeoutTimer.Dispose();
-        
         _sendChannel.Writer.Complete();
         _cts.Cancel();
 

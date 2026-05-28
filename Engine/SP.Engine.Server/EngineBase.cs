@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -22,7 +23,12 @@ public abstract class EngineBase : EngineCore
     private readonly Dictionary<ushort, ICommand> _userCommands = new();
     private readonly Dictionary<ushort, ICommand> _internalCommands = new();
     private readonly List<ConnectorFiber> _connectorFibers = [];
-    private readonly List<PeerGroup> _peerGroups = [];
+
+    private ThreadFiber[] _logicFibers;
+    private List<PeerBase>[] _shardPeers;
+    private IDisposable[] _shardTickTimers;
+    private int _shardMask;
+    
     private PeerManager _peerManager;
     private PerfMonitor _perfMonitor;
     private IDisposable _waitingReconnectCheckingTimer;
@@ -45,7 +51,7 @@ public abstract class EngineBase : EngineCore
         if (!SetupConnectorFiber(assemblies, config.Connectors))
             return false;
         
-        SetupPeerGroup();
+        SetupLogicFibers();
         SetupPerfMonitor(config.Perf);
         
         Logger.Info("The server {0} is initialized.", name);
@@ -79,7 +85,17 @@ public abstract class EngineBase : EngineCore
     {
         _perfMonitor?.Dispose();
         _perfMonitorFiber?.Dispose();
-        foreach (var group in _peerGroups) group.Dispose();
+
+        if (_shardTickTimers != null)
+        {
+            foreach (var timer in _shardTickTimers) timer?.Dispose();
+        }
+
+        if (_logicFibers != null)
+        {
+            foreach (var fiber in _logicFibers) fiber?.Dispose();
+        }
+        
         foreach (var fiber in _connectorFibers) fiber.Dispose();
         StopReconnectTimer();
 
@@ -104,41 +120,39 @@ public abstract class EngineBase : EngineCore
     internal PeerBase GetWaitingPeer(uint peerId)
         => _peerManager.GetWaitingPeer(peerId);
 
-    private PeerGroup AllocateGroup()
-    {
-        var minGroup = _peerGroups[0];
-        var minCount = minGroup.PeerCount;
-
-        foreach (var group in _peerGroups)
-        {
-            var count = group.PeerCount;
-            if (count >= minCount) continue;
-            minCount = count;
-            minGroup = group;
-        }
-        
-        return minGroup;
-    }
+    private int GetShardIndex(uint peerId) => (int)(peerId & _shardMask);
 
     internal bool OnlinePeer(PeerBase peer, Session session)
     {
         if (!_peerManager.TransitionToOnline(peer.PeerId, session))
             return false;
 
-        // 그룹 재할당
-        var group = AllocateGroup();
-        group.AddPeer(peer);
+        RegisterPeerToShard(peer);
         return true;
     }
 
     internal void JoinPeer(PeerBase peer)
     {
-        // 그룹 할당
-        var group = AllocateGroup();
-        group.AddPeer(peer);
-        
-        // 매니저에 피어 등록
         _peerManager.Register(peer);
+        RegisterPeerToShard(peer);
+    }
+
+    private void RegisterPeerToShard(PeerBase peer)
+    {
+        var index = GetShardIndex(peer.PeerId);
+        var fiber = _logicFibers[index];
+        fiber.Enqueue(_shardPeers[index].Add, peer);
+    }
+
+    private void UnregisterPeerFromShard(PeerBase peer)
+    {
+        var index = GetShardIndex(peer.PeerId);
+        var fiber = _logicFibers[index];
+
+        fiber.Enqueue(() =>
+        {
+            _shardPeers[index].Remove(peer);
+        });
     }
     
     internal bool NewPeer(Session session, out PeerBase peer)
@@ -151,8 +165,8 @@ public abstract class EngineBase : EngineCore
     {
         var peer = session.Peer;
         if (null == peer) return;
-        
-        peer.OnSessionClosed(session);
+
+        UnregisterPeerFromShard(peer);
 
         if (ShouldKeepPeer(session))
         {
@@ -196,19 +210,62 @@ public abstract class EngineBase : EngineCore
         }
     }
 
-    private void SetupPeerGroup()
+    private void SetupLogicFibers()
     {
-        var groupCount = Environment.ProcessorCount;
-        groupCount = Math.Clamp(groupCount, 4, 32); // todo:환경에 맞게 튜닝
+        var coreCount = Environment.ProcessorCount;
+        var fiberCount = 1;
+        while (fiberCount < coreCount) fiberCount <<= 1;
+
+        fiberCount = Math.Clamp(fiberCount, 4, 32);
+        _shardMask = fiberCount - 1;
         
-        for (byte index = 0; index < groupCount; index++)
+        _logicFibers = new ThreadFiber[fiberCount];
+        _shardPeers = new List<PeerBase>[fiberCount];
+        _shardTickTimers = new IDisposable[fiberCount];
+
+        var interval = TimeSpan.FromMilliseconds(Config.Session.PeerUpdateIntervalMs);
+
+        for (var index = 0; index < fiberCount; index++)
         {
-            var group = new PeerGroup(index, this);
-            _peerGroups.Add(group);
+            _logicFibers[index] = new ThreadFiber($"LogicFiber-{index:D2}",
+                capacity: 4096,
+                maxBatchSize: 512,
+                onError: OnFiberException);
+
+            _shardPeers[index] = [];
+            _shardTickTimers[index] = GlobalScheduler.Schedule(
+                _logicFibers[index],
+                ProcessFiberPeersTick,
+                index,
+                TimeSpan.Zero,
+                interval);
         }
         
-        Logger.Info("PeerGroup setup completed. GroupCount: {0}, Shared sessions per group: ~{1}", 
-            groupCount, Config.Session.MaxConnections / groupCount);
+        Logger.Info("LogicFiber pool setup completed. FiberCount: {0}", fiberCount);
+    }
+
+    private void ProcessFiberPeersTick(int fiberIndex)
+    {
+        var peers = _shardPeers[fiberIndex];
+        for (var i = peers.Count - 1; i >= 0; i--)
+        {
+            try
+            {
+                peers[i].Tick();
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "Peer tick failed in Fiber-{0}: PeerId {1}", fiberIndex, peers[i].PeerId);
+            }
+        }
+    }
+
+    private void OnFiberException(Exception ex)
+    {
+        if (ex is FiberException e)
+        {
+            Logger.Error(e.InnerException, "Fiber: {0}, Job: {1}", e.FiberName, e.Job?.Name);
+        }
     }
     
     private void SetupPerfMonitor(PerfConfig config)
@@ -240,7 +297,7 @@ public abstract class EngineBase : EngineCore
     private void PerfMonitorTick()
     {
         var sessions = SessionsSource;
-        _perfMonitor?.Tick(sessions.Length, _peerManager);
+        _perfMonitor?.Tick(sessions.Length);
     }
 
     private bool SetupConnectorFiber(Assembly[] assemblies, List<ConnectorConfig> configs)
@@ -351,7 +408,7 @@ public abstract class EngineBase : EngineCore
             {
                 var messages = peer.IngestReceivedMessage(tcp);
                 if (messages == null) return;
-
+             
                 foreach (var m in messages)
                 {
                     using (m) DispatchCommand(session, peer, m);
@@ -373,21 +430,44 @@ public abstract class EngineBase : EngineCore
             return;
         }
 
-        if (peer == null)
-            return;
+        if (peer == null) return;
         
-        var command = GetUserCommand(message.Id);
-        if (command == null)
-            return;
+        var index = GetShardIndex(peer.PeerId);
+        var logicFiber = _logicFibers[index];
 
-        var protocol = command.Deserialize(peer, message);
-        if (protocol == null)
+        message.Retain();
+        logicFiber.Enqueue(ExecuteUseCommand, this, peer, message);
+    }
+
+    private static void ExecuteUseCommand(EngineBase engine, PeerBase peer, IMessage message)
+    {
+        var start = Stopwatch.GetTimestamp();
+        var command = engine.GetUserCommand(message.Id);
+        if (command == null) return;
+        
+        try
         {
-            peer.Close(CloseReason.Rejected);
-            return;
+            command.Execute(peer, message);
         }
+        catch (Exception ex)
+        {
+            engine.Logger.Error(ex, "Logic execution failed: Command={0}, PeerId={1}", command.Name, peer.PeerId);
+        }
+        finally
+        {
+            // 메시지 메모리 해제
+            message.Dispose();
+            
+            var end = Stopwatch.GetTimestamp();
+            var executionTimeMs = (double)(end - start) / Stopwatch.Frequency * 1000;
 
-        peer.EnqueueCommand(command, protocol);
+            if (executionTimeMs >= engine.Config.Session.UserCommandSlowThresholdMs)
+            {
+                engine.Logger.Warn(
+                    "Slow job detected. Command={0}, PeerId={1}, Exec={2:F2}ms",
+                    command.Name, peer.PeerId, executionTimeMs);
+            }
+        }
     }
 
     public IEnumerable<IConnector> GetAllConnectors()

@@ -3,6 +3,7 @@ using System.Buffers;
 using System.Collections.Concurrent;
 using System.Threading;
 using SP.Core;
+using SP.Core.Buffers;
 
 namespace SP.Engine.Runtime.Networking
 {
@@ -45,23 +46,25 @@ namespace SP.Engine.Runtime.Networking
             return true;
         }
 
-        public PooledBuffer Combine(out int length)
+        public PooledBuffer Combine()
         {
-            var result = new PooledBuffer(_totalLength);
+            const int headerLen = UdpHeader.ByteSize;
+            var totalSize = headerLen + _totalLength;
+            
+            var result = new PooledBuffer(totalSize);
             var dest = result.Memory.Span;
-            var offset = 0;
+            var offset = headerLen;
             
             for (var i = 0; i < TotalCount; i++)
             {
                 var len = _lengths[i];
                 if (_fragments[i] == null) continue;
                 
-                var src = _fragments[i].Slice(0, len);
+                var src = _fragments[i][..len];
                 src.CopyTo(dest[offset..]);
                 offset += len;
             }
     
-            length = offset;
             return result;
         }
 
@@ -105,33 +108,32 @@ namespace SP.Engine.Runtime.Networking
             }
         }
 
-        public bool TryPush(UdpHeader header, ReadOnlySpan<byte> bodyData, out UdpMessage message)
+        public bool TryPush(UdpHeader header, ReadOnlySpan<byte> payload, out UdpMessage message)
         {
             message = null;
             if (_disposed) return false;
 
-            if (!FragmentHeader.TryRead(bodyData, out var fragHeader, out var fragHeaderConsumed)) return false;
+            if (!FragmentHeader.TryRead(payload, out var fragHeader, out var fragHeaderConsumed)) return false;
             
-            var fragData = bodyData[fragHeaderConsumed..];
+            var fragData = payload[fragHeaderConsumed..];
                 
             if (!_assembles.ContainsKey(fragHeader.FragId) && _assembles.Count >= _pendingMessageThreshold) 
                 return false;
                 
-            if (!TryAssembleInternal(fragHeader, fragData, out var bodyOwner, out var bodyLength)) 
+            if (!TryAssemblePacket(fragHeader, fragData, out var bufferOwner)) 
                 return false;
-                
-            message = new UdpMessage(header, bodyOwner, bodyLength);
+
+            header.WriteTo(bufferOwner.Memory.Span[..UdpHeader.ByteSize]);
+            message = new UdpMessage(header, bufferOwner);
             return true;
         }
         
-        private bool TryAssembleInternal(
+        private bool TryAssemblePacket(
             FragmentHeader fragHeader,
             ReadOnlySpan<byte> fragData, 
-            out IMemoryOwner<byte> bodyOwner, 
-            out int bodyLength)
+            out IMemoryOwner<byte> bufferOwner)
         {
-            bodyOwner = null;
-            bodyLength = 0;
+            bufferOwner = null;
 
             var state = _assembles.GetOrAdd(fragHeader.FragId, _ => new FragmentState(fragHeader.TotalCount));
 
@@ -145,8 +147,7 @@ namespace SP.Engine.Runtime.Networking
                 
                 using (state)
                 {
-                    bodyOwner = state.Combine(out var length);
-                    bodyLength = length;
+                    bufferOwner = state.Combine();
                     return true;
                 }
             }

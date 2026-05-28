@@ -52,23 +52,36 @@ public sealed record NetworkConfig
     /// <summary>
     /// 최대 재전송 횟수
     /// </summary>
-    public int MaxRetransmitCount { get; init; } = 5;
+    public int ReliableMaxRetransmitCount { get; init; } = 5;
     /// <summary>
     /// 초기 재전송 타임아웃 
     /// </summary>
-    public int InitialRetransmitTimeoutMs { get; init; } = 500;
+    public int ReliableInitialRetransmitTimeoutMs { get; init; } = 500;
     /// <summary>
     /// Delayed ACK 대기 시간 (송신 데이터가 없을 때)
     /// </summary>
-    public int MaxAckDelayMs { get; init; } = 50;
+    public int ReliableMaxAckDelayMs { get; init; } = 50;
     /// <summary>
     /// ACK 없이 수신 가능한 최대 패킷 수 (도달 시 즉시 ACK)
     /// </summary>
-    public int AckFrequency { get; init; } = 10;
+    public int ReliableAckFrequency { get; init; } = 10;
     /// <summary>
     /// 순서 어긋난 패킷을 보관할 최대 갯수
     /// </summary>
-    public int MaxOutOfOrderCount { get; init; } = 1024;
+    public int ReliableMaxOutOfOrderCount { get; init; } = 1024;
+    /// <summary>
+    /// 신뢰성 전송에서 동시에 전송할 수 있는 패킷 수 
+    /// </summary>
+    public int ReliableInFlightLimit { get; init; } = 2048;
+    /// <summary>
+    /// 신뢰성 전송에서 오프라인 시 전송 대기할 수 있는 패킷 수
+    /// </summary>
+    public int ReliablePendingQueueCapacity { get; init; } = 1024;
+    
+    /// <summary>
+    /// 수신 백프레셔 제어 타이아웃
+    /// </summary>
+    public int ReceivingBackPressureTimeoutSec { get; init; } = 10;
     
     /// <summary>
     /// UDP 활성화 여부
@@ -94,4 +107,14 @@ public sealed record NetworkConfig
     /// UDP 파편화 조립기 대기 메시지 임계치
     /// </summary>
     public int FragmentAssemblerPendingMessageThreshold { get; init; } = 100;
+    
+    /// <summary>
+    /// TCP 송신 채널의 BoundedChannel 최대 용량
+    /// </summary>
+    public int TcpSendQueueCapacity { get; init; } = 2048;
+    /// <summary>
+    /// UDP 송신 채널의 BoundedChannel 최대 용량
+    /// 파편화 패킷 유입을 고려하여 TCP보다 크게 설정합니다.
+    /// </summary>
+    public int UdpSendQueueCapacity { get; init; } = 4096;
 }

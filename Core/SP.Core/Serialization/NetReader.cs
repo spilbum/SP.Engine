@@ -24,9 +24,9 @@ namespace SP.Core.Serialization
         {
             if (count > Remaining)
                 throw new InvalidDataException($"Insufficient data: need {count}, remaining {Remaining}");
-            var s = _span.Slice(_position, count);
+            var span = _span.Slice(_position, count);
             _position += count;
-            return s;
+            return span;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -46,72 +46,34 @@ namespace SP.Core.Serialization
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ReadOnlySpan<byte> ReadSpan(int count)
-        {
-            return Slice(count);
-        }
+        public ReadOnlySpan<byte> ReadSpan(int count) => Slice(count);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public byte ReadByte()
-        {
-            var s = Slice(1);
-            return s[0];
-        }
+        public byte ReadByte() => Slice(1)[0];
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public sbyte ReadSByte()
-        {
-            return unchecked((sbyte)ReadByte());
-        }
+        public sbyte ReadSByte() => unchecked((sbyte)ReadByte());
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadBool()
-        {
-            var b = ReadByte();
-            return b != 0;
-        }
+        public bool ReadBool() => ReadByte() != 0;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public short ReadInt16()
-        {
-            var s = Slice(2);
-            return BinaryPrimitives.ReadInt16BigEndian(s);
-        }
+        public short ReadInt16() => BinaryPrimitives.ReadInt16BigEndian(Slice(2));
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ushort ReadUInt16()
-        {
-            var s = Slice(2);
-            return BinaryPrimitives.ReadUInt16BigEndian(s);
-        }
+        public ushort ReadUInt16() => BinaryPrimitives.ReadUInt16BigEndian(Slice(2));
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int ReadInt32()
-        {
-            var s = Slice(4);
-            return BinaryPrimitives.ReadInt32BigEndian(s);
-        }
+        public int ReadInt32() => BinaryPrimitives.ReadInt32BigEndian(Slice(4));
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public uint ReadUInt32()
-        {
-            var s = Slice(4);
-            return BinaryPrimitives.ReadUInt32BigEndian(s);
-        }
+        public uint ReadUInt32() => BinaryPrimitives.ReadUInt32BigEndian(Slice(4));
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public long ReadInt64()
-        {
-            var s = Slice(8);
-            return BinaryPrimitives.ReadInt64BigEndian(s);
-        }
+        public long ReadInt64() => BinaryPrimitives.ReadInt64BigEndian(Slice(8));
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ulong ReadUInt64()
-        {
-            var s = Slice(8);
-            return BinaryPrimitives.ReadUInt64BigEndian(s);
-        }
+        public ulong ReadUInt64() => BinaryPrimitives.ReadUInt64BigEndian(Slice(8));
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public float ReadSingle()
@@ -174,8 +136,7 @@ namespace SP.Core.Serialization
         public long ReadVarLong()
         {
             var u = ReadVarULong();
-            var value = (long)((u >> 1) ^ (ulong)-(long)(u & 1));
-            return value;
+            return (long)((u >> 1) ^ (ulong)-(long)(u & 1));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -183,8 +144,7 @@ namespace SP.Core.Serialization
         {
             var byteLen = (int)ReadVarUInt();
             if (byteLen < 0) throw new InvalidDataException("Negative string length");
-            var bytes = ReadSpan(byteLen);
-            return Encoding.UTF8.GetString(bytes);
+            return Encoding.UTF8.GetString(ReadSpan(byteLen));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -196,20 +156,12 @@ namespace SP.Core.Serialization
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ReadOnlySpan<byte> ReadBytes(int length)
-        {
-            return ReadSpan(length);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Align(int alignment)
         {
             if (alignment <= 1) return;
             var mis = _position % alignment;
             if (mis == 0) return;
-
-            var pad = alignment - mis;
-            Advance(pad);
+            Advance(alignment - mis);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -280,38 +232,7 @@ namespace SP.Core.Serialization
                 var value = ReadDouble();
                 return Unsafe.As<double, T>(ref value);
             }
-
-            if (typeof(T) == typeof(DateTime))
-            {
-                var ticks = ReadInt64();
-                var dt = new DateTime(ticks);
-                return Unsafe.As<DateTime, T>(ref dt);
-            }
-
-            if (Unsafe.SizeOf<T>() == 4)
-            {
-                var v = ReadInt32();
-                return Unsafe.As<int, T>(ref v);
-            }
-
-            if (Unsafe.SizeOf<T>() == 1)
-            {
-                var v = ReadByte();
-                return Unsafe.As<byte, T>(ref v);
-            }
-
-            if (Unsafe.SizeOf<T>() == 2)
-            {
-                var v = ReadInt16();
-                return Unsafe.As<short, T>(ref v);
-            }
-
-            if (Unsafe.SizeOf<T>() == 8)
-            {
-                var v = ReadInt64();
-                return Unsafe.As<long, T>(ref v);
-            }
-
+            
             ThrowNotSupportedType(typeof(T));
             return default;
         }

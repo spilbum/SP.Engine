@@ -1,5 +1,4 @@
-﻿using System;
-using System.Buffers;
+﻿using System.Buffers;
 
 namespace SP.Engine.Runtime.Networking
 {
@@ -9,14 +8,13 @@ namespace SP.Engine.Runtime.Networking
         {
         }
 
-        public TcpMessage(TcpHeader header, IMemoryOwner<byte> bodyOwner, int bodyLength) 
-            : base(header, bodyOwner, bodyLength)
+        public TcpMessage(TcpHeader header, IMemoryOwner<byte> bufferOwner) : base(header, bufferOwner)
         {
         }
 
+        protected override int HeaderLength => TcpHeader.ByteSize;
+
         public uint SequenceNumber => Header.SequenceNumber;
-        public uint AckNumber => Header.AckNumber;
-        public int Size => TcpHeader.ByteSize + BodyLength;
 
         public void SetSequenceNumber(uint sequenceNumber)
         {
@@ -24,38 +22,17 @@ namespace SP.Engine.Runtime.Networking
                 .From(Header)
                 .WithSequenceNumber(sequenceNumber)
                 .Build();
+            
+            UpdateHeaderInBuffer();
         }
 
-        public void SetAckNumber(uint ackNumber)
-        {
-            Header = new TcpHeaderBuilder()
-                .From(Header)
-                .WithAckNumber(ackNumber)
-                .Build();
-        }
-
-        public int WriteTo(Span<byte> destination)
-        {
-            const int hSize = TcpHeader.ByteSize;
-            var total = hSize + BodyLength;
-
-            if (destination.Length < total) return 0;
-
-            Header.WriteTo(destination[..hSize]);
-            if (BodyLength > 0)
-            {
-                BodySpan.CopyTo(destination.Slice(hSize, BodyLength));
-            }
-            return total;
-        }
-        
-        protected override TcpHeader CreateHeader(HeaderFlags flags, ushort protocolId, int bodyLength)
+        protected override TcpHeader CreateHeader(HeaderFlags flags, ushort protocolId, int payloadLength)
         {
             return new TcpHeaderBuilder()
                 .From(Header)
                 .AddFlag(flags)
                 .WithProtocolId(protocolId)
-                .WithBodyLength(bodyLength)
+                .WithPayloadLength(payloadLength)
                 .Build();
         }
     }

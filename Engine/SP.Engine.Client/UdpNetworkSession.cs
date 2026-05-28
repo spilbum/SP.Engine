@@ -1,10 +1,12 @@
 using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using SP.Core;
+using SP.Core.Buffers;
 using SP.Engine.Client.Configuration;
 using SP.Engine.Runtime.Networking;
 
@@ -14,18 +16,17 @@ namespace SP.Engine.Client
     {
         private readonly SocketAsyncEventArgs _receiveEventArgs = new SocketAsyncEventArgs();
         private readonly PooledBuffer _receiveBuffer;
-        private readonly int _sendBufferSize;
-        private readonly ConcurrentQueue<PooledBuffer> _sendingQueue = new ConcurrentQueue<PooledBuffer>();
-        private int _fragSeq = 1;
+        private readonly ConcurrentQueue<(IMemoryOwner<byte> Buffer, int Length)> _sendingQueue = new ConcurrentQueue<(IMemoryOwner<byte>, int)>();
+        private SocketAsyncEventArgs _sendEventArgs;
         private int _inSendingFlag;
         private ushort _maxFragmentSize = 512;
         private IPEndPoint _remoteEndPoint;
-        private SocketAsyncEventArgs _sendEventArgs;
         private Socket _socket;
+        private readonly EngineConfig _config;
         
         public UdpNetworkSession(EngineConfig config)
         {
-            _sendBufferSize = config.SendBufferSize;
+            _config = config;
             _receiveBuffer = new PooledBuffer(config.ReceiveBufferSize);
         }
 
@@ -35,47 +36,25 @@ namespace SP.Engine.Client
         {
             if (!IsRunning) return false;
 
-            if (message.Size > _maxFragmentSize)
+            if (message.TotalLength > _maxFragmentSize)
             {
                 // 패킷 파편화
-                if (!EnqueueFragments(message)) return false;   
+                if (!message.TryExtractFragments(_maxFragmentSize, out var items))
+                    return false;
+
+                foreach (var item in items)
+                    _sendingQueue.Enqueue((item.Buffer, item.Length));
             }
             else
             {
                 // 단일 패킷 전송
-                var buffer = new PooledBuffer(message.Size);
-                message.WriteTo(buffer.Memory.Span);
-                _sendingQueue.Enqueue(buffer);
+                if (!message.TryExtractBuffer(out var bufferOwner, out var length)) return false;
+                _sendingQueue.Enqueue((bufferOwner, length));
             }
 
             if (Interlocked.CompareExchange(ref _inSendingFlag, 1, 0) == 0)
-            {
-                ExecuteSend();
-            }
+                FlushSend();
         
-            return true;
-        }
-        
-        private bool EnqueueFragments(UdpMessage message)
-        {
-            const int headerSize = UdpHeader.ByteSize;
-            const int fragHeaderSize = FragmentHeader.ByteSize;
-
-            var fragId = unchecked((uint)Interlocked.Increment(ref _fragSeq));
-            var maxBodyPerFrag = _maxFragmentSize - headerSize - fragHeaderSize;
-            var totalCount = (byte)Math.Ceiling((double)message.BodyLength / maxBodyPerFrag);
-
-            for (byte index = 0; index < totalCount; index++)
-            {
-                var bodyOffset = index * maxBodyPerFrag;
-                var fragLength = (ushort)Math.Min(message.BodyLength - bodyOffset, maxBodyPerFrag);
-                var totalSize = headerSize + fragHeaderSize + fragLength;
-            
-                var buffer = new PooledBuffer(totalSize);
-                message.WriteFragmentTo(buffer.Memory.Span, fragId, index, totalCount, bodyOffset, fragLength);
-            
-                _sendingQueue.Enqueue(buffer);
-            }
             return true;
         }
 
@@ -95,7 +74,7 @@ namespace SP.Engine.Client
                 _remoteEndPoint = new IPEndPoint(IPAddress.Parse(ip), port);
                 _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
                 _socket.Connect(_remoteEndPoint);
-                _socket.SendBufferSize = _sendBufferSize;
+                _socket.SendBufferSize = _config.SendBufferSize;
 
                 _receiveEventArgs.SetBuffer(_receiveBuffer.GetRawBuffer(), 0, _receiveBuffer.Length);
                 _receiveEventArgs.RemoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
@@ -144,36 +123,35 @@ namespace SP.Engine.Client
             }
             
             _receiveBuffer.Dispose();
-            while (_sendingQueue.TryDequeue(out var buffer)) buffer.Dispose();
+            while (_sendingQueue.TryDequeue(out var item)) item.Buffer.Dispose();
             OnClose();
         }
 
-        private void ExecuteSend()
+        private void FlushSend()
         {
-            if (!_sendingQueue.TryPeek(out var buffer))
+            if (!_sendingQueue.TryPeek(out var item))
             {
                 Interlocked.Exchange(ref _inSendingFlag, 0);
                 return;
             }
 
-            Send(buffer);
-        }
-
-        private void Send(PooledBuffer buffer)
-        {
-            if (_sendEventArgs == null)
+            var e = _sendEventArgs;
+            if (e == null)
             {
-                _sendEventArgs = new SocketAsyncEventArgs();
-                _sendEventArgs.Completed += OnSendCompleted;
+                e = new SocketAsyncEventArgs();
+                e.Completed += OnSendCompleted;
+                _sendEventArgs = e;
             }
-
+            
             try
             {
-                _sendEventArgs.SetBuffer(buffer.Memory);
-                _sendEventArgs.RemoteEndPoint = _remoteEndPoint;
+                e.SetBuffer(item.Buffer.Memory.Slice(0, item.Length));
+                e.RemoteEndPoint = _remoteEndPoint;
 
-                if (!_socket.SendAsync(_sendEventArgs))
-                    OnSendCompleted(this, _sendEventArgs);
+                if (!_socket.SendAsync(e))
+                {
+                    OnSendCompleted(this, e);
+                }
             }
             catch (Exception ex)
             {
@@ -184,14 +162,14 @@ namespace SP.Engine.Client
         
         private void OnSendCompleted(object sender, SocketAsyncEventArgs e)
         {
-            if (_sendingQueue.TryDequeue(out var completed))
+            if (_sendingQueue.TryDequeue(out var item))
             {
-                completed.Dispose();
+                item.Buffer.Dispose();
             }
 
             if (e.SocketError != SocketError.Success)
             {
-                while (_sendingQueue.TryDequeue(out var buffer)) buffer.Dispose();
+                while (_sendingQueue.TryDequeue(out var item1)) item1.Buffer.Dispose();
                 Interlocked.Exchange(ref _inSendingFlag, 0);
                 
                 var ex = new SocketException((int)e.SocketError);
@@ -201,7 +179,7 @@ namespace SP.Engine.Client
                 return;
             }
 
-            ExecuteSend();
+            FlushSend();
         }
 
         private void OnReceiveCompleted(object sender, SocketAsyncEventArgs e)

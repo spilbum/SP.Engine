@@ -24,34 +24,6 @@ public class PeerManager(ILogger logger, IEngineConfig config)
             ? peer 
             : _reconnectPendingPeers.TryGetValue(peerId, out var waiting) ? waiting.Peer : null;
 
-    public (double avgDwell, double avgExec, int pendingTotal) GetGlobalFiberMetrics()
-    {
-        var globalSumDwellMs = 0d;
-        var globalSumExecMs = 0d;
-        var globalCompletedCount = 0;
-        var globalPendingJobs = 0;
-
-        foreach (var peer in _activePeers.Values)
-        {
-            var metrics = peer.ExtractMetrics();
-            globalSumDwellMs += metrics.totalDwell;
-            globalSumExecMs += metrics.totalExec;
-            globalCompletedCount += metrics.count;
-            
-            globalPendingJobs += peer.PendingJobCount;
-        }
-
-        globalPendingJobs += _reconnectPendingPeers.Values.Sum(waiting => waiting.Peer.PendingJobCount);
-
-        if (globalCompletedCount == 0)
-            return (0, 0, globalPendingJobs);
-        
-        return (
-            globalSumDwellMs / globalCompletedCount, 
-            globalSumExecMs / globalCompletedCount,
-            globalPendingJobs);
-    }
-    
     public void Register(PeerBase peer)
     {
         if (!_activePeers.TryAdd(peer.PeerId, peer))
@@ -68,15 +40,11 @@ public class PeerManager(ILogger logger, IEngineConfig config)
     {
         // 대기 목록에서 먼저 제거
         if (!_reconnectPendingPeers.TryRemove(peerId, out var pending))
-        {
-            logger.Warn("No peer to reconnect pending: {0}, sessionId={1}", peerId, session.SessionId);
             return false;
-        }
 
         var peer = pending.Peer;
         if (!_activePeers.TryAdd(peerId, peer))
         {
-            logger.Warn("Failed to add active: {0}, sessionId={1}", peerId, session.SessionId);
             peer.Close(CloseReason.InternalError);
             return false;
         }

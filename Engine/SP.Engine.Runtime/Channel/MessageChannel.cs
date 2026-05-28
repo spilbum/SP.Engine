@@ -5,7 +5,8 @@ namespace SP.Engine.Runtime.Channel
     public enum ChannelKind : byte
     {
         Reliable = 0, // 순서보장/재전송
-        Unreliable = 1 // 비보장
+        Unreliable = 1, // 비보장
+        Count = 2
     }
 
     public interface IMessageChannel
@@ -17,7 +18,7 @@ namespace SP.Engine.Runtime.Channel
     public abstract class BaseMessageChannel<T> : IMessageChannel
     {
         public abstract ChannelKind Kind { get; }
-        public abstract bool TrySend(T message);
+        protected abstract bool TrySend(T message);
 
         bool IMessageChannel.TrySend(IMessage message)
             => message is T typed && TrySend(typed);
@@ -31,7 +32,7 @@ namespace SP.Engine.Runtime.Channel
 
         public override ChannelKind Kind => ChannelKind.Reliable;
 
-        public override bool TrySend(TcpMessage message)
+        protected override bool TrySend(TcpMessage message)
             => _sender.TrySend(message);
     }
 
@@ -43,7 +44,7 @@ namespace SP.Engine.Runtime.Channel
 
         public override ChannelKind Kind => ChannelKind.Unreliable;
 
-        public override bool TrySend(UdpMessage message)
+        protected override bool TrySend(UdpMessage message)
             => _sender.TrySend(message);
     }
 }

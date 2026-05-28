@@ -8,8 +8,6 @@ namespace SP.Engine.Runtime.Command
     {
         string Name { get; }
         Type ContextType { get; }
-        void Execute(ICommandContext context, IProtocolData protocol);
         void Execute(ICommandContext context, IMessage message);
-        IProtocolData Deserialize(ICommandContext context, IMessage message);
     }
 }

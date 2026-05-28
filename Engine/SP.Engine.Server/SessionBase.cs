@@ -1,14 +1,18 @@
 ﻿using System;
 using System.Buffers;
+using System.Collections;
 using System.Net;
+using System.Net.Sockets;
 using System.Threading;
 using SP.Core;
 using SP.Core.Logging;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Channel;
 using SP.Engine.Runtime.Command;
+using SP.Engine.Runtime.Compression;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
+using SP.Engine.Runtime.Security;
 using SP.Engine.Server.Configuration;
 
 namespace SP.Engine.Server;
@@ -26,17 +30,15 @@ public abstract class SessionBase : ICommandContext, IDisposable
     private readonly MessageChannelRouter _router = new();
     private EngineCore _engine;
     private IPolicySnapshot _policySnapshot;
-    private SessionReceiveBuffer _receiveBuffer;
+    private ReadWriteBuffer _readWriteBuffer;
     private long _sessionId;
     private volatile TcpNetworkSession _tcpNetworkSession;
     private long _lastActiveTimeTicks;
     private FragmentAssembler _fragmentAssembler;
     private volatile UdpNetworkSession _udpNetworkSession;
-    protected volatile int _state = (int)SessionState.None;
+    private readonly object _udpLock = new();
     
-    public bool IsPaused => _tcpNetworkSession?.IsPaused ?? true;
-    public void PauseReceive() => _tcpNetworkSession?.PauseReceive();
-    public void ResumeReceive() => _tcpNetworkSession?.ResumeReceive();
+    protected volatile int _state = (int)SessionState.None;
 
     public long SessionId
     {
@@ -56,25 +58,15 @@ public abstract class SessionBase : ICommandContext, IDisposable
     public ILogger Logger => _engine?.Logger;
     public IEngineConfig Config => _engine?.Config;
     public IPolicySnapshot PolicySnapshot => _policySnapshot;
-
-    public UdpNetworkSession UdpNetworkSession
-    {
-        get => _udpNetworkSession;
-        internal set
-        {
-            _udpNetworkSession = value;
-            _fragmentAssembler = new FragmentAssembler(
-                Config.Network.FragmentAssemblerCleanupPeriodSec,
-                Config.Network.FragmentAssemblerPendingMessageThreshold);
-            _router.Bind(new UnreliableChannel(value));
-        }
-    }
     
     public DateTime StartTime { get; }
     public CloseReason CloseReason { get; private set; }
     public bool IsAuthenticated { get; protected set; }
     public bool IsClosing => (SessionState)_state == SessionState.Closing;
     public bool IsClosed => (SessionState)_state == SessionState.Closed;
+
+    IEncryptor ICommandContext.Encryptor => null;
+    ICompressor ICommandContext.Compressor => null;
     
     public DateTime StartClosingTime { get; protected set; }
     
@@ -91,18 +83,17 @@ public abstract class SessionBase : ICommandContext, IDisposable
         _tcpNetworkSession = ns;
         _tcpNetworkSession.Session = this;
         _router.Bind(new ReliableChannel(ns));
-        _receiveBuffer = new SessionReceiveBuffer(_engine.Config.Network.ReceiveBufferSize);
+        _readWriteBuffer = new ReadWriteBuffer(_engine.Config.Network.ReceiveBufferSize);
         _policySnapshot = _engine.CreatePolicySnapshot(new PolicyGlobals(false, false, 0, 65536));
     }
 
-    TProtocol ICommandContext.Deserialize<TProtocol>(IMessage message)
-        => message.Deserialize<TProtocol>(null, null);
-
     public void CleanupFragmentAssembler()
     {
-        if (_udpNetworkSession == null) return;
+        var assembler = Volatile.Read(ref _fragmentAssembler);
+        if (assembler == null) return;
+
         var now = DateTime.UtcNow;
-        _fragmentAssembler.Cleanup(now);
+        assembler.Cleanup(now);
     }
 
     protected void EnableUdp()
@@ -123,7 +114,6 @@ public abstract class SessionBase : ICommandContext, IDisposable
 
     public bool Send(ChannelKind channel, IMessage message)
     {
-        using var sc = new SlowChecker(200, $"SessionBase.Send:{channel}:{message.Id}", Logger);
         switch (channel)
         {
             case ChannelKind.Reliable when message is not TcpMessage:
@@ -135,16 +125,99 @@ public abstract class SessionBase : ICommandContext, IDisposable
                 return true;
         }
     }
-
-    public void ProcessTcpBuffer(byte[] buffer, int offset, int length)
+    
+    internal void UpdateUdpNetworkSession(Socket socket, IPEndPoint remoteEndPoint)
     {
-        if (IsClosed || !_receiveBuffer.Write(buffer.AsSpan(offset, length))) return;
+        var ns = _udpNetworkSession;
+        if (ns == null)
+        {
+            lock (_udpLock)
+            {
+                ns ??= new UdpNetworkSession(this, socket, remoteEndPoint);
+                
+                _udpNetworkSession = ns;
+                _router.Bind(new UnreliableChannel(ns));
+                
+                var assembler = new FragmentAssembler(
+                    Config.Network.FragmentAssemblerCleanupPeriodSec,
+                    Config.Network.FragmentAssemblerPendingMessageThreshold);
+                Interlocked.Exchange(ref _fragmentAssembler, assembler);
+            }
+        }
+
+        ns.UpdateRemoteEndPoint(remoteEndPoint);
+    }
+
+    internal void CloseUdpChannel(CloseReason reason)
+    {
+        _router.Unbind(ChannelKind.Unreliable);
+
+        lock (_udpLock)
+        {
+            var udp = Interlocked.Exchange(ref _udpNetworkSession, null);
+            if (udp == null) return;
+            udp.Close(reason);
+            
+            var assembler = Interlocked.Exchange(ref _fragmentAssembler, null);
+            assembler?.Dispose();
+        }
+
+        OnUdpChannelClosed(reason);
+    }
+
+    protected virtual void OnUdpChannelClosed(CloseReason reason)
+    {
+        
+    }
+
+    internal void SetMaxFragmentSize(ushort mtu)
+    {
+        _udpNetworkSession?.SetMaxFragmentSize(mtu);
+    }
+    
+    internal void HandleUdpMessage(UdpHeader header, IMemoryOwner<byte> bufferOwner)
+    {
+        try
+        {
+            if (header.IsFragmented)
+            {
+                try
+                {
+                    var assembler = Volatile.Read(ref _fragmentAssembler);
+                    if (assembler == null) return;
+                    
+                    var payloadSpan = bufferOwner.Memory.Span[header.HeaderLength..];
+                    if (assembler.TryPush(header, payloadSpan, out var message))
+                    {
+                        MessageReceived(message);
+                    }
+                }
+                finally
+                {
+                    bufferOwner.Dispose();
+                }
+            }
+            else
+            {
+                var message = new UdpMessage(header, bufferOwner);
+                MessageReceived(message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex);
+        }
+    }
+
+    internal void ProcessTcpBuffer(byte[] buffer, int offset, int length)
+    {
+        if (IsClosed || !_readWriteBuffer.TryWrite(buffer.AsSpan(offset, length))) return;
 
         try
         {
-            while (_receiveBuffer.TryExtract(_policySnapshot, out var header, out var bodyOwner, out var bodyLength))
+            while (_readWriteBuffer.TryRead(_policySnapshot, out var header, out var bufferOwner))
             {
-                var message = new TcpMessage(header, bodyOwner, bodyLength);
+                var message = new TcpMessage(header, bufferOwner);
                 MessageReceived(message);
             }
         }
@@ -155,37 +228,6 @@ public abstract class SessionBase : ICommandContext, IDisposable
         }
     }
     
-    public void HandleUdpMessage(UdpHeader header, ReadOnlySpan<byte> bodyData)
-    {
-        try
-        {
-            if (header.IsFragmented)
-            {
-                if (_fragmentAssembler.TryPush(header, bodyData, out var message))
-                {
-                    MessageReceived(message);
-                }
-            }
-            else
-            {
-                IMemoryOwner<byte> owner = null;
-                if (header.BodyLength > 0)
-                {
-                    var pooled = new PooledBuffer(header.BodyLength);
-                    bodyData.CopyTo(pooled.Memory.Span);
-                    owner = pooled;
-                }
-            
-                var message = new UdpMessage(header, owner, header.BodyLength);
-                MessageReceived(message);
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Error(ex);
-        }
-    }
-
     protected virtual void MessageReceived(IMessage message)
     {
         LastActiveTimeTicks = DateTime.UtcNow.Ticks;
@@ -197,21 +239,16 @@ public abstract class SessionBase : ICommandContext, IDisposable
         
         Logger.Debug("Session {0} closed. reason: {1}", SessionId, reason);
         
-        var tcp = Interlocked.Exchange(ref _tcpNetworkSession, null);
-        if (tcp != null)
-        {
-            tcp.Close(reason);
-            _router.Unbind(ChannelKind.Reliable);
-        }
+        _router.Unbind(ChannelKind.Reliable);
+        _router.Unbind(ChannelKind.Unreliable);
         
-        var udp = Interlocked.Exchange(ref _udpNetworkSession, null);
-        if (udp != null)
-        {
-            udp.Close(reason);
-            _router.Unbind(ChannelKind.Unreliable);
-        }
+        var tcp = Interlocked.Exchange(ref _tcpNetworkSession, null);
+        tcp?.Close(reason);
 
-        _receiveBuffer.Dispose();
+        var udp = Interlocked.Exchange(ref _udpNetworkSession, null);
+        udp?.Close(reason);
+
+        _readWriteBuffer.Dispose();
         CloseReason = reason;
     }
 
@@ -226,7 +263,7 @@ public abstract class SessionBase : ICommandContext, IDisposable
         if (disposing)
         {
             _fragmentAssembler?.Dispose();
-            _receiveBuffer.Dispose();
+            _readWriteBuffer.Dispose();
         }
     }
 }

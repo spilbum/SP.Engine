@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using Common;
 using SP.Core;
+using SP.Core.Buffers;
 using SP.Core.Logging;
 using SP.Engine.Client.Configuration;
 using SP.Engine.Protocol;
@@ -69,17 +70,20 @@ internal static class Program
                 _manager?.StopEchoTest();
                 break;
             case "reconnect":
-                _manager?.Test_Reconnect();
+                if (args.Length > 1 && int.TryParse(args[1], out var delayMs))
+                {
+                    _manager?.Test_Reconnect(delayMs);
+                }
+                else
+                {
+                    _manager?.Test_Reconnect(0);
+                }
                 break;
             case "disconnect":
                 _manager?.Stop();
                 break;
             
             case "quit":
-#if DEBUG
-                BufferTracker.DumpLeaks(_manager?.Logger);
-#endif
-                
                 Environment.Exit(0);
                 break;                
             default:

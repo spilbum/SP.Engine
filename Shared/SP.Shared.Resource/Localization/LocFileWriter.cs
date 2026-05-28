@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
 using SP.Core;
+using SP.Core.Buffers;
 using SP.Core.Serialization;
 
 namespace SP.Shared.Resource.Localization;

@@ -1,11 +1,11 @@
 ﻿using System;
-using System.Collections.Concurrent;
+using System.Buffers;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
-using SP.Core;
+using SP.Engine.Runtime;
 using SP.Engine.Runtime.Networking;
 using Exception = System.Exception;
 
@@ -13,14 +13,12 @@ namespace SP.Engine.Server;
 
 public class UdpNetworkSession : NetworkSessionBase, IUnreliableSender
 {
-    private readonly Channel<PooledBuffer> _sendChannel;
+    private readonly Channel<(IMemoryOwner<byte> Buffer, int Length)> _sendChannel;
     private readonly CancellationTokenSource _cts = new();
-    
-    private uint _fragSeq;
     private ushort _maxFragmentSize;
     
     public UdpNetworkSession(
-        Session session,
+        SessionBase session,
         Socket client,
         IPEndPoint remoteEndPoint)
         : base (SocketMode.Udp, client)
@@ -29,14 +27,14 @@ public class UdpNetworkSession : NetworkSessionBase, IUnreliableSender
         RemoteEndPoint = remoteEndPoint;
         SetMaxFragmentSize(session.Config.Network.UdpMinMtu);
 
-        var channelOptions = new BoundedChannelOptions(4096)
-        {
-            SingleReader = true,
-            SingleWriter = false,
-            FullMode = BoundedChannelFullMode.DropWrite
-        };
+        _sendChannel = Channel.CreateBounded<(IMemoryOwner<byte>, int)>(
+            new BoundedChannelOptions(session.Config.Network.UdpSendQueueCapacity)
+            {
+                SingleReader = true,
+                SingleWriter = false,
+                FullMode = BoundedChannelFullMode.DropWrite
+            });
         
-        _sendChannel = Channel.CreateBounded<PooledBuffer>(channelOptions);
         Task.Run(ProcessSendLoopTask);
     }
 
@@ -44,50 +42,36 @@ public class UdpNetworkSession : NetworkSessionBase, IUnreliableSender
     {
         if (IsClosed || IsInClosingOrClosed) return false;
         
-        if (message.Size > _maxFragmentSize)
+        if (message.TotalLength > _maxFragmentSize)
         {
             // 패킷 파편화
-            if (!EnqueueFragments(message)) return false;   
+            if (!message.TryExtractFragments(_maxFragmentSize, out var fragments))
+                return false;
+            
+            for (var i = 0; i < fragments.Length; i++)
+            {
+                var item = fragments[i];
+                if (_sendChannel.Writer.TryWrite(item)) continue;
+                
+                // 버퍼 정리 후 채널 종료 
+                for (var j = i; j < fragments.Length; j++) 
+                    fragments[j].Buffer.Dispose();
+                Session.CloseUdpChannel(CloseReason.ServerBusy);
+                return false;
+            }
         }
         else
         {
             // 단일 패킷 전송
-            var buffer = new PooledBuffer(message.Size);
-            message.WriteTo(buffer.Memory.Span);
-
-            if (!_sendChannel.Writer.TryWrite(buffer))
-            {
-                buffer.Dispose();
+            if (!message.TryExtractBuffer(out var bufferOwner, out var length))
                 return false;
-            }
-        }
-        
-        return true;
-    }
 
-    private bool EnqueueFragments(UdpMessage message)
-    {
-        const int headerSize = UdpHeader.ByteSize;
-        const int fragHeaderSize = FragmentHeader.ByteSize;
-        
-        var fragId = Interlocked.Increment(ref _fragSeq);
-        var maxBodyPerFrag = _maxFragmentSize - headerSize - fragHeaderSize;
-        var totalCount = (byte)Math.Ceiling((double)message.BodyLength / maxBodyPerFrag);
-
-        for (byte index = 0; index < totalCount; index++)
-        {
-            var bodyOffset = index * maxBodyPerFrag;
-            var fragLength = (ushort)Math.Min(message.BodyLength - bodyOffset, maxBodyPerFrag);
-            var totalSize = headerSize + fragHeaderSize + fragLength;
+            if (_sendChannel.Writer.TryWrite((bufferOwner, length))) return true;
             
-            var buffer = new PooledBuffer(totalSize);
-            message.WriteFragmentTo(buffer.Memory.Span, fragId, index, totalCount, bodyOffset, fragLength);
-
-            if (!_sendChannel.Writer.TryWrite(buffer))
-            {
-                buffer.Dispose();
-                return false;
-            }
+            // 실패되면 채널 종료
+            bufferOwner.Dispose();
+            Session.CloseUdpChannel(CloseReason.ServerBusy);
+            return false;
         }
         
         return true;
@@ -102,33 +86,35 @@ public class UdpNetworkSession : NetworkSessionBase, IUnreliableSender
         {
             while (await reader.WaitToReadAsync(token))
             {
-                while (reader.TryRead(out var buffer))
+                while (reader.TryRead(out var item))
                 {
+                    var bufferOwner = item.Buffer;
+                    var length = item.Length;
                     var ep = RemoteEndPoint;
                     var client = _client;
                     
                     if (IsClosed || client == null || ep == null)
                     {
-                        buffer.Dispose();
+                        bufferOwner.Dispose();
                         return;
                     }
 
                     if (!IncrementIo())
                     {
-                        buffer.Dispose();
+                        bufferOwner.Dispose();
                         return;
                     }
 
                     if (!TryAddState(SocketState.InSending))
                     {
                         DecrementIo();
-                        buffer.Dispose();
+                        bufferOwner.Dispose();
                         return;
                     }
 
                     try
                     {
-                        await _client.SendToAsync(buffer.Memory, SocketFlags.None, ep, token);
+                        await _client.SendToAsync(bufferOwner.Memory[..length], SocketFlags.None, ep, token);
                     }
                     catch (Exception ex)
                     {
@@ -136,7 +122,7 @@ public class UdpNetworkSession : NetworkSessionBase, IUnreliableSender
                     }
                     finally
                     {
-                        buffer.Dispose();
+                        bufferOwner.Dispose();
                         RemoveState(SocketState.InSending);
                         DecrementIo();
                     }
@@ -167,7 +153,9 @@ public class UdpNetworkSession : NetworkSessionBase, IUnreliableSender
         _sendChannel.Writer.Complete();
         _cts.Cancel();
         
-        while (_sendChannel.Reader.TryRead(out var buffer)) buffer.Dispose();
+        while (_sendChannel.Reader.TryRead(out var item))
+            item.Buffer.Dispose();
+        
         _cts.Dispose();
     }
     

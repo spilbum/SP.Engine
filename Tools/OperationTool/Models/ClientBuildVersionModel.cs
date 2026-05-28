@@ -1,4 +1,3 @@
-using CloudKit;
 using OperationTool.DatabaseHandler;
 using OperationTool.ViewModels;
 using SP.Shared.Resource;

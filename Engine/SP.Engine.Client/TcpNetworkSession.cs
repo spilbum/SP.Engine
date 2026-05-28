@@ -3,6 +3,7 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using SP.Core;
+using SP.Core.Buffers;
 using SP.Engine.Client.Configuration;
 using SP.Engine.Runtime.Networking;
 
@@ -10,22 +11,21 @@ namespace SP.Engine.Client
 {
     public class TcpNetworkSession : IReliableSender
     {
-        private readonly ByteRingBuffer _sendBuffer;
+        private readonly ByteRingBuffer _sendRingBuffer;
         private readonly object _sendLock = new object();
         private bool _isSending;
         private readonly PooledBuffer _localSendBuffer = new PooledBuffer(64 * 1024);
-        
         private bool _isConnecting;
         private PooledBuffer _receiveBuffer;
         private SocketAsyncEventArgs _receiveEventArgs;
         private SocketAsyncEventArgs _sendEventArgs;
         private Socket _socket;
-        private EngineConfig _config;
+        private readonly EngineConfig _config;
 
         public TcpNetworkSession(EngineConfig config)
         {
             _config = config;
-            _sendBuffer = new ByteRingBuffer(config.SendBufferSize);
+            _sendRingBuffer = new ByteRingBuffer(1024 * 1024); // 1MB
         }
 
         public bool IsConnected { get; private set; }
@@ -51,21 +51,22 @@ namespace SP.Engine.Client
             if (!IsConnected)
                 return false;
 
-            var messageSize = message.Size;
-            if (messageSize > _localSendBuffer.Length)
+            if (!message.TryExtractBuffer(out var bufferOwner, out var length))
                 return false;
 
             lock (_sendLock)
             {
-                var span = _localSendBuffer.Slice(0, messageSize);
-                message.WriteTo(span);
-                
-                if (!_sendBuffer.TryWrite(span))
-                    return false;
+                var success = _sendRingBuffer.TryWrite(bufferOwner.Memory.Span.Slice(0, length));
+                bufferOwner.Dispose();
 
-                if (_isSending)
-                    return true;
+                if (!success)
+                {
+                    Console.WriteLine("_sendRingBuffer.TryWrite failed. available={0}, pending={1}",
+                        _sendRingBuffer.GetAvailableSpace(), _sendRingBuffer.GetPendingBytes());
+                    return false;
+                }
                 
+                if (_isSending) return true;
                 _isSending = true;
             }
             
@@ -317,7 +318,7 @@ namespace SP.Engine.Client
 
                 lock (_sendLock)
                 {
-                    length = _sendBuffer.GetContiguousReadBlock(out offset);
+                    length = _sendRingBuffer.GetContiguousReadBlock(out offset);
                     if (length == 0)
                     {
                         _isSending = false;
@@ -328,7 +329,7 @@ namespace SP.Engine.Client
                 try
                 {
                     var e = _sendEventArgs;
-                    e.SetBuffer(_sendBuffer.GetRawBuffer(), offset, length);
+                    e.SetBuffer(_sendRingBuffer.GetRawBuffer(), offset, length);
 
                     if (socket.SendAsync(e))
                         return;
@@ -371,7 +372,7 @@ namespace SP.Engine.Client
 
             lock (_sendLock)
             {
-                _sendBuffer.Consume(e.BytesTransferred);
+                _sendRingBuffer.Consume(e.BytesTransferred);
             }
             
             return true;
@@ -393,7 +394,7 @@ namespace SP.Engine.Client
             lock (_sendLock)
             {
                 _isSending = false;
-                _sendBuffer.Clear();
+                _sendRingBuffer.Clear();
                 _localSendBuffer.Dispose();
             }
             

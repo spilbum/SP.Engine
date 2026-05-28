@@ -57,19 +57,7 @@ public sealed record SessionConfig
     /// 커넥터 상태 체크 주기
     /// </summary>
     public int ConnectorUpdateIntervalMs { get; init; } = 30;
-    
-    /// <summary>
-    /// 작업 큐 과부하로 수신을 중단할 시점
-    /// </summary>
-    public int PeerJobBackPressureThreshold { get; init; } = 200;
-    /// <summary>
-    /// 수신 중단 후 다시 수신을 재개할 큐 크기
-    /// </summary>
-    public int PeerJobResumeThreshold { get; init; } = 50;
-    /// <summary>
-    /// 느린 처리를 경고하거나 기록할 임계치
-    /// </summary>
-    public int PeerJobSlowThresholdMs { get; init; } = 200;
+    public int UserCommandSlowThresholdMs { get; init; } = 100;
     
     /// <summary>
     /// UDP 상태 체크 주기

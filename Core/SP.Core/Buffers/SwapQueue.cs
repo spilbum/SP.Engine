@@ -2,7 +2,7 @@ using System;
 using System.Buffers;
 using System.Collections.Generic;
 
-namespace SP.Core
+namespace SP.Core.Buffers
 {
     public sealed class SwapQueue<T> : IDisposable
     {

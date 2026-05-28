@@ -1,25 +1,23 @@
 using System;
-using SP.Core.Logging;
 
 namespace SP.Engine.Runtime.Networking
 {
     public readonly struct TcpHeader : IHeader
     {
-        public const int ByteSize = 1 + 4 + 4 + 2 + 4; // 15 bytes
+        public const int ByteSize = 1 + 4 + 2 + 4; // 11 bytes
 
+        public int HeaderLength => ByteSize;
         public HeaderFlags Flags { get; }
         public uint SequenceNumber { get; }
-        public uint AckNumber { get; }
         public ushort ProtocolId { get; }
-        public int BodyLength { get; }
+        public int PayloadLength { get; }
 
-        public TcpHeader(HeaderFlags flags, uint sequenceNumber, uint ackNumber, ushort protocolId, int bodyLength)
+        public TcpHeader(HeaderFlags flags, uint sequenceNumber, ushort protocolId, int payloadLength)
         {
             Flags = flags;
             SequenceNumber = sequenceNumber;
-            AckNumber = ackNumber;
             ProtocolId = protocolId;
-            BodyLength = bodyLength;
+            PayloadLength = payloadLength;
         }
 
         public bool HasFlag(HeaderFlags flags)
@@ -31,9 +29,8 @@ namespace SP.Engine.Runtime.Networking
         {
             destination[0] = (byte)Flags;
             destination.WriteUInt32(1, SequenceNumber);
-            destination.WriteUInt32(5, AckNumber);
-            destination.WriteUInt16(9, ProtocolId);
-            destination.WriteInt32(11, BodyLength);
+            destination.WriteUInt16(5, ProtocolId);
+            destination.WriteInt32(7, PayloadLength);
         }
 
         public static bool TryRead(ReadOnlySpan<byte> source, out TcpHeader header, out int byteConsumed)
@@ -45,10 +42,9 @@ namespace SP.Engine.Runtime.Networking
             
             var flags = (HeaderFlags)source[0];
             var sequenceNumber = source.ReadUInt32(1);
-            var ackNumber = source.ReadUInt32(5);
-            var protocolId = source.ReadUInt16(9);
-            var bodyLength = source.ReadInt32(11);
-            header = new TcpHeader(flags, sequenceNumber, ackNumber, protocolId, bodyLength);
+            var protocolId = source.ReadUInt16(5);
+            var payloadLength = source.ReadInt32(7);
+            header = new TcpHeader(flags, sequenceNumber, protocolId, payloadLength);
             byteConsumed = ByteSize;
             return true;
         }
@@ -59,28 +55,20 @@ namespace SP.Engine.Runtime.Networking
         private HeaderFlags _flags;
         private ushort _protocolId;
         private uint _sequenceNumber;
-        private uint _ackNumber;
-        private int _bodyLength;
+        private int _payloadLength;
 
         public TcpHeaderBuilder From(TcpHeader header)
         {
             _flags = header.Flags;
             _sequenceNumber = header.SequenceNumber;
-            _ackNumber = header.AckNumber;
             _protocolId = header.ProtocolId;
-            _bodyLength = header.BodyLength;
+            _payloadLength = header.PayloadLength;
             return this;
         }
 
         public TcpHeaderBuilder WithSequenceNumber(uint sequenceNumber)
         {
             _sequenceNumber = sequenceNumber;
-            return this;
-        }
-
-        public TcpHeaderBuilder WithAckNumber(uint ackNumber)
-        {
-            _ackNumber = ackNumber;
             return this;
         }
 
@@ -96,15 +84,15 @@ namespace SP.Engine.Runtime.Networking
             return this;
         }
 
-        public TcpHeaderBuilder WithBodyLength(int bodyLength)
+        public TcpHeaderBuilder WithPayloadLength(int payloadLength)
         {
-            _bodyLength = bodyLength;
+            _payloadLength = payloadLength;
             return this;
         }
 
         public TcpHeader Build()
         {
-            return new TcpHeader(_flags, _sequenceNumber, _ackNumber, _protocolId, _bodyLength);
+            return new TcpHeader(_flags, _sequenceNumber, _protocolId, _payloadLength);
         }
     }
 }

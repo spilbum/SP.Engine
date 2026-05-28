@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
 
@@ -7,7 +6,7 @@ namespace SP.Engine.Runtime.Command
 {
     public abstract class CommandBase<TContext, TProtocol> : ICommand
         where TContext : ICommandContext
-        where TProtocol : IProtocolData
+        where TProtocol : class, IProtocolData, new()
     {
         public string Name => GetType().Name;
         public Type ContextType => typeof(TContext);
@@ -31,30 +30,24 @@ namespace SP.Engine.Runtime.Command
         {
             if (!(context is TContext ctx)) return;
 
-            try
-            {
-                var p = (TProtocol)Deserialize(context, message);
-                ExecuteCommand(ctx, p);
-            }
-            catch (Exception e)
-            {
-                context.Logger.Error(e);
-            }
-        }
+            var instance = ProtocolPool<TProtocol>.Rent();
 
-        public IProtocolData Deserialize(ICommandContext context, IMessage message)
-        {
             try
             {
-                var p = context.Deserialize<TProtocol>(message);
-                if (p == null)
-                    throw new InvalidDataException($"Failed to deserialize message: id={message.Id}");
-                return p;
+                if (!message.Deserialize(instance, ctx.Encryptor, ctx.Compressor))
+                {
+                    throw new InvalidOperationException($"Failed to deserialize message: {message.Id}");    
+                }
+                
+                ExecuteCommand(ctx, instance);
             }
             catch (Exception e)
             {
-                context.Logger.Error(e);
-                return null;
+                context.Logger.Error(e, "Command execution failed in {0}", Name);
+            }
+            finally
+            {
+                ProtocolPool<TProtocol>.Return(instance);
             }
         }
 

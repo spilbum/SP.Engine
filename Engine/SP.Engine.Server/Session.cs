@@ -14,7 +14,7 @@ public sealed class Session(long sessionId) : SessionBase(sessionId)
     private int _udpHealthFailCount;
     private IDisposable _udpHealthCheckTimer;
     private PeerBase _peer;
-
+    
     public PeerBase Peer
     {
         get => _peer;
@@ -56,6 +56,14 @@ public sealed class Session(long sessionId) : SessionBase(sessionId)
         }
     }
 
+    protected override void OnUdpChannelClosed(CloseReason reason)
+    {
+        base.OnUdpChannelClosed(reason);
+
+        SendUdpStatusNotify(false);
+        Logger.Debug("Session {0} UDP channel closed. Reason: {1}", SessionId, reason);
+    }
+
     internal void SendUdpStatusNotify(bool enabled)
     {
         InternalSend(new S2CEngineProtocolData.UdpStatusNotify { IsEnabled = enabled });
@@ -92,11 +100,6 @@ public sealed class Session(long sessionId) : SessionBase(sessionId)
         Peer = peer;
         IsAuthenticated = true;
         SetupProtocolPolicy();
-    }
-
-    internal void SetMaxFragmentSize(ushort mtu)
-    {
-        UdpNetworkSession?.SetMaxFragmentSize(mtu);
     }
 
     internal bool InternalSend(IProtocolData data)
@@ -151,11 +154,6 @@ public sealed class Session(long sessionId) : SessionBase(sessionId)
     protected override void MessageReceived(IMessage message)
     {
         base.MessageReceived(message);
-        
-        var peer = Peer;
-        if (peer != null && message is TcpMessage { AckNumber: > 0 } tcp)
-            peer.HandleRemoteAck(tcp.AckNumber);
-            
         Engine.ExecuteCommand(this, message);
     }
 

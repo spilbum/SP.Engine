@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Net;
 using System.Threading;
 
 namespace SP.Core.Fiber
@@ -14,7 +13,8 @@ namespace SP.Core.Fiber
         
         public string Name { get; }
         public bool IsDisposed => _disposed;
-        public int QueueCount => _queue.PendingCount;
+        public int QueuePendingCount => _queue.PendingCount;
+        public int QueueCapacity => _queue.Capacity;
 
         private long _totalExceptionCount;
 
