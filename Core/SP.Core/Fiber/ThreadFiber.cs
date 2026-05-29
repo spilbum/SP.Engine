@@ -126,22 +126,6 @@ namespace SP.Core.Fiber
             }
         }
 
-        public FiberSnapshot GetSnapshot()
-        {
-            return new FiberSnapshot
-            {
-                Name = Name,
-                IsWorking = !_disposed,
-                QueuePendingCount = _queue.PendingCount,
-                QueueCapacity = _queue.Capacity,
-                TotalProcessedCount = _queue.TotalProcessedCount,
-                TotalDroppedCount = _queue.TotalDroppedCount,
-                TotalDequeueCount = _queue.TotalDequeuedCount,
-                AvgBatchCount = _queue.AvgBatchSize,
-                TotalExceptionCount = Volatile.Read(ref _totalExceptionCount),
-            };
-        }
-
         public void Dispose()
         {
             if (_disposed) return;

@@ -32,7 +32,5 @@ namespace SP.Core
                 Value = (1 - _alpha) * Value + _alpha * newValue;
             }
         }
-
-        public void Reset() => IsInitialized = false;
     }
 }

@@ -2,14 +2,10 @@ using System;
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Text;
+using SP.Core.Buffers;
 
 namespace SP.Core.Serialization
 {
-    public interface IBufferResizer
-    {
-        Span<byte> Resize(int size, int position);
-    }
-    
     public ref struct NetWriter
     {
         private Span<byte> _buffer;

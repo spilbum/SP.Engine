@@ -19,7 +19,7 @@ namespace SP.Engine.Runtime.Networking
             Length = length;
         }
 
-        public static bool TryRead(ReadOnlySpan<byte> source, out FragmentHeader header, out int byteConsumed)
+        public static bool TryParse(ReadOnlySpan<byte> source, out FragmentHeader header, out int byteConsumed)
         {
             header = default;
             byteConsumed = 0;
@@ -35,13 +35,13 @@ namespace SP.Engine.Runtime.Networking
             return true;
         }
 
-        public void WriteTo(Span<byte> dst)
+        public void WriteTo(Span<byte> destination)
         {
-            if (dst.Length < ByteSize) throw new ArgumentException("destination too small");
-            dst.WriteUInt32(0, FragId);
-            dst[4] = Index;
-            dst[5] = TotalCount;
-            dst.WriteUInt16(6, Length);
+            if (destination.Length < ByteSize) throw new ArgumentException("destination too small");
+            destination.WriteUInt32(0, FragId);
+            destination[4] = Index;
+            destination[5] = TotalCount;
+            destination.WriteUInt16(6, Length);
         }
     }
 }

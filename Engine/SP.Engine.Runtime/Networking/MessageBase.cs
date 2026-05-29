@@ -1,7 +1,6 @@
 using System;
 using System.Buffers;
 using System.Threading;
-using SP.Core;
 using SP.Core.Buffers;
 using SP.Core.Serialization;
 using SP.Engine.Runtime.Compression;
@@ -140,13 +139,13 @@ namespace SP.Engine.Runtime.Networking
             }
         }
 
-        public bool Deserialize<TProtocol>(TProtocol instance, IEncryptor encryptor, ICompressor compressor)
+        public void Deserialize<TProtocol>(TProtocol instance, IEncryptor encryptor, ICompressor compressor)
             where TProtocol : class, IProtocolData, new()
         {
-            if (instance == null) return false;
+            if (instance == null) throw new ArgumentNullException(nameof(instance));
             
             var srcSpan = PayloadSpan;
-            if (srcSpan.IsEmpty) return false;
+            if (srcSpan.IsEmpty) throw new InvalidOperationException("Payload is empty");
 
             var maxPlaintextLen = srcSpan.Length;
             if (HasFlag(HeaderFlags.Encrypted) && compressor != null)
@@ -175,7 +174,6 @@ namespace SP.Engine.Runtime.Networking
 
                 var reader = new NetReader(srcSpan);
                 NetSerializer<TProtocol>.Deserialize(ref reader, instance);
-                return true;
             }
             finally
             {

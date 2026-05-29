@@ -2,7 +2,6 @@ using System;
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Threading;
-using SP.Core;
 using SP.Core.Buffers;
 
 namespace SP.Engine.Runtime.Networking
@@ -113,7 +112,7 @@ namespace SP.Engine.Runtime.Networking
             message = null;
             if (_disposed) return false;
 
-            if (!FragmentHeader.TryRead(payload, out var fragHeader, out var fragHeaderConsumed)) return false;
+            if (!FragmentHeader.TryParse(payload, out var fragHeader, out var fragHeaderConsumed)) return false;
             
             var fragData = payload[fragHeaderConsumed..];
                 

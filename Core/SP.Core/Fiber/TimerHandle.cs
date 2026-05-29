@@ -82,7 +82,7 @@ namespace SP.Core.Fiber
         {
             _fiber = fiber;
             _action = action;
-            _state = state;;
+            _state = state;
         }
 
         protected override void OnTick()

@@ -104,7 +104,7 @@ namespace SP.Engine.Server
                     _prevGcCounts[i] = currentGcCounts[i];
                 }
 
-                var activeBuf = BufferMetrics.GetRentCount();
+                var bufferSnapshot = BufferMetrics.Snapshot();
 
                 var metrics = new PerfMetrics
                 {
@@ -116,7 +116,7 @@ namespace SP.Engine.Server
                     GcDelta = deltaGc,
                     ThreadCount = _proc.Threads.Count,
                     SessionCount = sessionCount,
-                    ActiveBufferCount = activeBuf
+                    ActiveBufferCount = bufferSnapshot.ActiveRent
                 };
 
                 _prevTotalCpu = totalCpu;

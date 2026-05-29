@@ -9,7 +9,7 @@ namespace SP.Engine.Runtime.Networking
     {
         ushort Id { get; }
         void Retain();
-        bool Deserialize<TProtocol>(TProtocol instance, IEncryptor encryptor, ICompressor compressor) 
+        void Deserialize<TProtocol>(TProtocol instance, IEncryptor encryptor, ICompressor compressor) 
             where TProtocol : class, IProtocolData, new();
     }
 }

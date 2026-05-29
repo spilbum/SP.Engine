@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
-using System.Runtime.CompilerServices;
 using System.Threading;
 
 namespace SP.Core.Fiber
@@ -9,28 +7,28 @@ namespace SP.Core.Fiber
     {
         public static IWorkJob From(Action action)
         {
-            var job = SimplePool<DelegateJob>.Rent();
+            var job = WorkJobPool<DelegateJob>.Rent();
             job.Init(action);
             return job;
         }
 
         public static IWorkJob From<T>(Action<T> action, T state)
         {
-            var job = SimplePool<StateJob<T>>.Rent();
+            var job = WorkJobPool<StateJob<T>>.Rent();
             job.Init(action, state);
             return job;
         }
         
         public static IWorkJob From<T1, T2>(Action<T1, T2> action, T1 state1, T2 state2)
         {
-            var job = SimplePool<StateJob<T1, T2>>.Rent();
+            var job = WorkJobPool<StateJob<T1, T2>>.Rent();
             job.Init(action, state1, state2);
             return job;
         }
 
         public static IWorkJob From<T1, T2, T3>(Action<T1, T2, T3> action, T1 state1, T2 state2, T3 state3)
         {
-            var job = SimplePool<StateJob<T1, T2, T3>>.Rent();
+            var job = WorkJobPool<StateJob<T1, T2, T3>>.Rent();
             job.Init(action, state1, state2, state3);
             return job;
         }
@@ -60,7 +58,7 @@ namespace SP.Core.Fiber
                 
                 Name = null;
                 _action = null;
-                SimplePool<DelegateJob>.Return(this);
+                WorkJobPool<DelegateJob>.Return(this);
             }
         }
         
@@ -92,7 +90,7 @@ namespace SP.Core.Fiber
                 Name = null;
                 _run = null;
                 _state = default;
-                SimplePool<StateJob<T>>.Return(this);
+                WorkJobPool<StateJob<T>>.Return(this);
             }
         }
         
@@ -125,7 +123,7 @@ namespace SP.Core.Fiber
                 _run = null;
                 _s1 = default;
                 _s2 = default;
-                SimplePool<StateJob<T1, T2>>.Return(this);
+                WorkJobPool<StateJob<T1, T2>>.Return(this);
             }
         }
 
@@ -160,7 +158,7 @@ namespace SP.Core.Fiber
                 _s1 = default;
                 _s2 = default; 
                 _s3 = default;
-                SimplePool<StateJob<T1, T2, T3>>.Return(this);
+                WorkJobPool<StateJob<T1, T2, T3>>.Return(this);
             }
         }
     }

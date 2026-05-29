@@ -5,24 +5,6 @@ using System.Threading;
 
 namespace SP.Core.Buffers
 {
-    public static class BufferMetrics
-    {
-        private static long _activeRentCount;
-
-        public static void OnRent()
-        {
-            Interlocked.Increment(ref _activeRentCount);
-        }
-
-        public static void OnReturn()
-        {
-            Interlocked.Decrement(ref _activeRentCount);
-        }
-        
-        public static long GetRentCount()
-            => Interlocked.Read(ref _activeRentCount);
-    }
-    
     public sealed class PooledBuffer : IMemoryOwner<byte>
     {
         private const int DefaultCapacity = 1024;
