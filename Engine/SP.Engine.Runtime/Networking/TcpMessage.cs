@@ -1,39 +1,32 @@
-﻿using System.Buffers;
-
+﻿
 namespace SP.Engine.Runtime.Networking
 {
-    public class TcpMessage : MessageBase<TcpHeader>
+    public class TcpMessage : MessageBase<TcpHeader, TcpMessage>
     {
-        public TcpMessage()
-        {
-        }
-
-        public TcpMessage(TcpHeader header, IMemoryOwner<byte> bufferOwner) : base(header, bufferOwner)
-        {
-        }
-
         protected override int HeaderLength => TcpHeader.ByteSize;
 
-        public uint SequenceNumber => Header.SequenceNumber;
-
+        public uint SequenceNumber => _header.SequenceNumber;
+        
         public void SetSequenceNumber(uint sequenceNumber)
         {
-            Header = new TcpHeaderBuilder()
-                .From(Header)
-                .WithSequenceNumber(sequenceNumber)
-                .Build();
+            _header = new TcpHeader(
+                _header.Flags,
+                sequenceNumber,
+                _header.ProtocolId,
+                _header.PayloadLength
+            );
             
             UpdateHeaderInBuffer();
         }
 
         protected override TcpHeader CreateHeader(HeaderFlags flags, ushort protocolId, int payloadLength)
         {
-            return new TcpHeaderBuilder()
-                .From(Header)
-                .AddFlag(flags)
-                .WithProtocolId(protocolId)
-                .WithPayloadLength(payloadLength)
-                .Build();
+            return new TcpHeader(
+                flags,
+                0,
+                protocolId,
+                payloadLength
+            );
         }
     }
 }

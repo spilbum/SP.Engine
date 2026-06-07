@@ -2,6 +2,7 @@ using Common;
 using GameServer.UserPeer;
 using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Protocol;
+using SP.Engine.Server.Protocol;
 
 namespace GameServer.Command;
 
@@ -10,7 +11,10 @@ public class UdpEchoReq : CommandBase<GamePeer, C2GProtocolData.UdpEchoReq>
 {
     protected override void ExecuteCommand(GamePeer context, C2GProtocolData.UdpEchoReq protocol)
     {
-        //context.Logger.Debug("Session {0} UDP echo: {1} bytes", context.Session.SessionId, protocol.Data?.Length);
-        context.Send(new G2CProtocolData.UdpEchoAck { Seq = protocol.Seq, SentTicks = protocol.SentTicks, Data = protocol.Data });
+        using var scope = ProtocolScope<G2CProtocolData.UdpEchoAck>.Rent(context.Logger);
+        scope.Protocol.Seq = protocol.Seq;
+        scope.Protocol.SentTicks = protocol.SentTicks;
+        scope.Protocol.Data = protocol.Data;
+        context.Send(scope.Protocol);
     }
 }

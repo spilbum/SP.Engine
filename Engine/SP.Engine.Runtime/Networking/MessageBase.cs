@@ -9,66 +9,96 @@ using SP.Engine.Runtime.Security;
 
 namespace SP.Engine.Runtime.Networking
 {
-    public abstract class MessageBase<THeader> : IMessage where THeader : IHeader
+    public abstract class MessageBase<THeader, TMessage> : IMessage
+        where THeader : IHeader
+        where TMessage : MessageBase<THeader, TMessage>, new()
     {
         private const int LIMIT_PAYLOAD_LENGTH = 64 * 1024;
-        
-        private int _refCount;
         private IMemoryOwner<byte> _bufferOwner;
-        protected THeader Header { get; set; }
-
-        public int PayloadLength => Header?.PayloadLength ?? 0;
+        protected THeader _header;
+        
+        public ushort Id => _header?.ProtocolId ?? 0;
+        public int PayloadLength => _header?.PayloadLength ?? 0;
         public int TotalLength => HeaderLength + PayloadLength;
-        public ushort Id => Header?.ProtocolId ?? 0;
+        public bool IsEmpty => Volatile.Read(ref _bufferOwner) == null;
         
         protected abstract int HeaderLength { get; }
-        
-        protected MessageBase() { }
 
-        protected MessageBase(THeader header, IMemoryOwner<byte> bufferOwner)
+        public void Initialize(THeader header, IMemoryOwner<byte> bufferOwner)
         {
-            Header = header;
+            _header = header;
             _bufferOwner = bufferOwner;
-            Retain();
         }
 
-        protected Span<byte> PayloadSpan => _bufferOwner != null
+        private Span<byte> PayloadSpan => _bufferOwner != null
             ? _bufferOwner.Memory.Span.Slice(HeaderLength, PayloadLength)
             : Span<byte>.Empty;
 
         protected void UpdateHeaderInBuffer()
         {
-            if (_bufferOwner == null || Header == null) return;
-            Header.WriteTo(_bufferOwner.Memory.Span[..HeaderLength]);
+            if (_bufferOwner == null || _header == null) return;
+            _header.WriteTo(_bufferOwner.Memory.Span[..HeaderLength]);
         }
 
-        public void Retain() => Interlocked.Increment(ref _refCount);
-
-        public bool TryExtractBuffer(out IMemoryOwner<byte> bufferOwner, out int length)
+        public TMessage Extract()
         {
-            if (_bufferOwner == null)
-            {
-                bufferOwner = null;
-                length = 0;
-                return false;
-            }
+            var owner = Interlocked.Exchange(ref _bufferOwner, null);
+            if (owner == null)
+                throw new ObjectDisposedException(nameof(MessageBase<THeader, TMessage>),
+                    "Cannot extract an empty or disposed message.");
             
-            bufferOwner = Interlocked.Exchange(ref _bufferOwner, null);
-            if (bufferOwner == null)
+            var message = MessagePool<TMessage>.Rent();
+            message.Initialize(_header, owner);
+            return message;
+        }
+
+        public TMessage Clone()
+        {
+            var owner = Volatile.Read(ref _bufferOwner);
+            if (owner == null)
+                throw new ObjectDisposedException(nameof(MessageBase<THeader, TMessage>),
+                    "Cannot clone an empty or disposed message.");
+
+            var newOwner = BufferOwnerPool.Rent(TotalLength);
+            owner.Memory.Span[..TotalLength].CopyTo(newOwner.Memory.Span);
+            
+            var message = MessagePool<TMessage>.Rent();
+            message.Initialize(_header, newOwner);
+            return message;
+        }
+        
+        public bool TryGetBuffer(out ReadOnlyMemory<byte> memory)
+        {
+            var owner = Volatile.Read(ref _bufferOwner);
+            if (owner == null)
             {
-                length = 0;
+                memory = default;
                 return false;
             }
 
-            length = TotalLength;
-            return true;
+            try
+            {
+                memory = _bufferOwner.Memory[..TotalLength];
+                return true;
+            }
+            catch (ObjectDisposedException)
+            {
+                memory = default;
+                return false;
+            }
         }
         
         public void Dispose()
         {
-            if (Interlocked.Decrement(ref _refCount) != 0) return;
-            _bufferOwner?.Dispose();
-            _bufferOwner = null;
+            var owner = Interlocked.Exchange(ref _bufferOwner, null);
+            owner?.Dispose();
+
+            _header = default;
+
+            if (this is TMessage message)
+            {
+                MessagePool<TMessage>.Return(message);
+            }
         }
 
         public void Serialize(
@@ -79,7 +109,7 @@ namespace SP.Engine.Runtime.Networking
         {
             if (protocol is null) throw new ArgumentNullException(nameof(protocol));
             
-            var headerSize = Header.HeaderLength;
+            var headerSize = _header.HeaderLength;
             var maxPayloadLength = policy?.MaxPayloadLength ?? LIMIT_PAYLOAD_LENGTH;
             
             if (policy is { UseCompress: true } && compressor != null)
@@ -89,11 +119,11 @@ namespace SP.Engine.Runtime.Networking
                 maxPayloadLength = encryptor.GetCiphertextLength(maxPayloadLength);
 
             var bufferCapacity = Math.Min(LIMIT_PAYLOAD_LENGTH, headerSize + maxPayloadLength);
-            var bufferOwner = new PooledBuffer(bufferCapacity);
+            var bufferOwner = BufferOwnerPool.Rent(bufferCapacity);
             
             var totalSpan = bufferOwner.Memory.Span;
-
             var span = totalSpan[headerSize..];
+            
             var writer = new NetWriter(span);
             protocol.Serialize(ref writer);    
             
@@ -126,11 +156,9 @@ namespace SP.Engine.Runtime.Networking
                     flags |= HeaderFlags.Encrypted;
                 }     
                 
-                Header = CreateHeader(flags, protocol.Id, written);
-                Header.WriteTo(totalSpan[..headerSize]);
-                
+                _header = CreateHeader(flags, protocol.Id, written);
+                _header.WriteTo(totalSpan[..headerSize]);
                 _bufferOwner = bufferOwner;
-                Retain();
             }
             catch
             {
@@ -139,49 +167,49 @@ namespace SP.Engine.Runtime.Networking
             }
         }
 
-        public void Deserialize<TProtocol>(TProtocol instance, IEncryptor encryptor, ICompressor compressor)
+        public void Deserialize<TProtocol>(TProtocol protocol, IEncryptor encryptor, ICompressor compressor)
             where TProtocol : class, IProtocolData, new()
         {
-            if (instance == null) throw new ArgumentNullException(nameof(instance));
+            if (protocol == null) throw new ArgumentNullException(nameof(protocol));
             
-            var srcSpan = PayloadSpan;
-            if (srcSpan.IsEmpty) throw new InvalidOperationException("Payload is empty");
+            var sourceSpan = PayloadSpan;
+            if (sourceSpan.IsEmpty) return;
 
-            var maxPlaintextLen = srcSpan.Length;
+            var maxPlaintextLen = sourceSpan.Length;
             if (HasFlag(HeaderFlags.Encrypted) && compressor != null)
                 maxPlaintextLen = encryptor.GetPlaintextLength(maxPlaintextLen);
 
             if (HasFlag(HeaderFlags.Compressed) && compressor != null)
-                maxPlaintextLen = compressor.GetDecompressedLength(srcSpan);
+                maxPlaintextLen = compressor.GetDecompressedLength(sourceSpan);
             
-            var owner = new PooledBuffer(maxPlaintextLen);
-            var span = owner.Memory.Span;
+            var bufferOwner = BufferOwnerPool.Rent(maxPlaintextLen);
+            var span = bufferOwner.Memory.Span;
 
             try
             {
                 if (HasFlag(HeaderFlags.Encrypted) && encryptor != null)
                 {
-                    var written = encryptor.Decrypt(srcSpan, span);
-                    srcSpan = span[..written];
+                    var written = encryptor.Decrypt(sourceSpan, span);
+                    sourceSpan = span[..written];
                 }
 
                 if (HasFlag(HeaderFlags.Compressed) && compressor != null)
                 {
-                    var destSpan = span[srcSpan.Length..];
-                    var written = compressor.Decompress(srcSpan, destSpan);
-                    srcSpan = destSpan[..written];
+                    var destSpan = span[sourceSpan.Length..];
+                    var written = compressor.Decompress(sourceSpan, destSpan);
+                    sourceSpan = destSpan[..written];
                 }
 
-                var reader = new NetReader(srcSpan);
-                NetSerializer<TProtocol>.Deserialize(ref reader, instance);
+                var reader = new NetReader(sourceSpan);
+                protocol.Deserialize(ref reader);
             }
             finally
             {
-                owner.Dispose();
+                bufferOwner.Dispose();
             }
         }
 
-        private bool HasFlag(HeaderFlags flag) => Header != null && Header.HasFlag(flag);
+        private bool HasFlag(HeaderFlags flag) => _header != null && _header.HasFlag(flag);
         protected abstract THeader CreateHeader(HeaderFlags flags, ushort protocolId, int payloadLength);
     }
 }

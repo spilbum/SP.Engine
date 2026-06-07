@@ -1,43 +1,35 @@
 ﻿using System;
-using System.Buffers;
 using System.Net.Sockets;
 using System.Threading;
-using System.Threading.Channels;
-using System.Threading.Tasks;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Networking;
 
 namespace SP.Engine.Server;
 
-public class TcpNetworkSession : NetworkSessionBase, IReliableSender
+public class TcpNetworkSession(Socket client, SocketSendContext sendContext, SocketReceiveContext receiveContext)
+    : NetworkSessionBase(SocketMode.Tcp, client), IReliableSender
 {
-    private readonly CancellationTokenSource _cts = new();
-    private Channel<(IMemoryOwner<byte> Buffer, int Length)> _sendChannel;
+    private SocketSendContext _sendContext = sendContext;
+    private SocketReceiveContext _receiveContext = receiveContext;
+    private int _isSending; // 0: Idle, 1: Sending
     
-    public SocketReceiveContext ReceiveContext { get; }
-
-    public TcpNetworkSession(Socket client, SocketReceiveContext context) 
-        : base (SocketMode.Tcp, client)
+    public SocketSendContext ReleaseSendContext()
     {
-        ReceiveContext = context;
-        ReceiveContext.Initialize(this);
+        return Interlocked.Exchange(ref _sendContext, null);
+    }
+
+    public SocketReceiveContext ReleaseReceiveContext()
+    {
+        return Interlocked.Exchange(ref _receiveContext, null);
     }
 
     public bool Start()
     {
         if (Session == null) return false;
 
-        _sendChannel = Channel.CreateBounded<(IMemoryOwner<byte>, int)>(
-            new BoundedChannelOptions(Session.Config.Network.TcpSendQueueCapacity)
-            {
-                SingleReader = true, // ProcessSendLoopAsync 에서 Read 처리
-                SingleWriter = false, // 멀티스레드에서 Write 처리
-                FullMode = BoundedChannelFullMode.DropWrite // 버퍼가 꽉 차면 쓰기를 실패 처리하여 백업 제어
-            });
-        
-        Task.Run(ProcessSendLoopAsync);
-        
-        StartReceive(ReceiveContext.SocketEventArgs);
+        _sendContext.Initialize(this);
+        _receiveContext.Initialize(this);
+        StartReceive(_receiveContext.SocketEventArgs);
         return true;
     }
     
@@ -53,7 +45,7 @@ public class TcpNetworkSession : NetworkSessionBase, IReliableSender
             return;
         }
         
-        var offset = ReceiveContext.OriginOffset;
+        var offset = _receiveContext.OriginOffset;
         if (e.Offset != offset)
             e.SetBuffer(offset, Session.Config.Network.ReceiveBufferSize);
 
@@ -109,100 +101,127 @@ public class TcpNetworkSession : NetworkSessionBase, IReliableSender
     
     public bool TrySend(TcpMessage message)
     {
-        if (IsClosed || IsInClosingOrClosed) return false;
-
-        if (!message.TryExtractBuffer(out var buffer, out var length))
-            return false;
-        
         try
         {
-            if (!_sendChannel.Writer.TryWrite((buffer, length)))
+            if (IsClosed || IsInClosingOrClosed) return false;
+
+            if (!message.TryGetBuffer(out var memory))
             {
-                buffer.Dispose();
+                Session.Logger.Warn("Session {0} TryGetBuffer failed. Message already disposed or invalid",
+                    Session.SessionId);
+                return false;
+            }
+            
+            var context = Volatile.Read(ref _sendContext);
+            if (context == null)
+                return false;
+            
+            if (!context.RingBuffer.TryWrite(memory.Span))
+            {
+                Session.Logger.Warn("Session {0} TryWrite failed. RingBuffer: {1}/{2}", 
+                    Session.SessionId, context.RingBuffer.Size, context.RingBuffer.Capacity);
                 return false;
             }
         }
         catch (Exception ex)
         {
             LogError(ex);
-            buffer.Dispose();
             return false;
         }
+
+        TryFlushSend();
+        return true;
+    }
+
+    private void TryFlushSend()
+    {
+        if (Interlocked.CompareExchange(ref _isSending, 1, 0) == 0)
+        {
+            Session.AsyncRun(StartSend);
+        }
+    }
+
+    private void StartSend()
+    {
+        while (true)
+        {
+            if (IsClosed)
+            {
+                Interlocked.Exchange(ref _isSending, 0);
+                return;
+            }
+
+            var context = Volatile.Read(ref _sendContext);
+            if (context == null)
+            {
+                Interlocked.Exchange(ref _isSending, 0);
+                return;
+            }
+            
+            var segment = context.RingBuffer.GetReadableSegment();
+            if (segment.Count == 0)
+            {
+                Interlocked.Exchange(ref _isSending, 0);
+                return;
+            }
+
+            if (!IncrementIo())
+            {
+                Interlocked.Exchange(ref _isSending, 0);
+                return;
+            }
+
+            if (!TryAddState(SocketState.InSending))
+            {
+                DecrementIo();
+                Interlocked.Exchange(ref _isSending, 0);
+                return;
+            }
+        
+            context.SocketEventArgs.SetBuffer(segment.Array, segment.Offset, segment.Count);
+
+            try
+            {
+                if (!_client.SendAsync(context.SocketEventArgs))
+                {
+                    if (HandleSendResult(context.SocketEventArgs))
+                        continue;
+                }
+            }
+            catch (Exception ex)
+            {
+                LogError(ex);
+                RemoveState(SocketState.InSending);
+                DecrementIo();
+                Close(CloseReason.SocketError);
+            }
+
+            break;
+        }
+    }
+
+    private bool HandleSendResult(SocketAsyncEventArgs e)
+    {
+        RemoveState(SocketState.InSending);
+        DecrementIo();
+
+        if (e.SocketError != SocketError.Success || e.BytesTransferred == 0)
+        {
+            Close(e.BytesTransferred == 0 ? CloseReason.ClientClosing : CloseReason.SocketError);
+            return false;
+        }
+        
+        var context = Volatile.Read(ref _sendContext);
+        context?.RingBuffer.AdvanceRead(e.BytesTransferred);
 
         return true;
     }
 
-    private async Task ProcessSendLoopAsync()
+    public void ProcessSend(SocketAsyncEventArgs e)
     {
-        var reader = _sendChannel.Reader;
-        var token = _cts.Token;
-
-        try
+        if (HandleSendResult(e))
         {
-            while (await reader.WaitToReadAsync(token))
-            {
-                while (reader.TryRead(out var item))
-                {
-                    var buffer = item.Buffer;
-                    var length = item.Length;
-                    
-                    if (IsClosed || _client == null)
-                    {
-                        buffer.Dispose();
-                        return;
-                    }
-
-                    if (!IncrementIo())
-                    {
-                        buffer.Dispose();
-                        return;
-                    }
-
-                    if (!TryAddState(SocketState.InSending))
-                    {
-                        DecrementIo();
-                        buffer.Dispose();
-                        return;
-                    }
-
-                    var isSocketError = false;
-                    try
-                    {
-                        await _client.SendAsync(buffer.Memory[..length], SocketFlags.None, token);
-                    }
-                    catch (Exception ex)
-                    {
-                        LogError(ex);
-                        isSocketError = true;
-                    }
-                    finally
-                    {
-                        buffer.Dispose();
-                        RemoveState(SocketState.InSending);
-                        DecrementIo();
-                    }
-
-                    if (isSocketError)
-                    {
-                        Close(CloseReason.SocketError);
-                        return;
-                    }
-                }
-            }
+            StartSend();
         }
-        catch (OperationCanceledException) { }
-        catch (Exception ex)
-        {
-            LogError(ex);
-        }
-    }
-    
-    protected override void OnRelease()
-    {
-        _sendChannel.Writer.Complete();
-        _cts.Cancel();
-
-        while (_sendChannel.Reader.TryRead(out var item)) item.Buffer.Dispose();
-        _cts.Dispose();
     }
 }

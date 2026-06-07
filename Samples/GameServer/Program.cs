@@ -61,7 +61,7 @@ internal static class Program
                     WaitingReconnectTimeoutSec = 120,
                     WaitingReconnectTimerPeriodSec = 60
                     #if DEBUG
-                    , UserCommandSlowThresholdMs = 200
+                    , CommandSlowThresholdMs = 200
                     #endif
                 })
                 .ConfigurePerformance(perf => perf with
@@ -97,6 +97,10 @@ internal static class Program
         }
         finally
         {
+            #if DEBUG
+            BufferOwner.DumpActiveBuffers(Console.WriteLine);
+            #endif
+            
             server?.Dispose();
         }
         

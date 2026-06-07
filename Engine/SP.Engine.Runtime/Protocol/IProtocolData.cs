@@ -7,7 +7,7 @@ namespace SP.Engine.Runtime.Protocol
     {
         ushort Id { get; }
         ChannelKind Channel { get; }
-
         void Serialize(ref NetWriter writer);
+        void Deserialize(ref NetReader reader);
     }
 }

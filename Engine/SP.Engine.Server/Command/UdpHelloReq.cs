@@ -4,6 +4,7 @@ using SP.Engine.Runtime;
 using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Server.Configuration;
+using SP.Engine.Server.Protocol;
 
 namespace SP.Engine.Server.Command;
 
@@ -12,13 +13,13 @@ internal class UdpHelloReq : CommandBase<Session, C2SEngineProtocolData.UdpHello
 {
     protected override void ExecuteCommand(Session session, C2SEngineProtocolData.UdpHelloReq protocol)
     {
-        var ack = new S2CEngineProtocolData.UdpHelloAck { Result = UdpHandshakeResult.None };
+        using var scope = ProtocolScope<S2CEngineProtocolData.UdpHelloAck>.Rent();
 
         try
         {
             if (!ValidateRequest(session, protocol, out var result))
             {
-                ack.Result = result;
+                scope.Protocol.Result = result;
                 return;
             }
 
@@ -28,21 +29,18 @@ internal class UdpHelloReq : CommandBase<Session, C2SEngineProtocolData.UdpHello
             // 상태 체크 타이머 시작
             session.StartUdpHealthCheck();
             
-            ack.Mtu = mtu;
-            ack.Result = UdpHandshakeResult.Ok;
+            scope.Protocol.Mtu = mtu;
+            scope.Protocol.Result = UdpHandshakeResult.Ok;
             session.Logger.Debug("Session {0} UDP handshake succeeded with MTU: {1}", session.SessionId, mtu);
         }
         catch (Exception ex)
         {
-            ack.Result = UdpHandshakeResult.InternalError;
+            scope.Protocol.Result = UdpHandshakeResult.InternalError;
             session.Logger.Error("Session {0} UDP handshake failed. err: {1}\n{2}", session.SessionId, ex.Message, ex.StackTrace);
         }
         finally
         {
-            if (!session.InternalSend(ack))
-            {
-                session.Logger.Warn("Failed to send UDP handshake: sessionId={0}", session.SessionId);
-            }
+            session.InternalSend(scope.Protocol);
         }
     }
 

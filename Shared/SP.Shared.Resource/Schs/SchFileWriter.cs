@@ -13,7 +13,7 @@ public static class SchFileWriter
 {
     public static void Write(RefTableSchema schema, string path)
     {
-        var buf = new PooledBuffer();
+        var buf = BufferOwnerPool.Rent(65536);
         var w = new NetWriter(buf.Memory.Span);
 
         try
@@ -53,7 +53,7 @@ public static class SchFileWriter
         string path, 
         CancellationToken ct = default)
     {
-        var buf = new PooledBuffer();
+        var buf = BufferOwnerPool.Rent(65536);
 
 
         try

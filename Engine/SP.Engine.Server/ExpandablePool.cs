@@ -18,16 +18,15 @@ public interface IObjectPool<T> : IDisposable
 public sealed class ExpandablePool<T> : IObjectPool<T>
 {
     private readonly ConcurrentStack<T> _globalStack = new();
-    private readonly ManualResetEventSlim _expansionEvent = new(true);
+    private readonly object _expansionLock = new();
     private IPoolObjectFactory<T> _factory;
     
-    private int _totalItemCount;
+    private int _totalCount;
     private int _minPoolSize;
     private int _maxPoolSize;
-    private int _expanding;
     private volatile bool _disposed;
     
-    public int ItemCount => _totalItemCount;
+    public int TotalCount => Volatile.Read(ref _totalCount);
     
     public void Initialize(int minPoolSize, int maxPoolSize, IPoolObjectFactory<T> factory)
     {
@@ -38,85 +37,79 @@ public sealed class ExpandablePool<T> : IObjectPool<T>
         _minPoolSize = minPoolSize;
         _maxPoolSize = maxPoolSize;
         _factory = factory;
+        
         AddSource(minPoolSize);
     }
     
     public bool TryRent(out T item)
     {
-        while (!_disposed)
+        if (_globalStack.TryPop(out item)) return true;
+
+        if (_disposed)
+        {
+            item = default;
+            return false;
+        }
+
+        return TryRentWithExpansion(out item);
+    }
+    
+    private bool TryRentWithExpansion(out T item)
+    {
+        lock (_expansionLock)
         {
             if (_globalStack.TryPop(out item)) return true;
-
-            if (TryEnsureCapacity(out var wasExpanding)) continue;
-
-            if (!wasExpanding && Volatile.Read(ref _totalItemCount) >= _maxPoolSize)
+            
+            var totalCount = Volatile.Read(ref _totalCount);
+            if (totalCount >= _maxPoolSize)
             {
                 item = default;
                 return false;
             }
 
-            _expansionEvent.Wait();
-        }
-        
-        item = default;
-        return false;
-    }
-
-    public void Return(T item)
-    {
-        if (_disposed || item == null) return;
-        _globalStack.Push(item);
-    }
-    
-    private bool TryEnsureCapacity(out bool wasExpanding)
-    {
-        wasExpanding = false;
-        if (Volatile.Read(ref _totalItemCount) >= _maxPoolSize) return false;
-
-        if (Interlocked.CompareExchange(ref _expanding, 1, 0) != 0)
-        {
-            wasExpanding = true;
-            return false;
-        }
-        
-        _expansionEvent.Reset();
-
-        try
-        {
-            var total = _totalItemCount;
-            if (total >= _maxPoolSize) return false;
+            // 확장 사이즈 계산
+            var nextSize = Math.Min(totalCount * 2, _maxPoolSize - totalCount);
+            if (nextSize <= 0)
+            {
+                item = default;
+                return false;
+            }
             
-            var nextSize = Math.Min(total * 2, _maxPoolSize - total);
-            if (nextSize <= 0) return false;
             AddSource(nextSize);
-            return true;
-        }
-        finally
-        {
-            Interlocked.Exchange(ref _expanding, 0);
-            _expansionEvent.Set();
+            
+            return _globalStack.TryPop(out item);
         }
     }
     
     private void AddSource(int size)
     {
         var items = _factory.Create(size);
-        
-        Interlocked.Add(ref _totalItemCount, items.Length);
+        Interlocked.Add(ref _totalCount, items.Length);
         
         foreach (var item in items)
             _globalStack.Push(item);
     }
     
+    public void Return(T item)
+    {
+        if (_disposed || item == null) return;
+        _globalStack.Push(item);
+    }
+    
     public void Dispose()
     {
         if (_disposed) return;
-        _disposed = true;
-        
-        while (_globalStack.TryPop(out var item))
+
+        lock (_expansionLock)
         {
-            if (item is IDisposable disposable)
-                disposable.Dispose();
+            if (_disposed) return;
+            _disposed = true;
+        
+            while (_globalStack.TryPop(out var item))
+            {
+                if (item is IDisposable disposable)
+                    disposable.Dispose();
+            }
         }
     }
 }

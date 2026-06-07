@@ -1,10 +1,9 @@
 using System;
+using System.Buffers;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
-using SP.Core;
-using SP.Core.Buffers;
-using SP.Engine.Client.Configuration;
+using System.Threading;
 using SP.Engine.Runtime.Networking;
 
 namespace SP.Engine.Client
@@ -12,19 +11,17 @@ namespace SP.Engine.Client
     public class TcpNetworkSession : IReliableSender
     {
         private readonly ByteRingBuffer _sendRingBuffer;
-        private readonly object _sendLock = new object();
-        private bool _isSending;
-        private readonly PooledBuffer _localSendBuffer = new PooledBuffer(64 * 1024);
+        private int _inSending;
         private bool _isConnecting;
-        private PooledBuffer _receiveBuffer;
+        private byte[] _receiveBuffer;
         private SocketAsyncEventArgs _receiveEventArgs;
         private SocketAsyncEventArgs _sendEventArgs;
         private Socket _socket;
-        private readonly EngineConfig _config;
+        private readonly NetPeerBase _netPeer;
 
-        public TcpNetworkSession(EngineConfig config)
+        public TcpNetworkSession(NetPeerBase netPeer)
         {
-            _config = config;
+            _netPeer = netPeer;
             _sendRingBuffer = new ByteRingBuffer(1024 * 1024); // 1MB
         }
 
@@ -36,11 +33,8 @@ namespace SP.Engine.Client
 
         public void Connect(EndPoint remoteEndPoint)
         {
-            if (_isConnecting)
-                throw new InvalidOperationException("Connection is already in progress.");
-
-            if (IsConnected)
-                throw new InvalidOperationException("Socket is already connected.");
+            if (_isConnecting) throw new InvalidOperationException("Connection is already in progress.");
+            if (IsConnected) throw new InvalidOperationException("Socket is already connected.");
 
             _isConnecting = true;
             remoteEndPoint.ResolveAndConnectAsync(ProcessConnect, null);
@@ -48,29 +42,34 @@ namespace SP.Engine.Client
         
         public bool TrySend(TcpMessage message)
         {
-            if (!IsConnected)
-                return false;
-
-            if (!message.TryExtractBuffer(out var bufferOwner, out var length))
-                return false;
-
-            lock (_sendLock)
+            try
             {
-                var success = _sendRingBuffer.TryWrite(bufferOwner.Memory.Span.Slice(0, length));
-                bufferOwner.Dispose();
+                if (!IsConnected) return false;
 
-                if (!success)
+                if (!message.TryGetBuffer(out var memory))
                 {
-                    Console.WriteLine("_sendRingBuffer.TryWrite failed. available={0}, pending={1}",
-                        _sendRingBuffer.GetAvailableSpace(), _sendRingBuffer.GetPendingBytes());
+                    _netPeer.Logger.Warn("NetPeer {0} TCP TryGetBuffer failed. Id={1}, IsEmpty={2}",
+                        _netPeer.PeerId, message.Id, message.IsEmpty);
                     return false;
                 }
                 
-                if (_isSending) return true;
-                _isSending = true;
+                using (var buffer = _sendRingBuffer.Lock())
+                {
+                    if (!buffer.TryWrite(memory.Span))
+                    {
+                        _netPeer.Logger.Warn("NetPeer {0} TCP TryWrite failed. RingBuffer: {1}/{2}",
+                            _netPeer.PeerId, _sendRingBuffer.Size, _sendRingBuffer.Capacity);
+                        return false;
+                    }   
+                }
+            }
+            catch (Exception ex)
+            {
+                if (!IsIgnoreException(ex)) OnError(ex);
+                return false;
             }
             
-            FlushSend();
+            TryFlushSend();
             return true;
         }
 
@@ -139,7 +138,7 @@ namespace SP.Engine.Client
 
             try
             {
-                _socket.SendBufferSize = _config.SendBufferSize;
+                _socket.SendBufferSize = _netPeer.Config.SendBufferSize;
                 _socket.NoDelay = true;
 
                 var vals = new byte[12];
@@ -178,9 +177,9 @@ namespace SP.Engine.Client
         private void GetSocket(SocketAsyncEventArgs e)
         {
             if (null == _receiveBuffer)
-                _receiveBuffer = new PooledBuffer(_config.ReceiveBufferSize);
+                _receiveBuffer = ArrayPool<byte>.Shared.Rent(_netPeer.Config.ReceiveBufferSize);
 
-            e.SetBuffer(_receiveBuffer.GetRawBuffer(), 0, _receiveBuffer.Length);
+            e.SetBuffer(_receiveBuffer, 0, _receiveBuffer.Length);
             _receiveEventArgs = e;
 
             OnConnected();
@@ -209,10 +208,7 @@ namespace SP.Engine.Client
             else
             {
                 _socket = null;
-                lock (_sendLock)
-                {
-                    _isSending = false;
-                }
+                Interlocked.Exchange(ref _inSending, 0);
             }
 
             try
@@ -296,7 +292,13 @@ namespace SP.Engine.Client
             }
         }
 
-        private void FlushSend()
+        private void TryFlushSend()
+        {
+            if (Interlocked.CompareExchange(ref _inSending, 1, 0) == 0)
+                StartSend();
+        }
+        
+        private void StartSend()
         {
             if (_sendEventArgs == null)
             {
@@ -304,75 +306,69 @@ namespace SP.Engine.Client
                 _sendEventArgs.Completed += OnSendCompleted;
             }
             
+            var socket = _socket;
+            if (socket == null)
+            {
+                Interlocked.Exchange(ref _inSending, 0);
+                return;
+            }
+
             while (true)
             {
-                var socket = _socket;
-                if (socket == null)
+                ArraySegment<byte> segment;
+                using (var buffer = _sendRingBuffer.Lock())
                 {
-                    lock (_sendLock) _isSending = false;
-                    return;
+                    segment = buffer.GetReadableSegment();
                 }
-
-                int length;
-                int offset;
-
-                lock (_sendLock)
+                
+                if (segment.Count == 0)
                 {
-                    length = _sendRingBuffer.GetContiguousReadBlock(out offset);
-                    if (length == 0)
-                    {
-                        _isSending = false;
-                        return;
-                    }
+                    Interlocked.Exchange(ref _inSending, 0);
+                    return;
                 }
 
                 try
                 {
-                    var e = _sendEventArgs;
-                    e.SetBuffer(_sendRingBuffer.GetRawBuffer(), offset, length);
-
-                    if (socket.SendAsync(e))
+                    _sendEventArgs.SetBuffer(segment.Array, segment.Offset, segment.Count);
+                    if (socket.SendAsync(_sendEventArgs))
                         return;
 
-                    if (!HandleSendResult(e))
+                    if (!ProcessSendResult(_sendEventArgs))
                         return;
                 }
                 catch (Exception ex)
                 {
-                    lock (_sendLock) _isSending = false;
-                    if (EnsureSocketClosed() && !IsIgnoreException(ex))
-                        OnError(ex);
-                }
+                    Interlocked.Exchange(ref _inSending, 0);
+                    if (EnsureSocketClosed() && !IsIgnoreException(ex)) OnError(ex);
+                }   
             }
         }
         
         private void OnSendCompleted(object sender, SocketAsyncEventArgs e)
         {
-            if (HandleSendResult(e))
+            if (ProcessSendResult(e))
             {
-                FlushSend();
+                StartSend();
             }
         }
 
-        private bool HandleSendResult(SocketAsyncEventArgs e)
+        private bool ProcessSendResult(SocketAsyncEventArgs e)
         {
             if (e.SocketError != SocketError.Success || e.BytesTransferred == 0)
             {
-                lock (_sendLock) _isSending = false;
-                if (EnsureSocketClosed()) 
-                    OnClosed();
-
-                if (e.SocketError == SocketError.Success) 
-                    return false;
+                Interlocked.Exchange(ref _inSending, 0);
+                
+                if (EnsureSocketClosed()) OnClosed();
+                if (e.SocketError == SocketError.Success) return false;
                 
                 var ex = new SocketException((int)e.SocketError);
                 if (!IsIgnoreException(ex)) OnError(ex);
                 return false;
             }
 
-            lock (_sendLock)
+            using (var buffer = _sendRingBuffer.Lock())
             {
-                _sendRingBuffer.Consume(e.BytesTransferred);
+                buffer.AdvanceRead(e.BytesTransferred);                
             }
             
             return true;
@@ -388,14 +384,13 @@ namespace SP.Engine.Client
         private void OnClosed()
         {
             if (!IsConnected) return;
-
-            _receiveBuffer?.Dispose();
-
-            lock (_sendLock)
+            
+            _inSending = 0;
+            using (var buffer = _sendRingBuffer.Lock()) buffer.Clear();
+            
+            if (_receiveBuffer != null)
             {
-                _isSending = false;
-                _sendRingBuffer.Clear();
-                _localSendBuffer.Dispose();
+                ArrayPool<byte>.Shared.Return(_receiveBuffer);
             }
             
             _sendEventArgs?.Dispose();

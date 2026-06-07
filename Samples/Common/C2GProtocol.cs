@@ -130,7 +130,7 @@ namespace Common
             public long SentTicks;
         }
         
-        [Protocol(C2GProtocol.UdpEchoReq, channel: ChannelKind.Unreliable, encrypt: Toggle.Off, compress: Toggle.On)]
+        [Protocol(C2GProtocol.UdpEchoReq, channel: ChannelKind.Unreliable, encrypt: Toggle.On, compress: Toggle.Off)]
         public class UdpEchoReq : ProtocolDataBase<UdpEchoReq>
         {
             public uint Seq;
@@ -263,7 +263,7 @@ namespace Common
             public long SentTicks;
         }
         
-        [Protocol(G2CProtocol.UdpEchoAck, channel: ChannelKind.Unreliable, encrypt: Toggle.Off, compress: Toggle.On)]
+        [Protocol(G2CProtocol.UdpEchoAck, channel: ChannelKind.Unreliable, encrypt: Toggle.On, compress: Toggle.Off)]
         public class UdpEchoAck : ProtocolDataBase<UdpEchoAck>
         {
             public uint Seq;

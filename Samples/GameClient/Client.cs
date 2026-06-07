@@ -235,13 +235,40 @@ public class Client : NetPeerBase
         for (var i = 0; i < count; i++)
         {
             var seq = Tracker.RecordSend();
-            IProtocolData packet = _echoType == "tcp"
-                ? new C2GProtocolData.EchoReq { Seq = seq, SentTicks = DateTime.UtcNow.Ticks }
-                : new C2GProtocolData.UdpEchoReq { Seq = seq, SentTicks = DateTime.UtcNow.Ticks, Data = GetRandomBytes(5000)};
 
-            // 안전하게 메인 스레드 컨텍스트에서 최신 ACK 정보를 달고 송신 채널로 들어갑니다.
-            Send(packet); 
+            switch (_echoType)
+            {
+                case "tcp":
+                    SendTcp(seq);
+                    break;
+                case "udp":
+                    SendUdp(seq, 5000);
+                    break;
+                case "both":
+                    SendTcp(seq);
+                    SendUdp(seq, 5000);
+                    break;
+            }
         }
+    }
+
+    private void SendTcp(uint seq)
+    {
+        Send(new C2GProtocolData.EchoReq
+        {
+            Seq = seq,
+            SentTicks = DateTime.UtcNow.Ticks
+        });
+    }
+
+    private void SendUdp(uint seq, int bytes)
+    {
+        Send(new C2GProtocolData.UdpEchoReq
+        {
+            Seq = seq,
+            SentTicks = DateTime.UtcNow.Ticks,
+            Data = GetRandomBytes(bytes)
+        });
     }
     
     private static byte[] GetRandomBytes(int count)

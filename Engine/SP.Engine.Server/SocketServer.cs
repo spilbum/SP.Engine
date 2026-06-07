@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
-using SP.Core;
 using SP.Core.Buffers;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Networking;
@@ -11,31 +10,12 @@ using SP.Engine.Server.Configuration;
 
 namespace SP.Engine.Server;
 
-internal class ReceiveContextFactory(int bufferSize) : IPoolObjectFactory<SocketReceiveContext>
-{
-    public SocketReceiveContext[] Create(int size)
-    {
-        var globalBuffer = GC.AllocateArray<byte>(bufferSize * size);
-        
-        var contexts = new SocketReceiveContext[size];
-        for (var i = 0; i < size; i++)
-        {
-            var e = new SocketAsyncEventArgs();
-            e.SetBuffer(globalBuffer, i * bufferSize, bufferSize);
-            contexts[i] = new SocketReceiveContext(e);
-        }
-        
-        return contexts;
-    }
-}
-
 internal sealed class SocketServer(EngineCore engine, ListenerInfo[] listenerInfos) : IDisposable
 {
     private bool _disposed;
     private byte[] _keepAliveOptionValues;
-    private readonly object _udpSessionLock = new();
     private ExpandablePool<SocketReceiveContext> _receiveContextPool;
-    
+    private ExpandablePool<SocketSendContext> _sendContextPool;
     private List<INetworkListener> Listeners { get; } = new(listenerInfos.Length);
     private ListenerInfo[] ListenerInfos { get; } = listenerInfos;
     private bool IsRunning { get; set; }
@@ -57,6 +37,12 @@ internal sealed class SocketServer(EngineCore engine, ListenerInfo[] listenerInf
             Math.Max(config.Session.MaxConnections, 512),
             Math.Max(config.Session.MaxConnections * 2, 512),
             new ReceiveContextFactory(config.Network.ReceiveBufferSize));
+        
+        _sendContextPool = new ExpandablePool<SocketSendContext>();
+        _sendContextPool.Initialize(
+            Math.Max(config.Session.MaxConnections, 512),
+            Math.Max(config.Session.MaxConnections * 2, 512),
+            new SendContextFactory(config.Network.SendBufferSize));
         
         foreach (var info in ListenerInfos)
         {
@@ -101,6 +87,7 @@ internal sealed class SocketServer(EngineCore engine, ListenerInfo[] listenerInf
             listener.Stop();
 
         Listeners.Clear();
+        _sendContextPool.Dispose();
         _receiveContextPool.Dispose();
     }
 
@@ -142,36 +129,48 @@ internal sealed class SocketServer(EngineCore engine, ListenerInfo[] listenerInf
         ProcessTcpClient(socket);
     }
     
-    private void OnDataReceived(Socket socket, ReadOnlySpan<byte> buffer, IPEndPoint remoteEndPoint)
+    private void OnDataReceived(Socket socket, IPEndPoint remoteEndPoint, ReadOnlySpan<byte> data)
     {
-        if (!UdpHeader.TryRead(buffer, out var header, out var headerConsumed)) return;
+        if (!UdpHeader.TryRead(data, out var header, out var headerConsumed)) return;
             
         var session = engine.GetSession(header.SessionId);
-        if (session == null || session.IsClosed) return;
-
-        session.UpdateUdpNetworkSession(socket, remoteEndPoint);
+        if (session == null || session.IsClosed || session.IsClosing) return;
         
-        var bufferOwner = new PooledBuffer(headerConsumed + header.PayloadLength);
-        buffer.CopyTo(bufferOwner.Memory.Span);
+        var buffer = BufferOwnerPool.Rent(headerConsumed + header.PayloadLength);
+        data.CopyTo(buffer.Memory.Span);
 
-        var state = (session, header, bufferOwner);
+        var state = (session, socket, remoteEndPoint, header, buffer);
         session.AsyncRun(state, static s =>
         {
-            s.session.HandleUdpMessage(s.header, s.bufferOwner);
+            if (s.session.IsClosed)
+            { 
+                s.buffer.Dispose();
+                return;
+            }
+            
+            s.session.ProcessUdpClient(s.socket, s.remoteEndPoint, s.header, s.buffer);
         });
     }
 
     private void ProcessTcpClient(Socket client)
     {
-        if (!_receiveContextPool.TryRent(out var context))
+        if (!_sendContextPool.TryRent(out var sendContext))
         {
-            engine.Logger.Warn("Failed to rent receive context. (Count: {0})", _receiveContextPool.ItemCount);
+            engine.Logger.Warn("TCP _sendContextPool.TryRent failed. ");
+            engine.AsyncRun(client.SafeClose);
+            return;
+        }
+        
+        if (!_receiveContextPool.TryRent(out var receiveContext))
+        {
+            sendContext.Reset();
+            _sendContextPool.Return(sendContext);
             engine.AsyncRun(client.SafeClose);
             return;
         }
 
-        var ns = new TcpNetworkSession(client, context);
-        ns.Closed += OnTcpSessionClosed;
+        var ns = new TcpNetworkSession(client, sendContext, receiveContext);
+        ns.Closed += OnSessionClosed;
 
         var session = CreateSession(client, ns);
         if (session != null)
@@ -190,15 +189,22 @@ internal sealed class SocketServer(EngineCore engine, ListenerInfo[] listenerInf
         }
     }
 
-    private void OnTcpSessionClosed(INetworkSession session, CloseReason reason)
+    private void OnSessionClosed(INetworkSession session, CloseReason reason)
     {
-        if (session is not TcpNetworkSession s) return;
+        if (session is not TcpNetworkSession ns) return;
         
-        var context = s.ReceiveContext;
-        if (context != null)
+        var sendContext = ns.ReleaseSendContext();
+        if (sendContext != null)
         {
-            context.Reset();
-            _receiveContextPool.Return(context);
+            sendContext.Reset();
+            _sendContextPool.Return(sendContext);
+        }
+        
+        var receiveContext = ns.ReleaseReceiveContext();
+        if (receiveContext != null)
+        {
+            receiveContext.Reset();
+            _receiveContextPool.Return(receiveContext);
         }
     }
 

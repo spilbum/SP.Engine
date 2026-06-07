@@ -122,14 +122,14 @@ public abstract class NetworkSessionBase : INetworkSession
     protected virtual void OnClosed(CloseReason reason)
     {
         if (!TryAddState(SocketState.Closed)) return;
-
-        OnRelease();
         
+        OnRelease();
+
         var handler = Interlocked.Exchange(ref _closed, null);
         handler?.Invoke(this, reason);
     }
     
-    protected abstract void OnRelease();
+    protected virtual void OnRelease() { }
     protected virtual bool ShouldSocketClosed() => true;
     
     protected bool HasState(SocketState state) => (_socketState & (int)state) != 0;

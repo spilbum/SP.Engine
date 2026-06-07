@@ -86,9 +86,9 @@ internal abstract class UdpNetworkListenerBase(ListenerInfo info, IEngineConfig 
                 {
                     try
                     {
-                        var buffer = e.Buffer.AsSpan(e.Offset, e.BytesTransferred);
                         var remoteEndPoint = (IPEndPoint)e.RemoteEndPoint;
-                        OnDataReceived(socket, buffer, remoteEndPoint);
+                        var data = e.Buffer.AsSpan(e.Offset, e.BytesTransferred);
+                        OnDataReceived(socket, remoteEndPoint, data);
                     }
                     catch (Exception ex)
                     {

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Security.Cryptography;
 using System.Threading;
+using SP.Core;
 using SP.Core.Logging;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Channel;
@@ -12,6 +13,7 @@ using SP.Engine.Runtime.Compression;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Runtime.Security;
+using SP.Engine.Server.Protocol;
 
 namespace SP.Engine.Server;
 
@@ -45,7 +47,7 @@ public interface IPeer : ICommandContext
     uint PeerId { get; }
     PeerKind Kind { get; }
     PeerState State { get; }
-    bool Send(IProtocolData data);
+    bool Send<T>(T data) where T : class, IProtocolData, new();
     void Close(CloseReason reason);
 }
 
@@ -61,6 +63,9 @@ public abstract class PeerBase : IPeer, IDisposable
     private DateTime _lastAckTime;
     private bool _disposed;
     private readonly List<TcpMessage> _retriesCache = [];
+
+    private int _isSending;
+    private readonly ConcurrentQueue<IProtocolData> _sendQueue = new();
     
     protected PeerBase(PeerKind kind, Session session)
     {
@@ -136,62 +141,96 @@ public abstract class PeerBase : IPeer, IDisposable
 
     public bool Send(IProtocolData data)
     {
+        if (data == null) return false;
+        return !IsClosed && ProtocolDispatcher.DispatchSend(this, data);
+    }
+    
+    public bool Send<T>(T data) where T : class, IProtocolData, new()
+    {
         if (IsClosed) return false;
-
-        var policy = _session.PolicySnapshot.Resolve(data.Id);
-        var encryptor = policy.UseEncrypt ? _encryptor : null;
-        var compressor = policy.UseCompress ? _compressor : null;
-        var originalChannel = data.Channel;
-        var channel = originalChannel == ChannelKind.Unreliable && !_session.IsUdpAvailable
-            ? ChannelKind.Reliable
-            : originalChannel;
         
-        switch (channel)
+        _sendQueue.Enqueue(data);
+
+        if (Interlocked.CompareExchange(ref _isSending, 1, 0) == 0)
         {
-            case ChannelKind.Reliable:
+            ThreadPool.UnsafeQueueUserWorkItem(ProcessSendQueue, this);
+        }
+        
+        return true;
+    }
+
+    private static void ProcessSendQueue(object state)
+    {
+        var peer = (PeerBase)state;
+        
+        try
+        {
+            while (peer._sendQueue.TryDequeue(out var data))
             {
-                var tcp = new TcpMessage();
-                tcp.Serialize(data, policy, encryptor, compressor);  
-
-                using (tcp)
-                {
-                    if (originalChannel == ChannelKind.Unreliable)
-                    {
-                        return _session.Send(channel, tcp);   
-                    }
-
-                    if (IsConnected)
-                    {
-                        if (!_messageProcessor.PrepareReliableSend(tcp))
-                        {
-                            _messageProcessor.EnqueuePendingMessage(tcp);
-                            return true;
-                        }
-
-                        if (!_session.Send(channel, tcp)) return false;  
-                    }
-                    else
-                    {
-                        _messageProcessor.EnqueuePendingMessage(tcp);
-                    }
-                }
-                
-                return true;
+                if (peer.IsClosed) return;
+                ExecuteSend(peer, data);
             }
-            case ChannelKind.Unreliable:
+        }
+        finally
+        {
+            Interlocked.Exchange(ref peer._isSending, 0);
+
+            if (!peer._sendQueue.IsEmpty && Interlocked.CompareExchange(ref peer._isSending, 1, 0) == 0)
             {
-                if (!IsConnected) return false;
-                
-                var udp = new UdpMessage();
-                udp.Serialize(data, policy, encryptor, compressor);  
-                
-                using (udp)
+                ThreadPool.UnsafeQueueUserWorkItem(ProcessSendQueue, peer);
+            }
+        }
+    }
+
+    private static void ExecuteSend(PeerBase peer, IProtocolData data)
+    {
+        IMessage message = null;
+        
+        try
+        {
+            var session = peer._session;
+            var policy = session.PolicySnapshot.Resolve(data.Id);
+            var encryptor = policy.UseEncrypt ? peer._encryptor : null;
+            var compressor = policy.UseCompress ? peer._compressor : null;
+
+            var channel = data.Channel;
+            if (channel == ChannelKind.Reliable || (channel == ChannelKind.Unreliable && !session.IsUdpAvailable))
+            {
+                message = MessagePool<TcpMessage>.Rent();
+                message.Serialize(data, policy, encryptor, compressor);
+
+                if (channel == ChannelKind.Unreliable)
                 {
-                    return _session.Send(channel, udp);   
+                    session.TrySend(ChannelKind.Reliable, message);
+                    return;
+                }
+
+                if (peer.IsConnected)
+                {
+                    if (!peer._messageProcessor.RegisterInFlight((TcpMessage)message, out var inFlightMessage)) return;
+                    session.TrySend(channel, inFlightMessage);
+                }
+                else
+                {
+                    peer._messageProcessor.EnqueuePendingMessage((TcpMessage)message);
                 }
             }
-            default:
-                throw new Exception($"Unknown channel: {channel}");
+            else
+            {
+                if (!peer.IsConnected) return;
+                
+                message = MessagePool<UdpMessage>.Rent();
+                message.Serialize(data, policy, encryptor, compressor);
+                session.TrySend(channel, message);
+            }
+        }
+        catch (Exception ex)
+        {
+            peer.Logger.Error(ex, "Peer {0} execute send failed. P: {1}", peer.PeerId, data.Id);
+        }
+        finally
+        {
+            message?.Dispose();
         }
     }
 
@@ -219,7 +258,6 @@ public abstract class PeerBase : IPeer, IDisposable
 
     public virtual void Tick()
     {
-        if (!IsConnected) return;
         CheckAndFlushPeriodAck();
         ProcessRetransmission();
         FlushPendingMessages();   
@@ -227,11 +265,13 @@ public abstract class PeerBase : IPeer, IDisposable
 
     private void ProcessRetransmission()
     {
+        if (!IsConnected) return;
+        
         _retriesCache.Clear();
         
         try
         {
-            var failed = _messageProcessor.ExtractRetransmissions(_retriesCache);
+            var failed = _messageProcessor.PrepareRetransmissions(_retriesCache);
             if (failed != null)
             {
                 Logger.Warn("Retransmission exhausted. PeerId: {0}, Failed Seq: {1}, ProtocolId: {2}",
@@ -243,12 +283,8 @@ public abstract class PeerBase : IPeer, IDisposable
 
             foreach (var message in _retriesCache)
             {
-                _session.Send(ChannelKind.Reliable, message);
+                using (message) _session.TrySend(ChannelKind.Reliable, message);
             }
-        }
-        catch (ObjectDisposedException)
-        {
-
         }
         catch (Exception ex)
         {
@@ -258,6 +294,8 @@ public abstract class PeerBase : IPeer, IDisposable
 
     private void CheckAndFlushPeriodAck()
     {
+        if (!IsConnected) return;
+        
         var ackNumber = _messageProcessor.NextExpectedSeq;
         if (ackNumber <= _lastSentAck) return;
         
@@ -268,7 +306,7 @@ public abstract class PeerBase : IPeer, IDisposable
         if (elapsedMs < _messageProcessor.MaxAckDelayMs && pendingCount < _messageProcessor.AckFrequency)
             return;
 
-        _lastAckTime = DateTime.UtcNow;
+        _lastAckTime = nowUtc;
         _lastSentAck = ackNumber;
         _session.SendMessageAck(ackNumber);
     }
@@ -285,9 +323,9 @@ public abstract class PeerBase : IPeer, IDisposable
         _messageProcessor.AcknowledgeInFlight(remoteAckNumber);   
     }
 
-    internal List<TcpMessage> IngestReceivedMessage(TcpMessage message)
+    internal ReceiveIngestResult ReceiveIngestMessage(TcpMessage message, List<TcpMessage> destinationList)
     {
-        return _messageProcessor.IngestReceivedMessage(message);
+        return _messageProcessor.ReceiveIngestMessage(message, destinationList);
     }
 
     internal void JoinServer()
@@ -329,26 +367,31 @@ public abstract class PeerBase : IPeer, IDisposable
     
     private void FlushPendingMessages()
     {
+        if (!IsConnected) return;
+        
         var messages = _messageProcessor.FlushPendingMessages();
         if (messages.Count == 0) return;
         
         var processed = 0;
         foreach (var message in messages)
         {
-            if (!IsConnected) break;
-            if (!_messageProcessor.PrepareReliableSend(message)) break;
-            _session.Send(ChannelKind.Reliable, message);
+            if (!_messageProcessor.RegisterInFlight(message, out var inFlightMessage)) break;
             
+            _session.TrySend(ChannelKind.Reliable, inFlightMessage);
             message.Dispose();
-            processed++;
+            
+            processed++;   
         }
         
         if (processed >= messages.Count) return;
 
-        for (var i = processed; i < messages.Count; i++)
+        for (var index = processed; index < messages.Count; index++)
         {
-            _messageProcessor.EnqueuePendingMessage(messages[i]);
-            messages[i].Dispose();
+            var message = messages[index];
+            using (message)
+            {
+                _messageProcessor.EnqueuePendingMessage(message);
+            }
         }
     }
 

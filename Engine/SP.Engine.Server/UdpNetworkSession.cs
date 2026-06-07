@@ -1,22 +1,21 @@
 ﻿using System;
-using System.Buffers;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
-using System.Threading.Channels;
-using System.Threading.Tasks;
-using SP.Engine.Runtime;
+using SP.Core.Buffers;
 using SP.Engine.Runtime.Networking;
-using Exception = System.Exception;
 
 namespace SP.Engine.Server;
 
 public class UdpNetworkSession : NetworkSessionBase, IUnreliableSender
 {
-    private readonly Channel<(IMemoryOwner<byte> Buffer, int Length)> _sendChannel;
-    private readonly CancellationTokenSource _cts = new();
     private ushort _maxFragmentSize;
-    
+    private int _inSending; // 0: Idle, 1: Sending
+    private readonly SocketAsyncEventArgs _sendEventArgs;
+
+    private readonly ConcurrentQueue<(BufferOwner Buffer, int Length)> _sendQueue = new();
+
     public UdpNetworkSession(
         SessionBase session,
         Socket client,
@@ -25,139 +24,177 @@ public class UdpNetworkSession : NetworkSessionBase, IUnreliableSender
     {
         Session = session;
         RemoteEndPoint = remoteEndPoint;
-        SetMaxFragmentSize(session.Config.Network.UdpMinMtu);
 
-        _sendChannel = Channel.CreateBounded<(IMemoryOwner<byte>, int)>(
-            new BoundedChannelOptions(session.Config.Network.UdpSendQueueCapacity)
-            {
-                SingleReader = true,
-                SingleWriter = false,
-                FullMode = BoundedChannelFullMode.DropWrite
-            });
+        _sendEventArgs = new SocketAsyncEventArgs();
+        _sendEventArgs.RemoteEndPoint = remoteEndPoint;
+        _sendEventArgs.Completed += OnSendCompleted;
         
-        Task.Run(ProcessSendLoopTask);
+        SetMaxFragmentSize(session.Config.Network.UdpMinMtu);
     }
 
     public bool TrySend(UdpMessage message)
     {
-        if (IsClosed || IsInClosingOrClosed) return false;
-        
-        if (message.TotalLength > _maxFragmentSize)
-        {
-            // 패킷 파편화
-            if (!message.TryExtractFragments(_maxFragmentSize, out var fragments))
-                return false;
-            
-            for (var i = 0; i < fragments.Length; i++)
-            {
-                var item = fragments[i];
-                if (_sendChannel.Writer.TryWrite(item)) continue;
-                
-                // 버퍼 정리 후 채널 종료 
-                for (var j = i; j < fragments.Length; j++) 
-                    fragments[j].Buffer.Dispose();
-                Session.CloseUdpChannel(CloseReason.ServerBusy);
-                return false;
-            }
-        }
-        else
-        {
-            // 단일 패킷 전송
-            if (!message.TryExtractBuffer(out var bufferOwner, out var length))
-                return false;
+        if (IsClosed || IsInClosingOrClosed || message.IsEmpty) return false;
 
-            if (_sendChannel.Writer.TryWrite((bufferOwner, length))) return true;
-            
-            // 실패되면 채널 종료
-            bufferOwner.Dispose();
-            Session.CloseUdpChannel(CloseReason.ServerBusy);
+        const int MaxUdpQueueSize = 512;
+        if (_sendQueue.Count >= MaxUdpQueueSize)
+        {
+            Session.Logger.Warn("Session {0} UDP Send Queue is full.", Session.SessionId);
             return false;
         }
         
+        if (message.TotalLength <= _maxFragmentSize)
+        {
+            // 단일 패킷 처리
+            if (!message.TryGetBufferOwner(out var buffer, out var length))
+            {
+                Session.Logger.Warn("Session {0} UDP TryGetBufferOwner failed.", Session.SessionId);
+                return false;
+            }
+            
+            _sendQueue.Enqueue((buffer, length));
+        }
+        else
+        {
+            // 패킷 파편화
+            if (!message.TryGetFragments(_maxFragmentSize, out var fragments))
+            {
+                Session.Logger.Warn("Session {0} UDP TryGetFragments failed.", Session.SessionId);
+                return false;
+            }
+
+            foreach (var (buffer, length) in fragments)
+            {
+                _sendQueue.Enqueue((buffer, length));
+            }
+        }
+
+        TryFlushSend();
         return true;
     }
 
-    private async Task ProcessSendLoopTask()
+    private void TryFlushSend()
     {
-        var reader = _sendChannel.Reader;
-        var token = _cts.Token;
-
-        try
+        if (Interlocked.CompareExchange(ref _inSending, 1, 0) == 0)
         {
-            while (await reader.WaitToReadAsync(token))
+            Session.AsyncRun(StartSend);
+        }
+    }
+
+    private void StartSend()
+    {
+        while (true)
+        {
+            if (IsClosed)
             {
-                while (reader.TryRead(out var item))
+                ClearSendQueue();
+                Interlocked.Exchange(ref _inSending, 0);
+                return;
+            }
+
+            if (!_sendQueue.TryDequeue(out var item))
+            {
+                Interlocked.Exchange(ref _inSending, 0);
+                return;
+            }
+
+            if (!IncrementIo())
+            {
+                item.Buffer.Dispose();
+                Interlocked.Exchange(ref _inSending, 0);
+                return;
+            }
+
+            if (!TryAddState(SocketState.InSending))
+            {
+                DecrementIo();
+                item.Buffer.Dispose();
+                Interlocked.Exchange(ref _inSending, 0);
+                return;
+            }
+            
+            _sendEventArgs.SetBuffer(item.Buffer.GetBuffer(), 0, item.Length);
+            _sendEventArgs.UserToken = item.Buffer;
+            _sendEventArgs.RemoteEndPoint = RemoteEndPoint;
+            
+            var socket = Volatile.Read(ref _client);
+            if (socket == null)
+            {
+                HandleSendResult(_sendEventArgs);
+                continue;
+            }
+
+            try
+            {
+                if (!socket.SendToAsync(_sendEventArgs))
                 {
-                    var bufferOwner = item.Buffer;
-                    var length = item.Length;
-                    var ep = RemoteEndPoint;
-                    var client = _client;
-                    
-                    if (IsClosed || client == null || ep == null)
-                    {
-                        bufferOwner.Dispose();
-                        return;
-                    }
-
-                    if (!IncrementIo())
-                    {
-                        bufferOwner.Dispose();
-                        return;
-                    }
-
-                    if (!TryAddState(SocketState.InSending))
-                    {
-                        DecrementIo();
-                        bufferOwner.Dispose();
-                        return;
-                    }
-
-                    try
-                    {
-                        await _client.SendToAsync(bufferOwner.Memory[..length], SocketFlags.None, ep, token);
-                    }
-                    catch (Exception ex)
-                    {
-                        LogError(ex);
-                    }
-                    finally
-                    {
-                        bufferOwner.Dispose();
-                        RemoveState(SocketState.InSending);
-                        DecrementIo();
-                    }
+                    HandleSendResult(_sendEventArgs);
+                    continue;
                 }
             }
-        }
-        catch (OperationCanceledException)
-        {
+            catch (Exception ex)
+            {
+                LogError(ex);
+                HandleSendResult(_sendEventArgs);
+                Interlocked.Exchange(ref _inSending, 0);
+            }
 
+            break;
         }
-        catch (Exception ex)
+    }
+
+    private void HandleSendResult(SocketAsyncEventArgs e)
+    {
+        RemoveState(SocketState.InSending);
+        DecrementIo();
+        
+        if (e.UserToken is BufferOwner bufferOwner)
         {
-            LogError(ex);
+            bufferOwner.Dispose();
         }
+        
+        e.UserToken = null;
+        e.SetBuffer(null, 0, 0);
+    }
+
+    private void ProcessSend(SocketAsyncEventArgs e)
+    {
+        HandleSendResult(e);
+        StartSend();
+    }
+
+    private void OnSendCompleted(object sender, SocketAsyncEventArgs e)
+    {
+        ProcessSend(e);
+    }
+
+    private void ClearSendQueue()
+    {
+        while (_sendQueue.TryDequeue(out var item)) item.Buffer.Dispose();
     }
 
     public void SetMaxFragmentSize(ushort size) => _maxFragmentSize = (ushort)(size - 28);
 
-    public void UpdateRemoteEndPoint(IPEndPoint remoteEndPoint)
+    public void UpdateContext(Socket socket, IPEndPoint remoteEndPoint)
     {
+        if (!ReferenceEquals(_client, socket))
+        {
+            Interlocked.Exchange(ref _client, socket);
+        }
+        
         var ep = RemoteEndPoint;
         if (ep != null && ep.Equals(remoteEndPoint)) return;
+        
         Interlocked.Exchange(ref _remoteEndPoint, remoteEndPoint);
     }
 
+    protected override bool ShouldSocketClosed() => false;
+
     protected override void OnRelease()
     {
-        _sendChannel.Writer.Complete();
-        _cts.Cancel();
+        base.OnRelease();
         
-        while (_sendChannel.Reader.TryRead(out var item))
-            item.Buffer.Dispose();
-        
-        _cts.Dispose();
+        ClearSendQueue();
+        _sendEventArgs.Dispose();
     }
-    
-    protected override bool ShouldSocketClosed() => false;
 }

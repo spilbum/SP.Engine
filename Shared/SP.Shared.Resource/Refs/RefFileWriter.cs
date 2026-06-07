@@ -13,7 +13,7 @@ public static class RefFileWriter
 {
     public static void Write(RefTableSchema schema, RefTableData data, string path)
     {
-        var buf = new PooledBuffer(65536);
+        var buf = BufferOwnerPool.Rent(65536);
         var w = new NetWriter(buf.Memory.Span);
 
         try
@@ -56,7 +56,7 @@ public static class RefFileWriter
         string path,
         CancellationToken ct = default)
     {
-        var buf = new PooledBuffer();
+        var buf = BufferOwnerPool.Rent(65536);
 
         try
         {

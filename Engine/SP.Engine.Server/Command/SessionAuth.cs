@@ -3,6 +3,7 @@ using SP.Engine.Protocol;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Protocol;
+using SP.Engine.Server.Protocol;
 
 namespace SP.Engine.Server.Command;
 
@@ -11,7 +12,7 @@ internal class SessionAuth : CommandBase<Session, C2SEngineProtocolData.SessionA
 {
     protected override void ExecuteCommand(Session session, C2SEngineProtocolData.SessionAuthReq protocol)
     {
-        var ack = new S2CEngineProtocolData.SessionAuthAck { Result = SessionAuthResult.None };
+        using var scope = ProtocolScope<S2CEngineProtocolData.SessionAuthAck>.Rent();
         var engine = session.Engine;
         
         try
@@ -20,26 +21,23 @@ internal class SessionAuth : CommandBase<Session, C2SEngineProtocolData.SessionA
                 ? HandleNewSession(session, engine, protocol)
                 : HandleReconnection(session, engine, protocol);
 
-            ack.Result = result;
-            if (ack.Result != SessionAuthResult.Ok) return;
+            scope.Protocol.Result = result;
+            if (scope.Protocol.Result != SessionAuthResult.Ok) return;
 
             session.Authenticate(peer);
             session.Logger.Debug("Session {0}({1}) TCP handshake succeeded.", session.SessionId, peer.PeerId);
         }
         catch (Exception e)
         {
-            ack.Result = SessionAuthResult.InternalError;
+            scope.Protocol.Result = SessionAuthResult.InternalError;
             session.Logger.Error("Session {0} TCP handshake failed. err: {1}\n{2}", session.SessionId, e.Message, e.StackTrace);
         }
         finally
         {
-            if (ack.Result == SessionAuthResult.Ok)
-                ack.FillSuccess(session, session.Peer);
+            if (scope.Protocol.Result == SessionAuthResult.Ok)
+                scope.Protocol.FillSuccess(session, session.Peer);
 
-            if (!session.InternalSend(ack))
-            {
-                session.Logger.Warn("Failed to send TCP handshake: sessionId={0}", session.SessionId);
-            }
+            session.InternalSend(scope.Protocol);
         }
     }
     

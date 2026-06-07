@@ -8,8 +8,8 @@ namespace SP.Engine.Runtime.Networking
     public interface IMessage : IDisposable
     {
         ushort Id { get; }
-        void Retain();
-        void Deserialize<TProtocol>(TProtocol instance, IEncryptor encryptor, ICompressor compressor) 
+        void Serialize(IProtocolData data, IPolicy policy, IEncryptor encryptor, ICompressor compressor);
+        void Deserialize<TProtocol>(TProtocol protocol, IEncryptor encryptor, ICompressor compressor) 
             where TProtocol : class, IProtocolData, new();
     }
 }

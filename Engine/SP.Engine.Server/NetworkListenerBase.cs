@@ -8,7 +8,7 @@ internal delegate void ErrorHandler(INetworkListener listener, Exception e);
 
 internal delegate void NewClientAcceptHandler(Socket client);
 
-internal delegate void DataReceivedHandler(Socket listenSocket, ReadOnlySpan<byte> buffer, IPEndPoint remoteEndPoint);
+internal delegate void DataReceivedHandler(Socket socket, IPEndPoint remoteEndPoint, ReadOnlySpan<byte> data);
 
 public class ListenerInfo
 {
@@ -67,10 +67,10 @@ internal abstract class NetworkListenerBase(ListenerInfo info) : INetworkListene
         handler?.Invoke(client);
     }
 
-    protected void OnDataReceived(Socket listenSocket, ReadOnlySpan<byte> buffer, IPEndPoint remoteEndPoint)
+    protected void OnDataReceived(Socket socket, IPEndPoint remoteEndPoint, ReadOnlySpan<byte> buffer)
     {
         var handler = DataReceived;
-        handler?.Invoke(listenSocket, buffer, remoteEndPoint);
+        handler?.Invoke(socket, remoteEndPoint, buffer);
     }
 
     protected virtual void Dispose(bool disposing)

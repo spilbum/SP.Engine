@@ -44,7 +44,7 @@ public sealed class SessionManager
         }
     }
 
-    public Session CreateSession(EngineCore engine, TcpNetworkSession ns)
+    public Session CreateSession(EngineCore engine, TcpNetworkSession ns, ReadWriteBuffer readWriteBuffer)
     {
         lock (_lock)
         {
@@ -58,7 +58,7 @@ public sealed class SessionManager
 
             try
             {
-                session.Initialize(engine, ns);
+                session.Initialize(engine, ns, readWriteBuffer);
             }
             catch (Exception ex)
             {

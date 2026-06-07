@@ -19,7 +19,7 @@ public static class LocFileWriter
         string path,
         CancellationToken ct = default)
     {
-        var buf = new PooledBuffer(65536);
+        var buf = BufferOwnerPool.Rent(65536);
 
         try
         {

@@ -5,6 +5,7 @@ using SP.Engine.Runtime;
 using SP.Engine.Runtime.Channel;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
+using SP.Engine.Server.Protocol;
 
 namespace SP.Engine.Server;
 
@@ -23,10 +24,10 @@ public sealed class Session(long sessionId) : SessionBase(sessionId)
     
     public EngineBase Engine { get; private set; }
 
-    public override void Initialize(EngineCore engineCore, TcpNetworkSession ns)
+    public override void Initialize(EngineCore engine, TcpNetworkSession ns, ReadWriteBuffer readWriteBuffer)
     {
-        base.Initialize(engineCore, ns);
-        Engine = (EngineBase)engineCore;
+        base.Initialize(engine, ns, readWriteBuffer);
+        Engine = (EngineBase)engine;
     }
 
     internal void StartUdpHealthCheck()
@@ -56,23 +57,24 @@ public sealed class Session(long sessionId) : SessionBase(sessionId)
         }
     }
 
-    protected override void OnUdpChannelClosed(CloseReason reason)
+    protected override void OnUdpClosed(CloseReason reason)
     {
-        base.OnUdpChannelClosed(reason);
-
+        base.OnUdpClosed(reason);
         SendUdpStatusNotify(false);
-        Logger.Debug("Session {0} UDP channel closed. Reason: {1}", SessionId, reason);
     }
 
     internal void SendUdpStatusNotify(bool enabled)
     {
-        InternalSend(new S2CEngineProtocolData.UdpStatusNotify { IsEnabled = enabled });
+        using var scope = ProtocolScope<S2CEngineProtocolData.UdpStatusNotify>.Rent();
+        scope.Protocol.IsEnabled = enabled;
+        InternalSend(scope.Protocol);
     }
 
     private void SendUdpHealthCheck()
     {
         _lastUdpCheckTimeTicks = DateTime.UtcNow.Ticks;
-        InternalSend(new S2CEngineProtocolData.UdpHealthCheck());
+        using var scope = ProtocolScope<S2CEngineProtocolData.UdpHealthCheck>.Rent();
+        InternalSend(scope.Protocol);
     }
 
     private bool InvalidateUdpHealth(int maxFailCount)
@@ -102,53 +104,49 @@ public sealed class Session(long sessionId) : SessionBase(sessionId)
         SetupProtocolPolicy();
     }
 
-    internal bool InternalSend(IProtocolData data)
+    internal bool InternalSend<T>(T data) where T : class, IProtocolData, new()
     {
-        var originalChannel = data.Channel;
-        var channel = originalChannel == ChannelKind.Unreliable && !IsUdpAvailable
-            ? ChannelKind.Reliable
-            : originalChannel;
-
-        switch (channel)
+        IMessage message = null;
+        try
         {
-            case ChannelKind.Reliable:
+            var channel = data.Channel;
+            if (channel == ChannelKind.Reliable
+                || (channel == ChannelKind.Unreliable && !IsUdpAvailable))
             {
-                var tcp = new TcpMessage();
-                tcp.Serialize(data);
-                
-                using (tcp)
-                {
-                    return Send(channel, tcp);
-                }
+                message = MessagePool<TcpMessage>.Rent();
             }
-            case ChannelKind.Unreliable:
+            else
             {
-                var udp = new UdpMessage();
-                udp.Serialize(data);
-                
-                using (udp)
-                {
-                    return Send(channel, udp);
-                }
+                message = MessagePool<UdpMessage>.Rent();
             }
-            default:
-                throw new Exception($"Unknown channel: {channel}");
+            
+            message.Serialize(data, null, null, null);
+            return TrySend(channel, message);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex);
+            return false;
+        }
+        finally
+        {
+            message?.Dispose();
         }
     }
 
     internal void SendPong(uint clientSendTimeMs)
     {
-        InternalSend(new S2CEngineProtocolData.Pong
-        {
-            ClientSendTimeMs = clientSendTimeMs,
-            ServerTimeMs = EngineBase.NetworkTimeMs
-        });
+        using var scope = ProtocolScope<S2CEngineProtocolData.Pong>.Rent();
+        scope.Protocol.ClientSendTimeMs = clientSendTimeMs;
+        scope.Protocol.ServerTimeMs = EngineBase.NetworkTimeMs;  
+        InternalSend(scope.Protocol);
     }
 
     internal void SendMessageAck(uint ackNumber)
     {
-        var messageAck = new S2CEngineProtocolData.MessageAck { AckNumber = ackNumber };
-        InternalSend(messageAck);
+        using var scope = ProtocolScope<S2CEngineProtocolData.MessageAck>.Rent();
+        scope.Protocol.AckNumber = ackNumber;
+        InternalSend(scope.Protocol);
     }
 
     protected override void MessageReceived(IMessage message)
@@ -184,7 +182,8 @@ public sealed class Session(long sessionId) : SessionBase(sessionId)
     
     internal void SendClose()
     {
-        InternalSend(new S2CEngineProtocolData.Close());
+        using var scope = ProtocolScope<S2CEngineProtocolData.Close>.Rent();
+        InternalSend(scope.Protocol);
     }
 
     protected override void Dispose(bool disposing)

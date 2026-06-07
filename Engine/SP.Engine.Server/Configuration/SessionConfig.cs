@@ -57,7 +57,7 @@ public sealed record SessionConfig
     /// 커넥터 상태 체크 주기
     /// </summary>
     public int ConnectorUpdateIntervalMs { get; init; } = 30;
-    public int UserCommandSlowThresholdMs { get; init; } = 100;
+    public int CommandSlowThresholdMs { get; init; } = 100;
     
     /// <summary>
     /// UDP 상태 체크 주기

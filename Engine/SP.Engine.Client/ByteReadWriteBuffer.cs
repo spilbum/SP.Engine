@@ -1,71 +1,64 @@
-﻿using System;
+using System;
 using System.Buffers;
 using System.IO;
 using System.Runtime.CompilerServices;
 using SP.Core.Buffers;
+using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
 
-namespace SP.Engine.Runtime.Networking
+namespace SP.Engine.Client
 {
-    public sealed class ReadWriteBuffer : IDisposable
+    public sealed class ByteReadWriteBuffer
     {
-        private readonly PooledBuffer _buffer;
-        private int _mask;
-        private int _capacity;
+        private readonly byte[] _buffer;
+        private readonly int _capacity;
+        private readonly int _mask;
+        
         private int _head;
         private int _tail;
-        private int _available;
-        private bool _disposed;
+        private int _size;
+        
         private readonly object _lock = new object();
-
-        public ReadWriteBuffer(int capacity)
+        
+        public ByteReadWriteBuffer(int capacity)
         {
-            // 2의 거듭제곱 크기로 보정하여 마스킹 연산이 가능하도록 함
             var cap = 1;
             while (cap < capacity) cap <<= 1;
             
-            _buffer = new PooledBuffer(cap);
             _capacity = cap;
-            _mask = _capacity - 1;
+            _mask = cap - 1;
+            _buffer = new byte[cap];
         }
-
+        
         public bool TryWrite(ReadOnlySpan<byte> data)
         {
             lock (_lock)
             {
-                if (_disposed) return false;
-
-                if (data.Length > _capacity - _available)
+                if (data.IsEmpty) return false;
+                if (data.Length > _capacity - _size) return false;
+                
+                if (_tail + data.Length <= _capacity)
                 {
-                    var required = _available + data.Length;
-                    var newCap = _capacity;
-                    while (newCap < required) newCap <<= 1;
-
-                    _tail = _buffer.ExpandRingBuffer(newCap, _head, _tail, _available);
-                    _head = 0;
-                    _capacity = newCap;
-                    _mask = _capacity - 1;
-                }
-
-                var distanceToEnd = _capacity - _tail;
-                if (distanceToEnd >= data.Length)
-                {
-                    data.CopyTo(_buffer.Slice(_tail, data.Length));
+                    data.CopyTo(_buffer.AsSpan(_tail, data.Length));
+                    _tail = (_tail + data.Length) & _mask;
                 }
                 else
                 {
-                    // 버퍼 끝에 걸치는 경우 분할 복사
-                    data[..distanceToEnd].CopyTo(_buffer.Slice(_tail, distanceToEnd));
-                    data[distanceToEnd..].CopyTo(_buffer.Slice(0, data.Length - distanceToEnd));
+                    var firstChunk = _capacity - _tail;
+                    var secondChunk = data.Length - firstChunk;
+                    
+                    data.Slice(0, firstChunk).CopyTo(_buffer.AsSpan(_tail, firstChunk));
+                    data.Slice(firstChunk, secondChunk).CopyTo(_buffer.AsSpan(0, secondChunk));
+
+                    _tail = secondChunk;
                 }
-            
-                _tail = (_tail + data.Length) & _mask;
-                _available += data.Length;
+                
+                _size += data.Length;
                 return true;
             }
         }
         
-        public bool TryRead(
+         public bool TryRead(
             IPolicySnapshot policySnapshot, 
             out TcpHeader header,
             out IMemoryOwner<byte> bufferOwner)
@@ -77,10 +70,10 @@ namespace SP.Engine.Runtime.Networking
             lock (_lock)
             {
                 // 최소 헤더 크기만큼 데이터가 있는지 확인
-                if (_disposed || _available < headerSize) return false;
+                if (_size < headerSize) return false;
                 
                 Span<byte> headerSpan = stackalloc byte[headerSize];
-                CopyTo(_head, headerSize, headerSpan);
+                CopyTo(headerSize, headerSpan);
 
                 if (!TcpHeader.TryRead(headerSpan, out var tempHeader, out var headerConsumed)) return false;
                 
@@ -88,7 +81,7 @@ namespace SP.Engine.Runtime.Networking
                 var payloadLen = tempHeader.PayloadLength;
                 var totalLength = headerConsumed + payloadLen;
                 
-                if (_available < totalLength) return false;
+                if (_size < totalLength) return false;
 
                 // 패킷 별 최대 페이로드 용량 체크
                 var maxPayloadLength = policySnapshot.Resolve(header.ProtocolId)?.MaxPayloadLength ?? 65536;
@@ -99,17 +92,17 @@ namespace SP.Engine.Runtime.Networking
                 
                 header = tempHeader;
 
-                var pooled = new PooledBuffer(totalLength);
-                CopyTo(_head, totalLength, pooled.Memory.Span);
+                var buffer = BufferOwnerPool.Rent(totalLength);
+                CopyTo(totalLength, buffer.Memory.Span);
                 
-                bufferOwner = pooled;
+                bufferOwner = buffer;
                 
                 // 상태 갱신
                 _head = (_head + totalLength) & _mask;
-                _available -= totalLength;
+                _size -= totalLength;
                 
                 // 버퍼가 완전히 비었을 경우 포인터 초기화로 파편화 방지
-                if (_available == 0)
+                if (_size == 0)
                 {
                     _head = _tail = 0;
                 }
@@ -122,27 +115,17 @@ namespace SP.Engine.Runtime.Networking
         /// 링 버퍼의 데이터를 연속된 Span으로 복사합니다.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void CopyTo(int head, int length, Span<byte> destination)
+        private void CopyTo(int length, Span<byte> destination)
         {
-            var distanceToEnd = _capacity - head;
+            var distanceToEnd = _capacity - _head;
             if (distanceToEnd >= length)
             {
-                _buffer.Slice(head, length).CopyTo(destination);
+                _buffer.AsSpan(_head, length).CopyTo(destination);
             }
             else
             {
-                _buffer.Slice(head, distanceToEnd).CopyTo(destination[..distanceToEnd]);
-                _buffer.Slice(0, length - distanceToEnd).CopyTo(destination[distanceToEnd..]);
-            }
-        }
-
-        public void Dispose()
-        {
-            lock (_lock)
-            {
-                if (_disposed) return;
-                _disposed = true;
-                _buffer.Dispose();   
+                _buffer.AsSpan(_head, distanceToEnd).CopyTo(destination.Slice(0, distanceToEnd));
+                _buffer.AsSpan(0, length - distanceToEnd).CopyTo(destination.Slice(distanceToEnd, length - distanceToEnd));
             }
         }
     }

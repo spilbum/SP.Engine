@@ -15,9 +15,9 @@ public sealed class SocketReceiveContext : IDisposable
         SocketEventArgs.Completed += OnReceiveCompleted;
     }
     
-    public void Initialize(TcpNetworkSession ns)
+    public void Initialize(TcpNetworkSession session)
     {
-        SocketEventArgs.UserToken = ns;
+        SocketEventArgs.UserToken = session;
     }
     
     private static void OnReceiveCompleted(object sender, SocketAsyncEventArgs e)
@@ -37,5 +37,23 @@ public sealed class SocketReceiveContext : IDisposable
     {
         SocketEventArgs.Completed -= OnReceiveCompleted;
         SocketEventArgs.Dispose();
+    }
+}
+
+internal class ReceiveContextFactory(int bufferSize) : IPoolObjectFactory<SocketReceiveContext>
+{
+    public SocketReceiveContext[] Create(int size)
+    {
+        var globalBuffer = GC.AllocateArray<byte>(bufferSize * size);
+        
+        var contexts = new SocketReceiveContext[size];
+        for (var i = 0; i < size; i++)
+        {
+            var e = new SocketAsyncEventArgs();
+            e.SetBuffer(globalBuffer, i * bufferSize, bufferSize);
+            contexts[i] = new SocketReceiveContext(e);
+        }
+        
+        return contexts;
     }
 }

@@ -1,11 +1,11 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using SP.Core.Fiber;
-using SP.Core.Logging;
 using SP.Engine.Protocol;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Command;
@@ -14,7 +14,6 @@ using SP.Engine.Runtime.Protocol;
 using SP.Engine.Server.Command;
 using SP.Engine.Server.Configuration;
 using SP.Engine.Server.Connector;
-using SP.Engine.Server.Logging;
 
 namespace SP.Engine.Server;
 
@@ -34,6 +33,32 @@ public abstract class EngineBase : EngineCore
     private IDisposable _waitingReconnectCheckingTimer;
     private ThreadFiber _perfMonitorFiber;
     
+    private static readonly ConcurrentBag<ThreadPerfLog> _threadPerfLogs = [];
+    [ThreadStatic] private static ThreadPerfLog _threadPerfLog;
+    [ThreadStatic] private static List<TcpMessage> _orderCache;
+
+    private class ThreadPerfLog
+    {
+        public long ProcessedCount;
+        public double TotalExecutionTimeMs;
+    }
+
+    private static ThreadPerfLog GetCurrentThreadPerfLog()
+    {
+        if (_threadPerfLog != null) return _threadPerfLog;
+        _threadPerfLog = new ThreadPerfLog();
+        _threadPerfLogs.Add(_threadPerfLog);
+        return _threadPerfLog;
+    }
+    
+    public int GetLogicFiberPendingCount(int index)
+    {
+        if (_logicFibers == null || index >= _logicFibers.Length) return 0;
+        return _logicFibers[index].QueuePendingCount;
+    }
+    
+    public int LogicFiberCount => _logicFibers.Length;
+    
     private static readonly long _baseUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     private static long UtcNowMs => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     internal static uint NetworkTimeMs => (uint)(UtcNowMs - _baseUnixMs);
@@ -52,7 +77,6 @@ public abstract class EngineBase : EngineCore
             return false;
         
         SetupLogicFibers();
-        SetupPerfMonitor(config.Perf);
         
         Logger.Info("The server {0} is initialized.", name);
         return true;
@@ -67,6 +91,7 @@ public abstract class EngineBase : EngineCore
             fiber.Start();
         
         StartReconnectTimer();
+        StartPerfMonitor(Config.Perf);
         
         try
         {
@@ -230,7 +255,7 @@ public abstract class EngineBase : EngineCore
             _logicFibers[index] = new ThreadFiber($"LogicFiber-{index:D2}",
                 capacity: 4096,
                 maxBatchSize: 512,
-                onError: OnFiberException);
+                onError: OnLogicFiberException);
 
             _shardPeers[index] = [];
             _shardTickTimers[index] = GlobalScheduler.Schedule(
@@ -244,9 +269,9 @@ public abstract class EngineBase : EngineCore
         Logger.Info("LogicFiber pool setup completed. FiberCount: {0}", fiberCount);
     }
 
-    private void ProcessFiberPeersTick(int fiberIndex)
+    private void ProcessFiberPeersTick(int index)
     {
-        var peers = _shardPeers[fiberIndex];
+        var peers = _shardPeers[index];
         for (var i = peers.Count - 1; i >= 0; i--)
         {
             try
@@ -255,49 +280,78 @@ public abstract class EngineBase : EngineCore
             }
             catch (Exception ex)
             {
-                Logger.Error(ex, "Peer tick failed in Fiber-{0}: PeerId {1}", fiberIndex, peers[i].PeerId);
+                Logger.Error(ex, "Peer tick failed in Fiber-{0}: PeerId {1}", index, peers[i].PeerId);
             }
         }
     }
 
-    private void OnFiberException(Exception ex)
+    private void OnLogicFiberException(Exception ex)
     {
         if (ex is FiberException e)
         {
-            Logger.Error(e.InnerException, "Fiber: {0}, Job: {1}", e.FiberName, e.Job?.Name);
+            Logger.Error(e.InnerException, "LogicFiber '{0}' execute failed. Job={1}", e.FiberName, e.Job?.Name);
         }
     }
-    
-    private void SetupPerfMonitor(PerfConfig config)
+
+    private void StartPerfMonitor(PerfConfig config)
     {
         if (!config.MonitorEnabled) return;
 
-        var fiber = new ThreadFiber("PerfMonitorFiber");
-        _perfMonitorFiber = fiber;
+        _perfMonitorFiber =  new ThreadFiber("PerfMonitorFiber");
         _perfMonitor = new PerfMonitor();
-        
-        GlobalScheduler.Schedule(fiber, PerfMonitorTick, TimeSpan.Zero, TimeSpan.FromSeconds(config.SamplePeriodSec));
 
-        if (!config.LoggerEnabled) return;
-
-        var logger = LogManager.GetLogger("PerfMonitor");
-        GlobalScheduler.Schedule(
-            fiber,
-            PerfMonitorLogging, 
-            logger, 
-            TimeSpan.Zero, TimeSpan.FromSeconds(config.LoggingPeriodSec));
+        // 수집 루프 시작
+        _perfMonitorFiber.Enqueue(PerfMonitorTickLoop);
+        // 로깅 루프 시작
+        _perfMonitorFiber.Enqueue(PerfMonitorLoggingLoop);
     }
 
-    private void PerfMonitorLogging(ILogger logger)
+    private void PerfMonitorLoggingLoop()
     {
-        if (_perfMonitor.TryGetLast(out var metrics))
-            logger.Info(metrics.ToString());
+        try
+        {
+            if (_perfMonitor != null && _perfMonitor.TryGetLast(out var metrics))
+                Logger.Info(metrics.ToString());
+        }
+        finally
+        {
+            // 다음 루프 예약
+            GlobalScheduler.Schedule(
+                _perfMonitorFiber,
+                PerfMonitorLoggingLoop,
+                TimeSpan.FromSeconds(Config.Perf.LoggingPeriodSec),
+                TimeSpan.Zero);
+        }
     }
 
-    private void PerfMonitorTick()
+    private void PerfMonitorTickLoop()
     {
-        var sessions = SessionsSource;
-        _perfMonitor?.Tick(sessions.Length);
+        try
+        {
+            long totalProcessed = 0;
+            double totalTimeMs = 0;
+            foreach (var log in _threadPerfLogs)
+            {
+                totalProcessed += Volatile.Read(ref log.ProcessedCount);
+                totalTimeMs += Volatile.Read(ref log.TotalExecutionTimeMs);
+            }
+
+            var sessions = SessionsSource;
+            _perfMonitor?.Tick(this, sessions.Length, totalProcessed, totalTimeMs);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Failed to execute performance monitor tick.");
+        }
+        finally
+        {
+            // 다음 루프 예약
+            GlobalScheduler.Schedule(
+                _perfMonitorFiber,
+                PerfMonitorTickLoop,
+                TimeSpan.FromSeconds(1),
+                TimeSpan.Zero);
+        }
     }
 
     private bool SetupConnectorFiber(Assembly[] assemblies, List<ConnectorConfig> configs)
@@ -400,73 +454,110 @@ public abstract class EngineBase : EngineCore
     internal void ExecuteCommand(Session session, IMessage message)
     {
         if (session == null) return;
-        var peer = session.Peer;
-
-        using (message)
+        
+        try
         {
-            if (message is TcpMessage { SequenceNumber: > 0 } tcp && peer != null)
+            var command = GetInternalCommand(message.Id);
+            if (command != null)
             {
-                var messages = peer.IngestReceivedMessage(tcp);
-                if (messages == null) return;
-             
-                foreach (var m in messages)
+                command.Execute(session, message);
+                return;
+            }
+            
+            var peer = session.Peer;
+            if (peer == null) return;
+            
+            if (message is TcpMessage { SequenceNumber: > 0 } tcp)
+            {
+                _orderCache ??= new List<TcpMessage>(32);
+                _orderCache.Clear();
+
+                var result = peer.ReceiveIngestMessage(tcp, _orderCache);
+                switch (result)
                 {
-                    using (m) DispatchCommand(session, peer, m);
+                    case ReceiveIngestResult.Success:
+                    {
+                        foreach (var m in _orderCache)
+                        {
+                            using (m) DispatchUserCommand(peer, m);
+                        }
+                        break;
+                    }
+                    case ReceiveIngestResult.BufferOverflow:
+                    {
+                        Logger.Warn("Peer {0} Out-of-order buffer overflow (Msx: {1})"
+                            , peer.PeerId, Config.Network.ReliableMaxOutOfOrderCount);
+
+                        peer.Close(CloseReason.Rejected);
+                        return;
+                    }
+                    case ReceiveIngestResult.Buffered:
+                    case ReceiveIngestResult.Duplicate:
+                    default:
+                        break;
                 }
             }
             else
             {
-                DispatchCommand(session, peer, message);
+                DispatchUserCommand(peer, message);
             }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "ExecuteCommand failed: {0}", ex.Message);
+        }
+        finally
+        {
+            message.Dispose();
         }
     }
 
-    private void DispatchCommand(SessionBase session, PeerBase peer, IMessage message)
+    private void DispatchUserCommand(PeerBase peer, IMessage message)
     {
-        var internalCommand = GetInternalCommand(message.Id);
-        if (internalCommand != null)
+        IMessage newMessage;
+        
+        // 메시지 소유권 이전
+        switch (message)
         {
-            internalCommand.Execute(session, message);
-            return;
+            case TcpMessage tcp:
+                newMessage = tcp.Extract();
+                break;
+            case UdpMessage udp:
+                newMessage = udp.Extract();
+                break;
+            default:
+                return;
         }
-
-        if (peer == null) return;
         
         var index = GetShardIndex(peer.PeerId);
         var logicFiber = _logicFibers[index];
-
-        message.Retain();
-        logicFiber.Enqueue(ExecuteUseCommand, this, peer, message);
+        logicFiber.Enqueue(ExecuteUseCommand, this, peer, newMessage);
     }
 
     private static void ExecuteUseCommand(EngineBase engine, PeerBase peer, IMessage message)
     {
-        var start = Stopwatch.GetTimestamp();
         var command = engine.GetUserCommand(message.Id);
         if (command == null) return;
+
+        double executionTimeMs;
         
         try
         {
-            command.Execute(peer, message);
-        }
-        catch (Exception ex)
-        {
-            engine.Logger.Error(ex, "Logic execution failed: Command={0}, PeerId={1}", command.Name, peer.PeerId);
+            executionTimeMs = command.Execute(peer, message);
         }
         finally
         {
-            // 메시지 메모리 해제
             message.Dispose();
-            
-            var end = Stopwatch.GetTimestamp();
-            var executionTimeMs = (double)(end - start) / Stopwatch.Frequency * 1000;
+        }
+        
+        var log = GetCurrentThreadPerfLog();
+        log.ProcessedCount++;
+        log.TotalExecutionTimeMs += executionTimeMs;
 
-            if (executionTimeMs >= engine.Config.Session.UserCommandSlowThresholdMs)
-            {
-                engine.Logger.Warn(
-                    "Slow job detected. Command={0}, PeerId={1}, Exec={2:F2}ms",
-                    command.Name, peer.PeerId, executionTimeMs);
-            }
+        if (executionTimeMs >= engine.Config.Session.CommandSlowThresholdMs)
+        {
+            engine.Logger.Warn(
+                "Command '{0}' slow detected. PeerId={1}, Exec={2:F2}ms", command.Name, peer.PeerId, executionTimeMs);
         }
     }
 

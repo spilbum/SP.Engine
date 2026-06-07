@@ -60,6 +60,8 @@ public abstract class EngineCore : ILogContext, IDisposable
     private SessionManager _sessionManager;
     private IDisposable _fragmentAssemblerCleanupTimer;
     private readonly Dictionary<ushort, ProtocolOverrides> _protocolOverrides = new();
+
+    private ExpandablePool<ReadWriteBuffer> _readWritePool;
     
     public string Name { get; private set; }
 
@@ -105,6 +107,9 @@ public abstract class EngineCore : ILogContext, IDisposable
             return false;
 
         if (!SetupPolicy(assemblies))
+            return false;
+
+        if (!SetupReadWritePool(config))
             return false;
 
         _sessionManager = new SessionManager(config.Session.MaxConnections);
@@ -266,7 +271,17 @@ public abstract class EngineCore : ILogContext, IDisposable
 
         return _protocolOverrides.Count != 0;
     }
-    
+
+    private bool SetupReadWritePool(EngineConfig config)
+    {
+        _readWritePool = new ExpandablePool<ReadWriteBuffer>();
+        _readWritePool.Initialize(
+                Math.Max(config.Session.MaxConnections, 512),
+                Math.Max(config.Session.MaxConnections * 2, 512),
+                new ReadWritePoolFactory(config.Network.ReceiveBufferSize));
+        return true;
+    }
+
     internal IPolicySnapshot CreatePolicySnapshot(PolicyGlobals globals)
         => new PolicySnapshot(globals, _protocolOverrides);
 
@@ -444,7 +459,13 @@ public abstract class EngineCore : ILogContext, IDisposable
     
     internal Session CreateSession(TcpNetworkSession ns)
     {
-        var session = _sessionManager.CreateSession(this, ns);
+        if (!_readWritePool.TryRent(out var readWriteBuffer))
+        {
+            Logger.Warn("ReadWritePool.TryRent failed.");
+            return null;
+        }
+        
+        var session = _sessionManager.CreateSession(this, ns, readWriteBuffer);
         if (session == null) return null;
         
         ns.Closed += OnTcpSessionClosed;
@@ -457,12 +478,29 @@ public abstract class EngineCore : ILogContext, IDisposable
     
     private void OnTcpSessionClosed(INetworkSession ns, CloseReason reason)
     {
-        var session = ns.Session;
-        if (session == null) return;
+        if (ns.Session is not Session session) return;
 
         Logger.Debug("The session {0} has been closed. reason={1}", session.SessionId, reason);
-        _sessionManager.RemoveSession(session.SessionId);
-        OnSessionClosed((Session)session, reason);
+
+        try
+        {
+            var buffer = session.ReleaseReadWriteBuffer();
+            if (buffer != null)
+            {
+                _readWritePool.Return(buffer);
+            }
+            
+            session.Close(reason);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Error during session close in OnTcpSessionClosed. SessionId={0}", session.SessionId);
+        }
+        finally
+        {
+            _sessionManager.RemoveSession(session.SessionId);
+            OnSessionClosed(session, reason);
+        }
     }
 
     private void EnqueueAuthHandshakePending(SessionBase session)
