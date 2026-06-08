@@ -4,7 +4,7 @@ obj/
 .vscode/
 bin/
 .DS_Store
-.user
+*.user
 *.dev.json
 .log
 logs
