@@ -7,7 +7,7 @@ using SP.Core.Accessor;
 
 namespace SP.Core.Serialization
 {
-    internal static class NetSerializerBuilder
+    internal static class DynamicSerializerBuilder
     {
         // NetWriter.Write<T>(T value);
         private static readonly MethodInfo WriteGeneric = typeof(NetWriter)
@@ -29,8 +29,6 @@ namespace SP.Core.Serialization
             .GetMethods(BindingFlags.Public | BindingFlags.Static)
             .First(m => m.Name == "Deserialize" && m.IsGenericMethod && m.GetParameters().Length == 1);
         
-        private static readonly MethodInfo ListClear = typeof(System.Collections.IList).GetMethod(nameof(System.Collections.IList.Clear));
-        private static readonly MethodInfo DictClear = typeof(System.Collections.IDictionary).GetMethod(nameof(System.Collections.IDictionary.Clear));
         private static readonly MethodInfo WriteBool = typeof(NetWriter).GetMethod(nameof(NetWriter.WriteBool));
         private static readonly MethodInfo ReadBool = typeof(NetReader).GetMethod(nameof(NetReader.ReadBool));
         private static readonly MethodInfo WriteInt64 = typeof(NetWriter).GetMethod(nameof(NetWriter.WriteInt64));
@@ -38,14 +36,12 @@ namespace SP.Core.Serialization
         private static readonly PropertyInfo DateTimeTicks = typeof(DateTime).GetProperty(nameof(DateTime.Ticks));
         private static readonly ConstructorInfo DateTimeCtor = typeof(DateTime).GetConstructor(new[] { typeof(long) });
         
-        public static SerializerPair Build(Type type)
+        public static TypeSerializer Build(Type type)
         {
-            return new SerializerPair(
-                null,
-                null,
-                null, 
+            return new TypeSerializer(
+                CompileReader(type), 
                 CompileWriter(type),
-                CompileReader(type),
+                CompilePopulate(type),
                 CompileReset(type)
             );
         }
@@ -76,9 +72,14 @@ namespace SP.Core.Serialization
                     var ticks = Expression.Property(memberAccess, DateTimeTicks);
                     bodyBlock.Add(Expression.Call(writerParam, WriteInt64, ticks));
                 }
-                else if (member.Type.IsValueType || member.Type.IsPrimitive)
+                else if (member.Type.IsPrimitive)
                 {
                     bodyBlock.Add(Expression.Call(writerParam, WriteGeneric.MakeGenericMethod(member.Type), memberAccess));
+                }
+                else if (member.Type.IsValueType)
+                {
+                    // struct 
+                    bodyBlock.Add(Expression.Call(SerializeGeneric.MakeGenericMethod(member.Type), writerParam, memberAccess));
                 }
                 else
                 {
@@ -97,14 +98,71 @@ namespace SP.Core.Serialization
             if (bodyBlock.Count == 0) bodyBlock.Add(Expression.Empty());
 
             return Expression.Lambda(
-                typeof(SerializerPair.WriteGenericFn<>).MakeGenericType(type),
+                typeof(TypeSerializer.WriteDelegate<>).MakeGenericType(type),
                 Expression.Block(bodyBlock),
                 writerParam,
                 valueParam
             ).Compile();
         }
-        
+
         private static object CompileReader(Type type)
+        {
+            var readerParam = Expression.Parameter(typeof(NetReader).MakeByRefType(), "reader");
+            
+            var resultVar = Expression.Variable(type, "result");
+            var bodyBlock = new List<Expression>
+            {
+                // 인스턴스 생성 및 할당 (result = new T())
+                Expression.Assign(resultVar, Expression.New(type))
+            };
+
+            var accessor = RuntimeTypeAccessor.GetOrCreate(type);
+            foreach (var member in accessor.Members.Where(m => m.CanSet && !m.IgnoreSet))
+            {
+                var memberAccess = Expression.MakeMemberAccess(resultVar, member.Info);
+
+                if (member.Type.IsEnum)
+                {
+                    var underlyingType = Enum.GetUnderlyingType(member.Type);
+                    var readCall = Expression.Call(readerParam, ReadGeneric.MakeGenericMethod(underlyingType));
+                    bodyBlock.Add(Expression.Assign(memberAccess, Expression.Convert(readCall, member.Type)));
+                }
+                else if (member.Type == typeof(DateTime))
+                {
+                    var ticks = Expression.Call(readerParam, ReadInt64);
+                    bodyBlock.Add(Expression.Assign(memberAccess, Expression.New(DateTimeCtor, ticks)));
+                }
+                else if (member.Type.IsPrimitive)
+                {
+                    var readCall = Expression.Call(readerParam, ReadGeneric.MakeGenericMethod(member.Type));
+                    bodyBlock.Add(Expression.Assign(memberAccess, readCall));
+                }
+                else if (member.Type.IsValueType)
+                {
+                    var deserializeCall = Expression.Call(DeserializeGeneric.MakeGenericMethod(member.Type), readerParam);
+                    bodyBlock.Add(Expression.Assign(memberAccess, deserializeCall));
+                }
+                else
+                {
+                    var deserializeCall = Expression.Call(DeserializeGeneric.MakeGenericMethod(member.Type), readerParam);
+                    bodyBlock.Add(Expression.IfThenElse(
+                        Expression.Call(readerParam, ReadBool),
+                        Expression.Assign(memberAccess, deserializeCall),
+                        Expression.Assign(memberAccess, Expression.Constant(null, member.Type))
+                    ));
+                }
+            }
+            
+            bodyBlock.Add(resultVar);
+
+            return Expression.Lambda(
+                typeof(TypeSerializer.ReadDelegate<>).MakeGenericType(type),
+                Expression.Block(new[] { resultVar }, bodyBlock),
+                readerParam
+            ).Compile();
+        }
+        
+        private static object CompilePopulate(Type type)
         {
             var readerParam = Expression.Parameter(typeof(NetReader).MakeByRefType(), "reader");
             var instanceParam = Expression.Parameter(type, "instance");
@@ -127,13 +185,17 @@ namespace SP.Core.Serialization
                 else if (member.Type == typeof(DateTime))
                 {
                     // 스트림에서 Int64(Ticks)를 읽어와 DateTime 객체를 생성 후 할당
-                    var readTicks = Expression.Call(readerParam, ReadInt64);
-                    var newDateTime = Expression.New(DateTimeCtor, readTicks);
-                    bodyBlock.Add(Expression.Assign(memberAccess, newDateTime));
+                    var ticks = Expression.Call(readerParam, ReadInt64);
+                    bodyBlock.Add(Expression.Assign(memberAccess, Expression.New(DateTimeCtor, ticks)));
                 }
-                else if (member.Type.IsValueType || member.Type.IsPrimitive)
+                else if (member.Type.IsPrimitive)
                 {
                     bodyBlock.Add(Expression.Assign(memberAccess, Expression.Call(readerParam, ReadGeneric.MakeGenericMethod(member.Type))));
+                }
+                else if (member.Type.IsValueType)
+                {
+                    var deserializeCall = Expression.Call(DeserializeGeneric.MakeGenericMethod(member.Type), readerParam);
+                    bodyBlock.Add(Expression.Assign(memberAccess, deserializeCall));
                 }
                 else
                 {
@@ -148,7 +210,7 @@ namespace SP.Core.Serialization
             if (bodyBlock.Count == 0) bodyBlock.Add(Expression.Empty());
 
             return Expression.Lambda(
-                typeof(SerializerPair.ReadIntoGenericFn<>).MakeGenericType(type),
+                typeof(TypeSerializer.PopulateDelegate<>).MakeGenericType(type),
                 Expression.Block(bodyBlock),
                 readerParam,
                 instanceParam
@@ -185,7 +247,7 @@ namespace SP.Core.Serialization
             if (bodyBlock.Count == 0) bodyBlock.Add(Expression.Empty());
 
             return Expression.Lambda(
-                typeof(SerializerPair.ResetGenericFn<>).MakeGenericType(type),
+                typeof(TypeSerializer.ResetDelegate<>).MakeGenericType(type),
                 Expression.Block(bodyBlock),
                 instanceParam
             ).Compile();

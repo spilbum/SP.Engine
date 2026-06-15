@@ -20,14 +20,6 @@ public sealed record SessionConfig
     public int IdleSessionTimeoutSec { get; init; } = 300;
 
     /// <summary>
-    /// 세션 목록 스냅샷 생성 여부
-    /// </summary>
-    public bool EnableSessionSnapshot { get; init; } = true;
-    /// <summary>
-    /// 스냅샷 갱신 주기
-    /// </summary>
-    public int SessionSnapshotPeriodSec { get; init; } = 3;
-    /// <summary>
     /// 끊긴 유저의 재접속 대기 시간
     /// </summary>
     public int WaitingReconnectTimeoutSec { get; init; } = 120;

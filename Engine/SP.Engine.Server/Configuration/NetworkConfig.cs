@@ -79,11 +79,6 @@ public sealed record NetworkConfig
     public int ReliablePendingQueueCapacity { get; init; } = 1024;
     
     /// <summary>
-    /// 수신 백프레셔 제어 타이아웃
-    /// </summary>
-    public int ReceivingBackPressureTimeoutSec { get; init; } = 10;
-    
-    /// <summary>
     /// UDP 활성화 여부
     /// </summary>
     public bool EnableUdp { get; init; } = true;
@@ -107,14 +102,4 @@ public sealed record NetworkConfig
     /// UDP 파편화 조립기 대기 메시지 임계치
     /// </summary>
     public int FragmentAssemblerPendingMessageThreshold { get; init; } = 100;
-    
-    /// <summary>
-    /// TCP 송신 채널의 BoundedChannel 최대 용량
-    /// </summary>
-    public int TcpSendQueueCapacity { get; init; } = 2048;
-    /// <summary>
-    /// UDP 송신 채널의 BoundedChannel 최대 용량
-    /// 파편화 패킷 유입을 고려하여 TCP보다 크게 설정합니다.
-    /// </summary>
-    public int UdpSendQueueCapacity { get; init; } = 4096;
 }

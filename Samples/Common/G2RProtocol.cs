@@ -23,13 +23,13 @@ namespace Common
 
     public static class G2RProtocolData
     {
-        [Protocol(G2RProtocol.ServerSyncNtf)]
+        [ProtocolData(G2RProtocol.ServerSyncNtf)]
         public class ServerSyncNtf : ProtocolDataBase<ServerSyncNtf>
         {
             public int UserCount;
         }
         
-        [Protocol(G2RProtocol.RankUpdateReq)]
+        [ProtocolData(G2RProtocol.RankUpdateReq)]
         public class RankUpdateReq : ProtocolDataBase<RankUpdateReq>
         {
             public int? AbsoluteScore;
@@ -39,7 +39,7 @@ namespace Common
             public long Uid;
         }
 
-        [Protocol(G2RProtocol.RankTopReq)]
+        [ProtocolData(G2RProtocol.RankTopReq)]
         public class RankTopReq : ProtocolDataBase<RankTopReq>
         {
             public int Count;
@@ -47,7 +47,7 @@ namespace Common
             public long Uid;
         }
 
-        [Protocol(G2RProtocol.RankRangeReq)]
+        [ProtocolData(G2RProtocol.RankRangeReq)]
         public class RankRangeReq : ProtocolDataBase<RankRangeReq>
         {
             public int Count;
@@ -56,7 +56,7 @@ namespace Common
             public long Uid;
         }
 
-        [Protocol(G2RProtocol.RankMyReq)]
+        [ProtocolData(G2RProtocol.RankMyReq)]
         public class RankMyReq : ProtocolDataBase<RankMyReq>
         {
             public SeasonKind SeasonKind;
@@ -66,7 +66,7 @@ namespace Common
 
     public static class R2GProtocolData
     {
-        [Protocol(R2GProtocol.RankUpdateAck)]
+        [ProtocolData(R2GProtocol.RankUpdateAck)]
         public class RankUpdateAck : ProtocolDataBase<RankUpdateAck>
         {
             public ErrorCode Result;
@@ -74,7 +74,7 @@ namespace Common
             public long Uid;
         }
 
-        [Protocol(R2GProtocol.RankTopAck, compress: Toggle.On)]
+        [ProtocolData(R2GProtocol.RankTopAck, compress: Toggle.On)]
         public class RankTopAck : ProtocolDataBase<RankTopAck>
         {
             public List<PlayerRankInfo>? Infos;
@@ -83,7 +83,7 @@ namespace Common
             public long Uid;
         }
 
-        [Protocol(R2GProtocol.RankRangeAck, compress: Toggle.On)]
+        [ProtocolData(R2GProtocol.RankRangeAck, compress: Toggle.On)]
         public class RankRangeAck : ProtocolDataBase<RankRangeAck>
         {
             public List<PlayerRankInfo>? Infos;
@@ -92,7 +92,7 @@ namespace Common
             public long Uid;
         }
 
-        [Protocol(R2GProtocol.RankMyAck)]
+        [ProtocolData(R2GProtocol.RankMyAck)]
         public class RankMyAck : ProtocolDataBase<RankMyAck>
         {
             public PlayerRankInfo? Info;

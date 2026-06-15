@@ -84,6 +84,7 @@ namespace SP.Engine.Client
         private bool _disposed;
         private AesGcmEncryptor _encryptor;
         private ReliableMessageProcessor _messageProcessor;
+        private int _maxPayloadLength = 65536;
 
         private readonly Dictionary<ushort, ProtocolOverrides> _protocolOverrides = new Dictionary<ushort, ProtocolOverrides>();
         private IPolicySnapshot _policySnapshot;
@@ -94,7 +95,7 @@ namespace SP.Engine.Client
         private TickTimer _timer;
         private UdpNetworkSession _udpNetworkSession;
         
-        private uint _lastSentAck;
+        private uint _lastSentAck = 1;
         private DateTime _lastAckTime;
 
         private FragmentAssembler _fragmentAssembler;
@@ -329,7 +330,7 @@ namespace SP.Engine.Client
             if (!SetupPolicy(assemblies))
                 return false;
 
-            var defaultPolicy = new PolicyGlobals(false, false, 0, 65536);
+            var defaultPolicy = new PolicyGlobals(false, false, 0);
             _policySnapshot = CreatePolicySnapshot(defaultPolicy);
             return true;
         }
@@ -401,9 +402,9 @@ namespace SP.Engine.Client
 
                 foreach (var type in types)
                 {
-                    var attr = type.GetCustomAttribute<ProtocolAttribute>();
+                    var attr = type.GetCustomAttribute<ProtocolDataAttribute>();
                     if (attr == null) return false;
-                    _protocolOverrides[attr.Id] = new ProtocolOverrides(attr.Encrypt, attr.Compress, attr.MaxPayloadLength);
+                    _protocolOverrides[attr.Id] = new ProtocolOverrides(attr.Encrypt, attr.Compress);
                 }
             }
 
@@ -430,7 +431,7 @@ namespace SP.Engine.Client
                 {
                     if (message is TcpMessage tcp && tcp.SequenceNumber > 0)
                     {
-                        var result = _messageProcessor.ReceiveIngestMessage(tcp, _orderCache);
+                        var result = _messageProcessor.ReceiveIngestMessage(tcp.Extract(), _orderCache);
                         switch (result)
                         {
                             case ReceiveIngestResult.Success:
@@ -493,33 +494,12 @@ namespace SP.Engine.Client
         {
             if (!IsConnected) return;
 
-            var messages = _messageProcessor.FlushPendingMessages();
-            if (messages.Count == 0) return;
-            
-            var processed = 0;
-            foreach (var message in messages)
+            while (_messageProcessor.TryPeekPendingMessage(out var message))
             {
-                if (!IsConnected) break;
                 if (!_messageProcessor.RegisterInFlight(message, out var inFlightMessage)) break;
-                
+                _messageProcessor.DequeuePendingMessage();
                 TrySend(ChannelKind.Reliable, inFlightMessage);
                 message.Dispose();
-                    
-                processed++; 
-            }
-            
-            if (processed >= messages.Count) return;
-            
-            for (var index = processed; index < messages.Count; index++)
-            {
-                var message = messages[index];
-                using (message)
-                {
-                    if (!_messageProcessor.EnqueuePendingMessage(message))
-                    {
-                        Logger.Warn("Failed to re-enqueue pending message during flush.");
-                    }
-                }
             }
         }
         
@@ -746,7 +726,7 @@ namespace SP.Engine.Client
 
             try
             {
-                while (_readWriteBuffer.TryRead(_policySnapshot, out var header, out var bufferOwner))
+                while (_readWriteBuffer.TryRead(_maxPayloadLength, out var header, out var bufferOwner))
                 {
                     var message = MessagePool<TcpMessage>.Rent();
                     message.Initialize(header, bufferOwner);
@@ -764,19 +744,19 @@ namespace SP.Engine.Client
         {
             if (!IsConnected) return;
                     
-            var ackNumber = _messageProcessor.NextExpectedSeq;
-            if (ackNumber <= _lastSentAck) return;
+            var expectedSeq = _messageProcessor.NextExpectedSeq;
+            if (expectedSeq <= _lastSentAck) return;
             
             var nowUtc = DateTime.UtcNow;
             var elapsedMs = (nowUtc - _lastAckTime).TotalMilliseconds;
-            var pendingCount = ackNumber - _lastSentAck;
+            var pendingCount = expectedSeq - _lastSentAck;
 
             if (elapsedMs < _messageProcessor.MaxAckDelayMs && pendingCount < _messageProcessor.AckFrequency)
                 return;
                 
             _lastAckTime = nowUtc;
-            _lastSentAck = ackNumber;
-            SendMessageAck(ackNumber);
+            _lastSentAck = expectedSeq;
+            SendMessageAck(expectedSeq);
         }
 
         private void OnSessionError(object sender, ErrorEventArgs e)
@@ -945,11 +925,16 @@ namespace SP.Engine.Client
             _compressor = new Lz4Compressor(maxPayloadLength);
         }
 
-        internal void SetupPolicy(bool useEncrypt, bool useCompress, int compressionThreshold, int maxPayloadLength)
+        internal void SetupPolicy(bool useEncrypt, bool useCompress, int compressionThreshold)
         {
-            var g = new PolicyGlobals(useEncrypt, useCompress, compressionThreshold, maxPayloadLength);
+            var g = new PolicyGlobals(useEncrypt, useCompress, compressionThreshold);
             var snapshot = CreatePolicySnapshot(g);
             Interlocked.Exchange(ref _policySnapshot, snapshot);
+        }
+
+        internal void SetMaxPayloadLength(int maxPayloadLength)
+        {
+            _maxPayloadLength = maxPayloadLength;
         }
         
         internal bool ConnectUdpSocket(int openPort)
@@ -1036,10 +1021,16 @@ namespace SP.Engine.Client
                     StopUdpHandshakeTimer();
                     _channelRouter.SetUdpAvailable(false);
                     Logger.Error("UDP handshake failed (timed out: {0} sec).", Config.UdpHandshakeTimeSec * count);
+                    return;
                 }
                 
                 SendUdpHandshake();
-            }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(Config.UdpHandshakeTimeSec));
+
+                var baseMs = Config.UdpHandshakeTimeSec * 1000;
+                var jitterMs = new Random(Guid.NewGuid().GetHashCode()).Next(-1000, 1000);
+                var nextDelayMs = Math.Max(1000, baseMs + jitterMs);
+                _udpHandshakeTimer?.Change(TimeSpan.FromMilliseconds(nextDelayMs), Timeout.InfiniteTimeSpan);
+            }, null, TimeSpan.FromSeconds(1), Timeout.InfiniteTimeSpan);
         }
 
         private void StopUdpHandshakeTimer()

@@ -15,23 +15,17 @@ namespace SP.Engine.Runtime.Command
         private static class ProtocolPool<T> where T : class, IProtocolData, new()
         {
             private const int LocalCapacity = 512;
-            [ThreadStatic] private static LocalStack _localPool;
 
-            private class LocalStack
-            {
-                public readonly T[] Items = new T[LocalCapacity];
-                public int Count;
-            }
-            
+            [ThreadStatic] private static T[] _localItems;
+            [ThreadStatic] private static int _localCount;
             private static readonly ConcurrentQueue<T> _globalQueue = new ConcurrentQueue<T>();
             
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static T Rent()
             {
-                var localStack = _localPool;
-                if (localStack != null && localStack.Count > 0)
+                if (_localCount > 0)
                 {
-                    return localStack.Items[--localStack.Count];
+                    return _localItems[--_localCount];
                 }
             
                 return _globalQueue.TryDequeue(out var instance) ? instance : new T();
@@ -42,21 +36,13 @@ namespace SP.Engine.Runtime.Command
             {
                 if (instance == null) return;
 
-                try
-                {
-                    NetSerializer<T>.Reset(instance);
-                }
-                catch
-                {
-                    return;
-                }
+                NetObject<T>.Reset(instance);
+                
+                _localItems ??= new T[LocalCapacity];
             
-                _localPool ??= new LocalStack();
-            
-                var localStack = _localPool;
-                if (localStack.Count < LocalCapacity)
+                if (_localCount < LocalCapacity)
                 {
-                    localStack.Items[localStack.Count++] = instance;
+                    _localItems[_localCount++] = instance;
                 }
                 else
                 {
@@ -68,7 +54,7 @@ namespace SP.Engine.Runtime.Command
         public string Name => GetType().Name;
         public Type ContextType => typeof(TContext);
 
-        public double Execute(ICommandContext context, IMessage message)
+        public long Execute(ICommandContext context, IMessage message)
         {
             if (!(context is TContext ctx)) return 0;
             
@@ -88,7 +74,6 @@ namespace SP.Engine.Runtime.Command
             }
             
             var start = Stopwatch.GetTimestamp();
-            double executionTimeMs;
             
             try
             {
@@ -101,13 +86,11 @@ namespace SP.Engine.Runtime.Command
             }
             finally
             {
-                var end = Stopwatch.GetTimestamp();
-                executionTimeMs = (double)(end - start) / Stopwatch.Frequency * 1000;
-                
                 ProtocolPool<TProtocol>.Return(protocol);
             }
-            
-            return executionTimeMs;
+
+            var deltaTicks = Stopwatch.GetTimestamp() - start;
+            return (long)Math.Round((double)(deltaTicks * 1000) / Stopwatch.Frequency);
         }
 
         protected abstract void ExecuteCommand(TContext context, TProtocol protocol);

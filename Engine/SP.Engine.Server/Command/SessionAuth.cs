@@ -14,6 +14,12 @@ internal class SessionAuth : CommandBase<Session, C2SEngineProtocolData.SessionA
     {
         using var scope = ProtocolScope<S2CEngineProtocolData.SessionAuthAck>.Rent();
         var engine = session.Engine;
+
+        if (!session.TryEnterAuthenticating())
+        {
+            session.Logger.Warn("Session {0} attempted duplicate auth.", session.SessionId);
+            return;
+        }
         
         try
         {
@@ -24,7 +30,7 @@ internal class SessionAuth : CommandBase<Session, C2SEngineProtocolData.SessionA
             scope.Protocol.Result = result;
             if (scope.Protocol.Result != SessionAuthResult.Ok) return;
 
-            session.Authenticate(peer);
+            session.CompleteAuthenticated(peer);
             session.Logger.Debug("Session {0}({1}) TCP handshake succeeded.", session.SessionId, peer.PeerId);
         }
         catch (Exception e)
@@ -65,6 +71,8 @@ internal class SessionAuth : CommandBase<Session, C2SEngineProtocolData.SessionA
                 return (SessionAuthResult.ReconnectionNotAllowed, null);
             
             peer = prevSession.Peer;
+            
+            prevSession.Peer = null;
             prevSession.Close(CloseReason.ServerClosing);
         }
         else
@@ -76,7 +84,7 @@ internal class SessionAuth : CommandBase<Session, C2SEngineProtocolData.SessionA
         // 클라가 받은 시퀀스 번호로 갱신
         peer.HandleRemoteAck(req.ClientNextExpectedSeq);
         
-        return engine.OnlinePeer(peer, session) 
+        return engine.ActivatePeer(peer, session) 
             ? (SessionAuthResult.Ok, targetPeer: peer)
             : (SessionAuthResult.InternalError, null);
     }

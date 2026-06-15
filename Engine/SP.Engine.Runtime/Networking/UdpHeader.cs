@@ -38,10 +38,10 @@ namespace SP.Engine.Runtime.Networking
             destination.WriteInt32(12, PayloadLength);
         }
 
-        public static bool TryRead(ReadOnlySpan<byte> source, out UdpHeader header, out int byteConsumed)
+        public static bool TryRead(ReadOnlySpan<byte> source, out UdpHeader header, out int bytesConsumed)
         {
             header = default;
-            byteConsumed = 0;
+            bytesConsumed = 0;
             
             if (source.Length < ByteSize) return false;
 
@@ -51,7 +51,7 @@ namespace SP.Engine.Runtime.Networking
             var fragmented = source[11];
             var payloadLength = source.ReadInt32(12);
             header = new UdpHeader(flags, sessionId, protocolId, fragmented, payloadLength);
-            byteConsumed = ByteSize;
+            bytesConsumed = ByteSize;
             return true;
         }
     }

@@ -15,15 +15,7 @@ using SP.Engine.Server.Logging;
 
 namespace SP.Engine.Server;
 
-public static class TickExtensions
-{
-    public static DateTime ToDateTime(this long ticks, DateTimeKind kind = DateTimeKind.Utc)
-    {
-        return new DateTime(ticks, kind);
-    }
-}
-
-public enum EServerState
+public enum ServerState
 {
     NotInitialized = ServerStateConst.NotInitialized,
     Initializing = ServerStateConst.Initializing,
@@ -49,37 +41,24 @@ public abstract class EngineCore : ILogContext, IDisposable
     private readonly ConcurrentQueue<SessionBase> _closeHandshakePendingQueue = new();
     private IDisposable _clearIdleSessionTimer;
     private IDisposable _handshakePendingTimer;
-    private IDisposable _sessionSnapshotTimer;
     private ListenerInfo[] _listenerInfos;
     private SocketServer _socketServer;
-    private Session[] _sessionSnapshot;
-    private int _stateCode = ServerStateConst.NotInitialized;
-    private bool _disposed;
     private ThreadFiber _engineFiber;
     private readonly Scheduler _globalScheduler = new();
     private SessionManager _sessionManager;
     private IDisposable _fragmentAssemblerCleanupTimer;
-    private readonly Dictionary<ushort, ProtocolOverrides> _protocolOverrides = new();
-
     private ExpandablePool<ReadWriteBuffer> _readWritePool;
+    private readonly Dictionary<ushort, ProtocolOverrides> _protocolOverrides = new();
+    private int _stateCode = ServerStateConst.NotInitialized;
+    private bool _disposed;
     
     public string Name { get; private set; }
-
-    protected Session[] SessionsSource
-    {
-        get
-        {
-            if (!Config.Session.EnableSessionSnapshot) return _sessionManager.GetActiveSnapshot();
-            var snap = Volatile.Read(ref _sessionSnapshot);
-            return snap ?? [];
-        }
-    }
-
+    public ServerState State => (ServerState)_stateCode;
+    public Session[] SessionsSource => _sessionManager.GetActiveSnapshot();
     public ILogger Logger { get; private set; }
     public IEngineConfig Config { get; private set; }
-    
-    internal IFiber Fiber => _engineFiber; 
     public IScheduler GlobalScheduler => _globalScheduler;
+    internal IFiber Fiber => _engineFiber;
 
     public void Dispose()
     {
@@ -124,7 +103,7 @@ public abstract class EngineCore : ILogContext, IDisposable
             Interlocked.CompareExchange(ref _stateCode, ServerStateConst.Starting, ServerStateConst.NotStarted);
         if (oldState != ServerStateConst.NotStarted)
         {
-            Logger.Fatal("This server instance is in the state {0}, you cannot start it now.", (EServerState)oldState);
+            Logger.Fatal("This server instance is in the state {0}, you cannot start it now.", (ServerState)oldState);
             return false;
         }
 
@@ -136,9 +115,6 @@ public abstract class EngineCore : ILogContext, IDisposable
         }
 
         _stateCode = ServerStateConst.Running;
-
-        if (Config.Session.EnableSessionSnapshot)
-            StartSessionSnapshotTimer();
 
         if (Config.Session.EnableClearIdleSession)
             StartClearIdleSessionTimer();
@@ -161,8 +137,6 @@ public abstract class EngineCore : ILogContext, IDisposable
         _socketServer?.Stop();
         _stateCode = ServerStateConst.NotStarted;
 
-        _sessionSnapshot = null;
-        StopSessionSnapshotTimer();
         StopClearIdleSessionTimer();
         StopHandshakePendingTimer();
         StopFragmentAssemblerCleanupTimer();
@@ -263,9 +237,9 @@ public abstract class EngineCore : ILogContext, IDisposable
 
             foreach (var type in types)
             {
-                var attr = type.GetCustomAttribute<ProtocolAttribute>();
+                var attr = type.GetCustomAttribute<ProtocolDataAttribute>();
                 if (attr == null) continue;
-                _protocolOverrides[attr.Id] = new ProtocolOverrides(attr.Encrypt, attr.Compress, attr.MaxPayloadLength);
+                _protocolOverrides[attr.Id] = new ProtocolOverrides(attr.Encrypt, attr.Compress);
             }
         }
 
@@ -327,49 +301,32 @@ public abstract class EngineCore : ILogContext, IDisposable
 
     private void ClearIdleSession()
     {
-        var activeSessions = _sessionManager.GetActiveSnapshot();
-        if (activeSessions.Length == 0) return;
+        var snapshot = _sessionManager.GetActiveSnapshot();
+        if (snapshot.Length == 0) return;
         
         var nowUtc = DateTime.UtcNow;
         var idleTimeoutSec = Config.Session.IdleSessionTimeoutSec;
         var timeoutTicks = nowUtc.Ticks - TimeSpan.FromSeconds(idleTimeoutSec).Ticks;
 
-        foreach (var s in activeSessions)
+        foreach (var session in snapshot)
         {
-            if (s == null) continue;
+            if (session == null) continue;
 
-            var lastActive = s.LastActiveTimeTicks;
+            var lastActive = session.LastActiveTimeTicks;
             if (lastActive > timeoutTicks) continue;
+            
+            if (Logger.IsEnabled(LogLevel.Debug))
+            {
+                var lastActiveTime = new DateTime(lastActive, DateTimeKind.Utc);
+                Logger.Debug(
+                    "[TimeOut] Session {0} idle for {1}s. LastActiveTime: {2}",
+                    session.SessionId,
+                    TimeSpan.FromTicks(nowUtc.Ticks - lastActive).TotalSeconds,
+                    lastActiveTime);   
+            }
 
-            Logger.Debug(
-                "[TimeOut] Session {0} idle for {1}s. LastActive: {2}",
-                s.SessionId,
-                TimeSpan.FromTicks(nowUtc.Ticks - lastActive).TotalSeconds,
-                lastActive.ToDateTime());
-
-            s.Close(CloseReason.TimeOut);
+            session.Close(CloseReason.TimeOut);
         }
-    }
-
-    private void StartSessionSnapshotTimer()
-    {
-        _sessionSnapshotTimer = _globalScheduler.Schedule(
-            _engineFiber, 
-            TakeSessionSnapshot,
-            TimeSpan.Zero,
-            TimeSpan.FromSeconds(Config.Session.SessionSnapshotPeriodSec));
-    }
-
-    private void StopSessionSnapshotTimer()
-    {
-        _sessionSnapshotTimer?.Dispose();
-        _sessionSnapshotTimer = null;
-    }
-
-    private void TakeSessionSnapshot()
-    {
-        var snapshot = _sessionManager.GetActiveSnapshot();
-        Interlocked.Exchange(ref _sessionSnapshot, snapshot);
     }
 
     protected virtual void Dispose(bool disposing)
@@ -421,13 +378,13 @@ public abstract class EngineCore : ILogContext, IDisposable
 
                 // 타임 아웃 체크
                 if (DateTime.UtcNow < session.StartTime.AddSeconds(Config.Session.AuthHandshakeTimeoutSec))
-                    continue;
+                    break;
                 
                 Logger.Debug("Timeout auth handshake for session: {0}", session.SessionId);
                 
                 // 인증 타임 아웃
-                if (_authHandshakePendingQueue.TryDequeue(out var expired))
-                    expired.Close(CloseReason.ServerClosing);
+                if (!_authHandshakePendingQueue.TryDequeue(out var expired)) continue;
+                expired.Close(CloseReason.ServerClosing);
             }
 
             while (_closeHandshakePendingQueue.TryPeek(out var session))
@@ -442,7 +399,7 @@ public abstract class EngineCore : ILogContext, IDisposable
 
                 // 타임 아웃 체크
                 if (DateTime.UtcNow < session.StartClosingTime.AddSeconds(Config.Session.CloseHandshakeTimeoutSec))
-                    continue;
+                    break;
 
                 Logger.Debug("Timeout close handshake for session: {0}", session.SessionId);
                 
@@ -460,23 +417,20 @@ public abstract class EngineCore : ILogContext, IDisposable
     internal Session CreateSession(TcpNetworkSession ns)
     {
         if (!_readWritePool.TryRent(out var readWriteBuffer))
-        {
-            Logger.Warn("ReadWritePool.TryRent failed.");
             return null;
-        }
         
         var session = _sessionManager.CreateSession(this, ns, readWriteBuffer);
         if (session == null) return null;
         
-        ns.Closed += OnTcpSessionClosed;
+        ns.Closed += OnSessionClosed;
         
         // 인증 해드쉐이크 대기 등록
         EnqueueAuthHandshakePending(session);
-        Logger.Debug("A new session connected. sessionId={0}", session.SessionId);
+        Logger.Debug("A new session {0} connected.", session.SessionId);
         return session;
     }
-    
-    private void OnTcpSessionClosed(INetworkSession ns, CloseReason reason)
+
+    private void OnSessionClosed(INetworkSession ns, CloseReason reason)
     {
         if (ns.Session is not Session session) return;
 
@@ -484,22 +438,19 @@ public abstract class EngineCore : ILogContext, IDisposable
 
         try
         {
-            var buffer = session.ReleaseReadWriteBuffer();
-            if (buffer != null)
-            {
-                _readWritePool.Return(buffer);
-            }
-            
             session.Close(reason);
+
+            var buffer = session.ReleaseReadWriteBuffer();
+            if (buffer != null) _readWritePool.Return(buffer);
         }
         catch (Exception ex)
         {
-            Logger.Error(ex, "Error during session close in OnTcpSessionClosed. SessionId={0}", session.SessionId);
+            Logger.Error(ex, "Session {0} OnSessionClosed failed: {1}", session.SessionId, ex.Message);
         }
         finally
         {
             _sessionManager.RemoveSession(session.SessionId);
-            OnSessionClosed(session, reason);
+            OnSessionClosed(session, reason);   
         }
     }
 

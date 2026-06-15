@@ -209,7 +209,7 @@ namespace SP.Engine.Runtime.Networking
                     var tracker = _windowSlots[index];
                     if (tracker == null) continue;
 
-                    if (!tracker.IsTimeout(nowUtc)) break;
+                    if (!tracker.IsTimeout(nowUtc)) continue;
 
                     if (tracker.IsExhausted)
                     {
@@ -326,27 +326,12 @@ namespace SP.Engine.Runtime.Networking
     
     public sealed class ReceiveSequenceReorderer : IDisposable
     {
-        private readonly ReaderWriterLockSlim _rwlock = new ReaderWriterLockSlim();
         private readonly int _maxOutOfOrderCount;
         private uint _nextExpectedSeq = 1;
-        private readonly SortedDictionary<uint, TcpMessage> _outOfOrderSlots = new SortedDictionary<uint, TcpMessage>();
+        private readonly Dictionary<uint, TcpMessage> _outOfOrderSlots = new Dictionary<uint, TcpMessage>();
         private bool _disposed;
         
-        public uint NextExpectedSeq
-        {
-            get
-            {
-                _rwlock.EnterReadLock();
-                try
-                {
-                    return _nextExpectedSeq;
-                }
-                finally
-                {
-                    _rwlock.ExitReadLock();
-                }
-            }
-        }
+        public uint NextExpectedSeq => _nextExpectedSeq;
 
         public ReceiveSequenceReorderer(int maxOutOfOrderCount)
         {
@@ -357,58 +342,42 @@ namespace SP.Engine.Runtime.Networking
         {
             if (_disposed) return ReceiveIngestResult.Success;
             
-            _rwlock.EnterWriteLock();
-            try
+            var seq = message.SequenceNumber;
+            var diff = (int)(seq - _nextExpectedSeq);
+            if (diff < 0 || _outOfOrderSlots.ContainsKey(seq))
             {
-                var seq = message.SequenceNumber;
-                if (seq < _nextExpectedSeq || _outOfOrderSlots.ContainsKey(seq))
-                {
-                    return ReceiveIngestResult.Duplicate;
-                }
+                return ReceiveIngestResult.Duplicate;
+            }
 
-                if (seq == _nextExpectedSeq)
+            if (diff > _maxOutOfOrderCount || _outOfOrderSlots.Count >= _maxOutOfOrderCount)
+            {
+                return ReceiveIngestResult.BufferOverflow;
+            }
+
+            if (diff == 0)
+            {
+                destinationList.Add(message);
+                _nextExpectedSeq++;
+
+                while (_outOfOrderSlots.Remove(_nextExpectedSeq, out var nextMessage))
                 {
-                    destinationList.Add(message.Extract());
+                    destinationList.Add(nextMessage);
                     _nextExpectedSeq++;
-
-                    while (_outOfOrderSlots.Remove(_nextExpectedSeq, out var nextMessage))
-                    {
-                        destinationList.Add(nextMessage);
-                        _nextExpectedSeq++;
-                    }
+                }
                     
-                    return ReceiveIngestResult.Success;
-                }
-
-                if (_outOfOrderSlots.Count >= _maxOutOfOrderCount)
-                {
-                    return ReceiveIngestResult.BufferOverflow;
-                }
+                return ReceiveIngestResult.Success;
+            }
                 
-                _outOfOrderSlots.TryAdd(seq, message.Extract());
-                return ReceiveIngestResult.Buffered;
-            }
-            finally
-            {
-                _rwlock.ExitWriteLock();
-            }
+            _outOfOrderSlots.TryAdd(seq, message);
+            return ReceiveIngestResult.Buffered;
         }
         
         public void Dispose()
         {
-            _rwlock.EnterWriteLock();
-            try
-            {
-                if (_disposed) return;
-                _disposed = true;
-                foreach (var message in _outOfOrderSlots.Values) message.Dispose();
-                _outOfOrderSlots.Clear();   
-            }
-            finally
-            {
-                _rwlock.ExitWriteLock();
-            }
-            _rwlock.Dispose();
+            if (_disposed) return;
+            _disposed = true;
+            foreach (var message in _outOfOrderSlots.Values) message.Dispose();
+            _outOfOrderSlots.Clear();  
         }
     }
     
@@ -417,8 +386,9 @@ namespace SP.Engine.Runtime.Networking
         private readonly ReliableSendWindow _reliableSendWindow;
         private readonly ReceiveSequenceReorderer _receiveSequenceReorderer;
         private readonly RtoEstimator _rtoEstimator = new RtoEstimator();
-        private readonly List<TcpMessage> _dequeuedCache = new List<TcpMessage>();
-        private readonly SwapQueue<TcpMessage> _pendingQueue;
+        private readonly ConcurrentQueue<TcpMessage> _pendingQueue = new ConcurrentQueue<TcpMessage>();
+        private int _currentPendingCount;
+        private readonly int _pendingQueueCapacity;
         
         public int MaxAckDelayMs { get; private set; }
         public int AckFrequency { get; private set; }
@@ -430,7 +400,7 @@ namespace SP.Engine.Runtime.Networking
                 builder.InFlightLimit,
                 builder.InitialRetransmitTimeoutMs,
                 builder.MaxRetransmitCount);
-            _pendingQueue = new SwapQueue<TcpMessage>(builder.PendingQueueCapacity);
+            _pendingQueueCapacity = builder.PendingQueueCapacity;
             _receiveSequenceReorderer = new ReceiveSequenceReorderer(builder.MaxOutOfOrderCount);
             
             MaxAckDelayMs = builder.MaxAckDelayMs;
@@ -441,17 +411,27 @@ namespace SP.Engine.Runtime.Networking
 
         public bool EnqueuePendingMessage(TcpMessage message)
         {
+            if (Interlocked.Increment(ref _currentPendingCount) > _pendingQueueCapacity)
+            {
+                Interlocked.Decrement(ref _currentPendingCount);
+                message.Dispose();
+                return false;
+            }
+            
             var tcp = message.Extract();
-            if (_pendingQueue.TryEnqueue(tcp)) return true;
-            tcp.Dispose();
+            _pendingQueue.Enqueue(tcp);
             return false;
         }
 
-        public List<TcpMessage> FlushPendingMessages()
+        public bool TryPeekPendingMessage(out TcpMessage message)
+            => _pendingQueue.TryPeek(out message);
+
+        public void DequeuePendingMessage()
         {
-            _dequeuedCache.Clear();
-            _pendingQueue.Extract(_dequeuedCache);
-            return _dequeuedCache;
+            if (_pendingQueue.TryDequeue(out var _))
+            {
+                Interlocked.Decrement(ref _currentPendingCount);
+            }
         }
 
         public bool RegisterInFlight(TcpMessage message, out TcpMessage inFlightMessage)
@@ -473,11 +453,7 @@ namespace SP.Engine.Runtime.Networking
 
         public void Dispose()
         {
-            var remaining = new List<TcpMessage>();
-            _pendingQueue.Extract(remaining);
-            foreach (var message in remaining) message.Dispose();
-            
-            _pendingQueue.Dispose();
+            while (_pendingQueue.TryDequeue(out var message)) message.Dispose();
             _reliableSendWindow.Dispose();
             _receiveSequenceReorderer.Dispose();
         }

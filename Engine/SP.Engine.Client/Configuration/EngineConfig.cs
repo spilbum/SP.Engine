@@ -32,11 +32,6 @@ namespace SP.Engine.Client.Configuration
         public int UdpHandshakeTimeSec { get; set; } = 5;
 
         /// <summary>
-        ///     전송 큐 사이즈 (기본값: 512개)
-        /// </summary>
-        public int SendQueueSize { get; set; } = 512;
-
-        /// <summary>
         ///     전송 버퍼 크기 (기본값: 4k)
         /// </summary>
         public int SendBufferSize { get; set; } = 4 * 1024;
@@ -75,62 +70,5 @@ namespace SP.Engine.Client.Configuration
         ///     재연결 주기 (기본값: 30초)
         /// </summary>
         public int ReconnectAttemptIntervalSec { get; set; } = 30;
-    }
-
-    public class EngineConfigBuilder
-    {
-        private readonly EngineConfig _config = new EngineConfig();
-
-        public static EngineConfigBuilder Create()
-        {
-            return new EngineConfigBuilder();
-        }
-
-        public EngineConfigBuilder WithAutoPing(bool enable, int intervalSec)
-        {
-            _config.EnableAutoPing = enable;
-            _config.AutoPingIntervalSec = intervalSec;
-            return this;
-        }
-
-        public EngineConfigBuilder WithReconnectAttempt(int max, int intervalSec)
-        {
-            _config.MaxReconnectAttempts = max;
-            _config.ReconnectAttemptIntervalSec = intervalSec;
-            return this;
-        }
-
-        public EngineConfigBuilder WithUdpMtu(ushort mtu)
-        {
-            _config.UdpMtu = mtu;
-            return this;
-        }
-
-        public EngineConfigBuilder WithKeepAlive(bool enable, int timeSec, int intervalSec)
-        {
-            _config.EnableKeepAlive = enable;
-            _config.KeepAliveTimeSec = timeSec;
-            _config.KeepAliveIntervalSec = intervalSec;
-            return this;
-        }
-
-        public EngineConfigBuilder WithUdpHealthCheck(int intervalSec, int maxFailCount)
-        {
-            _config.UdpHealthCheckIntervalSec = intervalSec;
-            _config.UdpHealthCheckThreshold = maxFailCount;
-            return this;
-        }
-
-        public EngineConfigBuilder WithConnectAttempt(int max, int intervalSec)
-        {
-            _config.MaxConnectAttempts = max;
-            _config.ConnectAttemptIntervalSec = intervalSec;
-            return this;
-        }
-
-        public EngineConfig Build()
-        {
-            return _config;
-        }
     }
 }

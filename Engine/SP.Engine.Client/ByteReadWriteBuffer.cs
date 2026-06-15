@@ -59,7 +59,7 @@ namespace SP.Engine.Client
         }
         
          public bool TryRead(
-            IPolicySnapshot policySnapshot, 
+            int maxPayloadLength, 
             out TcpHeader header,
             out IMemoryOwner<byte> bufferOwner)
         {
@@ -78,17 +78,15 @@ namespace SP.Engine.Client
                 if (!TcpHeader.TryRead(headerSpan, out var tempHeader, out var headerConsumed)) return false;
                 
                 // 전체 패킷이 도착했는지 확인
-                var payloadLen = tempHeader.PayloadLength;
-                var totalLength = headerConsumed + payloadLen;
+                var payloadLength = tempHeader.PayloadLength;
+                var totalLength = headerConsumed + payloadLength;
+
+                if (payloadLength < 0 || payloadLength > maxPayloadLength)
+                {
+                    return false;
+                }
                 
                 if (_size < totalLength) return false;
-
-                // 패킷 별 최대 페이로드 용량 체크
-                var maxPayloadLength = policySnapshot.Resolve(header.ProtocolId)?.MaxPayloadLength ?? 65536;
-                if (payloadLen < 0 || payloadLen > maxPayloadLength)
-                {
-                    throw new InvalidDataException($"Corrupted payload detected. ID: {tempHeader.ProtocolId}, BodyLen: {payloadLen}, Max: {maxPayloadLength}");
-                }
                 
                 header = tempHeader;
 

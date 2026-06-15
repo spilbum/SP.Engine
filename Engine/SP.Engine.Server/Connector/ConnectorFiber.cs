@@ -37,7 +37,7 @@ public class ConnectorFiber : IDisposable
         }
         catch (Exception ex)
         {
-            _logger.Error("Connector '{0}' update failed: {1}/r/n{2}", Name, ex.Message, ex.StackTrace);
+            _logger.Error("Connector '{0}' update failed. Error: {1}\nStacktrace: {2}", Name, ex.Message, ex.StackTrace);
         }
     }
 

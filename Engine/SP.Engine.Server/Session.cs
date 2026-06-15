@@ -96,11 +96,22 @@ public sealed class Session(long sessionId) : SessionBase(sessionId)
         EnableUdp();
         return true;
     }
-    
-    internal void Authenticate(PeerBase peer)
+
+    internal bool TryEnterAuthenticating()
     {
+        return Interlocked.CompareExchange(ref _state, (int)SessionState.Authenticating, (int)SessionState.NotAuthenticated) ==
+               (int)SessionState.NotAuthenticated;
+    }
+    
+    internal void CompleteAuthenticated(PeerBase peer)
+    {
+        if (Interlocked.CompareExchange(ref _state, (int)SessionState.Authenticated, (int)SessionState.Authenticating)
+            != (int)SessionState.Authenticating)
+        {
+            return;
+        }
+            
         Peer = peer;
-        IsAuthenticated = true;
         SetupProtocolPolicy();
     }
 
@@ -169,8 +180,8 @@ public sealed class Session(long sessionId) : SessionBase(sessionId)
     
     private void StartClosing()
     {
-        if (Interlocked.CompareExchange(ref _state, (int)SessionState.Closing, (int)SessionState.Connected)
-            != (int)SessionState.Connected)
+        if (Interlocked.CompareExchange(ref _state, (int)SessionState.Closing, (int)SessionState.Authenticated)
+            != (int)SessionState.Authenticated)
         {
             return;
         }

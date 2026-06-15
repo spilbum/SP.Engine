@@ -1,33 +1,48 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
 namespace SP.Core.Serialization
 {
-    /// <summary>
-    /// 클래스 전용 직렬화/역직렬화
-    /// </summary>
-    public static class NetSerializer<T> where T : class
+    public static class NetSerializer<T>
     {
-        private static readonly SerializerPair.WriteGenericFn<T> _writer;
-        private static readonly SerializerPair.ReadIntoGenericFn<T> _reader;
-        private static readonly SerializerPair.ResetGenericFn<T> _reset;
-        
+        private static readonly TypeSerializer.WriteDelegate<T> _writer;
+        private static readonly TypeSerializer.ReadDelegate<T> _reader;
+
         static NetSerializer()
         {
             var pair = NetSerializer.GetOrBuild(typeof(T));
-            _writer = (SerializerPair.WriteGenericFn<T>)pair.GenericWriter;
-            _reader = (SerializerPair.ReadIntoGenericFn<T>)pair.GenericReaderInto;
-            _reset = (SerializerPair.ResetGenericFn<T>)pair.GenericReset;
+            _writer = (TypeSerializer.WriteDelegate<T>)pair.Writer;
+            _reader = (TypeSerializer.ReadDelegate<T>)pair.Reader;
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void Serialize(ref NetWriter w, T value) => _writer(ref w, value);
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static T Deserialize(ref NetReader r) => _reader(ref r);
+    }
+
+    public static class NetObject<T> where T : class
+    {
+        private static readonly TypeSerializer.WriteDelegate<T> _writer;
+        private static readonly TypeSerializer.PopulateDelegate<T> _populate;
+        private static readonly TypeSerializer.ResetDelegate<T> _reset;
+        
+        static NetObject()
+        {
+            var pair = NetSerializer.GetOrBuild(typeof(T));
+            _writer = (TypeSerializer.WriteDelegate<T>)pair.Writer;
+            _populate = (TypeSerializer.PopulateDelegate<T>)pair.Populate;
+            _reset = (TypeSerializer.ResetDelegate<T>)pair.Reset;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Serialize(ref NetWriter w, T value) => _writer(ref w, value);
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void Deserialize(ref NetReader r, T instance) => _reader(ref r, instance);
+        public static void Deserialize(ref NetReader r, T instance) => _populate(ref r, instance);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Reset(T instance) => _reset.Invoke(instance);
@@ -35,99 +50,67 @@ namespace SP.Core.Serialization
     
     public static class NetSerializer
     {
-        private static readonly ConcurrentDictionary<Type, SerializerPair> Cache =
-            new ConcurrentDictionary<Type, SerializerPair>();
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void Serialize<T>(ref NetWriter w, T value)
-        {
-            if (Cache.TryGetValue(typeof(T), out var pair))
-            {
-                ((SerializerPair.WriteGenericFn<T>)pair.GenericWriter)(ref w, value);
-                return;
-            }
-            
-            InternalSerialize(ref w, value);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static void InternalSerialize<T>(ref NetWriter w, T value)
-        {
-            var pair = GetOrBuild(typeof(T));
-            ((SerializerPair.WriteGenericFn<T>)pair.GenericWriter)(ref w, value);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static T Deserialize<T>(ref NetReader r)
-        {
-            return Cache.TryGetValue(typeof(T), out var pair) 
-                ? ((SerializerPair.ReadGenericFn<T>)pair.GenericReader)(ref r) 
-                : InternalDeserialize<T>(ref r);
-        }
+        private static readonly ConcurrentDictionary<Type, TypeSerializer> Cache =
+            new ConcurrentDictionary<Type, TypeSerializer>();
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static T InternalDeserialize<T>(ref NetReader r)
-        {
-            var pair = GetOrBuild(typeof(T));
-            return ((SerializerPair.ReadGenericFn<T>)pair.GenericReader)(ref r);
-        }
+        public static void Serialize<T>(ref NetWriter w, T value) =>  NetSerializer<T>.Serialize(ref w, value);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static T Deserialize<T>(ref NetReader r) => NetSerializer<T>.Deserialize(ref r);
         
-        public static SerializerPair GetOrBuild(Type type) => Cache.GetOrAdd(type, Build);
+        public static TypeSerializer GetOrBuild(Type type) => Cache.GetOrAdd(type, Build);
         
-        private static SerializerPair Build(Type t)
+        private static TypeSerializer Build(Type t)
         {
             if (t == typeof(string)) return BuildString();
             if (t == typeof(byte[])) return BuildByteArray();
             if (t == typeof(DateTime)) return BuildDateTime();
+            
             if (t.IsArray) return BuildArray(t);
-            if (TryBuildList(t, out var p)) return p;
-            if (TryBuildDictionary(t, out p)) return p;
+            if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(List<>))
+                return BuildList(t);
+
+            if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Dictionary<,>))
+                return BuildDictionary(t);
+            
             return BuildDataClass(t);
         }
 
-         private static SerializerPair BuildString()
+         private static TypeSerializer BuildString()
         {
-            var rFn = new SerializerPair.ReadFn((ref NetReader r) => r.ReadBool() ? r.ReadString() : null);
-            var wFn = new SerializerPair.WriteFn((ref NetWriter w, object v) =>
+            return new TypeSerializer(
+                (TypeSerializer.ReadDelegate<string>)Read,
+                (TypeSerializer.WriteDelegate<string>)Write,
+                null, null);
+
+            void Write(ref NetWriter w, string v)
             {
                 if (v == null)
                 {
                     w.WriteBool(false);
                     return;
                 }
-
+                
                 w.WriteBool(true);
-                w.WriteString((string)v);
-            });
+                w.WriteString(v);
+            }
 
-            return new SerializerPair(
-                rFn, wFn,
-                (SerializerPair.ReadGenericFn<string>)((ref NetReader r) => r.ReadBool() ? r.ReadString() : null),
-                (SerializerPair.WriteGenericFn<string>)((ref NetWriter w, string v) =>
-                {
-                    if (v == null)
-                    {
-                        w.WriteBool(false);
-                        return;
-                    }
-
-                    w.WriteBool(true);
-                    w.WriteString(v);
-                }),
-                null, null);
+            string Read(ref NetReader r)
+            {
+                return r.ReadBool() ? r.ReadString() : null;
+            }
         }
 
-        private static SerializerPair BuildByteArray()
+        private static TypeSerializer BuildByteArray()
         {
-            return new SerializerPair(
-                (ref NetReader r) => ReadGeneric(ref r),
-                (ref NetWriter w, object v) => WriteGeneric(ref w, (byte[])v),
-                (SerializerPair.ReadGenericFn<byte[]>)ReadGeneric,
-                (SerializerPair.WriteGenericFn<byte[]>)WriteGeneric,
+            return new TypeSerializer(
+                (TypeSerializer.ReadDelegate<byte[]>)Read,
+                (TypeSerializer.WriteDelegate<byte[]>)Write,
                 null, null
             );
 
-            void WriteGeneric(ref NetWriter w, byte[] v)
+            void Write(ref NetWriter w, byte[] v)
             {
                 if (v == null)
                 {
@@ -139,191 +122,173 @@ namespace SP.Core.Serialization
                 w.WriteBytes(v);
             }
 
-            byte[] ReadGeneric(ref NetReader r)
+            byte[] Read(ref NetReader r)
             {
                 if (!r.ReadBool()) return null;
-                var s = r.ReadBytes();
-                var arr = new byte[s.Length];
-                s.CopyTo(arr);
+                var span = r.ReadBytes();
+                var arr = new byte[span.Length];
+                span.CopyTo(arr);
                 return arr;
             }
         }
         
-        private static SerializerPair BuildDateTime()
+        private static TypeSerializer BuildDateTime()
         {
-            return new SerializerPair(
-                (ref NetReader r) => r.ReadBool() ? (object)new DateTime(r.ReadInt64(), DateTimeKind.Utc) : null,
-                (ref NetWriter w, object v) =>
-                {
-                    if (v == null)
-                    {
-                        w.WriteBool(false);
-                        return;
-                    }
-                    
-                    w.WriteBool(true);
-                    w.WriteInt64(((DateTime)v).ToUniversalTime().Ticks);
-                }, 
-                (SerializerPair.ReadGenericFn<DateTime>)((ref NetReader r) => new DateTime(r.ReadInt64(), DateTimeKind.Utc)),
-                (SerializerPair.WriteGenericFn<DateTime>)((ref NetWriter w, DateTime v) => w.WriteInt64(v.ToUniversalTime().Ticks)),
+            return new TypeSerializer(
+                (TypeSerializer.ReadDelegate<DateTime>)Read,
+                (TypeSerializer.WriteDelegate<DateTime>)Write,
+                null, null);
+
+            void Write(ref NetWriter w, DateTime v)
+            {
+                w.WriteInt64(v.ToUniversalTime().Ticks);
+            }
+
+            DateTime Read(ref NetReader r)
+            {
+                return new DateTime(r.ReadInt64(), DateTimeKind.Utc);
+            }
+        }
+
+        private static TypeSerializer BuildArray(Type t)
+        {
+            var elementType = t.GetElementType() ?? throw new InvalidOperationException("ElementType is null");
+            var helperType = typeof(ArrayHelper<>).MakeGenericType(elementType);
+            var readerType = typeof(TypeSerializer.ReadDelegate<>).MakeGenericType(t);
+            var writerType = typeof(TypeSerializer.WriteDelegate<>).MakeGenericType(t);
+            return new TypeSerializer(
+                Delegate.CreateDelegate(readerType, helperType.GetMethod(nameof(ArrayHelper<int>.Read))!),
+                Delegate.CreateDelegate(writerType, helperType.GetMethod(nameof(ArrayHelper<int>.Write))!),
                 null, null);
         }
 
-        private static SerializerPair BuildArray(Type arrayType)
+        private static TypeSerializer BuildList(Type t)
         {
-            var elemType = arrayType.GetElementType() ?? throw new InvalidOperationException("ElementType is null");
-            var elemSer = GetOrBuild(elemType);
+            var helperType = typeof(ListHelper<>).MakeGenericType(t.GetGenericArguments()[0]);
+            var readerType = typeof(TypeSerializer.ReadDelegate<>).MakeGenericType(t);
+            var writerType = typeof(TypeSerializer.WriteDelegate<>).MakeGenericType(t);
+            return new TypeSerializer(
+                Delegate.CreateDelegate(readerType, helperType.GetMethod(nameof(ListHelper<int>.Read))!),
+                Delegate.CreateDelegate(writerType, helperType.GetMethod(nameof(ListHelper<int>.Write))!),
+                null, null);
+        }
 
-            var rFn = new SerializerPair.ReadFn(Read);
-            var wfn = new SerializerPair.WriteFn(Write);
+        private static TypeSerializer BuildDictionary(Type t)
+        {
+            var args = t.GetGenericArguments();
+            var helperType = typeof(DictHelper<,>).MakeGenericType(args[0], args[1]);
+            var readerType = typeof(TypeSerializer.ReadDelegate<>).MakeGenericType(t);
+            var writerType = typeof(TypeSerializer.WriteDelegate<>).MakeGenericType(t);
+            return new TypeSerializer(
+                Delegate.CreateDelegate(readerType, helperType.GetMethod(nameof(DictHelper<int, int>.Read))!),
+                Delegate.CreateDelegate(writerType, helperType.GetMethod(nameof(DictHelper<int, int>.Write))!),
+                null, null);
+        }
 
-            return new SerializerPair(rFn, wfn, rFn, wfn, null, null);
-
-            object Read(ref NetReader r)
+        private static class ArrayHelper<T>
+        {
+            public static void Write(ref NetWriter w, T[] arr)
             {
-                var has = r.ReadBool();
-                if (!has) return null;
-
-                var n = (int)r.ReadVarUInt();
-                var arr = Array.CreateInstance(elemType, n);
-                for (var i = 0; i < n; i++)
-                    arr.SetValue(elemSer.Reader(ref r), i);
-                return arr;
-            }
-
-            void Write(ref NetWriter w, object value)
-            {
-                var arr = (Array)value;
                 if (arr == null)
                 {
                     w.WriteBool(false);
                     return;
                 }
-
+                
                 w.WriteBool(true);
                 w.WriteVarUInt((uint)arr.Length);
-                for (var i = 0; i < arr.Length; i++)
-                    elemSer.Writer(ref w, arr.GetValue(i));
+                for (var i = 0; i < arr.Length; i++) NetSerializer<T>.Serialize(ref w, arr[i]);
+            }
+
+            public static T[] Read(ref NetReader r)
+            {
+                if (!r.ReadBool()) return null;
+                var count = r.ReadVarUInt();
+                var arr = new T[count];
+                for (var i = 0; i < count; i++) 
+                    arr[i] = NetSerializer<T>.Deserialize(ref r);
+                return arr;
             }
         }
 
-        private static bool TryBuildList(Type t, out SerializerPair pair)
+        private static class ListHelper<T>
         {
-            pair = null;
-            if (!t.IsGenericType || t.GetGenericTypeDefinition() != typeof(List<>)) return false;
-
-            var elemType = t.GetGenericArguments()[0];
-            var elemSer = GetOrBuild(elemType);
-            
-            var rFn = new SerializerPair.ReadFn(Read);
-            var wfn = new SerializerPair.WriteFn(Write);
-
-            pair = new SerializerPair(rFn, wfn, rFn, wfn, null, null);
-            return true;
-
-            void Write(ref NetWriter w, object v)
+            public static void Write(ref NetWriter w, List<T> list)
             {
-                var list = (IList)v;
                 if (list == null)
                 {
                     w.WriteBool(false);
                     return;
                 }
-
+                
                 w.WriteBool(true);
                 w.WriteVarUInt((uint)list.Count);
-                foreach (var it in list) elemSer.Writer(ref w, it);
+                foreach (var item in list) NetSerializer<T>.Serialize(ref w, item);
             }
 
-            object Read(ref NetReader r)
+            public static List<T> Read(ref NetReader r)
             {
-                var has = r.ReadBool();
-                if (!has) return null;
-
-                var n = (int)r.ReadVarUInt();
-                var list = (IList)Activator.CreateInstance(t);
-                for (var i = 0; i < n; i++)
-                    list.Add(elemSer.Reader(ref r));
+                if (!r.ReadBool()) return null;
+                var count = (int)r.ReadVarUInt();
+                var list = new List<T>(count);
+                for (var i = 0; i < count; i++) list.Add(NetSerializer<T>.Deserialize(ref r));
                 return list;
             }
         }
 
-        private static bool TryBuildDictionary(Type t, out SerializerPair pair)
+        private static class DictHelper<TKey, TValue>
         {
-            pair = null;
-            if (!t.IsGenericType || t.GetGenericTypeDefinition() != typeof(Dictionary<,>)) return false;
-
-            var args = t.GetGenericArguments();
-            var kSer = GetOrBuild(args[0]);
-            var vSer = GetOrBuild(args[1]);
-            
-            var rFn = new SerializerPair.ReadFn(Read);
-            var wfn = new SerializerPair.WriteFn(Write);
-
-            pair = new SerializerPair(rFn, wfn, rFn, wfn, null, null);
-            return true;
-
-            object Read(ref NetReader r)
+            public static void Write(ref NetWriter w, Dictionary<TKey, TValue> dict)
             {
-                var has = r.ReadBool();
-                if (!has) return null;
-
-                var n = (int)r.ReadVarUInt();
-                var dict = (IDictionary)Activator.CreateInstance(t);
-                for (var i = 0; i < n; i++)
-                {
-                    var k = kSer.Reader(ref r);
-                    var v = vSer.Reader(ref r);
-                    dict.Add(k, v);
-                }
-
-                return dict;
-            }
-
-            void Write(ref NetWriter w, object v)
-            {
-                var dict = (IDictionary)v;
                 if (dict == null)
                 {
                     w.WriteBool(false);
                     return;
                 }
-
+                
                 w.WriteBool(true);
                 w.WriteVarUInt((uint)dict.Count);
-                foreach (DictionaryEntry e in dict)
+                foreach (var kvp in dict)
                 {
-                    kSer.Writer(ref w, e.Key);
-                    vSer.Writer(ref w, e.Value);
+                    NetSerializer<TKey>.Serialize(ref w, kvp.Key);
+                    NetSerializer<TValue>.Serialize(ref w, kvp.Value);
                 }
             }
-        }
 
-
-
-        private static SerializerPair BuildDataClass(Type t) => NetSerializerBuilder.Build(t);
+            public static Dictionary<TKey, TValue> Read(ref NetReader r)
+            {
+                if (!r.ReadBool()) return null;
+                var count = (int)r.ReadVarUInt();
+                var dict = new Dictionary<TKey, TValue>(count);
+                for (var i = 0; i < count; i++)
+                {
+                    dict.Add(NetSerializer<TKey>.Deserialize(ref r), NetSerializer<TValue>.Deserialize(ref r));
+                }
+                return dict;
+            }
+         }
+        
+        private static TypeSerializer BuildDataClass(Type t) => DynamicSerializerBuilder.Build(t);
     }
     
-    public class SerializerPair
+    public class TypeSerializer
     {
-        public delegate object ReadFn(ref NetReader r);
-        public delegate void WriteFn(ref NetWriter w, object v);
-        public delegate T ReadGenericFn<out T>(ref NetReader r);
-        public delegate void WriteGenericFn<in T>(ref NetWriter w, T value);
-        public delegate void ReadIntoGenericFn<in T>(ref NetReader r, T instance);
-        public delegate void ResetGenericFn<in T>(T instance);
+        public delegate T ReadDelegate<out T>(ref NetReader r);
+        public delegate void WriteDelegate<in T>(ref NetWriter w, T value);
+        public delegate void PopulateDelegate<in T>(ref NetReader r, T instance);
+        public delegate void ResetDelegate<in T>(T instance);
 
-        public ReadFn Reader { get; }
-        public WriteFn Writer { get; }
-        public object GenericReader { get; }
-        public object GenericWriter { get; }
-        public object GenericReaderInto { get; }
-        public object GenericReset { get; }
+        public object Reader { get; }
+        public object Writer { get; }
+        public object Populate { get; }
+        public object Reset { get; }
 
-        public SerializerPair(ReadFn reader, WriteFn writer, object genericReader, object genericWriter, object genericReaderInto, object genericReset)
+        public TypeSerializer(object reader, object writer, object populate, object reset)
         {
-            Reader = reader; Writer = writer; GenericReader = genericReader; GenericWriter = genericWriter;
-            GenericReaderInto = genericReaderInto; GenericReset = genericReset;
+            Reader = reader; 
+            Writer = writer;
+            Populate = populate;
+            Reset = reset;
         }
     }
 }

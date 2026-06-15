@@ -67,6 +67,7 @@ namespace SP.Engine.Server
         private int _prevGcCount2;
 
         private long _lastProcessedCount;
+        private double _lastTotalTimeMs;
 
         public void Dispose() => _proc?.Dispose();
 
@@ -86,7 +87,7 @@ namespace SP.Engine.Server
             }
         }
 
-        public PerfMetrics Sample(EngineBase engine, int sessionCount, long totalProcessed, double totalTimeMs)
+        public PerfMetrics Sample(EngineBase engine, long totalProcessed, double totalTimeMs)
         {
             lock (_lock)
             {
@@ -123,7 +124,10 @@ namespace SP.Engine.Server
                 var (_, _, activeBuffers) = BufferMetrics.Snapshot();
 
                 var deltaProcessed = totalProcessed - _lastProcessedCount;
+                var deltaTimeMs = totalTimeMs - _lastTotalTimeMs;   
+                
                 _lastProcessedCount = totalProcessed;
+                _lastTotalTimeMs = totalTimeMs;
 
                 // 수집 주기 계산
                 var periodSec = deltaWall.TotalSeconds;
@@ -141,7 +145,7 @@ namespace SP.Engine.Server
                 }
                 
                 var avgQueue = fiberCount > 0 ? (double)totalQueue / fiberCount : 0;
-                var avgExecTimeMs = totalProcessed > 0 ? totalTimeMs / totalProcessed : 0;
+                var avgExecTimeMs = deltaProcessed > 0 ? deltaTimeMs / deltaProcessed : 0;
 
                 var threadCount = _proc.Threads.Count;
                 
@@ -155,7 +159,7 @@ namespace SP.Engine.Server
                     GcDelta1 = deltaGc1,
                     GcDelta2 = deltaGc2,
                     ThreadCount = threadCount,
-                    SessionCount = sessionCount,
+                    SessionCount = engine.SessionsSource.Length,
                     ActiveBufferCount = activeBuffers,
                     AvgQueueLength = avgQueue,
                     MaxQueueLength = maxQueue,
@@ -194,14 +198,14 @@ namespace SP.Engine.Server
             return metrics.CpuUsagePercent != 0;
         }
 
-        public void Tick(EngineBase engine, int sessionCount, long totalProcessed, double totalTimeMs)
+        public void Tick(EngineBase engine, long totalProcessed, double totalTimeMs)
         {
             if (Interlocked.Exchange(ref _sampling, 1) == 1)
                 return;
 
             try
             {
-                var m = _sampler.Sample(engine, sessionCount, totalProcessed, totalTimeMs);
+                var m = _sampler.Sample(engine, totalProcessed, totalTimeMs);
                 _last = m;
                 OnSampled?.Invoke(_last);
             }

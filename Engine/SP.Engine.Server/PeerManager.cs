@@ -1,13 +1,12 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using SP.Core.Logging;
 using SP.Engine.Runtime;
 using SP.Engine.Server.Configuration;
 
 namespace SP.Engine.Server;
 
-public class PeerManager(ILogger logger, IEngineConfig config)
+public class PeerManager(IEngineConfig config)
 {
     private readonly ConcurrentDictionary<uint, PeerBase> _activePeers = [];
     private readonly ConcurrentDictionary<uint, PendingReconnect> _reconnectPendingPeers = [];
@@ -27,7 +26,6 @@ public class PeerManager(ILogger logger, IEngineConfig config)
     {
         if (!_activePeers.TryAdd(peer.PeerId, peer))
         {
-            logger.Warn("Register failed: Peer {0} already exists.", peer.PeerId);
             peer.Close(CloseReason.InternalError);
             return;
         }
@@ -70,7 +68,7 @@ public class PeerManager(ILogger logger, IEngineConfig config)
         peer.Offline(reason);
     }
 
-    public void Terminate(uint peerId, CloseReason reason)
+    public void RemovePeer(uint peerId, CloseReason reason)
     {
         if (_activePeers.TryRemove(peerId, out var activePeer))
         {
@@ -108,7 +106,6 @@ public class PeerManager(ILogger logger, IEngineConfig config)
         foreach (var peerId in targets)
         {
             if (!_reconnectPendingPeers.TryRemove(peerId, out var pending)) continue;
-            logger.Debug("Timeout reconnect for peer: {0}.", peerId);
             pending.Peer.LeaveServer(CloseReason.TimeOut);
         }
     }

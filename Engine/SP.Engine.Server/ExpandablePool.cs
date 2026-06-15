@@ -45,13 +45,10 @@ public sealed class ExpandablePool<T> : IObjectPool<T>
     {
         if (_globalStack.TryPop(out item)) return true;
 
-        if (_disposed)
-        {
-            item = default;
-            return false;
-        }
+        if (!_disposed) return TryRentWithExpansion(out item);
+        item = default;
+        return false;
 
-        return TryRentWithExpansion(out item);
     }
     
     private bool TryRentWithExpansion(out T item)

@@ -13,7 +13,6 @@ namespace SP.Engine.Runtime.Networking
         where THeader : IHeader
         where TMessage : MessageBase<THeader, TMessage>, new()
     {
-        private const int LIMIT_PAYLOAD_LENGTH = 64 * 1024;
         private IMemoryOwner<byte> _bufferOwner;
         protected THeader _header;
         
@@ -30,7 +29,7 @@ namespace SP.Engine.Runtime.Networking
             _bufferOwner = bufferOwner;
         }
 
-        private Span<byte> PayloadSpan => _bufferOwner != null
+        private ReadOnlySpan<byte> PayloadSpan => _bufferOwner != null
             ? _bufferOwner.Memory.Span.Slice(HeaderLength, PayloadLength)
             : Span<byte>.Empty;
 
@@ -110,53 +109,58 @@ namespace SP.Engine.Runtime.Networking
             if (protocol is null) throw new ArgumentNullException(nameof(protocol));
             
             var headerSize = _header.HeaderLength;
-            var maxPayloadLength = policy?.MaxPayloadLength ?? LIMIT_PAYLOAD_LENGTH;
             
-            if (policy is { UseCompress: true } && compressor != null)
-                maxPayloadLength = compressor.GetMaxCompressedLength(maxPayloadLength);
-
-            if (policy is { UseEncrypt: true } && encryptor != null)
-                maxPayloadLength = encryptor.GetCiphertextLength(maxPayloadLength);
-
-            var bufferCapacity = Math.Min(LIMIT_PAYLOAD_LENGTH, headerSize + maxPayloadLength);
-            var bufferOwner = BufferOwnerPool.Rent(bufferCapacity);
+            using var resizerA = BufferResizer.Rent();
+            using var resizerB = BufferResizer.Rent();
             
-            var totalSpan = bufferOwner.Memory.Span;
-            var span = totalSpan[headerSize..];
+            var writer = new NetWriter(resizerA.Span, resizerA);
+            protocol.Serialize(ref writer);
             
-            var writer = new NetWriter(span);
-            protocol.Serialize(ref writer);    
+            var currentSpan = resizerA.GetWrittenSpan(writer.WrittenCount);
             
-            var written = writer.WrittenCount;
+            var doCompress = policy is { UseCompress: true } && compressor != null && currentSpan.Length >= policy.CompressionThreshold;
+            var doEncrypt = policy is { UseEncrypt: true } && encryptor != null;
             var flags = HeaderFlags.None;
+
+            if (doCompress)
+            {
+                var maxCompressedLength = compressor.GetMaxCompressedLength(currentSpan.Length);
+                resizerB.Resize(maxCompressedLength, 0);
+                
+                var compressedLength = compressor.Compress(currentSpan, resizerB.Span);
+                currentSpan = resizerB.GetWrittenSpan(compressedLength);
+                flags |= HeaderFlags.Compressed;
+            }
+
+            if (doEncrypt)
+            {
+                var maxEncryptedLength = encryptor.GetCiphertextLength(currentSpan.Length);
+                Span<byte> targetSpan;
+
+                if (doCompress)
+                {
+                    resizerA.Resize(maxEncryptedLength, 0);
+                    targetSpan = resizerA.Span;
+                }
+                else
+                {
+                    resizerB.Resize(maxEncryptedLength, 0);
+                    targetSpan = resizerB.Span;
+                }
+                
+                var encryptedLength = encryptor.Encrypt(currentSpan, targetSpan);
+                currentSpan = targetSpan[..encryptedLength];
+                flags |= HeaderFlags.Encrypted;
+            }
             
+            var bufferOwner = BufferOwnerPool.Rent(headerSize + currentSpan.Length);
+
             try
             {
-                if (policy is { UseCompress: true } && compressor != null && written >= policy.CompressionThreshold)
-                {
-                    var srcSpan = span[..written];
-                    var destSpan = span[written..];
-                        
-                    var compressedLen = compressor.Compress(srcSpan, destSpan);
+                var totalSpan = bufferOwner.Memory.Span;
+                currentSpan.CopyTo(totalSpan[headerSize..]);
 
-                    destSpan[..compressedLen].CopyTo(span);
-                    written = compressedLen;
-                    flags |= HeaderFlags.Compressed;
-                } 
-
-                if (policy is { UseEncrypt: true } && encryptor != null)
-                {
-                    var srcSpan = span[..written];
-                    var destSpan = span[written..];
-                        
-                    var encryptedLen = encryptor.Encrypt(srcSpan, destSpan);
-
-                    destSpan[..encryptedLen].CopyTo(span);
-                    written = encryptedLen;
-                    flags |= HeaderFlags.Encrypted;
-                }     
-                
-                _header = CreateHeader(flags, protocol.Id, written);
+                _header = CreateHeader(flags, protocol.Id, currentSpan.Length);
                 _header.WriteTo(totalSpan[..headerSize]);
                 _bufferOwner = bufferOwner;
             }
@@ -172,40 +176,52 @@ namespace SP.Engine.Runtime.Networking
         {
             if (protocol == null) throw new ArgumentNullException(nameof(protocol));
             
-            var sourceSpan = PayloadSpan;
-            if (sourceSpan.IsEmpty) return;
-
-            var maxPlaintextLen = sourceSpan.Length;
-            if (HasFlag(HeaderFlags.Encrypted) && compressor != null)
-                maxPlaintextLen = encryptor.GetPlaintextLength(maxPlaintextLen);
-
-            if (HasFlag(HeaderFlags.Compressed) && compressor != null)
-                maxPlaintextLen = compressor.GetDecompressedLength(sourceSpan);
+            var currentSpan = PayloadSpan;
+            if (currentSpan.IsEmpty) return;
             
-            var bufferOwner = BufferOwnerPool.Rent(maxPlaintextLen);
-            var span = bufferOwner.Memory.Span;
+            var isEncrypted = HasFlag(HeaderFlags.Encrypted) && encryptor != null;
+            var isCompressed = HasFlag(HeaderFlags.Compressed) && compressor != null;
+
+            if (!isEncrypted && !isCompressed)
+            {
+                var reader = new NetReader(currentSpan);
+                protocol.Deserialize(ref reader);
+                return;
+            }
+
+            BufferResizer resizeA = null;
+            BufferResizer resizeB = null;
 
             try
             {
-                if (HasFlag(HeaderFlags.Encrypted) && encryptor != null)
+                if (isEncrypted)
                 {
-                    var written = encryptor.Decrypt(sourceSpan, span);
-                    sourceSpan = span[..written];
+                    var plainLength = encryptor.GetPlaintextLength(currentSpan.Length);
+                    resizeA = BufferResizer.Rent(plainLength);
+                    
+                    var written = encryptor.Decrypt(currentSpan, resizeA.Span);
+                    currentSpan = resizeA.GetWrittenSpan(written);
                 }
 
-                if (HasFlag(HeaderFlags.Compressed) && compressor != null)
+                if (isCompressed)
                 {
-                    var destSpan = span[sourceSpan.Length..];
-                    var written = compressor.Decompress(sourceSpan, destSpan);
-                    sourceSpan = destSpan[..written];
+                    var decompressedLength = compressor.GetDecompressedLength(currentSpan);
+                    
+                    var targetResizer = isEncrypted
+                        ? resizeB = BufferResizer.Rent(decompressedLength)
+                        : resizeA = BufferResizer.Rent(decompressedLength);
+                    
+                    var written = compressor.Decompress(currentSpan, targetResizer.Span);
+                    currentSpan = targetResizer.GetWrittenSpan(written);
                 }
 
-                var reader = new NetReader(sourceSpan);
+                var reader = new NetReader(currentSpan);
                 protocol.Deserialize(ref reader);
             }
             finally
             {
-                bufferOwner.Dispose();
+                resizeA?.Dispose();
+                resizeB?.Dispose();
             }
         }
 

@@ -15,7 +15,7 @@ internal class Close : CommandBase<Session, C2SEngineProtocolData.Close>
         if (session.IsClosing)
         {
             // 서버 요청에 대한 응답인 경우
-            session.Close(CloseReason.ServerClosing);
+            session.Close(session.CloseReason != CloseReason.Unknown ? session.CloseReason : CloseReason.ServerClosing);
             return;
         }
         

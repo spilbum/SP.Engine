@@ -42,7 +42,7 @@ namespace SP.Engine.Server.Protocol
 
             try
             {
-                NetSerializer<T>.Reset(protocol);
+                NetObject<T>.Reset(protocol);
             }
             catch
             {

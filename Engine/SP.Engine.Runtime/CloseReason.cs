@@ -13,6 +13,5 @@ namespace SP.Engine.Runtime
         InternalError = 8,
         LimitExceededRetransmission = 9,
         Rejected = 10,
-        ServerBusy = 11,
     }
 }

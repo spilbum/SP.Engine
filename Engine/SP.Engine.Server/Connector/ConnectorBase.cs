@@ -86,14 +86,17 @@ public abstract class ConnectorBase : NetPeerBase, IConnector, ICommandContext
     private void OnDisconnected(object sender, EventArgs e)
     {
         Interlocked.Exchange(ref _connecting, 0);
-
-        // 재연결 타이머 등록
-        _reconnectTimer ??= _globalScheduler.Schedule(
+        
+        var oldTimer = Interlocked.Exchange(ref _reconnectTimer, null);
+        oldTimer?.Dispose();
+        
+        var delay = TimeSpan.FromSeconds(Config.ConnectAttemptIntervalSec > 0 ? Config.ConnectAttemptIntervalSec : 1);
+        _reconnectTimer = _globalScheduler.Schedule(
             _fiber,
             Connect,
             Host,
             Port,
-            TimeSpan.Zero,
+            delay,
             TimeSpan.FromSeconds(Config.ReconnectAttemptIntervalSec)); 
     }
     

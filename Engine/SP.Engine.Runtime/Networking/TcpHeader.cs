@@ -33,10 +33,10 @@ namespace SP.Engine.Runtime.Networking
             destination.WriteInt32(7, PayloadLength);
         }
 
-        public static bool TryRead(ReadOnlySpan<byte> source, out TcpHeader header, out int byteConsumed)
+        public static bool TryRead(ReadOnlySpan<byte> source, out TcpHeader header, out int bytesConsumed)
         {
             header = default;
-            byteConsumed = 0;
+            bytesConsumed = 0;
             
             if (source.Length < ByteSize) return false;
             
@@ -45,7 +45,7 @@ namespace SP.Engine.Runtime.Networking
             var protocolId = source.ReadUInt16(5);
             var payloadLength = source.ReadInt32(7);
             header = new TcpHeader(flags, sequenceNumber, protocolId, payloadLength);
-            byteConsumed = ByteSize;
+            bytesConsumed = ByteSize;
             return true;
         }
     }

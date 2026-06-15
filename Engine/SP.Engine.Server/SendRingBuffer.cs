@@ -8,18 +8,16 @@ namespace SP.Engine.Server
         private readonly int _offset;
         private readonly int _capacity;
         private readonly int _mask;
-
         private int _head;
         private int _tail;
         private int _size;
-        
-        private readonly object _sync = new();
+        private readonly object _lock = new();
 
         public int Capacity => _capacity;
 
         public int Size
         {
-            get { lock (_sync) { return _size; } }
+            get { lock (_lock) { return _size; } }
         }
 
         public SendRingBuffer(byte[] globalBuffer, int offset, int capacity)
@@ -38,7 +36,7 @@ namespace SP.Engine.Server
 
         public void Clear()
         {
-            lock (_sync)
+            lock (_lock)
             {
                 _head = _tail = _size = 0;
             }
@@ -48,7 +46,7 @@ namespace SP.Engine.Server
         {
             if (data.IsEmpty) return true;
 
-            lock (_sync)
+            lock (_lock)
             {
                 if (data.Length > _capacity - _size) return false;
 
@@ -80,7 +78,7 @@ namespace SP.Engine.Server
 
         public ArraySegment<byte> GetReadableSegment()
         {
-            lock (_sync)
+            lock (_lock)
             {
                 if (_size == 0) return ArraySegment<byte>.Empty;
 
@@ -98,7 +96,7 @@ namespace SP.Engine.Server
         {
             if (bytesTransferred <= 0) return;
 
-            lock (_sync)
+            lock (_lock)
             {
                 if (bytesTransferred > _size)
                 {

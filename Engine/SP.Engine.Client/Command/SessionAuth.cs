@@ -34,8 +34,9 @@ namespace SP.Engine.Client.Command
             
             if (protocol.UseEncrypt) context.SetupEncryptor(protocol.ServerPublicKey);
             if (protocol.UseCompress) context.SetupCompressor(protocol.MaxPayloadLength);
-            context.SetupPolicy(protocol.UseEncrypt, protocol.UseCompress, protocol.CompressionThreshold, protocol.MaxPayloadLength);
-
+            context.SetupPolicy(protocol.UseEncrypt, protocol.UseCompress, protocol.CompressionThreshold);
+            context.SetMaxPayloadLength(protocol.MaxPayloadLength);
+            
             if (protocol.UdpOpenPort > 0)
             {
                 if (context.ConnectUdpSocket(protocol.UdpOpenPort))

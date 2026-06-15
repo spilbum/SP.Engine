@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Net.Sockets;
+using System.Text;
 using System.Threading;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Networking;
@@ -13,15 +14,8 @@ public class TcpNetworkSession(Socket client, SocketSendContext sendContext, Soc
     private SocketReceiveContext _receiveContext = receiveContext;
     private int _isSending; // 0: Idle, 1: Sending
     
-    public SocketSendContext ReleaseSendContext()
-    {
-        return Interlocked.Exchange(ref _sendContext, null);
-    }
-
-    public SocketReceiveContext ReleaseReceiveContext()
-    {
-        return Interlocked.Exchange(ref _receiveContext, null);
-    }
+    public SocketSendContext ReleaseSendContext() => Interlocked.Exchange(ref _sendContext, null);
+    public SocketReceiveContext ReleaseReceiveContext() => Interlocked.Exchange(ref _receiveContext, null);
 
     public bool Start()
     {
@@ -29,99 +23,91 @@ public class TcpNetworkSession(Socket client, SocketSendContext sendContext, Soc
 
         _sendContext.Initialize(this);
         _receiveContext.Initialize(this);
-        StartReceive(_receiveContext.SocketEventArgs);
+        StartReceive();
         return true;
     }
     
-    private void StartReceive(SocketAsyncEventArgs e)
+    private void StartReceive()
     {
         if (IsClosed) return;
         
         if (!IncrementIo()) return;
-        
-        if (!TryAddState(SocketState.InReceiving))
-        {
-            DecrementIo();
-            return;
-        }
-        
-        var offset = _receiveContext.OriginOffset;
-        if (e.Offset != offset)
-            e.SetBuffer(offset, Session.Config.Network.ReceiveBufferSize);
 
-        try
+        var e = _receiveContext.SocketEventArgs;
+        var offset = _receiveContext.OriginOffset;
+
+        while (true)
         {
-            if (!_client.ReceiveAsync(e))
+            if (e.Offset != offset)
+                e.SetBuffer(offset, Session.Config.Network.ReceiveBufferSize);
+
+            bool pending;
+            try
             {
-                ProcessReceive(e);
+                pending = _client.ReceiveAsync(e);
             }
+            catch (Exception ex)
+            {
+                LogError(ex);
+                Close(CloseReason.SocketError);
+                break;
+            }
+
+            if (pending) return;
+
+            if (!ProcessReceiveCompleted(e))
+                break;
         }
-        catch (Exception ex)
-        {
-            LogError(ex);
-            OnReceiveTerminated(CloseReason.SocketError);
-        }
+        
+        DecrementIo();
     }
     
     public void ProcessReceive(SocketAsyncEventArgs e)
     {
-        if (e.SocketError != SocketError.Success || e.BytesTransferred == 0)
+        if (ProcessReceiveCompleted(e))
         {
-            OnReceiveTerminated(e.BytesTransferred == 0 ? CloseReason.ClientClosing : CloseReason.SocketError);
-            return;
+            StartReceive();
         }
         
-        OnReceiveEnded();
-        
+        DecrementIo();
+    }
+
+    private bool ProcessReceiveCompleted(SocketAsyncEventArgs e)
+    {
+        if (e.SocketError != SocketError.Success || e.BytesTransferred == 0)
+        {
+            Close(e.BytesTransferred == 0 ? CloseReason.ClientClosing : CloseReason.SocketError);
+            return false;
+        }
+
         try
         {
             Session.ProcessTcpBuffer(e.Buffer, e.Offset, e.BytesTransferred);
+            return true;
         }
         catch (Exception ex)
         {
             LogError(ex);
             Close(CloseReason.InternalError);
-            return;
+            return false;
         }
-        
-        StartReceive(e);
-    }
-    
-    private void OnReceiveEnded()
-    {
-        RemoveState(SocketState.InReceiving);
-        DecrementIo();
-    }
-    
-    private void OnReceiveTerminated(CloseReason reason)
-    {
-        OnReceiveEnded();
-        Close(reason);
     }
     
     public bool TrySend(TcpMessage message)
     {
         try
         {
-            if (IsClosed || IsInClosingOrClosed) return false;
+            if (IsInClosingOrClosed) return false;
 
             if (!message.TryGetBuffer(out var memory))
-            {
-                Session.Logger.Warn("Session {0} TryGetBuffer failed. Message already disposed or invalid",
-                    Session.SessionId);
                 return false;
-            }
             
             var context = Volatile.Read(ref _sendContext);
             if (context == null)
                 return false;
-            
+
             if (!context.RingBuffer.TryWrite(memory.Span))
-            {
-                Session.Logger.Warn("Session {0} TryWrite failed. RingBuffer: {1}/{2}", 
-                    Session.SessionId, context.RingBuffer.Size, context.RingBuffer.Capacity);
                 return false;
-            }
         }
         catch (Exception ex)
         {
@@ -143,9 +129,12 @@ public class TcpNetworkSession(Socket client, SocketSendContext sendContext, Soc
 
     private void StartSend()
     {
+        var syncCount = 0;
+        const int MaxSyncCompletions = 50;
+        
         while (true)
         {
-            if (IsClosed)
+            if (IsInClosingOrClosed)
             {
                 Interlocked.Exchange(ref _isSending, 0);
                 return;
@@ -170,58 +159,69 @@ public class TcpNetworkSession(Socket client, SocketSendContext sendContext, Soc
                 Interlocked.Exchange(ref _isSending, 0);
                 return;
             }
-
-            if (!TryAddState(SocketState.InSending))
-            {
-                DecrementIo();
-                Interlocked.Exchange(ref _isSending, 0);
-                return;
-            }
         
             context.SocketEventArgs.SetBuffer(segment.Array, segment.Offset, segment.Count);
 
+            bool pending;
             try
             {
-                if (!_client.SendAsync(context.SocketEventArgs))
-                {
-                    if (HandleSendResult(context.SocketEventArgs))
-                        continue;
-                }
+                pending = _client.SendAsync(context.SocketEventArgs);
             }
             catch (Exception ex)
             {
                 LogError(ex);
-                RemoveState(SocketState.InSending);
+                Interlocked.Exchange(ref _isSending, 0);
                 DecrementIo();
                 Close(CloseReason.SocketError);
+                return;
             }
 
-            break;
+            if (pending) break;
+
+            if (!ProcessSendCompleted(context.SocketEventArgs))
+            {
+                Interlocked.Exchange(ref _isSending, 0);
+                return;
+            }
+            
+            syncCount++;
+            if (syncCount >= MaxSyncCompletions)
+            {
+                Session.AsyncRun(StartSend);
+                return;
+            }
         }
     }
 
-    private bool HandleSendResult(SocketAsyncEventArgs e)
+    private bool ProcessSendCompleted(SocketAsyncEventArgs e)
     {
-        RemoveState(SocketState.InSending);
-        DecrementIo();
-
-        if (e.SocketError != SocketError.Success || e.BytesTransferred == 0)
+        try
         {
-            Close(e.BytesTransferred == 0 ? CloseReason.ClientClosing : CloseReason.SocketError);
-            return false;
-        }
-        
-        var context = Volatile.Read(ref _sendContext);
-        context?.RingBuffer.AdvanceRead(e.BytesTransferred);
+            if (e.SocketError != SocketError.Success || e.BytesTransferred == 0)
+            {
+                Close(e.BytesTransferred == 0 ? CloseReason.ClientClosing : CloseReason.SocketError);
+                return false;
+            }
 
-        return true;
+            var context = Volatile.Read(ref _sendContext);
+            context?.RingBuffer.AdvanceRead(e.BytesTransferred);
+            return true;
+        }
+        finally
+        {
+            DecrementIo();
+        }
     }
 
     public void ProcessSend(SocketAsyncEventArgs e)
     {
-        if (HandleSendResult(e))
+        if (ProcessSendCompleted(e))
         {
             StartSend();
+        }
+        else
+        {
+            Interlocked.Exchange(ref _isSending, 0);
         }
     }
 }

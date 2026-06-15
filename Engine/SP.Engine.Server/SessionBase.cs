@@ -17,8 +17,9 @@ namespace SP.Engine.Server;
 
 public enum SessionState
 {
-    None = 0,
-    Connected,
+    NotAuthenticated = 0,
+    Authenticating,
+    Authenticated,
     Closing,
     Closed
 }
@@ -35,8 +36,7 @@ public abstract class SessionBase : ICommandContext, IDisposable
     private FragmentAssembler _fragmentAssembler;
     private volatile UdpNetworkSession _udpNetworkSession;
     private readonly object _udpLock = new();
-    
-    protected volatile int _state = (int)SessionState.None;
+    protected volatile int _state = (int)SessionState.NotAuthenticated;
 
     public long SessionId
     {
@@ -59,7 +59,7 @@ public abstract class SessionBase : ICommandContext, IDisposable
     
     public DateTime StartTime { get; }
     public CloseReason CloseReason { get; private set; }
-    public bool IsAuthenticated { get; protected set; }
+    public bool IsAuthenticated => (SessionState)_state == SessionState.Authenticated;
     public bool IsClosing => (SessionState)_state == SessionState.Closing;
     public bool IsClosed => (SessionState)_state == SessionState.Closed;
 
@@ -82,7 +82,8 @@ public abstract class SessionBase : ICommandContext, IDisposable
         _tcpNetworkSession.Session = this;
         _router.Bind(new ReliableChannel(ns));
         _readWriteBuffer = readWriteBuffer;
-        _policySnapshot = _engine.CreatePolicySnapshot(new PolicyGlobals(false, false, 0, 65536));
+        _policySnapshot = _engine.CreatePolicySnapshot(new PolicyGlobals(false, false, 0));
+        _state = (int)SessionState.NotAuthenticated;
     }
 
     public ReadWriteBuffer ReleaseReadWriteBuffer()
@@ -112,7 +113,7 @@ public abstract class SessionBase : ICommandContext, IDisposable
     protected void SetupProtocolPolicy()
     {
         var n = Config.Network;
-        var g = new PolicyGlobals(n.UseEncrypt, n.UseCompress, n.CompressionThreshold, n.MaxPayloadLength);
+        var g = new PolicyGlobals(n.UseEncrypt, n.UseCompress, n.CompressionThreshold);
         var snapshot = _engine.CreatePolicySnapshot(g);
         Interlocked.Exchange(ref _policySnapshot, snapshot);
     }
@@ -232,20 +233,19 @@ public abstract class SessionBase : ICommandContext, IDisposable
             return;
         }
 
-        try
+        while (Volatile.Read(ref _readWriteBuffer) != null)
         {
-            while (Volatile.Read(ref _readWriteBuffer) != null &&
-                   rwBuffer.TryRead(_policySnapshot, out var header, out var bufferOwner))
+            var result = rwBuffer.TryRead(Config.Network.MaxPayloadLength, out var header, out var bufferOwner);
+            if (result == MessageReadResult.NeedMoreData) break;
+            if (result is MessageReadResult.InvalidHeader or MessageReadResult.CorruptedPayload)
             {
-                var message = MessagePool<TcpMessage>.Rent();
-                message.Initialize(header, bufferOwner);
-                MessageReceived(message);
+                Close(CloseReason.InternalError);
+                return;
             }
-        }
-        catch (Exception ex)
-        {
-            Logger.Error(ex);
-            Close(CloseReason.ProtocolError);
+            
+            var message = MessagePool<TcpMessage>.Rent();
+            message.Initialize(header, bufferOwner);
+            MessageReceived(message);
         }
     }
     
@@ -281,12 +281,12 @@ public abstract class SessionBase : ICommandContext, IDisposable
     {
         if (disposing)
         {
-            if (!IsClosed)
-            {
-                Close(CloseReason.ServerClosing);
-            }
-            
             _fragmentAssembler?.Dispose();
+        }
+
+        if (!IsClosed)
+        {
+            Logger.Fatal("Memory Leak Detection: Session {0} is being disposed without logically closed!", SessionId);
         }
     }
 }

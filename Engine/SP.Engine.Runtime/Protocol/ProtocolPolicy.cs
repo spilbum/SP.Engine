@@ -7,23 +7,20 @@ namespace SP.Engine.Runtime.Protocol
         bool UseEncrypt { get; }
         bool UseCompress { get; }
         int CompressionThreshold { get; }
-        int MaxPayloadLength { get; }
     }
 
     public sealed class ProtocolPolicy : IPolicy
     {
-        public ProtocolPolicy(bool useEncrypt, bool useCompress, int compressionThreshold, int maxPayloadLength)
+        public ProtocolPolicy(bool useEncrypt, bool useCompress, int compressionThreshold)
         {
             UseEncrypt = useEncrypt;
             UseCompress = useCompress;
             CompressionThreshold = compressionThreshold;
-            MaxPayloadLength = maxPayloadLength;
         }
 
         public bool UseEncrypt { get; }
         public bool UseCompress { get; }
         public int CompressionThreshold { get; }
-        public int MaxPayloadLength { get; }
     }
 
     public struct PolicyGlobals
@@ -31,14 +28,12 @@ namespace SP.Engine.Runtime.Protocol
         public readonly bool UseEncrypt;
         public readonly bool UseCompress;
         public readonly int CompressionThreshold;
-        public readonly int MaxPayloadLength;
 
-        public PolicyGlobals(bool useEncrypt, bool useCompress, int compressionThreshold, int maxPayloadLength)
+        public PolicyGlobals(bool useEncrypt, bool useCompress, int compressionThreshold)
         {
             UseEncrypt = useEncrypt;
             UseCompress = useCompress;
             CompressionThreshold = compressionThreshold;
-            MaxPayloadLength = maxPayloadLength;
         }
     }
 
@@ -46,13 +41,11 @@ namespace SP.Engine.Runtime.Protocol
     {
         public readonly Toggle Encrypt;
         public readonly Toggle Compress;
-        public readonly int MaxPayloadLength;
 
-        public ProtocolOverrides(Toggle encrypt, Toggle compress, int maxPayloadLength)
+        public ProtocolOverrides(Toggle encrypt, Toggle compress)
         {
             Encrypt = encrypt;
             Compress = compress;
-            MaxPayloadLength = maxPayloadLength;
         }
     }
 
@@ -64,15 +57,12 @@ namespace SP.Engine.Runtime.Protocol
     public sealed class PolicySnapshot : IPolicySnapshot
     {
         private const int MinCompressionThreshold = 128;
-        private const int MinPayloadLength = 64;
         private readonly ProtocolPolicy[] _cache = new ProtocolPolicy[ushort.MaxValue];
-
-        public ProtocolPolicy Globals { get; }
+        private readonly ProtocolPolicy _fallback;
 
         public PolicySnapshot(PolicyGlobals g, Dictionary<ushort, ProtocolOverrides> overrides)
-        {
-            var maxPayloadLength = g.MaxPayloadLength < MinPayloadLength ? MinPayloadLength : g.MaxPayloadLength;
-            Globals = new ProtocolPolicy(g.UseEncrypt, g.UseCompress, g.CompressionThreshold, maxPayloadLength);
+        { 
+            _fallback = new ProtocolPolicy(g.UseEncrypt, g.UseCompress, g.CompressionThreshold);
             
             foreach (var (id, ov) in overrides)
             {
@@ -86,17 +76,14 @@ namespace SP.Engine.Runtime.Protocol
             var useEncrypt = g.UseEncrypt && (ov.Encrypt == Toggle.Inherit || ov.Encrypt == Toggle.On);
             var useCompress = g.UseCompress && (ov.Compress == Toggle.Inherit || ov.Compress == Toggle.On);
 
-            var length = ov.MaxPayloadLength == -1 ? g.MaxPayloadLength : ov.MaxPayloadLength;
-            var maxPayloadLength = length < MinPayloadLength ? MinPayloadLength : length;
-            
             if (!useCompress)
-                return new ProtocolPolicy(useEncrypt, false, 0, maxPayloadLength);
+                return new ProtocolPolicy(useEncrypt, false, 0);
 
             var compressionThreshold = g.CompressionThreshold < MinCompressionThreshold ? MinCompressionThreshold : g.CompressionThreshold;
-            return new ProtocolPolicy(useEncrypt, true, compressionThreshold, maxPayloadLength);
+            return new ProtocolPolicy(useEncrypt, true, compressionThreshold);
         }
         
         public ProtocolPolicy Resolve(ushort protocolId)
-            => _cache[protocolId] ?? Globals;
+            => _cache[protocolId] ?? _fallback;
     }
 }

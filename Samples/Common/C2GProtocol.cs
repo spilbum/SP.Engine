@@ -50,7 +50,7 @@ namespace Common
 
     public static class C2GProtocolData
     {
-        [Protocol(C2GProtocol.LoginReq)]
+        [ProtocolData(C2GProtocol.LoginReq)]
         public class LoginReq : ProtocolDataBase<LoginReq>
         {
             public string? AccessToken;
@@ -59,42 +59,42 @@ namespace Common
             public long Uid;
         }
 
-        [Protocol(C2GProtocol.RoomCreateReq)]
+        [ProtocolData(C2GProtocol.RoomCreateReq)]
         public class RoomCreateReq : ProtocolDataBase<RoomCreateReq>
         {
             public RoomOptionsInfo? Options;
         }
 
-        [Protocol(C2GProtocol.RoomSearchReq)]
+        [ProtocolData(C2GProtocol.RoomSearchReq)]
         public class RoomSearchReq : ProtocolDataBase<RoomSearchReq>
         {
             public long RoomId;
         }
 
-        [Protocol(C2GProtocol.RoomRandomSearchReq)]
+        [ProtocolData(C2GProtocol.RoomRandomSearchReq)]
         public class RoomRandomSearchReq : ProtocolDataBase<RoomRandomSearchReq>
         {
             public RoomOptionsInfo? Options;
         }
 
-        [Protocol(C2GProtocol.RoomJoinReq)]
+        [ProtocolData(C2GProtocol.RoomJoinReq)]
         public class RoomJoinReq : ProtocolDataBase<RoomJoinReq>
         {
             public long RoomId;
         }
 
-        [Protocol(C2GProtocol.RoomLeaveNtf)]
+        [ProtocolData(C2GProtocol.RoomLeaveNtf)]
         public class RoomLeaveNtf : ProtocolDataBase<RoomLeaveNtf>
         {
             public RoomLeaveReason Reason;
         }
 
-        [Protocol(C2GProtocol.GameReadyCompletedNtf)]
+        [ProtocolData(C2GProtocol.GameReadyCompletedNtf)]
         public class GameReadyCompletedNtf : ProtocolDataBase<GameReadyCompletedNtf>
         {
         }
 
-        [Protocol(C2GProtocol.GameActionReq)]
+        [ProtocolData(C2GProtocol.GameActionReq)]
         public class GameActionReq : ProtocolDataBase<GameActionReq>
         {
             public ActionKind Action;
@@ -102,20 +102,20 @@ namespace Common
             public string? Value;
         }
 
-        [Protocol(C2GProtocol.RankTopReq)]
+        [ProtocolData(C2GProtocol.RankTopReq)]
         public class RankTopReq : ProtocolDataBase<RankTopReq>
         {
             public int Count;
             public SeasonKind SeasonKind;
         }
 
-        [Protocol(C2GProtocol.RankMyReq)]
+        [ProtocolData(C2GProtocol.RankMyReq)]
         public class RankMyReq : ProtocolDataBase<RankMyReq>
         {
             public SeasonKind SeasonKind;
         }
 
-        [Protocol(C2GProtocol.RankRangeReq)]
+        [ProtocolData(C2GProtocol.RankRangeReq)]
         public class RankRangeReq : ProtocolDataBase<RankRangeReq>
         {
             public int Count;
@@ -123,14 +123,14 @@ namespace Common
             public int StartRank;
         }
 
-        [Protocol(C2GProtocol.EchoReq, channel: ChannelKind.Reliable)]
+        [ProtocolData(C2GProtocol.EchoReq, channel: ChannelKind.Reliable)]
         public class EchoReq : ProtocolDataBase<EchoReq>
         {
             public uint Seq;
             public long SentTicks;
         }
         
-        [Protocol(C2GProtocol.UdpEchoReq, channel: ChannelKind.Unreliable, encrypt: Toggle.On, compress: Toggle.Off)]
+        [ProtocolData(C2GProtocol.UdpEchoReq, channel: ChannelKind.Unreliable, encrypt: Toggle.On, compress: Toggle.Off)]
         public class UdpEchoReq : ProtocolDataBase<UdpEchoReq>
         {
             public uint Seq;
@@ -141,7 +141,7 @@ namespace Common
 
     public static class G2CProtocolData
     {
-        [Protocol(G2CProtocol.LoginAck)]
+        [ProtocolData(G2CProtocol.LoginAck)]
         public class LoginAck : ProtocolDataBase<LoginAck>
         {
             public string? AccessToken;
@@ -149,7 +149,7 @@ namespace Common
             public long Uid;
         }
 
-        [Protocol(G2CProtocol.RoomCreateAck)]
+        [ProtocolData(G2CProtocol.RoomCreateAck)]
         public class RoomCreateAck : ProtocolDataBase<RoomCreateAck>
         {
             public RoomOptionsInfo? Options;
@@ -159,7 +159,7 @@ namespace Common
             public int ServerPort;
         }
 
-        [Protocol(G2CProtocol.RoomSearchAck)]
+        [ProtocolData(G2CProtocol.RoomSearchAck)]
         public class RoomSearchAck : ProtocolDataBase<RoomSearchAck>
         {
             public RoomOptionsInfo? Options;
@@ -169,7 +169,7 @@ namespace Common
             public int ServerPort;
         }
 
-        [Protocol(G2CProtocol.RoomRandomSearchAck)]
+        [ProtocolData(G2CProtocol.RoomRandomSearchAck)]
         public class RoomRandomSearchAck : ProtocolDataBase<RoomRandomSearchAck>
         {
             public RoomOptionsInfo? Options;
@@ -179,7 +179,7 @@ namespace Common
             public int ServerPort;
         }
 
-        [Protocol(G2CProtocol.RoomJoinAck)]
+        [ProtocolData(G2CProtocol.RoomJoinAck)]
         public class RoomJoinAck : ProtocolDataBase<RoomJoinAck>
         {
             public List<RoomMemberInfo>? Members;
@@ -188,7 +188,7 @@ namespace Common
             public RoomKind RoomKind;
         }
 
-        [Protocol(G2CProtocol.RoomMemberEnterNtf)]
+        [ProtocolData(G2CProtocol.RoomMemberEnterNtf)]
         public class RoomMemberEnterNtf : ProtocolDataBase<RoomMemberEnterNtf>
         {
             public RoomMemberInfo? Member;
@@ -196,7 +196,7 @@ namespace Common
             public int RoomMemberCount;
         }
 
-        [Protocol(G2CProtocol.RoomMemberLeaveNtf)]
+        [ProtocolData(G2CProtocol.RoomMemberLeaveNtf)]
         public class RoomMemberLeaveNtf : ProtocolDataBase<RoomMemberLeaveNtf>
         {
             public RoomLeaveReason Reason;
@@ -205,31 +205,31 @@ namespace Common
             public long Uid;
         }
 
-        [Protocol(G2CProtocol.GameReadyNtf)]
+        [ProtocolData(G2CProtocol.GameReadyNtf)]
         public class GameReadyNtf : ProtocolDataBase<GameReadyNtf>
         {
         }
 
-        [Protocol(G2CProtocol.GameStartNtf)]
+        [ProtocolData(G2CProtocol.GameStartNtf)]
         public class GameStartNtf : ProtocolDataBase<GameStartNtf>
         {
         }
 
-        [Protocol(G2CProtocol.GameEndNtf)]
+        [ProtocolData(G2CProtocol.GameEndNtf)]
         public class GameEndNtf : ProtocolDataBase<GameEndNtf>
         {
             public byte Rank;
             public ItemInfo? Reward;
         }
 
-        [Protocol(G2CProtocol.GameActionAck)]
+        [ProtocolData(G2CProtocol.GameActionAck)]
         public class GameActionAck : ProtocolDataBase<GameActionAck>
         {
             public ErrorCode Result;
             public int SeqNo;
         }
 
-        [Protocol(G2CProtocol.RankTopAck)]
+        [ProtocolData(G2CProtocol.RankTopAck)]
         public class RankTopAck : ProtocolDataBase<RankTopAck>
         {
             public List<PlayerRankInfo>? Infos;
@@ -237,7 +237,7 @@ namespace Common
             public SeasonKind SeasonKind;
         }
 
-        [Protocol(G2CProtocol.RankMyAck)]
+        [ProtocolData(G2CProtocol.RankMyAck)]
         public class RankMyAck : ProtocolDataBase<RankMyAck>
         {
             public PlayerRankInfo? Info;
@@ -247,7 +247,7 @@ namespace Common
             public SeasonKind SeasonKind;
         }
 
-        [Protocol(G2CProtocol.RankRangeAck)]
+        [ProtocolData(G2CProtocol.RankRangeAck)]
         public class RankRangeAck : ProtocolDataBase<RankRangeAck>
         {
             public List<PlayerRankInfo>? Infos;
@@ -256,14 +256,14 @@ namespace Common
         }
 
 
-        [Protocol(G2CProtocol.EchoAck, channel: ChannelKind.Reliable)]
+        [ProtocolData(G2CProtocol.EchoAck, channel: ChannelKind.Reliable)]
         public class EchoAck : ProtocolDataBase<EchoAck>
         {
             public uint Seq;
             public long SentTicks;
         }
         
-        [Protocol(G2CProtocol.UdpEchoAck, channel: ChannelKind.Unreliable, encrypt: Toggle.On, compress: Toggle.Off)]
+        [ProtocolData(G2CProtocol.UdpEchoAck, channel: ChannelKind.Unreliable, encrypt: Toggle.On, compress: Toggle.Off)]
         public class UdpEchoAck : ProtocolDataBase<UdpEchoAck>
         {
             public uint Seq;

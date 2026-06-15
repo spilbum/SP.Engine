@@ -19,10 +19,10 @@ namespace SP.Engine.Runtime.Networking
             PayloadLength = payloadLength;
         }
 
-        public static bool TryParse(ReadOnlySpan<byte> source, out FragmentHeader header, out int byteConsumed)
+        public static bool TryParse(ReadOnlySpan<byte> source, out FragmentHeader header, out int bytesConsumed)
         {
             header = default;
-            byteConsumed = 0;
+            bytesConsumed = 0;
 
             if (source.Length < ByteSize) return false;
 
@@ -31,7 +31,7 @@ namespace SP.Engine.Runtime.Networking
             var totalCount = source[5];
             var payloadLength = source.ReadUInt16(6);
             header = new FragmentHeader(fragId, index, totalCount, payloadLength);
-            byteConsumed = ByteSize;
+            bytesConsumed = ByteSize;
             return true;
         }
 

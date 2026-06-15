@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Net;
 using System.Security.Cryptography;
 using System.Threading;
-using SP.Core;
 using SP.Core.Logging;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Channel;
@@ -59,7 +58,7 @@ public abstract class PeerBase : IPeer, IDisposable
     private Session _session;
     private readonly ReliableMessageProcessor _messageProcessor;
     private int _stateCode = PeerStateConst.NotAuthenticated;
-    private uint _lastSentAck;
+    private uint _lastSentAck = 1;
     private DateTime _lastAckTime;
     private bool _disposed;
     private readonly List<TcpMessage> _retriesCache = [];
@@ -207,13 +206,14 @@ public abstract class PeerBase : IPeer, IDisposable
 
                 if (peer.IsConnected)
                 {
-                    if (!peer._messageProcessor.RegisterInFlight((TcpMessage)message, out var inFlightMessage)) return;
-                    session.TrySend(channel, inFlightMessage);
+                    if (peer._messageProcessor.RegisterInFlight((TcpMessage)message, out var inFlightMessage))
+                    {
+                        session.TrySend(channel, inFlightMessage);
+                        return;
+                    }
                 }
-                else
-                {
-                    peer._messageProcessor.EnqueuePendingMessage((TcpMessage)message);
-                }
+                
+                peer._messageProcessor.EnqueuePendingMessage((TcpMessage)message);
             }
             else
             {
@@ -265,7 +265,7 @@ public abstract class PeerBase : IPeer, IDisposable
 
     private void ProcessRetransmission()
     {
-        if (!IsConnected) return;
+        if (!IsConnected || _session.IsClosing || _session.IsClosed) return;
         
         _retriesCache.Clear();
         
@@ -296,19 +296,19 @@ public abstract class PeerBase : IPeer, IDisposable
     {
         if (!IsConnected) return;
         
-        var ackNumber = _messageProcessor.NextExpectedSeq;
-        if (ackNumber <= _lastSentAck) return;
+        var expectedSeq = _messageProcessor.NextExpectedSeq;
+        if (expectedSeq <= _lastSentAck) return;
         
         var nowUtc = DateTime.UtcNow;
         var elapsedMs = (nowUtc - _lastAckTime).TotalMilliseconds;
-        var pendingCount = ackNumber - _lastSentAck;
+        var pendingCount = expectedSeq - _lastSentAck;
 
         if (elapsedMs < _messageProcessor.MaxAckDelayMs && pendingCount < _messageProcessor.AckFrequency)
             return;
 
         _lastAckTime = nowUtc;
-        _lastSentAck = ackNumber;
-        _session.SendMessageAck(ackNumber);
+        _lastSentAck = expectedSeq;
+        _session.SendMessageAck(expectedSeq);
     }
 
     internal void RecordPingData(double rttMs, double avgRttMs, double jitterMs)
@@ -368,30 +368,13 @@ public abstract class PeerBase : IPeer, IDisposable
     private void FlushPendingMessages()
     {
         if (!IsConnected) return;
-        
-        var messages = _messageProcessor.FlushPendingMessages();
-        if (messages.Count == 0) return;
-        
-        var processed = 0;
-        foreach (var message in messages)
+
+        while (_messageProcessor.TryPeekPendingMessage(out var message))
         {
             if (!_messageProcessor.RegisterInFlight(message, out var inFlightMessage)) break;
-            
+            _messageProcessor.DequeuePendingMessage();
             _session.TrySend(ChannelKind.Reliable, inFlightMessage);
             message.Dispose();
-            
-            processed++;   
-        }
-        
-        if (processed >= messages.Count) return;
-
-        for (var index = processed; index < messages.Count; index++)
-        {
-            var message = messages[index];
-            using (message)
-            {
-                _messageProcessor.EnqueuePendingMessage(message);
-            }
         }
     }
 

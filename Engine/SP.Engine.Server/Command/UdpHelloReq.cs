@@ -23,7 +23,7 @@ internal class UdpHelloReq : CommandBase<Session, C2SEngineProtocolData.UdpHello
                 return;
             }
 
-            var mtu = NegotiateMtu(session.Config.Network, protocol.Mtu);
+            var mtu = Math.Clamp(protocol.Mtu, session.Config.Network.UdpMinMtu, session.Config.Network.UdpMaxMtu);
             session.SetMaxFragmentSize(mtu);
             
             // 상태 체크 타이머 시작
@@ -66,12 +66,5 @@ internal class UdpHelloReq : CommandBase<Session, C2SEngineProtocolData.UdpHello
 
         result = UdpHandshakeResult.Ok;
         return true;
-    }
-
-    private static ushort NegotiateMtu(NetworkConfig config, ushort clientMtu)
-    {
-        var minMtu = Math.Max(config.UdpMinMtu, clientMtu);
-        var maxMtu = Math.Max(minMtu, config.UdpMaxMtu);
-        return Math.Min(Math.Max(clientMtu, minMtu), maxMtu);
     }
 }

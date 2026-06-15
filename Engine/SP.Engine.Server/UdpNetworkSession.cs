@@ -10,23 +10,22 @@ namespace SP.Engine.Server;
 
 public class UdpNetworkSession : NetworkSessionBase, IUnreliableSender
 {
+    private sealed record UdpRouteContext(Socket Socket, IPEndPoint EndPoint);
+    
     private ushort _maxFragmentSize;
     private int _inSending; // 0: Idle, 1: Sending
-    private readonly SocketAsyncEventArgs _sendEventArgs;
+    private SocketAsyncEventArgs _sendEventArgs;
+    private volatile UdpRouteContext _routeContext;
 
     private readonly ConcurrentQueue<(BufferOwner Buffer, int Length)> _sendQueue = new();
 
-    public UdpNetworkSession(
-        SessionBase session,
-        Socket client,
-        IPEndPoint remoteEndPoint)
+    public UdpNetworkSession(SessionBase session, Socket client, IPEndPoint remoteEndPoint)
         : base (SocketMode.Udp, client)
     {
         Session = session;
-        RemoteEndPoint = remoteEndPoint;
+        _routeContext = new UdpRouteContext(client, remoteEndPoint);
 
         _sendEventArgs = new SocketAsyncEventArgs();
-        _sendEventArgs.RemoteEndPoint = remoteEndPoint;
         _sendEventArgs.Completed += OnSendCompleted;
         
         SetMaxFragmentSize(session.Config.Network.UdpMinMtu);
@@ -34,7 +33,7 @@ public class UdpNetworkSession : NetworkSessionBase, IUnreliableSender
 
     public bool TrySend(UdpMessage message)
     {
-        if (IsClosed || IsInClosingOrClosed || message.IsEmpty) return false;
+        if (IsInClosingOrClosed || message.IsEmpty) return false;
 
         const int MaxUdpQueueSize = 512;
         if (_sendQueue.Count >= MaxUdpQueueSize)
@@ -46,23 +45,13 @@ public class UdpNetworkSession : NetworkSessionBase, IUnreliableSender
         if (message.TotalLength <= _maxFragmentSize)
         {
             // 단일 패킷 처리
-            if (!message.TryGetBufferOwner(out var buffer, out var length))
-            {
-                Session.Logger.Warn("Session {0} UDP TryGetBufferOwner failed.", Session.SessionId);
-                return false;
-            }
-            
+            if (!message.TryGetBufferOwner(out var buffer, out var length)) return false;
             _sendQueue.Enqueue((buffer, length));
         }
         else
         {
             // 패킷 파편화
-            if (!message.TryGetFragments(_maxFragmentSize, out var fragments))
-            {
-                Session.Logger.Warn("Session {0} UDP TryGetFragments failed.", Session.SessionId);
-                return false;
-            }
-
+            if (!message.TryGetFragments(_maxFragmentSize, out var fragments)) return false;
             foreach (var (buffer, length) in fragments)
             {
                 _sendQueue.Enqueue((buffer, length));
@@ -83,9 +72,20 @@ public class UdpNetworkSession : NetworkSessionBase, IUnreliableSender
 
     private void StartSend()
     {
+        int syncCount = 0;
+        const int MaxSyncCompletions = 50;
+        
         while (true)
         {
-            if (IsClosed)
+            if (IsInClosingOrClosed)
+            {
+                ClearSendQueue();
+                Interlocked.Exchange(ref _inSending, 0);
+                return;
+            }
+
+            var e = Volatile.Read(ref _sendEventArgs);
+            if (e == null)
             {
                 ClearSendQueue();
                 Interlocked.Exchange(ref _inSending, 0);
@@ -105,61 +105,59 @@ public class UdpNetworkSession : NetworkSessionBase, IUnreliableSender
                 return;
             }
 
-            if (!TryAddState(SocketState.InSending))
+            var route = _routeContext;
+            if (route.Socket == null)
             {
-                DecrementIo();
                 item.Buffer.Dispose();
+                ProcessSendCompleted(e);
                 Interlocked.Exchange(ref _inSending, 0);
                 return;
             }
             
-            _sendEventArgs.SetBuffer(item.Buffer.GetBuffer(), 0, item.Length);
-            _sendEventArgs.UserToken = item.Buffer;
-            _sendEventArgs.RemoteEndPoint = RemoteEndPoint;
-            
-            var socket = Volatile.Read(ref _client);
-            if (socket == null)
-            {
-                HandleSendResult(_sendEventArgs);
-                continue;
-            }
+            e.SetBuffer(item.Buffer.GetBuffer(), 0, item.Length);
+            e.UserToken = item.Buffer;
+            e.RemoteEndPoint = route.EndPoint;
 
+            bool pending;
             try
             {
-                if (!socket.SendToAsync(_sendEventArgs))
-                {
-                    HandleSendResult(_sendEventArgs);
-                    continue;
-                }
+                pending = route.Socket.SendToAsync(e);
             }
             catch (Exception ex)
             {
                 LogError(ex);
-                HandleSendResult(_sendEventArgs);
+                ProcessSendCompleted(e);
                 Interlocked.Exchange(ref _inSending, 0);
+                return;
             }
 
-            break;
+            if (pending) return;
+            
+            ProcessSendCompleted(e);
+            
+            syncCount++;
+            if (syncCount >= MaxSyncCompletions)
+            {
+                Session.AsyncRun(StartSend);
+                return;
+            }
         }
     }
 
-    private void HandleSendResult(SocketAsyncEventArgs e)
+    private void ProcessSendCompleted(SocketAsyncEventArgs e)
     {
-        RemoveState(SocketState.InSending);
-        DecrementIo();
-        
         if (e.UserToken is BufferOwner bufferOwner)
-        {
             bufferOwner.Dispose();
-        }
-        
+
         e.UserToken = null;
-        e.SetBuffer(null, 0, 0);
+        e.SetBuffer(null, 0, 0);  
+        
+        DecrementIo();
     }
 
     private void ProcessSend(SocketAsyncEventArgs e)
     {
-        HandleSendResult(e);
+        ProcessSendCompleted(e); 
         StartSend();
     }
 
@@ -170,22 +168,22 @@ public class UdpNetworkSession : NetworkSessionBase, IUnreliableSender
 
     private void ClearSendQueue()
     {
-        while (_sendQueue.TryDequeue(out var item)) item.Buffer.Dispose();
+        while (_sendQueue.TryDequeue(out var item)) 
+            item.Buffer.Dispose();
     }
 
     public void SetMaxFragmentSize(ushort size) => _maxFragmentSize = (ushort)(size - 28);
 
     public void UpdateContext(Socket socket, IPEndPoint remoteEndPoint)
     {
-        if (!ReferenceEquals(_client, socket))
-        {
-            Interlocked.Exchange(ref _client, socket);
-        }
+        var current = _routeContext;
+        if (ReferenceEquals(current.Socket, socket) && current.EndPoint.Equals(remoteEndPoint))
+            return;
         
-        var ep = RemoteEndPoint;
-        if (ep != null && ep.Equals(remoteEndPoint)) return;
-        
-        Interlocked.Exchange(ref _remoteEndPoint, remoteEndPoint);
+        Interlocked.Exchange(ref _routeContext, new UdpRouteContext(socket, remoteEndPoint));
+
+        Interlocked.Exchange(ref _client, socket);
+        Volatile.Write(ref _remoteEndPoint, remoteEndPoint);
     }
 
     protected override bool ShouldSocketClosed() => false;
@@ -195,6 +193,12 @@ public class UdpNetworkSession : NetworkSessionBase, IUnreliableSender
         base.OnRelease();
         
         ClearSendQueue();
-        _sendEventArgs.Dispose();
+        
+        var e = Interlocked.Exchange(ref _sendEventArgs, null);
+        if (e != null)
+        {
+            e.Completed -= OnSendCompleted;
+            e.Dispose();
+        }
     }
 }

@@ -1,48 +1,67 @@
 using System;
+using System.Buffers;
+using System.Collections.Concurrent;
 
 namespace SP.Core.Buffers
 {
     public sealed class BufferResizer : IBufferResizer, IDisposable
     {
-        private BufferOwner _bufferOwner;
+        private static readonly ConcurrentBag<BufferResizer> _pool = new ConcurrentBag<BufferResizer>();
+        
+        private byte[] _buffer;
         private bool _disposed;
+        
+        private BufferResizer() { }
 
-        public BufferResizer(int initialCapacity = 1024)
+        public static BufferResizer Rent(int initialCapacity = 256)
         {
-            _bufferOwner = new BufferOwner(initialCapacity);
+            if (!_pool.TryTake(out var resizer))
+            {
+                resizer = new BufferResizer();
+            }
+            
+            resizer._buffer = ArrayPool<byte>.Shared.Rent(initialCapacity);
+            resizer._disposed = false;
+            return resizer;
         }
 
-        public Span<byte> Span => _bufferOwner.Memory.Span;
+        public Span<byte> Span => _buffer;
 
         public Span<byte> Resize(int size, int position)
         {
             if (_disposed) throw new ObjectDisposedException(nameof(BufferResizer));
-
-            var newCapacity = _bufferOwner.Length * 2;
-            if (newCapacity < size) newCapacity = size;
             
-            var newBuffer = new BufferOwner(newCapacity);
+            if (size <= _buffer.Length) return _buffer;
+
+            var newCapacity = Math.Max(_buffer.Length * 2, size);
+            var newBuffer = ArrayPool<byte>.Shared.Rent(newCapacity);
 
             if (position > 0)
             {
-                _bufferOwner[..position].CopyTo(newBuffer.Memory.Span);
+                _buffer.AsSpan(0, position).CopyTo(newBuffer);
             }
             
-            _bufferOwner.Dispose();
-            _bufferOwner = newBuffer;
-            return newBuffer.Memory.Span;
+            ArrayPool<byte>.Shared.Return(_buffer);
+            _buffer = newBuffer;
+            
+            return _buffer;
         }
 
         public ReadOnlySpan<byte> GetWrittenSpan(int position)
-            => _bufferOwner.Memory.Span[..position];
+            => _buffer.AsSpan(0, position);
 
         public void Dispose()
         {
             if (_disposed) return;
             _disposed = true;
+
+            if (_buffer != null)
+            {
+                ArrayPool<byte>.Shared.Return(_buffer);
+                _buffer = null;
+            }
             
-            _bufferOwner?.Dispose();
-            _bufferOwner = null;
+            _pool.Add(this);
         }
     }
 }

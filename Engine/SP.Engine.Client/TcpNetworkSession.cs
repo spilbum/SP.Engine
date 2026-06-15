@@ -45,7 +45,7 @@ namespace SP.Engine.Client
             try
             {
                 if (!IsConnected) return false;
-
+                
                 if (!message.TryGetBuffer(out var memory))
                 {
                     _netPeer.Logger.Warn("NetPeer {0} TCP TryGetBuffer failed. Id={1}, IsEmpty={2}",

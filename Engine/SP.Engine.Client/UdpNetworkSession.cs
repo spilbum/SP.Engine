@@ -97,10 +97,9 @@ namespace SP.Engine.Client
                 _receiveBuffer = new byte[_netPeer.Config.ReceiveBufferSize];
 
                 _receiveEventArgs.SetBuffer(_receiveBuffer, 0, _receiveBuffer.Length);
-                _receiveEventArgs.RemoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
                 _receiveEventArgs.Completed += OnReceiveCompleted;
                 
-                _socket.ReceiveFromAsync(_receiveEventArgs);
+                _socket.ReceiveAsync(_receiveEventArgs);
 
                 _isRunning = true;
                 return true;
@@ -235,8 +234,8 @@ namespace SP.Engine.Client
             try
             {
                 e.SetBuffer(0, _receiveBuffer.Length);
-                if (e.RemoteEndPoint == null) e.RemoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
-                if (!_socket.ReceiveFromAsync(e))
+                
+                if (!_socket.ReceiveAsync(e))
                     OnReceiveCompleted(this, e);
             }
             catch (Exception ex)

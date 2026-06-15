@@ -13,18 +13,5 @@ namespace SP.Core.Accessor
         bool IgnoreGet { get; }
         bool IgnoreSet { get; }
         MemberInfo Info { get; }
-
-        object GetValue(object instance);
-        void SetValue(object instance, object value);
-    }
-
-    public static class MemberAccessorExtensions
-    {
-        public static bool IsNullable(this IMemberAccessor accessor)
-        {
-            if (!accessor.Type.IsValueType)
-                return true;
-            return Nullable.GetUnderlyingType(accessor.Type) != null;
-        }
     }
 }

@@ -17,17 +17,25 @@ using SP.Engine.Server.Connector;
 
 namespace SP.Engine.Server;
 
-public abstract class EngineBase : EngineCore
+public interface IEngine
 {
+    string Name { get; }
+    ServerState State { get; }
+}
+
+public abstract class EngineBase : EngineCore, IEngine
+{
+    private static readonly long _baseUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+    private static long UtcNowMs => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+    internal static uint NetworkTimeMs => (uint)(UtcNowMs - _baseUnixMs);
+    
     private readonly Dictionary<ushort, ICommand> _userCommands = new();
     private readonly Dictionary<ushort, ICommand> _internalCommands = new();
     private readonly List<ConnectorFiber> _connectorFibers = [];
-
     private ThreadFiber[] _logicFibers;
     private List<PeerBase>[] _shardPeers;
     private IDisposable[] _shardTickTimers;
     private int _shardMask;
-    
     private PeerManager _peerManager;
     private PerfMonitor _perfMonitor;
     private IDisposable _waitingReconnectCheckingTimer;
@@ -37,10 +45,12 @@ public abstract class EngineBase : EngineCore
     [ThreadStatic] private static ThreadPerfLog _threadPerfLog;
     [ThreadStatic] private static List<TcpMessage> _orderCache;
 
+    internal int LogicFiberCount => _logicFibers.Length;
+    
     private class ThreadPerfLog
     {
         public long ProcessedCount;
-        public double TotalExecutionTimeMs;
+        public long TotalExecutionTimeMs;
     }
 
     private static ThreadPerfLog GetCurrentThreadPerfLog()
@@ -57,18 +67,12 @@ public abstract class EngineBase : EngineCore
         return _logicFibers[index].QueuePendingCount;
     }
     
-    public int LogicFiberCount => _logicFibers.Length;
-    
-    private static readonly long _baseUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-    private static long UtcNowMs => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-    internal static uint NetworkTimeMs => (uint)(UtcNowMs - _baseUnixMs);
-
     internal override bool InternalInitialize(Assembly[] assemblies, string name, EngineConfig config)
     {
         if (!base.InternalInitialize(assemblies, name, config))
             return false;
         
-        _peerManager = new PeerManager(Logger, config);
+        _peerManager = new PeerManager(config);
         
         if (!SetupCommand(assemblies))
             return false;
@@ -147,8 +151,9 @@ public abstract class EngineBase : EngineCore
 
     private int GetShardIndex(uint peerId) => (int)(peerId & _shardMask);
 
-    internal bool OnlinePeer(PeerBase peer, Session session)
+    internal bool ActivatePeer(PeerBase peer, Session session)
     {
+        // 온라인 전환
         if (!_peerManager.TransitionToOnline(peer.PeerId, session))
             return false;
 
@@ -193,24 +198,17 @@ public abstract class EngineBase : EngineCore
 
         UnregisterPeerFromShard(peer);
 
-        if (ShouldKeepPeer(session))
+        if (session.IsClosing)
         {
-            // 재 연결 대기로 전환
-            _peerManager.TransitionToOffline(peer, reason);
+            // 종료 중이면 즉시 제거
+            _peerManager.RemovePeer(peer.PeerId, reason);
+            return;
         }
-        else
-        {
-            // 즉시 제거
-            _peerManager.Terminate(peer.PeerId, reason);
-        }
+        
+        // 오프라인 전환
+        _peerManager.TransitionToOffline(peer, reason);
     }
 
-    private static bool ShouldKeepPeer(Session session)
-    {
-        if (session.IsClosing) return false;
-        return session.Peer is { Kind: PeerKind.User };
-    }
-    
     private void StartReconnectTimer()
     {
         var ts = TimeSpan.FromSeconds(Config.Session.WaitingReconnectTimerPeriodSec);
@@ -337,7 +335,7 @@ public abstract class EngineBase : EngineCore
             }
 
             var sessions = SessionsSource;
-            _perfMonitor?.Tick(this, sessions.Length, totalProcessed, totalTimeMs);
+            _perfMonitor?.Tick(this, totalProcessed, totalTimeMs);
         }
         catch (Exception ex)
         {
@@ -457,6 +455,7 @@ public abstract class EngineBase : EngineCore
         
         try
         {
+            // 내부 명령어 실행
             var command = GetInternalCommand(message.Id);
             if (command != null)
             {
@@ -466,41 +465,24 @@ public abstract class EngineBase : EngineCore
             
             var peer = session.Peer;
             if (peer == null) return;
+
+            IMessage extracted;
+            switch (message)
+            {
+                case TcpMessage tcp:
+                    extracted = tcp.Extract();
+                    break;
+                case UdpMessage udp:
+                    extracted = udp.Extract();
+                    break;
+                default:
+                    return;
+            }
             
-            if (message is TcpMessage { SequenceNumber: > 0 } tcp)
-            {
-                _orderCache ??= new List<TcpMessage>(32);
-                _orderCache.Clear();
-
-                var result = peer.ReceiveIngestMessage(tcp, _orderCache);
-                switch (result)
-                {
-                    case ReceiveIngestResult.Success:
-                    {
-                        foreach (var m in _orderCache)
-                        {
-                            using (m) DispatchUserCommand(peer, m);
-                        }
-                        break;
-                    }
-                    case ReceiveIngestResult.BufferOverflow:
-                    {
-                        Logger.Warn("Peer {0} Out-of-order buffer overflow (Msx: {1})"
-                            , peer.PeerId, Config.Network.ReliableMaxOutOfOrderCount);
-
-                        peer.Close(CloseReason.Rejected);
-                        return;
-                    }
-                    case ReceiveIngestResult.Buffered:
-                    case ReceiveIngestResult.Duplicate:
-                    default:
-                        break;
-                }
-            }
-            else
-            {
-                DispatchUserCommand(peer, message);
-            }
+            var index = GetShardIndex(peer.PeerId);
+            var logicFiber = _logicFibers[index];
+            logicFiber.Enqueue(DispatchUserCommand, this, peer, extracted);
+            
         }
         catch (Exception ex)
         {
@@ -512,52 +494,70 @@ public abstract class EngineBase : EngineCore
         }
     }
 
-    private void DispatchUserCommand(PeerBase peer, IMessage message)
+    private static void DispatchUserCommand(EngineBase engine, PeerBase peer, IMessage message)
     {
-        IMessage newMessage;
-        
-        // 메시지 소유권 이전
-        switch (message)
+        try
         {
-            case TcpMessage tcp:
-                newMessage = tcp.Extract();
-                break;
-            case UdpMessage udp:
-                newMessage = udp.Extract();
-                break;
-            default:
-                return;
+            if (message is TcpMessage { SequenceNumber: > 0 } tcp)
+            {
+                _orderCache ??= new List<TcpMessage>(32);
+                _orderCache.Clear();
+
+                var result = peer.ReceiveIngestMessage(tcp, _orderCache);
+                switch (result)
+                {
+                    case ReceiveIngestResult.Success:
+                    {
+                        foreach (var ordered in _orderCache)
+                        {
+                            using (ordered) ExecuteUserCommand(engine, peer, ordered);
+                        }
+                        break;
+                    }
+                    case ReceiveIngestResult.BufferOverflow:
+                    {
+                        engine.Logger.Warn("Peer {0} Out-of-order buffer overflow (Msx: {1})"
+                            , peer.PeerId, engine.Config.Network.ReliableMaxOutOfOrderCount);
+
+                        peer.Close(CloseReason.Rejected);
+                        tcp.Dispose();
+                        return;
+                    }
+                    case ReceiveIngestResult.Buffered:
+                        break;
+                    case ReceiveIngestResult.Duplicate:
+                        tcp.Dispose();
+                        break;
+                    default:
+                        throw new Exception($"Invalid result: {result}");
+                }
+            }
+            else
+            {
+                using (message) ExecuteUserCommand(engine, peer, message);
+            }
         }
-        
-        var index = GetShardIndex(peer.PeerId);
-        var logicFiber = _logicFibers[index];
-        logicFiber.Enqueue(ExecuteUseCommand, this, peer, newMessage);
+        catch (Exception ex)
+        {
+            engine.Logger.Error(ex, "DispatchUserCommand failed: {0}", ex.Message);
+        }
     }
 
-    private static void ExecuteUseCommand(EngineBase engine, PeerBase peer, IMessage message)
+    private static void ExecuteUserCommand(EngineBase engine, PeerBase peer, IMessage message)
     {
         var command = engine.GetUserCommand(message.Id);
         if (command == null) return;
 
-        double executionTimeMs;
-        
-        try
-        {
-            executionTimeMs = command.Execute(peer, message);
-        }
-        finally
-        {
-            message.Dispose();
-        }
+        var elapsedTicks = command.Execute(peer, message);
         
         var log = GetCurrentThreadPerfLog();
-        log.ProcessedCount++;
-        log.TotalExecutionTimeMs += executionTimeMs;
+        Interlocked.Increment(ref log.ProcessedCount);
+        Interlocked.Add(ref log.TotalExecutionTimeMs, elapsedTicks);
 
-        if (executionTimeMs >= engine.Config.Session.CommandSlowThresholdMs)
+        if (elapsedTicks >= engine.Config.Session.CommandSlowThresholdMs)
         {
             engine.Logger.Warn(
-                "Command '{0}' slow detected. PeerId={1}, Exec={2:F2}ms", command.Name, peer.PeerId, executionTimeMs);
+                "Command '{0}' slow detected. PeerId={1}, Exec={2:F2}ms", command.Name, peer.PeerId, elapsedTicks);
         }
     }
 

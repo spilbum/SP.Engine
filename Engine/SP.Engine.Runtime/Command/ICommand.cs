@@ -7,6 +7,6 @@ namespace SP.Engine.Runtime.Command
     {
         string Name { get; }
         Type ContextType { get; }
-        double Execute(ICommandContext context, IMessage message);
+        long Execute(ICommandContext context, IMessage message);
     }
 }

@@ -16,11 +16,27 @@ namespace SP.Core.Buffers
         
         #if DEBUG
         private long _bufferId;
-        private StackTrace _stackTrace;
+        private AllocInfo _allocInfo;
 
         private static long _globalBufferId;
-        private static readonly ConcurrentDictionary<long, (StackTrace Trace, DateTime Time)> _activeRegistry 
-             = new ConcurrentDictionary<long, (StackTrace, DateTime)>();
+        private static readonly ConcurrentDictionary<long, (AllocInfo Info, DateTime Time)> _activeRegistry 
+             = new ConcurrentDictionary<long, (AllocInfo, DateTime)>();
+
+        private readonly struct AllocInfo
+        {
+            public string MemberName { get; }
+            public string FilePath { get; }
+            public int LineNumber { get; }
+
+            public AllocInfo(string memberName, string filePath, int lineNumber)
+            {
+                MemberName = memberName;
+                FilePath = filePath;
+                LineNumber = lineNumber;
+            }
+            
+            public override string ToString() => $"{FilePath}:{LineNumber} -> {MemberName}";
+        }
         #endif
 
         public Memory<byte> Memory
@@ -39,7 +55,11 @@ namespace SP.Core.Buffers
             Initialize(capacity);
         }
 
-        internal void Initialize(int capacity)
+        internal void Initialize(
+            int capacity,
+            [CallerMemberName] string callerMethod = "",
+            [CallerFilePath] string callerPath = "",
+            [CallerLineNumber] int callerLine = 0)
         {
             _capacity = capacity;
             _buffer = ArrayPool<byte>.Shared.Rent(capacity);
@@ -47,9 +67,9 @@ namespace SP.Core.Buffers
             BufferMetrics.OnRent();
             
 #if DEBUG
-            _stackTrace = new StackTrace(1, true);
+            _allocInfo = new AllocInfo(callerMethod, callerPath, callerLine);
             _bufferId = Interlocked.Increment(ref _globalBufferId);
-            _activeRegistry.TryAdd(_bufferId, (_stackTrace, DateTime.UtcNow));
+            _activeRegistry.TryAdd(_bufferId, (_allocInfo, DateTime.UtcNow));
 #endif
         }
         
@@ -69,7 +89,7 @@ namespace SP.Core.Buffers
             sb.AppendLine("\n[CRITICAL MEMORY LEAK DETECTED]");
             sb.AppendLine($"A {nameof(BufferOwner)} was garbage collected without being properly disposed.");
             sb.AppendLine("Allocation Stack Trace:");
-            sb.AppendLine(_stackTrace?.ToString() ?? "No trace available");
+            sb.AppendLine(_allocInfo.ToString());
 
             var alertMessage = sb.ToString();
             
@@ -99,7 +119,7 @@ namespace SP.Core.Buffers
             {
                 sb.AppendLine($"--- Leak Node #{index++} (Buffer ID: {kvp.Key} | AllocTime: {kvp.Value.Time}) ---");
                 // 덤프 요청 시점에만 문자열로 변환
-                sb.AppendLine(kvp.Value.Trace?.ToString()); 
+                sb.AppendLine(kvp.Value.Info.ToString()); 
                 sb.AppendLine();
             }
 

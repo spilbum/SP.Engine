@@ -11,26 +11,23 @@ namespace SP.Engine.Runtime.Protocol
     }
 
     [AttributeUsage(AttributeTargets.Class, Inherited = false)]
-    public sealed class ProtocolAttribute : Attribute
+    public sealed class ProtocolDataAttribute : Attribute
     {
-        public ProtocolAttribute(
+        public ProtocolDataAttribute(
             ushort id,
             ChannelKind channel = ChannelKind.Reliable,
             Toggle encrypt = Toggle.Inherit,
-            Toggle compress = Toggle.Inherit,
-            int maxPayloadLength = -1)
+            Toggle compress = Toggle.Inherit)
         {
             Id = id;
             Channel = channel;
             Encrypt = encrypt;
             Compress = compress;
-            MaxPayloadLength = maxPayloadLength;
         }
 
         public ushort Id { get; }
         public ChannelKind Channel { get; }
         public Toggle Encrypt { get; }
         public Toggle Compress { get; }
-        public int MaxPayloadLength { get; }
     }
 }

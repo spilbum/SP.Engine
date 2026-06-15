@@ -46,7 +46,7 @@ namespace SP.Core.Fiber
             
             var spinner = new SpinWait();
 
-            for (var retry = 0; retry < 3; retry++)
+            while (true)
             {
                 var result = _queue.TryEnqueue(job);
 
@@ -60,7 +60,14 @@ namespace SP.Core.Fiber
                         continue;
                 
                     case EnqueueResult.Full:
-                        Thread.Yield();
+                        if (spinner.NextSpinWillYield)
+                        {
+                            Thread.Sleep(1);
+                        }
+                        else
+                        {
+                            Thread.Yield();
+                        }
                         continue;
                 
                     case EnqueueResult.Closed:
@@ -71,17 +78,6 @@ namespace SP.Core.Fiber
                         return false;
                 }
             }
-
-            HandleQueueFull(job);
-            return false;
-        }
-
-        private void HandleQueueFull(IWorkJob job)
-        {
-            var ex = new FiberQueueFullException(Name, _queue.PendingCount, _queue.Capacity, _queue.TotalDroppedCount, job);
-            _onError?.Invoke(ex);
-            
-            job.Dispose();
         }
 
         private void Run()

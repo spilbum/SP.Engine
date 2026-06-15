@@ -2,22 +2,11 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
-using System.Text;
 using System.Threading;
 using SP.Core.Logging;
 using SP.Engine.Runtime;
 
 namespace SP.Engine.Server;
-
-[Flags]
-public enum SocketState
-{
-    None = 0,
-    InSending = 1 << 0,
-    InReceiving = 1 << 1,
-    InClosing = 1 << 4,
-    Closed = 1 << 24
-}
 
 public enum SocketMode
 {
@@ -32,12 +21,12 @@ public interface INetworkSession : ILogContext
 
 public abstract class NetworkSessionBase : INetworkSession
 {
-    private const string LogHeaderFormat = "[NetworkError] SessionId: {0}, Mode: {1}";
-    private const string SocketInfoFormat = "SocketErrorCode: {0} ({1})";
-    private const string CallerInfoFormat = "Location: {0} in {1}:{2}";
+    private const int StateConnected = 0;
+    private const int StateClosing = 1;
+    private const int StateClosed = 2;
     
     private Action<INetworkSession, CloseReason> _closed;
-    private volatile int _socketState;
+    private int _state;
     private int _pendingIoCount;
     private protected IPEndPoint _remoteEndPoint;
     private CloseReason _finalReason;
@@ -54,21 +43,21 @@ public abstract class NetworkSessionBase : INetworkSession
     public ILogger Logger => _session?.Logger;
     
     public IPEndPoint LocalEndPoint { get; }
-    public IPEndPoint RemoteEndPoint
-    {
-        get => Volatile.Read(ref _remoteEndPoint);
-        protected init => Volatile.Write(ref _remoteEndPoint, value);
-    }
+    public IPEndPoint RemoteEndPoint => Volatile.Read(ref _remoteEndPoint);
     
-    public bool IsClosed => HasState(SocketState.Closed);
-    protected bool IsInClosingOrClosed => _socketState >= (int)SocketState.InClosing;
+    public bool IsClosed => Volatile.Read(ref _state) == StateClosed; 
+    protected bool IsInClosingOrClosed => Volatile.Read(ref _state) >= StateClosing;
     
     protected NetworkSessionBase(SocketMode mode, Socket client)
     {
         _mode = mode;
         _client = client;
-        LocalEndPoint = (IPEndPoint)client.LocalEndPoint;
-        RemoteEndPoint = (IPEndPoint)client.RemoteEndPoint;
+        if (client != null)
+        {
+            LocalEndPoint = (IPEndPoint)client.LocalEndPoint;
+            Volatile.Write(ref _remoteEndPoint, (IPEndPoint)client.RemoteEndPoint);
+        }
+        _state = StateConnected;
     }
     
     public event Action<INetworkSession, CloseReason> Closed
@@ -94,34 +83,28 @@ public abstract class NetworkSessionBase : INetworkSession
     }
     
     public void Close(CloseReason reason)
-    {
-        if (!TryAddState(SocketState.InClosing)) return;
+    { 
+        if (Interlocked.CompareExchange(ref _state, StateClosing, StateConnected) != StateConnected)
+            return;
+        
         _finalReason = reason;
         
-        if (_client != null)
-            InternalClose(reason);
-        else
+        var client = Interlocked.Exchange(ref _client, null);
+        if (client != null && ShouldSocketClosed())
         {
-            if (Volatile.Read(ref _pendingIoCount) == 0)
-                OnClosed(_finalReason);
+            client.SafeClose();
+        }
+
+        if (Volatile.Read(ref _pendingIoCount) == 0)
+        {
+            OnClosed(_finalReason);
         }
     }
 
-    private void InternalClose(CloseReason reason)
-    {
-        var client = Interlocked.Exchange(ref _client, null);
-        if (client == null) return;
-        
-        if (ShouldSocketClosed())
-            client.SafeClose();
-        
-        if (Volatile.Read(ref _pendingIoCount) == 0)
-            OnClosed(reason);
-    }
-    
     protected virtual void OnClosed(CloseReason reason)
     {
-        if (!TryAddState(SocketState.Closed)) return;
+        if (Interlocked.Exchange(ref _state, StateClosed) == StateClosed)
+            return;
         
         OnRelease();
 
@@ -131,32 +114,6 @@ public abstract class NetworkSessionBase : INetworkSession
     
     protected virtual void OnRelease() { }
     protected virtual bool ShouldSocketClosed() => true;
-    
-    protected bool HasState(SocketState state) => (_socketState & (int)state) != 0;
-
-    protected bool TryAddState(SocketState state)
-    {
-        while (true)
-        {
-            var current = _socketState;
-            if (((SocketState)current & state) != 0) return false;
-
-            var next = current | (int)state;
-            if (Interlocked.CompareExchange(ref _socketState, next, current) == current) 
-                return true;
-        }
-    }
-
-    protected bool RemoveState(SocketState state)
-    {
-        while (true)
-        {
-            var current = _socketState;
-            var next = current & ~(int)state;
-            if (Interlocked.CompareExchange(ref _socketState, next, current) == current)
-                return true;
-        }
-    }
 
     protected void LogError(Exception e, [CallerMemberName] string caller = "", [CallerFilePath] string filePath = "",
         [CallerLineNumber] int lineNumber = -1)
@@ -164,23 +121,20 @@ public abstract class NetworkSessionBase : INetworkSession
         if (ShouldIgnoreError(e)) return;
 
         var sessionId = Session.SessionId;
-        var logBuilder = new StringBuilder();
-
-        logBuilder.AppendLine(string.Format(LogHeaderFormat, sessionId, _mode));
-        logBuilder.AppendLine($"Message: {e.Message}");
-
+        var fileName = System.IO.Path.GetFileName(filePath);
+        
         if (e is SocketException socketEx)
         {
-            logBuilder.AppendLine(string.Format(SocketInfoFormat,
-                (int)socketEx.SocketErrorCode,
-                socketEx.SocketErrorCode));
+            Session.Logger.Error(
+                "[NetworkError] SessionId: {SessionId}, Mode: {Mode}\nMessage: {Message}\nSocketErrorCode: {ErrorCode} ({SocketError})\nLocation: {Caller} in {FileName}:{LineNumber}\nStackTrace:\n{StackTrace}",
+                sessionId, _mode, e.Message, (int)socketEx.SocketErrorCode, socketEx.SocketErrorCode, caller, fileName, lineNumber, e.StackTrace);
         }
-        
-        logBuilder.AppendLine(string.Format(CallerInfoFormat, caller, System.IO.Path.GetFileName(filePath), lineNumber));
-        logBuilder.AppendLine("StackTrace:");
-        logBuilder.AppendLine(e.StackTrace);
-        
-       Session.Logger.Error(logBuilder.ToString());
+        else
+        {
+            Session.Logger.Error(
+                "[NetworkError] SessionId: {SessionId}, Mode: {Mode}\nMessage: {Message}\nLocation: {Caller} in {FileName}:{LineNumber}\nStackTrace:\n{StackTrace}",
+                sessionId, _mode, e.Message, caller, fileName, lineNumber, e.StackTrace);
+        }
     }
 
     private bool ShouldIgnoreError(Exception e)

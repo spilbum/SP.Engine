@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Security.Cryptography;
+using System.Threading;
 
 namespace SP.Engine.Server;
 
@@ -10,6 +11,7 @@ public sealed class SessionManager
     private readonly Stack<int> _freeIndices;
     private readonly object _lock = new();
     private readonly int _maxCapacity;
+    private volatile Session[] _activeSnapshot = [];
     
     public SessionManager(int capacity)
     {
@@ -17,31 +19,15 @@ public sealed class SessionManager
         _sessions = new Session[capacity];
         _freeIndices = new Stack<int>(capacity);
 
-        for (var i = capacity - 1; i >= 0; i--)
+        for (var index = capacity - 1; index >= 0; index--)
         {
-            _freeIndices.Push(i);
+            _freeIndices.Push(index);
         }
     }
 
     public Session[] GetActiveSnapshot()
     {
-        lock (_lock)
-        {
-            var activeCount = _maxCapacity - _freeIndices.Count;
-            if (activeCount <= 0) return [];
-            
-            var snapshot = new Session[activeCount];
-            var cursor = 0;
-            for (var i = 0; i < _maxCapacity; i++)
-            {
-                if (_sessions[i] == null || _sessions[i].SessionId == 0)
-                    continue;
-                
-                snapshot[cursor++] = _sessions[i];
-                if (cursor >= activeCount) break;
-            }
-            return snapshot;
-        }
+        return _activeSnapshot;
     }
 
     public Session CreateSession(EngineCore engine, TcpNetworkSession ns, ReadWriteBuffer readWriteBuffer)
@@ -67,7 +53,8 @@ public sealed class SessionManager
                 return null;
             }
       
-            _sessions[index] = session;
+            Volatile.Write(ref _sessions[index], session);
+            UpdateSnapshot();
             return session;
         }
     }
@@ -77,12 +64,10 @@ public sealed class SessionManager
         var index = (int)(sessionId & 0xFFFFFFFF);
         if (index < 0 || index >= _maxCapacity) return null;
 
-        lock (_lock)
-        {
-            var session = _sessions[index];
-            if (session != null && session.SessionId == sessionId)
-                return session;
-        }
+        var session = Volatile.Read(ref _sessions[index]);
+        
+        if (session != null && session.SessionId == sessionId)
+            return session;
         
         return null;
     }
@@ -95,12 +80,37 @@ public sealed class SessionManager
             if (index < 0 || index >= _maxCapacity) return;
             
             var session = _sessions[index];
-            if (session == null) return;
-
-            session.Dispose();
+            if (session == null || session.SessionId != sessionId) return;
             
-            _sessions[index] = null;
+            Volatile.Write(ref _sessions[index], null);
+            
+            session.Dispose();
             _freeIndices.Push(index);
+            
+            UpdateSnapshot();
         }
+    }
+
+    private void UpdateSnapshot()
+    {
+        var activeCount = _maxCapacity - _freeIndices.Count;
+        if (activeCount <= 0)
+        {
+            _activeSnapshot = [];
+            return;
+        }
+        
+        var newSnapshot = new Session[activeCount];
+        var cursor = 0;
+        for (var i = 0; i < _maxCapacity; i++)
+        {
+            if (_sessions[i] == null || _sessions[i].SessionId == 0)
+                continue;
+            
+            newSnapshot[cursor++] = _sessions[i];
+            if (cursor >= activeCount) break;
+        }
+        
+        _activeSnapshot = newSnapshot;
     }
 }
