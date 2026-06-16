@@ -16,6 +16,7 @@ public class UdpNetworkSession : NetworkSessionBase, IUnreliableSender
     private int _inSending; // 0: Idle, 1: Sending
     private SocketAsyncEventArgs _sendEventArgs;
     private volatile UdpRouteContext _routeContext;
+    private uint _nextFragId;
 
     private readonly ConcurrentQueue<(BufferOwner Buffer, int Length)> _sendQueue = new();
 
@@ -51,7 +52,9 @@ public class UdpNetworkSession : NetworkSessionBase, IUnreliableSender
         else
         {
             // 패킷 파편화
-            if (!message.TryGetFragments(_maxFragmentSize, out var fragments)) return false;
+            var fragId = Interlocked.Increment(ref _nextFragId);
+            if (!message.TryGetFragments(fragId, _maxFragmentSize, out var fragments)) return false;
+            
             foreach (var (buffer, length) in fragments)
             {
                 _sendQueue.Enqueue((buffer, length));

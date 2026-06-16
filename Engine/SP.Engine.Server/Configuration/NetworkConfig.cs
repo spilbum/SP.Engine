@@ -20,10 +20,6 @@ public sealed record NetworkConfig
     public int MaxPayloadLength { get; init; } = 64 * 1024;
 
     /// <summary>
-    /// 세션당 동시 전송 가능 큐 크기
-    /// </summary>
-    public int SendingQueueSize { get; init; } = 5;
-    /// <summary>
     /// Keep-alive 사용 여부
     /// </summary>
     public bool EnableKeepAlive { get; init; } = true;

@@ -21,6 +21,7 @@ namespace SP.Engine.Client
         private IPEndPoint _remoteEndPoint;
         private Socket _socket;
         private readonly NetPeerBase _netPeer;
+        private int _nextFragId;
         
         private readonly ConcurrentQueue<(BufferOwner Buffer, int Length)> _sendQueue = new ConcurrentQueue<(BufferOwner Buffer, int Length)>();
         
@@ -56,7 +57,8 @@ namespace SP.Engine.Client
             else
             {
                 // 패킷 파편화
-                if (!message.TryGetFragments(_maxFragmentSize, out var fragments))
+                var fragId = (uint)Interlocked.Increment(ref _nextFragId);
+                if (!message.TryGetFragments(fragId, _maxFragmentSize, out var fragments))
                 {
                     _netPeer.Logger.Warn("NetPeer {0} UDP TryGetFragments failed.", _netPeer.PeerId);
                     return false;

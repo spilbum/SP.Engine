@@ -1,7 +1,0 @@
-{
-  "Server": {
-    "Group" : "Live",
-    "Name": "Game",
-    "Port": 10000
-  }
-}

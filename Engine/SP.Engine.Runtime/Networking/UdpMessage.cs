@@ -35,7 +35,7 @@ namespace SP.Engine.Runtime.Networking
             return true;
         }
 
-        public bool TryGetFragments(int maxFragmentSize, out List<(BufferOwner Buffer, int Length)> fragments)
+        public bool TryGetFragments(uint fragId, int maxFragmentSize, out List<(BufferOwner Buffer, int Length)> fragments)
         {
             fragments = null;
             if (!TryGetBuffer(out var memory)) return false;
@@ -46,8 +46,7 @@ namespace SP.Engine.Runtime.Networking
             if (maxPayloadPerFrag <= 0) return false;
 
             var payloadSpan = memory.Span.Slice(headerSize, PayloadLength);
-            var totalFragCount = (byte)Math.Ceiling((double)payloadSpan.Length / maxPayloadPerFrag);
-            var fragId = unchecked((uint)Guid.NewGuid().GetHashCode());
+            var totalFragCount = (byte)((payloadSpan.Length + maxPayloadPerFrag - 1) / maxPayloadPerFrag);
             
             fragments = new List<(BufferOwner Buffer, int Length)>();
             

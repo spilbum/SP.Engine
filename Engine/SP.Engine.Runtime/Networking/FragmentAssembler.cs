@@ -11,6 +11,7 @@ namespace SP.Engine.Runtime.Networking
         private const int MaxAllowedFragments = 64;
         private readonly BufferOwner[] _fragmentBuffers;
         private readonly int[] _fragmentLengths;
+        private readonly int _maxPayloadLength;
         private int _totalPayloadLength;
         private int _disposed; // 0: alive, 1: disposed
         
@@ -19,12 +20,13 @@ namespace SP.Engine.Runtime.Networking
         public byte TotalExpectedCount { get; }
         public uint FragId { get; }
 
-        public FragmentContext(uint fragId, byte totalExpectedCount)
+        public FragmentContext(uint fragId, byte totalExpectedCount, int maxPayloadLength)
         {
             if (totalExpectedCount > MaxAllowedFragments) throw new ArgumentOutOfRangeException(nameof(totalExpectedCount));
             
             FragId = fragId;
             TotalExpectedCount = totalExpectedCount;
+            _maxPayloadLength = maxPayloadLength;
             _fragmentBuffers = ArrayPool<BufferOwner>.Shared.Rent(totalExpectedCount);
             _fragmentLengths = ArrayPool<int>.Shared.Rent(totalExpectedCount);
             
@@ -37,14 +39,15 @@ namespace SP.Engine.Runtime.Networking
             if (Volatile.Read(ref _disposed) != 0) return false;
             if (index >= TotalExpectedCount || _fragmentBuffers[index] != null) return false;
 
+            if (_totalPayloadLength + span.Length > _maxPayloadLength) return false;
+            
             var bufferOwner = BufferOwnerPool.Rent(span.Length);
             span.CopyTo(bufferOwner.Memory.Span);
 
             _fragmentBuffers[index] = bufferOwner;
             _fragmentLengths[index] = span.Length;
-            Interlocked.Add(ref _totalPayloadLength, span.Length);
+            _totalPayloadLength += span.Length;
             ReceivedCount++;
-            
             return true;
         }
 
@@ -104,19 +107,23 @@ namespace SP.Engine.Runtime.Networking
         private readonly ConcurrentDictionary<uint, FragmentContext> _contexts =
             new ConcurrentDictionary<uint, FragmentContext>();
 
+        private int _pendingContextCount;
+
         private readonly int _cleanupTimeoutSec;
         private readonly int _pendingMessageThreshold;
+        private readonly int _maxPayloadLength;
         private int _disposed;
         
-        public FragmentAssembler(int cleanupTimeoutSec, int pendingMessageThreshold)
+        public FragmentAssembler(int cleanupTimeoutSec, int pendingMessageThreshold, int maxPayloadLength)
         {
             _cleanupTimeoutSec = cleanupTimeoutSec;
             _pendingMessageThreshold = pendingMessageThreshold;
+            _maxPayloadLength = maxPayloadLength;
         }
         
         public void Cleanup(DateTime now)
         {
-            if (_contexts.IsEmpty) return;
+            if (Volatile.Read(ref _pendingContextCount) == 0) return;
 
             var timeout = TimeSpan.FromSeconds(_cleanupTimeoutSec);
             foreach (var (key, state) in _contexts)
@@ -127,6 +134,7 @@ namespace SP.Engine.Runtime.Networking
                 {
                     if (_contexts.TryRemove(key, out var expired))
                     {
+                        Interlocked.Decrement(ref _pendingContextCount);
                         expired.Dispose();
                     }   
                 }
@@ -146,9 +154,6 @@ namespace SP.Engine.Runtime.Networking
             {
                 var span = buffer.Memory.Span.Slice(header.HeaderLength, header.PayloadLength);
                 if (!FragmentHeader.TryParse(span, out var fragHeader, out var headerConsumed))
-                    return false;
-
-                if (!_contexts.ContainsKey(fragHeader.FragId) && _contexts.Count >= _pendingMessageThreshold)
                     return false;
                 
                 if (!TryAssemble(fragHeader, span[headerConsumed..], out var bufferOwner, out var totalPayloadLength))
@@ -176,23 +181,38 @@ namespace SP.Engine.Runtime.Networking
             bufferOwner = null;
             totalPayloadLength = 0;
 
-            var context = _contexts.GetOrAdd(
-                fragHeader.FragId, 
-                _ => new FragmentContext(fragHeader.FragId, fragHeader.TotalCount));
+            if (!_contexts.ContainsKey(fragHeader.FragId) && Volatile.Read(ref _pendingContextCount) >= _pendingMessageThreshold)
+                return false;
+
+            if (!_contexts.TryGetValue(fragHeader.FragId, out var context))
+            {
+                context = new FragmentContext(fragHeader.FragId, fragHeader.TotalCount, _maxPayloadLength);
+                if (_contexts.TryAdd(fragHeader.FragId, context))
+                {
+                    Interlocked.Increment(ref _pendingContextCount);
+                }
+                else
+                {
+                    context.Dispose();
+                    _contexts.TryGetValue(fragHeader.FragId, out context);
+                }
+            }
+            
+            if (context == null) return false;
 
             lock (context)
             {
-                if (!_contexts.ContainsKey(fragHeader.FragId))
-                {
-                    return false;
-                }
+                if (!_contexts.ContainsKey(fragHeader.FragId)) return false;
                 
                 if (!context.TryAddFragment(fragHeader.Index, fragData)) return false;
 
                 if (context.ReceivedCount < context.TotalExpectedCount) return false;
 
-                if (!_contexts.TryRemove(fragHeader.FragId, out _)) return true;
-                
+                if (_contexts.TryRemove(fragHeader.FragId, out _))
+                {
+                    Interlocked.Decrement(ref _pendingContextCount);
+                }
+     
                 using (context)
                 {
                     return context.TryMerge(out bufferOwner, out totalPayloadLength);
@@ -207,6 +227,7 @@ namespace SP.Engine.Runtime.Networking
             foreach (var key in _contexts.Keys)
             {
                 if (!_contexts.TryRemove(key, out var context)) continue;
+                Interlocked.Decrement(ref _pendingContextCount);
                 lock (context)
                 {
                     context.Dispose();

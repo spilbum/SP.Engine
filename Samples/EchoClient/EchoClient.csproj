@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\..\Engine\SP.Engine.Client\SP.Engine.Client.csproj" />
+      <ProjectReference Include="..\..\Engine\SP.Engine.Protocol\SP.Engine.Protocol.csproj" />
+      <ProjectReference Include="..\..\Engine\SP.Engine.Runtime\SP.Engine.Runtime.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Compile Include="..\EchoServer\Protocol\C2S.cs">
+        <Link>Protocol\C2S.cs</Link>
+      </Compile>
+      <Compile Include="..\EchoServer\Protocol\S2C.cs">
+        <Link>Protocol\S2C.cs</Link>
+      </Compile>
+    </ItemGroup>
+
+</Project>

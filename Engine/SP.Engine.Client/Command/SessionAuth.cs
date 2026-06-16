@@ -44,7 +44,8 @@ namespace SP.Engine.Client.Command
                     context.SetupFragmentAssembler(
                         protocol.FragmentAssemblerCleanupIntervalSec,
                         protocol.FragmentAssemblerCleanupTimeoutSec,
-                        protocol.FragmentAssemblerPendingMessageThreshold);
+                        protocol.FragmentAssemblerPendingMessageThreshold,
+                        protocol.MaxPayloadLength);
                 }
             }
             

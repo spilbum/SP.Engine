@@ -159,7 +159,8 @@ public abstract class SessionBase : ICommandContext, IDisposable
                         
                         var assembler = new FragmentAssembler(
                             Config.Network.FragmentAssemblerCleanupPeriodSec,
-                            Config.Network.FragmentAssemblerPendingMessageThreshold);
+                            Config.Network.FragmentAssemblerPendingMessageThreshold,
+                            Config.Network.MaxPayloadLength);
                         Interlocked.Exchange(ref _fragmentAssembler, assembler);
                     
                         Logger.Debug("Successfully initialized UDP Network Session for SessionId={0}", SessionId);

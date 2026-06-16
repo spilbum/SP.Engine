@@ -809,9 +809,6 @@ namespace SP.Engine.Client
                     
                     _udpNetworkSession?.Close();
                     _udpNetworkSession = null;
-
-                    _peerId = 0;
-                    _sessionId = 0;
                     _tcpNetworkSession = null;
 
                     SetState(NetPeerState.Closed);
@@ -960,11 +957,11 @@ namespace SP.Engine.Client
             return true;
         }
 
-        internal void SetupFragmentAssembler(int cleanupIntervalSec, int cleanupTimeoutSec, int pendingMessageThreshold)
+        internal void SetupFragmentAssembler(int cleanupIntervalSec, int cleanupTimeoutSec, int pendingMessageThreshold, int maxPayloadLength)
         {
             if (_fragmentAssembler != null) return;
             StartFragmentAssemblerCleanupTimer(cleanupIntervalSec);
-            _fragmentAssembler = new FragmentAssembler(cleanupTimeoutSec, pendingMessageThreshold);
+            _fragmentAssembler = new FragmentAssembler(cleanupTimeoutSec, pendingMessageThreshold, maxPayloadLength);
         }
 
         internal void HandleRemoteAck(uint remoteAckNumber)

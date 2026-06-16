@@ -21,6 +21,8 @@ public interface IEngine
 {
     string Name { get; }
     ServerState State { get; }
+    bool Start();
+    void Stop();
 }
 
 public abstract class EngineBase : EngineCore, IEngine
@@ -334,7 +336,6 @@ public abstract class EngineBase : EngineCore, IEngine
                 totalTimeMs += Volatile.Read(ref log.TotalExecutionTimeMs);
             }
 
-            var sessions = SessionsSource;
             _perfMonitor?.Tick(this, totalProcessed, totalTimeMs);
         }
         catch (Exception ex)

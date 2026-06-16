@@ -1,0 +1,6 @@
+{
+  "Server": {
+    "Name": "EchoServer",
+    "Port": 10000
+  }
+}
