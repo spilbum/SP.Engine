@@ -79,26 +79,33 @@ public class EchoManager(ILogger logger)
         
         while (IsRunning)
         {
-            if (!_clients.IsEmpty)
+            try
             {
-                Parallel.ForEach(_clients, parallelOptions, client =>
+                if (!_clients.IsEmpty)
                 {
-                    try
+                    Parallel.ForEach(_clients, parallelOptions, client =>
                     {
-                        client.Tick();
-
-                        if (client.IsConnected)
+                        try
                         {
-                            client.ProcessPendingEcho();
+                            client.Tick();
+
+                            if (client.IsConnected)
+                            {
+                                client.ProcessPendingEcho();
+                            }
                         }
-                    }
-                    catch (Exception e)
-                    {
-                        logger.Error($"Tick Error: {e.Message}/r/nStacktrace: {e.StackTrace}");
-                    }
-                });
+                        catch (Exception e)
+                        {
+                            logger.Error($"Tick Error: {e.Message}/r/nStacktrace: {e.StackTrace}");
+                        }
+                    });
+                }
             }
-            
+            catch (Exception ex)
+            {
+                logger.Error("UpdateLoop failed: {0}", ex.Message);
+            }
+
             await Task.Delay(10);
         }
     }
@@ -109,8 +116,7 @@ public class EchoManager(ILogger logger)
     {
         lock (_lock)
         {
-            var targets = _clients.Take(targetCount).ToList();
-            
+            var targets = _clients.Where(c => !c.IsEchoing).Take(targetCount).ToList();
             foreach (var client in targets)
             {
                 client.StartEcho(sendType, period, batchCount);

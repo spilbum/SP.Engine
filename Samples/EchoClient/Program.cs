@@ -31,7 +31,7 @@ internal static class Program
                 await HandleCommandAsync(line);
             }
         }
-        catch (TaskCanceledException)
+        catch (OperationCanceledException)
         {
         }
         catch (Exception ex)

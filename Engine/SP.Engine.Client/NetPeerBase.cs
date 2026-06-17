@@ -11,7 +11,8 @@ using SP.Core.Buffers;
 using SP.Core.Logging;
 using SP.Engine.Client.Command;
 using SP.Engine.Client.Configuration;
-using SP.Engine.Protocol;
+using SP.Engine.Common.Protocol;
+using SP.Engine.Common.Protocol.C2S;
 using SP.Engine.Runtime.Channel;
 using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Compression;
@@ -76,8 +77,8 @@ namespace SP.Engine.Client
         
         private readonly MessageChannelRouter _channelRouter = new MessageChannelRouter();
         private readonly DiffieHellman _diffieHellman = new DiffieHellman(DhKeySize.Bit2048);
-        private readonly Dictionary<ushort, ICommand> _internalCommands = new Dictionary<ushort, ICommand>();
-        private readonly Dictionary<ushort, ICommand> _userCommands = new Dictionary<ushort, ICommand>();
+        private readonly Dictionary<ushort, ICommandHandler> _engineCommands = new Dictionary<ushort, ICommandHandler>();
+        private readonly Dictionary<ushort, ICommandHandler> _appCommands = new Dictionary<ushort, ICommandHandler>();
         private ByteReadWriteBuffer _readWriteBuffer;
         private readonly ConcurrentQueue<IMessage> _messageReceivedQueue = new ConcurrentQueue<IMessage>();
         private Lz4Compressor _compressor;
@@ -278,10 +279,10 @@ namespace SP.Engine.Client
         
         public void SendPing()
         {
-            var ping = new C2SEngineProtocolData.Ping
+            var ping = new Ping
             {
                 SendTimeMs = NetworkTimeMs,
-                RawRttMs = LatencyStats.LastRttMs,
+                RttMs = LatencyStats.LastRttMs,
                 AvgRttMs = LatencyStats.AvgRttMs,
                 JitterMs = LatencyStats.JitterMs,
             };
@@ -314,17 +315,17 @@ namespace SP.Engine.Client
             Logger = logger;
             LatencyStats = new LatencyStats();
             
-            // 내부 프로토콜 핸들러 등록
-            RegisterInternalCommand<SessionAuth>(S2CEngineProtocolId.SessionAuthAck);
-            RegisterInternalCommand<Close>(S2CEngineProtocolId.Close);
-            RegisterInternalCommand<MessageAck>(S2CEngineProtocolId.MessageAck);
-            RegisterInternalCommand<Pong>(S2CEngineProtocolId.Pong);
-            RegisterInternalCommand<UdpHelloAck>(S2CEngineProtocolId.UdpHelloAck);
-            RegisterInternalCommand<UdpHealthCheck>(S2CEngineProtocolId.UdpHealthCheck);
-            RegisterInternalCommand<UdpStatusNotify>(S2CEngineProtocolId.UdpStatusNotify);
+            // 엔진 명령어 등록
+            RegisterEngineCommand<SessionAuthAckHandler>(ProtocolId.S2C.SessionAuthAck);
+            RegisterEngineCommand<CloseCmdHandler>(ProtocolId.S2C.CloseCmd);
+            RegisterEngineCommand<MessageAckHandler>(ProtocolId.S2C.MessageAck);
+            RegisterEngineCommand<PongHandler>(ProtocolId.S2C.Pong);
+            RegisterEngineCommand<UdpHelloAckHandler>(ProtocolId.S2C.UdpHelloAck);
+            RegisterEngineCommand<UdpHealthCheckReqHandler>(ProtocolId.S2C.UdpHealthCheckReq);
+            RegisterEngineCommand<UdpStatusNotifyHandler>(ProtocolId.S2C.UdpStatusNotify);
 
-            // 유저 프로토콜 핸들러 검색 및 등록
-            if (!DiscoverUserCommands(assemblies))
+            // 사용자 명령어 추출
+            if (!DiscoverAppCommands(assemblies))
                 return false;
 
             if (!SetupPolicy(assemblies))
@@ -340,23 +341,23 @@ namespace SP.Engine.Client
             Dispose(false);
         }
 
-        private void RegisterInternalCommand<T>(ushort protocolId) where T : ICommand, new()
-            => _internalCommands[protocolId] = new T();
+        private void RegisterEngineCommand<T>(ushort protocolId) where T : ICommandHandler, new()
+            => _engineCommands[protocolId] = new T();
 
-        private ICommand GetInternalCommand(ushort protocolId)
+        private ICommandHandler GetEngineCommand(ushort protocolId)
         {
-            _internalCommands.TryGetValue(protocolId, out var command);
+            _engineCommands.TryGetValue(protocolId, out var command);
             return command;
         }
         
-        private bool DiscoverUserCommands(Assembly[] assemblies)
+        private bool DiscoverAppCommands(Assembly[] assemblies)
         {
             var targetType = GetType();
             
             foreach (var assembly in assemblies)
             {
                 var types = assembly.GetTypes()
-                    .Where(t => typeof(ICommand).IsAssignableFrom(t) && t.IsClass && !t.IsAbstract)
+                    .Where(t => typeof(ICommandHandler).IsAssignableFrom(t) && t.IsClass && !t.IsAbstract)
                     .ToList();
                 
                 foreach (var t in types)
@@ -368,28 +369,28 @@ namespace SP.Engine.Client
                         continue;
                     }
    
-                    if (!(Activator.CreateInstance(t) is ICommand command)) continue;
+                    if (!(Activator.CreateInstance(t) is ICommandHandler command)) continue;
                     if (targetType != command.ContextType) continue;
-                    if (!_userCommands.TryAdd(attr.Id, command))
+                    if (!_appCommands.TryAdd(attr.Id, command))
                     {
                         Logger.Warn($"Duplicate command: {attr.Id}");
                     }
                 }
             }
 
-            if (_userCommands.Count == 0)
+            if (_appCommands.Count == 0)
             {
                 Logger.Fatal("Command could not be found");
                 return false;
             }
             
-            Logger.Debug("[NetPeer] Discovered '{0}' commands: [{1}]", _userCommands.Count, string.Join(", ", _userCommands.Keys));
+            Logger.Debug("[NetPeer] Discovered '{0}' commands: [{1}]", _appCommands.Count, string.Join(", ", _appCommands.Keys));
             return true;
         }
 
-        private ICommand GetUserCommand(ushort protocolId)
+        private ICommandHandler GetAppCommand(ushort protocolId)
         {
-            _userCommands.TryGetValue(protocolId, out var command);
+            _appCommands.TryGetValue(protocolId, out var command);
             return command;
         }
 
@@ -473,21 +474,21 @@ namespace SP.Engine.Client
 
         private void DispatchCommand(IMessage message)
         {
-            var internalCommand = GetInternalCommand(message.Id);
-            if (internalCommand != null)
+            var engineCommand = GetEngineCommand(message.Id);
+            if (engineCommand != null)
             {
-                internalCommand.Execute(this, message);
+                engineCommand.Execute(this, message);
                 return;
             }
 
-            var command = GetUserCommand(message.Id);
-            if (command == null)
+            var appCommand = GetAppCommand(message.Id);
+            if (appCommand == null)
             {
                 Logger.Warn("Unknown command: {0}", message.Id);
                 return;
             }
 
-            command.Execute(this, message);
+            appCommand.Execute(this, message);
         }
         
         private void FlushPendingMessage()
@@ -678,13 +679,13 @@ namespace SP.Engine.Client
         {
             try
             {
-                var success = InternalSend(new C2SEngineProtocolData.SessionAuthReq
+                var success = InternalSend(new SessionAuthReq
                 {
                     SessionId = _sessionId,
                     PeerId = _peerId,
-                    ClientPublicKey = _diffieHellman.PublicKey,
-                    ClientNextExpectedSeq = _messageProcessor?.NextExpectedSeq ?? 0,
-                    KeySize = _diffieHellman.KeySize,
+                    EncryptPublicKey = _diffieHellman.PublicKey,
+                    EncryptKeySize = _diffieHellman.KeySize,
+                    NextExpectedSeq = _messageProcessor?.NextExpectedSeq ?? 0,
                 });
                 
                 if (!success && _sessionId == 0)
@@ -700,18 +701,18 @@ namespace SP.Engine.Client
 
         private void SendCloseHandshake()
         {
-            if (!InternalSend(new C2SEngineProtocolData.Close()))
+            if (!InternalSend(new CloseCmd()))
             {
                 CloseWithoutHandshake();
             }
         }
 
-        private void SendMessageAck(uint ackNumber)
+        private void SendMessageAck(uint nextExpectedSeq)
         {
-            if (!InternalSend(new C2SEngineProtocolData.MessageAck { AckNumber = ackNumber }))
+            if (!InternalSend(new MessageAck { NextExpectedSeq = nextExpectedSeq }))
                 return;
             
-            _lastSentAck = ackNumber;
+            _lastSentAck = nextExpectedSeq;
         }
 
         internal void CloseWithoutHandshake()
@@ -873,7 +874,7 @@ namespace SP.Engine.Client
 
         private void MessageReceived(IMessage message)
         {
-            var command = GetInternalCommand(message.Id);
+            var command = GetEngineCommand(message.Id);
             if (command != null)
             {
                 using (message) command.Execute(this, message);
@@ -886,7 +887,7 @@ namespace SP.Engine.Client
 
         private void SendUdpHandshake()
         {
-            InternalSend(new C2SEngineProtocolData.UdpHelloReq
+            InternalSend(new UdpHelloReq
             {
                 SessionId = _sessionId,
                 PeerId = PeerId,
@@ -964,9 +965,9 @@ namespace SP.Engine.Client
             _fragmentAssembler = new FragmentAssembler(cleanupTimeoutSec, pendingMessageThreshold, maxPayloadLength);
         }
 
-        internal void HandleRemoteAck(uint remoteAckNumber)
+        internal void HandleRemoteAck(uint nextExpectedSeq)
         {
-            _messageProcessor?.AcknowledgeInFlight(remoteAckNumber);
+            _messageProcessor?.AcknowledgeInFlight(nextExpectedSeq);
         }
 
         internal void SessionAuthCompleted(long sessionId, uint peerId)

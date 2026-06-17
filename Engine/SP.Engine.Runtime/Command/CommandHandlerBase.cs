@@ -8,7 +8,7 @@ using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Runtime.Command
 {
-    public abstract class CommandBase<TContext, TProtocol> : ICommand
+    public abstract class CommandHandlerBase<TContext, TProtocol> : ICommandHandler
         where TContext : ICommandContext
         where TProtocol : class, IProtocolData, new()
     {

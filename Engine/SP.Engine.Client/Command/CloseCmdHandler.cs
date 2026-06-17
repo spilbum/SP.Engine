@@ -1,13 +1,14 @@
-using SP.Engine.Protocol;
+using SP.Engine.Common.Protocol;
+using SP.Engine.Common.Protocol.S2C;
 using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Client.Command
 {
-    [ProtocolCommand(S2CEngineProtocolId.Close)]
-    public class Close : CommandBase<NetPeerBase, S2CEngineProtocolData.Close>
+    [ProtocolCommand(ProtocolId.S2C.CloseCmd)]
+    internal class CloseCmdHandler : CommandHandlerBase<NetPeerBase, CloseCmd>
     {
-        protected override void ExecuteCommand(NetPeerBase context, S2CEngineProtocolData.Close protocol)
+        protected override void ExecuteCommand(NetPeerBase context, CloseCmd protocol)
         {
             if (context.State == NetPeerState.Closing)
             {

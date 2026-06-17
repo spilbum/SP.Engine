@@ -1,6 +1,6 @@
 namespace SP.Engine.Runtime
 {
-    public enum UdpHandshakeResult
+    public enum UdpHelloResult
     {
         Ok,
         InternalError,

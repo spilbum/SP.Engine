@@ -1,19 +1,7 @@
-﻿using EchoServer.Protocol;
-using SP.Engine.Server;
+﻿using SP.Engine.Server;
 using Exception = System.Exception;
 
 namespace EchoServer;
-
-public struct ServerConfig
-{
-    public string Name { get; set; }
-    public int Port { get; set; }
-}
-
-public struct AppConfig
-{
-    public ServerConfig Server { get; set; }
-}
 
 internal static class Program
 {
@@ -21,19 +9,16 @@ internal static class Program
     
     private static async Task Main(string[] args)
     {
-        var config = JsonConfigLoader.Load<AppConfig>("config.json");
+        if (args.Length < 1 || !int.TryParse(args[0], out var port))
+        {
+            Console.WriteLine("Usage: EchoServer.exe <port>");
+            return;
+        }
+        
         var builder = EngineBuilder<EchoServer>.Create()
-            .SetName(config.Server.Name)
-            .Listen(config.Server.Port)
-            .Listen(20000, mode: SocketMode.Udp)
-            .ConfigureNetwork(network => network with
-            {
-
-            })
-            .ConfigureSession(session => session with
-            {
-
-            });
+            .SetName(nameof(EchoServer))
+            .Listen(port)
+            .Listen(20000, mode: SocketMode.Udp);
 
         Console.CancelKeyPress += OnCancelKeyPress;
 

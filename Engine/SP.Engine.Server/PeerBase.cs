@@ -56,7 +56,6 @@ public abstract class PeerBase : IPeer, IDisposable
     private Lz4Compressor _compressor;
     private AesGcmEncryptor _encryptor;
     private Session _session;
-    private readonly ReliableMessageProcessor _messageProcessor;
     private int _stateCode = PeerStateConst.NotAuthenticated;
     private uint _lastSentAck = 1;
     private DateTime _lastAckTime;
@@ -66,6 +65,8 @@ public abstract class PeerBase : IPeer, IDisposable
     private int _isSending;
     private readonly ConcurrentQueue<IProtocolData> _sendQueue = new();
     
+    internal ReliableMessageProcessor MessageProcessor { get; }
+
     protected PeerBase(PeerKind kind, Session session)
     {
         PeerId = PeerIdGenerator.Generate();
@@ -77,7 +78,7 @@ public abstract class PeerBase : IPeer, IDisposable
         var config = session.Config.Network;
         _compressor = new Lz4Compressor(config.MaxPayloadLength);
 
-        _messageProcessor = ReliableMessageProcessor.CreateBuilder()
+        MessageProcessor = ReliableMessageProcessor.CreateBuilder()
             .SetRetransmitPolicy(config.ReliableMaxRetransmitCount, config.ReliableInitialRetransmitTimeoutMs)
             .SetAckPolicy(config.ReliableMaxAckDelayMs, config.ReliableAckFrequency)
             .SetMaxOutOfOrderCount(config.ReliableMaxOutOfOrderCount)
@@ -104,7 +105,7 @@ public abstract class PeerBase : IPeer, IDisposable
         _compressor = other._compressor;
         other._compressor = null;
         
-        _messageProcessor = other._messageProcessor;
+        MessageProcessor = other.MessageProcessor;
         _session = other._session;
         _session.Peer = this;
     }
@@ -206,14 +207,14 @@ public abstract class PeerBase : IPeer, IDisposable
 
                 if (peer.IsConnected)
                 {
-                    if (peer._messageProcessor.RegisterInFlight((TcpMessage)message, out var inFlightMessage))
+                    if (peer.MessageProcessor.RegisterInFlight((TcpMessage)message, out var inFlightMessage))
                     {
                         session.TrySend(channel, inFlightMessage);
                         return;
                     }
                 }
                 
-                peer._messageProcessor.EnqueuePendingMessage((TcpMessage)message);
+                peer.MessageProcessor.EnqueuePendingMessage((TcpMessage)message);
             }
             else
             {
@@ -250,7 +251,7 @@ public abstract class PeerBase : IPeer, IDisposable
                 PeerIdGenerator.Free(PeerId);
             
             _diffieHellman?.Dispose();
-            _messageProcessor.Dispose();
+            MessageProcessor.Dispose();
         }
 
         _disposed = true;
@@ -271,7 +272,7 @@ public abstract class PeerBase : IPeer, IDisposable
         
         try
         {
-            var failed = _messageProcessor.PrepareRetransmissions(_retriesCache);
+            var failed = MessageProcessor.PrepareRetransmissions(_retriesCache);
             if (failed != null)
             {
                 Logger.Warn("Retransmission exhausted. PeerId: {0}, Failed Seq: {1}, ProtocolId: {2}",
@@ -296,14 +297,14 @@ public abstract class PeerBase : IPeer, IDisposable
     {
         if (!IsConnected) return;
         
-        var expectedSeq = _messageProcessor.NextExpectedSeq;
+        var expectedSeq = MessageProcessor.NextExpectedSeq;
         if (expectedSeq <= _lastSentAck) return;
         
         var nowUtc = DateTime.UtcNow;
         var elapsedMs = (nowUtc - _lastAckTime).TotalMilliseconds;
         var pendingCount = expectedSeq - _lastSentAck;
 
-        if (elapsedMs < _messageProcessor.MaxAckDelayMs && pendingCount < _messageProcessor.AckFrequency)
+        if (elapsedMs < MessageProcessor.MaxAckDelayMs && pendingCount < MessageProcessor.AckFrequency)
             return;
 
         _lastAckTime = nowUtc;
@@ -313,19 +314,19 @@ public abstract class PeerBase : IPeer, IDisposable
 
     internal void RecordPingData(double rttMs, double avgRttMs, double jitterMs)
     {
-        _messageProcessor.AddRtoSample(rttMs);
+        MessageProcessor.AddRtoSample(rttMs);
         AvgRTTMs = avgRttMs;
         LatencyJitterMs = jitterMs;
     }
 
-    internal void HandleRemoteAck(uint remoteAckNumber)
+    internal void HandleRemoteAck(uint nextExpectedSeq)
     {
-        _messageProcessor.AcknowledgeInFlight(remoteAckNumber);   
+        MessageProcessor.AcknowledgeInFlight(nextExpectedSeq);   
     }
 
     internal ReceiveIngestResult ReceiveIngestMessage(TcpMessage message, List<TcpMessage> destinationList)
     {
-        return _messageProcessor.ReceiveIngestMessage(message, destinationList);
+        return MessageProcessor.ReceiveIngestMessage(message, destinationList);
     }
 
     internal void JoinServer()
@@ -343,7 +344,7 @@ public abstract class PeerBase : IPeer, IDisposable
     internal void Offline(CloseReason reason)
     {
         Interlocked.Exchange(ref _stateCode, PeerStateConst.Offline);
-        _messageProcessor.ResetInFlightMessages();
+        MessageProcessor.ResetInFlightMessages();
         OnOffline(reason);
     }
     
@@ -359,7 +360,7 @@ public abstract class PeerBase : IPeer, IDisposable
         Interlocked.Exchange(ref _stateCode, PeerStateConst.Closed);
         PeerIdGenerator.Free(PeerId);
         PeerId = 0;
-        _messageProcessor.Dispose();
+        MessageProcessor.Dispose();
         _diffieHellman?.Dispose();
         _session.Peer = null;
         OnLeaveServer(reason);
@@ -369,10 +370,10 @@ public abstract class PeerBase : IPeer, IDisposable
     {
         if (!IsConnected) return;
 
-        while (_messageProcessor.TryPeekPendingMessage(out var message))
+        while (MessageProcessor.TryPeekPendingMessage(out var message))
         {
-            if (!_messageProcessor.RegisterInFlight(message, out var inFlightMessage)) break;
-            _messageProcessor.DequeuePendingMessage();
+            if (!MessageProcessor.RegisterInFlight(message, out var inFlightMessage)) break;
+            MessageProcessor.DequeuePendingMessage();
             _session.TrySend(ChannelKind.Reliable, inFlightMessage);
             message.Dispose();
         }

@@ -1,5 +1,5 @@
-using System;
-using SP.Engine.Protocol;
+using SP.Engine.Common.Protocol;
+using SP.Engine.Common.Protocol.S2C;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Networking;
@@ -7,10 +7,10 @@ using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Client.Command
 {
-    [ProtocolCommand(S2CEngineProtocolId.SessionAuthAck)]
-    public class SessionAuth : CommandBase<NetPeerBase, S2CEngineProtocolData.SessionAuthAck>
+    [ProtocolCommand(ProtocolId.S2C.SessionAuthAck)]
+    internal class SessionAuthAckHandler : CommandHandlerBase<NetPeerBase, SessionAuthAck>
     {
-        protected override void ExecuteCommand(NetPeerBase context, S2CEngineProtocolData.SessionAuthAck protocol)
+        protected override void ExecuteCommand(NetPeerBase context, SessionAuthAck protocol)
         {
             if (protocol.Result != SessionAuthResult.Ok)
             {
@@ -32,7 +32,7 @@ namespace SP.Engine.Client.Command
                 context.SetReliableMessageProcessor(processor);
             }
             
-            if (protocol.UseEncrypt) context.SetupEncryptor(protocol.ServerPublicKey);
+            if (protocol.UseEncrypt) context.SetupEncryptor(protocol.EncryptPublicKey);
             if (protocol.UseCompress) context.SetupCompressor(protocol.MaxPayloadLength);
             context.SetupPolicy(protocol.UseEncrypt, protocol.UseCompress, protocol.CompressionThreshold);
             context.SetMaxPayloadLength(protocol.MaxPayloadLength);
@@ -49,7 +49,7 @@ namespace SP.Engine.Client.Command
                 }
             }
             
-            context.HandleRemoteAck(protocol.ServerNextExpectedSeq);
+            context.HandleRemoteAck(protocol.NextExpectedSeq);
             context.SessionAuthCompleted(protocol.SessionId, protocol.PeerId);
         }
     }

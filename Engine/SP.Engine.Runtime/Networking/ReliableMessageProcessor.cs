@@ -162,16 +162,16 @@ namespace SP.Engine.Runtime.Networking
             return true;   
         }
 
-        public void Acknowledge(uint remoteAckNumber)
+        public void Acknowledge(uint nextExpectedSeq)
         {
             if (Volatile.Read(ref _disposed) == 1) return;
 
             var unaSeq = Volatile.Read(ref _sendUnaSeq);
-            if ((int)(remoteAckNumber - unaSeq) <= 0) return;
+            if ((int)(nextExpectedSeq - unaSeq) <= 0) return;
 
             lock (_lock)
             {
-                for (var seq = unaSeq; seq != remoteAckNumber; seq++)
+                for (var seq = unaSeq; seq != nextExpectedSeq; seq++)
                 {
                     var index = (int)(seq & _mask);
                     var tracker = _windowSlots[index];
@@ -182,7 +182,7 @@ namespace SP.Engine.Runtime.Networking
                     _pool.Return(tracker); 
                 }
                 
-                Volatile.Write(ref _sendUnaSeq, remoteAckNumber);
+                Volatile.Write(ref _sendUnaSeq, nextExpectedSeq);
             }
         }
 
@@ -437,8 +437,8 @@ namespace SP.Engine.Runtime.Networking
         public bool RegisterInFlight(TcpMessage message, out TcpMessage inFlightMessage)
             => _reliableSendWindow.TryPush(message, out inFlightMessage);
 
-        public void AcknowledgeInFlight(uint remoteAckNumber)
-            => _reliableSendWindow.Acknowledge(remoteAckNumber);
+        public void AcknowledgeInFlight(uint nextExpectedSeq)
+            => _reliableSendWindow.Acknowledge(nextExpectedSeq);
 
         public TcpMessage PrepareRetransmissions(List<TcpMessage> destinationList)
             => _reliableSendWindow.PrepareRetransmissions(_rtoEstimator, destinationList);

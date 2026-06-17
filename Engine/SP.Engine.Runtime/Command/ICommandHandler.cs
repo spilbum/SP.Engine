@@ -3,7 +3,7 @@ using SP.Engine.Runtime.Networking;
 
 namespace SP.Engine.Runtime.Command
 {
-    public interface ICommand
+    public interface ICommandHandler
     {
         string Name { get; }
         Type ContextType { get; }

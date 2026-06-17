@@ -25,6 +25,6 @@
     <ItemGroup>
         <ProjectReference Include="..\..\Core\SP.Core\SP.Core.csproj"/>
         <ProjectReference Include="..\SP.Engine.Client\SP.Engine.Client.csproj"/>
-        <ProjectReference Include="..\SP.Engine.Protocol\SP.Engine.Protocol.csproj"/>
+        <ProjectReference Include="..\SP.Engine.Common\SP.Engine.Common.csproj" />
     </ItemGroup>
 </Project>

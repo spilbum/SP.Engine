@@ -6,7 +6,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using SP.Core.Fiber;
-using SP.Engine.Protocol;
+using SP.Engine.Common.Protocol;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Networking;
@@ -31,8 +31,8 @@ public abstract class EngineBase : EngineCore, IEngine
     private static long UtcNowMs => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     internal static uint NetworkTimeMs => (uint)(UtcNowMs - _baseUnixMs);
     
-    private readonly Dictionary<ushort, ICommand> _userCommands = new();
-    private readonly Dictionary<ushort, ICommand> _internalCommands = new();
+    private readonly Dictionary<ushort, ICommandHandler> _appCommands = new();
+    private readonly Dictionary<ushort, ICommandHandler> _engineCommands = new();
     private readonly List<ConnectorFiber> _connectorFibers = [];
     private ThreadFiber[] _logicFibers;
     private List<PeerBase>[] _shardPeers;
@@ -381,17 +381,17 @@ public abstract class EngineBase : EngineCore, IEngine
         try
         {
             // 엔진 명령어 등록
-            RegisterInternalCommand<SessionAuth>(C2SEngineProtocolId.SessionAuthReq);
-            RegisterInternalCommand<Close>(C2SEngineProtocolId.Close);
-            RegisterInternalCommand<Ping>(C2SEngineProtocolId.Ping);
-            RegisterInternalCommand<MessageAck>(C2SEngineProtocolId.MessageAck);
-            RegisterInternalCommand<UdpHelloReq>(C2SEngineProtocolId.UdpHelloReq);
-            RegisterInternalCommand<UdpHealthCheckConfirm>(C2SEngineProtocolId.UdpHealthCheckConfirm);
+            RegisterEngineCommand<SessionAuthReqHandler>(ProtocolId.C2S.SessionAuthReq);
+            RegisterEngineCommand<CloseCmdHandler>(ProtocolId.C2S.CloseCmd);
+            RegisterEngineCommand<PingHandler>(ProtocolId.C2S.Ping);
+            RegisterEngineCommand<MessageAckHandler>(ProtocolId.C2S.MessageAck);
+            RegisterEngineCommand<UdpHelloReqHandler>(ProtocolId.C2S.UdpHelloReq);
+            RegisterEngineCommand<UdpHealthCheckAckHandler>(ProtocolId.C2S.UdpHealthCheckAck);
 
-            // 유저 명령어 추출
+            // 사용자 명령어 추출
             foreach (var assembly in assemblies)
             {
-                DiscoverUserCommands(assembly);    
+                DiscoverAppCommands(assembly);    
             }
             
             return true;
@@ -403,13 +403,13 @@ public abstract class EngineBase : EngineCore, IEngine
         }
     }
 
-    private void RegisterInternalCommand<T>(ushort protocolId) where T : ICommand, new()
-        => _internalCommands[protocolId] = new T();
+    private void RegisterEngineCommand<T>(ushort protocolId) where T : ICommandHandler, new()
+        => _engineCommands[protocolId] = new T();
 
-    private void DiscoverUserCommands(Assembly assembly)
+    private void DiscoverAppCommands(Assembly assembly)
     {
         var commandTypes = assembly.GetTypes()
-            .Where(t => typeof(ICommand).IsAssignableFrom(t) && t.IsClass && !t.IsAbstract)
+            .Where(t => typeof(ICommandHandler).IsAssignableFrom(t) && t.IsClass && !t.IsAbstract)
             .ToList();
         
         var peerTypes = assembly.GetTypes()
@@ -427,26 +427,26 @@ public abstract class EngineBase : EngineCore, IEngine
                 throw new InvalidDataException($"[{t.FullName}] requires {nameof(ProtocolCommandAttribute)}");
             }
   
-            if (Activator.CreateInstance(t) is not ICommand command) continue;
+            if (Activator.CreateInstance(t) is not ICommandHandler command) continue;
             if (!peerTypes.Contains(command.ContextType)) continue;
-            if (!_userCommands.TryAdd(attr.Id, command))
+            if (!_appCommands.TryAdd(attr.Id, command))
             {
                 throw new InvalidDataException($"Duplicate command: {attr.Id}");
             }
         }
 
-        Logger.Debug("[Engine] Discovered '{0}' commands: [{1}]", _userCommands.Count, string.Join(", ", _userCommands.Keys));
+        Logger.Debug("[Engine] Discovered '{0}' commands: [{1}]", _appCommands.Count, string.Join(", ", _appCommands.Keys));
     }
 
-    private ICommand GetInternalCommand(ushort protocolId)
+    private ICommandHandler GetEngineCommand(ushort protocolId)
     {
-        _internalCommands.TryGetValue(protocolId, out var command);
+        _engineCommands.TryGetValue(protocolId, out var command);
         return command;
     }
 
-    private ICommand GetUserCommand(ushort protocolId)
+    private ICommandHandler GetAppCommand(ushort protocolId)
     {
-        _userCommands.TryGetValue(protocolId, out var command);
+        _appCommands.TryGetValue(protocolId, out var command);
         return command;
     }
     
@@ -457,7 +457,7 @@ public abstract class EngineBase : EngineCore, IEngine
         try
         {
             // 내부 명령어 실행
-            var command = GetInternalCommand(message.Id);
+            var command = GetEngineCommand(message.Id);
             if (command != null)
             {
                 command.Execute(session, message);
@@ -482,7 +482,7 @@ public abstract class EngineBase : EngineCore, IEngine
             
             var index = GetShardIndex(peer.PeerId);
             var logicFiber = _logicFibers[index];
-            logicFiber.Enqueue(DispatchUserCommand, this, peer, extracted);
+            logicFiber.Enqueue(DispatchAppCommand, this, peer, extracted);
             
         }
         catch (Exception ex)
@@ -495,7 +495,7 @@ public abstract class EngineBase : EngineCore, IEngine
         }
     }
 
-    private static void DispatchUserCommand(EngineBase engine, PeerBase peer, IMessage message)
+    private static void DispatchAppCommand(EngineBase engine, PeerBase peer, IMessage message)
     {
         try
         {
@@ -511,7 +511,7 @@ public abstract class EngineBase : EngineCore, IEngine
                     {
                         foreach (var ordered in _orderCache)
                         {
-                            using (ordered) ExecuteUserCommand(engine, peer, ordered);
+                            using (ordered) ExecuteAppCommand(engine, peer, ordered);
                         }
                         break;
                     }
@@ -535,7 +535,7 @@ public abstract class EngineBase : EngineCore, IEngine
             }
             else
             {
-                using (message) ExecuteUserCommand(engine, peer, message);
+                using (message) ExecuteAppCommand(engine, peer, message);
             }
         }
         catch (Exception ex)
@@ -544,9 +544,9 @@ public abstract class EngineBase : EngineCore, IEngine
         }
     }
 
-    private static void ExecuteUserCommand(EngineBase engine, PeerBase peer, IMessage message)
+    private static void ExecuteAppCommand(EngineBase engine, PeerBase peer, IMessage message)
     {
-        var command = engine.GetUserCommand(message.Id);
+        var command = engine.GetAppCommand(message.Id);
         if (command == null) return;
 
         var elapsedTicks = command.Execute(peer, message);

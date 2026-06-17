@@ -1,5 +1,7 @@
 using System;
-using SP.Engine.Protocol;
+using SP.Engine.Common.Protocol;
+using SP.Engine.Common.Protocol.C2S;
+using SP.Engine.Common.Protocol.S2C;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Protocol;
@@ -7,12 +9,12 @@ using SP.Engine.Server.Protocol;
 
 namespace SP.Engine.Server.Command;
 
-[ProtocolCommand(C2SEngineProtocolId.SessionAuthReq)]
-internal class SessionAuth : CommandBase<Session, C2SEngineProtocolData.SessionAuthReq>
+[ProtocolCommand(ProtocolId.C2S.SessionAuthReq)]
+internal class SessionAuthReqHandler : CommandHandlerBase<Session, SessionAuthReq>
 {
-    protected override void ExecuteCommand(Session session, C2SEngineProtocolData.SessionAuthReq protocol)
+    protected override void ExecuteCommand(Session session, SessionAuthReq protocol)
     {
-        using var scope = ProtocolScope<S2CEngineProtocolData.SessionAuthAck>.Rent();
+        using var scope = ProtocolScope<SessionAuthAck>.Rent();
         var engine = session.Engine;
 
         if (!session.TryEnterAuthenticating())
@@ -47,20 +49,20 @@ internal class SessionAuth : CommandBase<Session, C2SEngineProtocolData.SessionA
         }
     }
     
-    private static (SessionAuthResult, PeerBase) HandleNewSession(Session session, EngineBase engine, C2SEngineProtocolData.SessionAuthReq req)
+    private static (SessionAuthResult, PeerBase) HandleNewSession(Session session, EngineBase engine, SessionAuthReq req)
     {
         if (session.Peer != null) return (SessionAuthResult.InvalidRequest, null);
 
         if (!engine.NewPeer(session, out var peer)) return (SessionAuthResult.InternalError, null);
         
-        if (!peer.TryKeyExchange(req.KeySize, req.ClientPublicKey))
+        if (!peer.TryKeyExchange(req.EncryptKeySize, req.EncryptPublicKey))
             return (SessionAuthResult.KeyExchangeFailed, null);
 
         engine.JoinPeer(peer);
         return (SessionAuthResult.Ok, peer);
     }
 
-    private static (SessionAuthResult, PeerBase) HandleReconnection(Session session, EngineBase engine, C2SEngineProtocolData.SessionAuthReq req)
+    private static (SessionAuthResult, PeerBase) HandleReconnection(Session session, EngineBase engine, SessionAuthReq req)
     {
         var prevSession = engine.GetSession(req.SessionId);
         PeerBase peer;
@@ -82,7 +84,7 @@ internal class SessionAuth : CommandBase<Session, C2SEngineProtocolData.SessionA
         }
         
         // 클라가 받은 시퀀스 번호로 갱신
-        peer.HandleRemoteAck(req.ClientNextExpectedSeq);
+        peer.HandleRemoteAck(req.NextExpectedSeq);
         
         return engine.ActivatePeer(peer, session) 
             ? (SessionAuthResult.Ok, targetPeer: peer)
@@ -90,11 +92,10 @@ internal class SessionAuth : CommandBase<Session, C2SEngineProtocolData.SessionA
     }
 }
 
-public static class SessionAuthAckExtensions
+internal static class SessionAuthAckExtensions
 {
-    public static void FillSuccess(this S2CEngineProtocolData.SessionAuthAck ack, Session session, PeerBase peer)
+    public static void FillSuccess(this SessionAuthAck ack, Session session, PeerBase peer)
     {
-
         var engine = session.Engine;
         
         ack.SessionId = session.SessionId;
@@ -118,7 +119,7 @@ public static class SessionAuthAckExtensions
         if (config.UseEncrypt)
         {
             ack.UseEncrypt = true;
-            ack.ServerPublicKey = peer.LocalPublicKey;
+            ack.EncryptPublicKey = peer.LocalPublicKey;
         }
 
         if (config.UseCompress)
@@ -126,5 +127,7 @@ public static class SessionAuthAckExtensions
             ack.UseCompress = true;
             ack.CompressionThreshold = config.CompressionThreshold;
         }
+
+        ack.NextExpectedSeq = peer.MessageProcessor.NextExpectedSeq;
     }
 }

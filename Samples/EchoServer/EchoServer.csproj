@@ -17,9 +17,10 @@
 
     <ItemGroup>
       <ProjectReference Include="..\..\Core\SP.Core\SP.Core.csproj" />
-      <ProjectReference Include="..\..\Engine\SP.Engine.Protocol\SP.Engine.Protocol.csproj" />
+      <ProjectReference Include="..\..\Engine\SP.Engine.Common\SP.Engine.Common.csproj" />
       <ProjectReference Include="..\..\Engine\SP.Engine.Runtime\SP.Engine.Runtime.csproj" />
       <ProjectReference Include="..\..\Engine\SP.Engine.Server\SP.Engine.Server.csproj" />
+      <ProjectReference Include="..\Common\Common.csproj" />
     </ItemGroup>
 
     <ItemGroup>

@@ -1,4 +1,4 @@
-using EchoServer.Protocol;
+using Common.Protocol.C2S;
 using SP.Engine.Client;
 
 namespace EchoClient;
@@ -9,6 +9,8 @@ public class EchoClient : NetPeerBase
     private int _pendingCount;
     private int _batchCount;
     private string? _sendType;
+    
+    public bool IsEchoing { get; private set; }
 
     public EchoClient()
     {
@@ -47,16 +49,27 @@ public class EchoClient : NetPeerBase
     
     public void StartEcho(string type, int period, int batchCount)
     {
+        if (IsEchoing) return;
+        
+        IsEchoing = true;
         _sendType = type;
         _batchCount = batchCount;
-        _cts ??= new CancellationTokenSource();
+        _cts = new CancellationTokenSource();
         _ = Task.Run(() => EchoScheduler(period, _cts.Token));
     }
 
     public void StopEcho()
     {
-        _cts?.Cancel();
-        _cts = null;
+        if (!IsEchoing) return;
+        IsEchoing = false;
+        
+        if (_cts != null)
+        {
+            _cts.Cancel();
+            _cts.Dispose();
+            _cts = null;
+        }
+
         _pendingCount = 0;
     }
 
@@ -71,6 +84,10 @@ public class EchoClient : NetPeerBase
             
             if (period > 0) 
                 await Task.Delay(period, ct);
+            else
+            {
+                await Task.Yield();
+            }
         }
     }
 
@@ -100,7 +117,7 @@ public class EchoClient : NetPeerBase
 
     private void SendTcp(int bytes)
     {
-        Send(new C2S_TcpEchoReq
+        Send(new TcpEchoReq
         {
             SentTicks = DateTime.UtcNow.Ticks,
             Data = GetRandomBytes(bytes)
@@ -109,7 +126,7 @@ public class EchoClient : NetPeerBase
 
     private void SendUdp(int bytes)
     {
-        Send(new C2S_UdpEchoReq
+        Send(new UdpEchoReq
         {
             SentTicks = DateTime.UtcNow.Ticks,
             Data = GetRandomBytes(bytes)

@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Threading;
-using SP.Engine.Protocol;
+using SP.Engine.Common.Protocol.S2C;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Channel;
 using SP.Engine.Runtime.Networking;
@@ -65,7 +65,7 @@ public sealed class Session(long sessionId) : SessionBase(sessionId)
 
     internal void SendUdpStatusNotify(bool enabled)
     {
-        using var scope = ProtocolScope<S2CEngineProtocolData.UdpStatusNotify>.Rent();
+        using var scope = ProtocolScope<UdpStatusNotify>.Rent();
         scope.Protocol.IsEnabled = enabled;
         InternalSend(scope.Protocol);
     }
@@ -73,7 +73,7 @@ public sealed class Session(long sessionId) : SessionBase(sessionId)
     private void SendUdpHealthCheck()
     {
         _lastUdpCheckTimeTicks = DateTime.UtcNow.Ticks;
-        using var scope = ProtocolScope<S2CEngineProtocolData.UdpHealthCheck>.Rent();
+        using var scope = ProtocolScope<UdpHealthCheckReq>.Rent();
         InternalSend(scope.Protocol);
     }
 
@@ -145,18 +145,18 @@ public sealed class Session(long sessionId) : SessionBase(sessionId)
         }
     }
 
-    internal void SendPong(uint clientSendTimeMs)
+    internal void SendPong(uint sentTimeMs)
     {
-        using var scope = ProtocolScope<S2CEngineProtocolData.Pong>.Rent();
-        scope.Protocol.ClientSendTimeMs = clientSendTimeMs;
+        using var scope = ProtocolScope<Pong>.Rent();
+        scope.Protocol.SentTimeMs = sentTimeMs;
         scope.Protocol.ServerTimeMs = EngineBase.NetworkTimeMs;  
         InternalSend(scope.Protocol);
     }
 
-    internal void SendMessageAck(uint ackNumber)
+    internal void SendMessageAck(uint nextExpectedSeq)
     {
-        using var scope = ProtocolScope<S2CEngineProtocolData.MessageAck>.Rent();
-        scope.Protocol.AckNumber = ackNumber;
+        using var scope = ProtocolScope<MessageAck>.Rent();
+        scope.Protocol.NextExpectedSeq = nextExpectedSeq;
         InternalSend(scope.Protocol);
     }
 
@@ -193,7 +193,7 @@ public sealed class Session(long sessionId) : SessionBase(sessionId)
     
     internal void SendClose()
     {
-        using var scope = ProtocolScope<S2CEngineProtocolData.Close>.Rent();
+        using var scope = ProtocolScope<CloseCmd>.Rent();
         InternalSend(scope.Protocol);
     }
 

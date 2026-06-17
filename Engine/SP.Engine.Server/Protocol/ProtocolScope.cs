@@ -1,6 +1,4 @@
 using System.Runtime.CompilerServices;
-using SP.Core;
-using SP.Core.Logging;
 using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Server.Protocol;
@@ -13,9 +11,8 @@ public readonly ref struct ProtocolScope<T>(T protocol, bool isPooled) where T :
     public readonly T Protocol = protocol;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static ProtocolScope<T> Rent(ILogger logger = null)
+    public static ProtocolScope<T> Rent()
     {
-        using var _ = new SlowChecker(50, "new ProtocolScope", logger);
         return new ProtocolScope<T>(ProtocolPool<T>.Rent(), isPooled: true);
     }
 

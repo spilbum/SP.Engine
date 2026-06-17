@@ -1,16 +1,17 @@
-using SP.Engine.Protocol;
+using SP.Engine.Common.Protocol;
+using SP.Engine.Common.Protocol.S2C;
 using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Client.Command
 {
-    [ProtocolCommand(S2CEngineProtocolId.Pong)]
-    public class Pong : CommandBase<NetPeerBase, S2CEngineProtocolData.Pong>
+    [ProtocolCommand(ProtocolId.S2C.Pong)]
+    internal class PongHandler : CommandHandlerBase<NetPeerBase, Pong>
     {
-        protected override void ExecuteCommand(NetPeerBase context, S2CEngineProtocolData.Pong protocol)
+        protected override void ExecuteCommand(NetPeerBase context, Pong protocol)
         {
             var nowMs = NetPeerBase.NetworkTimeMs;
-            var rttMs = nowMs - protocol.ClientSendTimeMs;
+            var rttMs = nowMs - protocol.SentTimeMs;
             context.SetRttMs(rttMs);
 
             var estimatedServerNetworkTime = protocol.ServerTimeMs + rttMs / 2;

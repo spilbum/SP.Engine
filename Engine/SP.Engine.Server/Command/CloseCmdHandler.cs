@@ -1,14 +1,15 @@
-using SP.Engine.Protocol;
+using SP.Engine.Common.Protocol;
+using SP.Engine.Common.Protocol.C2S;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Server.Command;
 
-[ProtocolCommand(C2SEngineProtocolId.Close)]
-internal class Close : CommandBase<Session, C2SEngineProtocolData.Close>
+[ProtocolCommand(ProtocolId.C2S.CloseCmd)]
+internal class CloseCmdHandler : CommandHandlerBase<Session, CloseCmd>
 {
-    protected override void ExecuteCommand(Session session, C2SEngineProtocolData.Close protocol)
+    protected override void ExecuteCommand(Session session, CloseCmd protocol)
     {
         session.Logger.Debug("Received a termination request from the client. isClosing={0}", session.IsClosing);
         

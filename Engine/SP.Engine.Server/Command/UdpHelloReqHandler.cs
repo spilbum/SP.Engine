@@ -1,19 +1,20 @@
 using System;
-using SP.Engine.Protocol;
+using SP.Engine.Common.Protocol;
+using SP.Engine.Common.Protocol.C2S;
+using SP.Engine.Common.Protocol.S2C;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Protocol;
-using SP.Engine.Server.Configuration;
 using SP.Engine.Server.Protocol;
 
 namespace SP.Engine.Server.Command;
 
-[ProtocolCommand(C2SEngineProtocolId.UdpHelloReq)]
-internal class UdpHelloReq : CommandBase<Session, C2SEngineProtocolData.UdpHelloReq>
+[ProtocolCommand(ProtocolId.C2S.UdpHelloReq)]
+internal class UdpHelloReqHandler : CommandHandlerBase<Session, UdpHelloReq>
 {
-    protected override void ExecuteCommand(Session session, C2SEngineProtocolData.UdpHelloReq protocol)
+    protected override void ExecuteCommand(Session session, UdpHelloReq protocol)
     {
-        using var scope = ProtocolScope<S2CEngineProtocolData.UdpHelloAck>.Rent();
+        using var scope = ProtocolScope<UdpHelloAck>.Rent();
 
         try
         {
@@ -30,12 +31,12 @@ internal class UdpHelloReq : CommandBase<Session, C2SEngineProtocolData.UdpHello
             session.StartUdpHealthCheck();
             
             scope.Protocol.Mtu = mtu;
-            scope.Protocol.Result = UdpHandshakeResult.Ok;
+            scope.Protocol.Result = UdpHelloResult.Ok;
             session.Logger.Debug("Session {0} UDP handshake succeeded with MTU: {1}", session.SessionId, mtu);
         }
         catch (Exception ex)
         {
-            scope.Protocol.Result = UdpHandshakeResult.InternalError;
+            scope.Protocol.Result = UdpHelloResult.InternalError;
             session.Logger.Error("Session {0} UDP handshake failed. err: {1}\n{2}", session.SessionId, ex.Message, ex.StackTrace);
         }
         finally
@@ -44,27 +45,27 @@ internal class UdpHelloReq : CommandBase<Session, C2SEngineProtocolData.UdpHello
         }
     }
 
-    private static bool ValidateRequest(Session session, C2SEngineProtocolData.UdpHelloReq req, out UdpHandshakeResult result)
+    private static bool ValidateRequest(Session session, UdpHelloReq req, out UdpHelloResult result)
     {
         if (session.SessionId != req.SessionId || session.Peer?.PeerId != req.PeerId)
         {
-            result = UdpHandshakeResult.InvalidRequest;
+            result = UdpHelloResult.InvalidRequest;
             return false;
         }
 
         if (session.IsClosing || session.IsClosed)
         {
-            result = UdpHandshakeResult.SessionClosed;
+            result = UdpHelloResult.SessionClosed;
             return false;
         }
 
         if (req.Mtu <= 0)
         {
-            result = UdpHandshakeResult.InvalidRequest;
+            result = UdpHelloResult.InvalidRequest;
             return false;
         }
 
-        result = UdpHandshakeResult.Ok;
+        result = UdpHelloResult.Ok;
         return true;
     }
 }
