@@ -9,7 +9,8 @@ using System.Threading.Tasks;
 using SP.Core.Fiber;
 using SP.Core.Logging;
 using SP.Engine.Runtime;
-using SP.Engine.Runtime.Protocol;
+using SP.Engine.Runtime.Networking;
+using SP.Engine.Runtime.Policy;
 using SP.Engine.Server.Configuration;
 using SP.Engine.Server.Logging;
 
@@ -52,6 +53,7 @@ public abstract class EngineCore : ILogContext, IDisposable
     private int _stateCode = ServerStateConst.NotInitialized;
     private bool _disposed;
     
+    public string Category { get; private set; }
     public string Name { get; private set; }
     public ServerState State => (ServerState)_stateCode;
     public Session[] SessionsSource => _sessionManager.GetActiveSnapshot();
@@ -66,13 +68,14 @@ public abstract class EngineCore : ILogContext, IDisposable
         GC.SuppressFinalize(this);
     }
 
-    internal virtual bool InternalInitialize(Assembly[] assemblies, string name, EngineConfig config)
+    internal virtual bool InternalInitialize(Assembly[] assemblies, string category, string name, EngineConfig config)
     {
         if (Interlocked.CompareExchange(ref _stateCode, ServerStateConst.Initializing, ServerStateConst.NotInitialized)
             != ServerStateConst.NotInitialized)
             throw new InvalidOperationException(
                 "The server has been initialized already, you cannot initialize it again!");
 
+        Category = category ?? throw new ArgumentNullException(nameof(category));
         Name = !string.IsNullOrEmpty(name) ? name : $"{GetType().Name}-{Math.Abs(GetHashCode())}";
         Config = config ?? throw new ArgumentNullException(nameof(config));
         

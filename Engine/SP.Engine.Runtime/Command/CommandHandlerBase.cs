@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using SP.Core.Serialization;
 using SP.Engine.Runtime.Networking;
-using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Runtime.Command
 {
@@ -16,16 +15,21 @@ namespace SP.Engine.Runtime.Command
         {
             private const int LocalCapacity = 512;
 
-            [ThreadStatic] private static T[] _localItems;
-            [ThreadStatic] private static int _localCount;
+            [ThreadStatic] private static LocalStack _localStack;
             private static readonly ConcurrentQueue<T> _globalQueue = new ConcurrentQueue<T>();
-            
+
+            private class LocalStack
+            {
+                public T[] Items;
+                public int Count;
+            }
+
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static T Rent()
             {
-                if (_localCount > 0)
+                if (_localStack != null && _localStack.Count > 0)
                 {
-                    return _localItems[--_localCount];
+                    return _localStack.Items[--_localStack.Count];
                 }
             
                 return _globalQueue.TryDequeue(out var instance) ? instance : new T();
@@ -37,12 +41,12 @@ namespace SP.Engine.Runtime.Command
                 if (instance == null) return;
 
                 NetObject<T>.Reset(instance);
-                
-                _localItems ??= new T[LocalCapacity];
+
+                _localStack ??= new LocalStack { Items = new T[LocalCapacity] };
             
-                if (_localCount < LocalCapacity)
+                if (_localStack.Count < LocalCapacity)
                 {
-                    _localItems[_localCount++] = instance;
+                    _localStack.Items[_localStack.Count++] = instance;
                 }
                 else
                 {
@@ -51,8 +55,13 @@ namespace SP.Engine.Runtime.Command
             }
         }
         
-        public string Name => GetType().Name;
+        public string Name { get; }
         public Type ContextType => typeof(TContext);
+
+        protected CommandHandlerBase()
+        {
+            Name = GetType().Name;
+        }
 
         public long Execute(ICommandContext context, IMessage message)
         {
@@ -66,8 +75,7 @@ namespace SP.Engine.Runtime.Command
             }
             catch (Exception ex)
             {
-                context.Logger.Error(ex, "Command '{0}' deserialize filed. Error: {1}\nStackTrace: {2}"
-                    , Name, ex.Message, ex.StackTrace);
+                context.Logger.Error(ex, "Command '{0}' deserialize filed.", Name);
                 
                 ProtocolPool<TProtocol>.Return(protocol);
                 return 0;
@@ -81,8 +89,7 @@ namespace SP.Engine.Runtime.Command
             }
             catch (Exception e)
             {
-                context.Logger.Error(e, "Command '{0}' execution failed in {0}. Error: {1}\nStacktrace: {2}", 
-                    Name, e.Message, e.StackTrace);
+                context.Logger.Error(e, "Command '{0}' execution failed in {0}.", Name);
             }
             finally
             {
@@ -90,7 +97,7 @@ namespace SP.Engine.Runtime.Command
             }
 
             var deltaTicks = Stopwatch.GetTimestamp() - start;
-            return (long)Math.Round((double)(deltaTicks * 1000) / Stopwatch.Frequency);
+            return deltaTicks * 1000 / Stopwatch.Frequency;
         }
 
         protected abstract void ExecuteCommand(TContext context, TProtocol protocol);

@@ -4,12 +4,12 @@ using SP.Engine.Common.Protocol.C2S;
 using SP.Engine.Common.Protocol.S2C;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Command;
-using SP.Engine.Runtime.Protocol;
 using SP.Engine.Server.Protocol;
+using SP.Engine.Server.S2S;
 
 namespace SP.Engine.Server.Command;
 
-[ProtocolCommand(ProtocolId.C2S.SessionAuthReq)]
+[CommandHandler(ProtocolId.C2S.SessionAuthReq)]
 internal class SessionAuthReqHandler : CommandHandlerBase<Session, SessionAuthReq>
 {
     protected override void ExecuteCommand(Session session, SessionAuthReq protocol)
@@ -53,13 +53,27 @@ internal class SessionAuthReqHandler : CommandHandlerBase<Session, SessionAuthRe
     {
         if (session.Peer != null) return (SessionAuthResult.InvalidRequest, null);
 
-        if (!engine.NewPeer(session, out var peer)) return (SessionAuthResult.InternalError, null);
-        
-        if (!peer.TryKeyExchange(req.EncryptKeySize, req.EncryptPublicKey))
-            return (SessionAuthResult.KeyExchangeFailed, null);
-
-        engine.JoinPeer(peer);
-        return (SessionAuthResult.Ok, peer);
+        switch (req.PeerKind)
+        {
+            case PeerKind.User:
+            {
+                if (!engine.NewPeer(session, out var peer)) return (SessionAuthResult.InternalError, null);
+                if (!peer.TryKeyExchange(req.EncryptKeySize, req.EncryptPublicKey))
+                    return (SessionAuthResult.KeyExchangeFailed, null);
+                
+                engine.JoinPeer(peer);
+                return (SessionAuthResult.Ok, peer);
+            }
+            case PeerKind.Server:
+            {
+                var peer = new PendingS2SPeer(session);
+                return peer.TryKeyExchange(req.EncryptKeySize, req.EncryptPublicKey) 
+                    ? (SessionAuthResult.Ok, peer)
+                    : (SessionAuthResult.KeyExchangeFailed, null);
+            }
+            default:
+                return (SessionAuthResult.InvalidRequest, null);
+        }
     }
 
     private static (SessionAuthResult, PeerBase) HandleReconnection(Session session, EngineBase engine, SessionAuthReq req)

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
+using Common.Protocol.EC2ES;
 using SP.Core.Logging;
-using SP.Engine.Client.Configuration;
+using SP.Engine.Client;
 
 namespace EchoClient;
 
@@ -59,6 +60,8 @@ public class EchoManager(ILogger logger)
                 var client = NetPeerBuilder.Create()
                     .WithLogger(logger)
                     .WithAutoPing(true, 2)
+                    .AddAssembly(typeof(TcpEchoReq).Assembly)
+                    .WithEntryAssembly()
                     .Build<EchoClient>();
             
                 client.Connect(_host, _port);

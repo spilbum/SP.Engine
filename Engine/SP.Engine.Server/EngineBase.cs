@@ -10,15 +10,16 @@ using SP.Engine.Common.Protocol;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Networking;
-using SP.Engine.Runtime.Protocol;
 using SP.Engine.Server.Command;
 using SP.Engine.Server.Configuration;
-using SP.Engine.Server.Connector;
+using SP.Engine.Server.S2S;
+using SP.Engine.Server.S2S.Command;
 
 namespace SP.Engine.Server;
 
 public interface IEngine
 {
+    string Category { get; }
     string Name { get; }
     ServerState State { get; }
     bool Start();
@@ -33,15 +34,16 @@ public abstract class EngineBase : EngineCore, IEngine
     
     private readonly Dictionary<ushort, ICommandHandler> _appCommands = new();
     private readonly Dictionary<ushort, ICommandHandler> _engineCommands = new();
-    private readonly List<ConnectorFiber> _connectorFibers = [];
-    private ThreadFiber[] _logicFibers;
-    private List<PeerBase>[] _shardPeers;
-    private IDisposable[] _shardTickTimers;
-    private int _shardMask;
+    private readonly ConcurrentDictionary<string, S2SClientGroup> _s2sClientGroups = [];
     private PeerManager _peerManager;
     private PerfMonitor _perfMonitor;
     private IDisposable _waitingReconnectCheckingTimer;
-    private ThreadFiber _perfMonitorFiber;
+    private ThreadFiber _perfFiber;
+    
+    private ThreadFiber[] _logicFibers;
+    private IDisposable[] _shardTickTimers;
+    private Dictionary<uint, PeerBase>[] _shardPeers;
+    private int _shardMask;
     
     private static readonly ConcurrentBag<ThreadPerfLog> _threadPerfLogs = [];
     [ThreadStatic] private static ThreadPerfLog _threadPerfLog;
@@ -69,21 +71,21 @@ public abstract class EngineBase : EngineCore, IEngine
         return _logicFibers[index].QueuePendingCount;
     }
     
-    internal override bool InternalInitialize(Assembly[] assemblies, string name, EngineConfig config)
+    internal override bool InternalInitialize(Assembly[] assemblies, string category, string name, EngineConfig config)
     {
-        if (!base.InternalInitialize(assemblies, name, config))
+        if (!base.InternalInitialize(assemblies, category, name, config))
             return false;
         
         _peerManager = new PeerManager(config);
-        
+
         if (!SetupCommand(assemblies))
             return false;
 
-        if (!SetupConnectorFiber(assemblies, config.Connectors))
+        if (!SetupS2SClients(assemblies, config.S2SClients))
             return false;
         
-        SetupLogicFibers();
-        
+        SetupLogicFibers(config);
+
         Logger.Info("The server {0} is initialized.", name);
         return true;
     }
@@ -93,8 +95,7 @@ public abstract class EngineBase : EngineCore, IEngine
         if (!base.InternalStart())
             return false;
         
-        foreach (var fiber in _connectorFibers)
-            fiber.Start();
+        foreach (var group in _s2sClientGroups.Values) group.Start();
         
         StartReconnectTimer();
         StartPerfMonitor(Config.Perf);
@@ -115,7 +116,7 @@ public abstract class EngineBase : EngineCore, IEngine
     internal override void InternalStop()
     {
         _perfMonitor?.Dispose();
-        _perfMonitorFiber?.Dispose();
+        _perfFiber?.Dispose();
 
         if (_shardTickTimers != null)
         {
@@ -127,88 +128,123 @@ public abstract class EngineBase : EngineCore, IEngine
             foreach (var fiber in _logicFibers) fiber?.Dispose();
         }
         
-        foreach (var fiber in _connectorFibers) fiber.Dispose();
+        foreach (var group in _s2sClientGroups.Values) group.Dispose();
         StopReconnectTimer();
 
         base.InternalStop();
         OnStopped();
     }
-    
-    protected abstract IPeer CreatePeer(Session session);
-    protected abstract IConnector CreateConnector(string name);
+
+    protected abstract S2SPeerBase OnCreateS2SPeer(Session session, string cateogry);
+    protected abstract PeerBase OnCreatePeer(Session session);
     protected virtual void OnStarted() { }
     protected virtual void OnStopped() { }
     
     public bool Start() => InternalStart();
     public void Stop() => InternalStop();
+
+    protected int FindActivePeers<TPeer>(List<TPeer> destination) where TPeer : PeerBase
+        => _peerManager.FindActivePeers(destination);
     
     protected TPeer GetActivePeer<TPeer>(uint peerId) where TPeer : PeerBase
-        => _peerManager.GetActivePeer(peerId) as TPeer;
+        => _peerManager.GetActivePeer<TPeer>(peerId);
 
-    protected bool TransitionTo(PeerBase newPeer)
-        => _peerManager.TransitionTo(newPeer);
-    
     internal PeerBase GetWaitingPeer(uint peerId)
         => _peerManager.GetWaitingPeer(peerId);
 
+    private ThreadFiber GetLogicFiber(uint peerId)
+    {
+        var index = GetShardIndex(peerId);
+        return _logicFibers[index];
+    }
+
     private int GetShardIndex(uint peerId) => (int)(peerId & _shardMask);
+    
+    private void AddShardPeer(PeerBase peer)
+    {
+        var index = GetShardIndex(peer.PeerId);
+        _shardPeers[index].TryAdd(peer.PeerId, peer);
+    }
+
+    private void RemoveShardPeer(uint peerId)
+    {
+        var index = GetShardIndex(peerId);
+        _shardPeers[index].Remove(peerId);
+    }
 
     internal bool ActivatePeer(PeerBase peer, Session session)
     {
-        // 온라인 전환
         if (!_peerManager.TransitionToOnline(peer.PeerId, session))
             return false;
-
-        RegisterPeerToShard(peer);
+        
+        var fiber = GetLogicFiber(peer.PeerId);
+        fiber.Enqueue(AddShardPeer, peer);
         return true;
     }
 
     internal void JoinPeer(PeerBase peer)
     {
         _peerManager.Register(peer);
-        RegisterPeerToShard(peer);
+        
+        var fiber = GetLogicFiber(peer.PeerId);
+        fiber.Enqueue(AddShardPeer, peer);
     }
 
-    private void RegisterPeerToShard(PeerBase peer)
-    {
-        var index = GetShardIndex(peer.PeerId);
-        var fiber = _logicFibers[index];
-        fiber.Enqueue(_shardPeers[index].Add, peer);
-    }
-
-    private void UnregisterPeerFromShard(PeerBase peer)
-    {
-        var index = GetShardIndex(peer.PeerId);
-        var fiber = _logicFibers[index];
-
-        fiber.Enqueue(() =>
-        {
-            _shardPeers[index].Remove(peer);
-        });
-    }
-    
     internal bool NewPeer(Session session, out PeerBase peer)
     {
-        peer = CreatePeer(session) as PeerBase;
+        peer = OnCreatePeer(session);
         return peer != null;
+    }
+
+    internal S2SConnectResult ConnectS2SPeer(Session session, string category)
+    {
+        if (session.Peer is not PendingS2SPeer pendingPeer) return S2SConnectResult.AlreadyConnected;
+        
+        var newPeer = OnCreateS2SPeer(session, category);
+        if (newPeer == null) return S2SConnectResult.InternalError;
+
+        newPeer.InheritSecurityContext(pendingPeer);
+        pendingPeer.Dispose();
+        
+        session.Peer = newPeer;
+        JoinPeer(newPeer);
+        
+        OnS2SPeerConnected(newPeer);
+        return S2SConnectResult.Success;
+    }
+    
+    protected virtual void OnS2SPeerConnected(S2SPeerBase peer)
+    {
+        
     }
     
     protected override void OnSessionClosed(Session session, CloseReason reason)
     {
         var peer = session.Peer;
-        if (null == peer) return;
-
-        UnregisterPeerFromShard(peer);
-
-        if (session.IsClosing)
-        {
-            // 종료 중이면 즉시 제거
-            _peerManager.RemovePeer(peer.PeerId, reason);
-            return;
-        }
+        if (peer == null) return;
         
-        // 오프라인 전환
-        _peerManager.TransitionToOffline(peer, reason);
+        switch (peer)
+        {
+            case PendingS2SPeer pending:
+                pending.Dispose();
+                break;
+            default:
+            {
+                var fiber = GetLogicFiber(peer.PeerId);
+                fiber.Enqueue(RemoveShardPeer, peer.PeerId);
+
+                if (session.IsClosing)
+                {
+                    // 종료 중이면 즉시 제거
+                    _peerManager.RemovePeer(peer.PeerId, reason);
+                    return;
+                }
+        
+                // 오프라인 전환
+                _peerManager.TransitionToOffline(peer, reason);
+                break;
+            }
+        }
     }
 
     private void StartReconnectTimer()
@@ -235,21 +271,18 @@ public abstract class EngineBase : EngineCore, IEngine
         }
     }
 
-    private void SetupLogicFibers()
+    private void SetupLogicFibers(EngineConfig config)
     {
         var coreCount = Environment.ProcessorCount;
         var fiberCount = 1;
         while (fiberCount < coreCount) fiberCount <<= 1;
-
         fiberCount = Math.Clamp(fiberCount, 4, 32);
-        _shardMask = fiberCount - 1;
         
         _logicFibers = new ThreadFiber[fiberCount];
-        _shardPeers = new List<PeerBase>[fiberCount];
         _shardTickTimers = new IDisposable[fiberCount];
-
-        var interval = TimeSpan.FromMilliseconds(Config.Session.PeerUpdateIntervalMs);
-
+        _shardPeers = new Dictionary<uint, PeerBase>[fiberCount];
+        _shardMask = fiberCount - 1;
+        
         for (var index = 0; index < fiberCount; index++)
         {
             _logicFibers[index] = new ThreadFiber($"LogicFiber-{index:D2}",
@@ -260,27 +293,26 @@ public abstract class EngineBase : EngineCore, IEngine
             _shardPeers[index] = [];
             _shardTickTimers[index] = GlobalScheduler.Schedule(
                 _logicFibers[index],
-                ProcessFiberPeersTick,
+                UpdatePeersTick,
                 index,
                 TimeSpan.Zero,
-                interval);
+                TimeSpan.FromMilliseconds(config.Session.PeerUpdateIntervalMs));
         }
         
-        Logger.Info("LogicFiber pool setup completed. FiberCount: {0}", fiberCount);
+        Logger.Info("LogicFiber setup completed. FiberCount: {0}", fiberCount);
     }
 
-    private void ProcessFiberPeersTick(int index)
+    private void UpdatePeersTick(int index)
     {
-        var peers = _shardPeers[index];
-        for (var i = peers.Count - 1; i >= 0; i--)
+        foreach (var kvp in _shardPeers[index])
         {
             try
             {
-                peers[i].Tick();
+                kvp.Value.Tick();
             }
             catch (Exception ex)
             {
-                Logger.Error(ex, "Peer tick failed in Fiber-{0}: PeerId {1}", index, peers[i].PeerId);
+                Logger.Error(ex, "Failed to update peer: {0}", kvp.Key);
             }
         }
     }
@@ -297,13 +329,13 @@ public abstract class EngineBase : EngineCore, IEngine
     {
         if (!config.MonitorEnabled) return;
 
-        _perfMonitorFiber =  new ThreadFiber("PerfMonitorFiber");
+        _perfFiber = new ThreadFiber("PerfMonitorFiber");
         _perfMonitor = new PerfMonitor();
 
         // 수집 루프 시작
-        _perfMonitorFiber.Enqueue(PerfMonitorTickLoop);
+        _perfFiber.Enqueue(PerfMonitorTickLoop);
         // 로깅 루프 시작
-        _perfMonitorFiber.Enqueue(PerfMonitorLoggingLoop);
+        _perfFiber.Enqueue(PerfMonitorLoggingLoop);
     }
 
     private void PerfMonitorLoggingLoop()
@@ -317,7 +349,7 @@ public abstract class EngineBase : EngineCore, IEngine
         {
             // 다음 루프 예약
             GlobalScheduler.Schedule(
-                _perfMonitorFiber,
+                _perfFiber,
                 PerfMonitorLoggingLoop,
                 TimeSpan.FromSeconds(Config.Perf.LoggingPeriodSec),
                 TimeSpan.Zero);
@@ -346,34 +378,41 @@ public abstract class EngineBase : EngineCore, IEngine
         {
             // 다음 루프 예약
             GlobalScheduler.Schedule(
-                _perfMonitorFiber,
+                _perfFiber,
                 PerfMonitorTickLoop,
                 TimeSpan.FromSeconds(1),
                 TimeSpan.Zero);
         }
     }
 
-    private bool SetupConnectorFiber(Assembly[] assemblies, List<ConnectorConfig> configs)
+    private bool SetupS2SClients(Assembly[] assemblies, List<S2SClientConfig> configs)
     {
         foreach (var config in configs)
         {
-            var fiber = new ThreadFiber($"ConnectorFiber-{config.Name}",
-                onError: ex =>
-                {
-                    Logger.Error(ex.Message);
-                });
-
-            var cf = new ConnectorFiber(
-                fiber, GlobalScheduler, Logger,
-                TimeSpan.FromMilliseconds(Config.Session.ConnectorUpdateIntervalMs));
-
-            if (!cf.RegisterConnector(assemblies, config, CreateConnector(config.Name)))
+            var s2sClient = new S2SClient(this);
+            if (!s2sClient.Initialize(assemblies, config))
+            {
+                Logger.Fatal("S2SClient '{0}' initialize failed.", config.Name);
                 return false;
+            }
+
+            s2sClient.Connected += OnS2SClientConnected;
+            s2sClient.Disconnected += OnS2SClientDisconnected;
             
-            _connectorFibers.Add(cf);
+            var group = _s2sClientGroups.GetOrAdd(s2sClient.Name, name => new S2SClientGroup(name));
+            group.AddClient(s2sClient);
         }
 
         return true;
+    }
+
+    protected virtual void OnS2SClientConnected(S2SClient client)
+    {
+    }
+
+    protected virtual void OnS2SClientDisconnected(S2SClient client)
+    {
+        
     }
 
     private bool SetupCommand(Assembly[] assemblies)
@@ -387,6 +426,7 @@ public abstract class EngineBase : EngineCore, IEngine
             RegisterEngineCommand<MessageAckHandler>(ProtocolId.C2S.MessageAck);
             RegisterEngineCommand<UdpHelloReqHandler>(ProtocolId.C2S.UdpHelloReq);
             RegisterEngineCommand<UdpHealthCheckAckHandler>(ProtocolId.C2S.UdpHealthCheckAck);
+            RegisterEngineCommand<S2SConnectReqHandler>(ProtocolId.S2S.S2SConnectReq);
 
             // 사용자 명령어 추출
             foreach (var assembly in assemblies)
@@ -408,23 +448,23 @@ public abstract class EngineBase : EngineCore, IEngine
 
     private void DiscoverAppCommands(Assembly assembly)
     {
-        var commandTypes = assembly.GetTypes()
+        var commandHandlerTypes = assembly.GetTypes()
             .Where(t => typeof(ICommandHandler).IsAssignableFrom(t) && t.IsClass && !t.IsAbstract)
             .ToList();
         
         var peerTypes = assembly.GetTypes()
-            .Where(t => typeof(IPeer).IsAssignableFrom(t))
+            .Where(t => typeof(IPeer).IsAssignableFrom(t) && t.IsClass && !t.IsAbstract)
             .ToList();
-
-        if (commandTypes.Count == 0 || peerTypes.Count == 0)
+        
+        if (commandHandlerTypes.Count == 0 || peerTypes.Count == 0)
             return;
 
-        foreach (var t in commandTypes)
+        foreach (var t in commandHandlerTypes)
         {
-            var attr = t.GetCustomAttribute<ProtocolCommandAttribute>();
+            var attr = t.GetCustomAttribute<CommandHandlerAttribute>();
             if (attr == null)
             {
-                throw new InvalidDataException($"[{t.FullName}] requires {nameof(ProtocolCommandAttribute)}");
+                throw new InvalidDataException($"[{t.FullName}] requires {nameof(CommandHandlerAttribute)}");
             }
   
             if (Activator.CreateInstance(t) is not ICommandHandler command) continue;
@@ -479,11 +519,9 @@ public abstract class EngineBase : EngineCore, IEngine
                 default:
                     return;
             }
-            
-            var index = GetShardIndex(peer.PeerId);
-            var logicFiber = _logicFibers[index];
-            logicFiber.Enqueue(DispatchAppCommand, this, peer, extracted);
-            
+
+            var fiber = GetLogicFiber(peer.PeerId);
+            fiber.Enqueue(DispatchAppCommand, this, peer, extracted);
         }
         catch (Exception ex)
         {
@@ -517,7 +555,7 @@ public abstract class EngineBase : EngineCore, IEngine
                     }
                     case ReceiveIngestResult.BufferOverflow:
                     {
-                        engine.Logger.Warn("Peer {0} Out-of-order buffer overflow (Msx: {1})"
+                        engine.Logger.Warn("Peer {0} Out-of-order buffer overflow (Max: {1})"
                             , peer.PeerId, engine.Config.Network.ReliableMaxOutOfOrderCount);
 
                         peer.Close(CloseReason.Rejected);
@@ -562,21 +600,17 @@ public abstract class EngineBase : EngineCore, IEngine
         }
     }
 
-    public IEnumerable<IConnector> GetAllConnectors()
+    public IS2SClient GetS2SClient(string name)
     {
-        return _connectorFibers.Select(fiber => fiber.Connector);
+        return _s2sClientGroups.TryGetValue(name, out var group) 
+            ? group.GetAvailableClient() 
+            : null;
     }
-
-    public IEnumerable<IConnector> GetConnectors(string name)
+    
+    public IEnumerable<IS2SClient> GetS2SClientsInGroup(string name)
     {
-        return _connectorFibers.Where(c => c.Name.Equals(name)).Select(c => c.Connector);
-    }
-
-    public IConnector GetConnector(string name, string host, int port)
-    {
-        return _connectorFibers
-            .Where(c => c.Name.Equals(name) && c.Host.Equals(host) && c.Port.Equals(port))
-            .Select(c => c.Connector)
-            .FirstOrDefault();
+        return _s2sClientGroups.TryGetValue(name, out var group)
+            ? group.GetAllActiveClients()
+            : [];
     }
 }

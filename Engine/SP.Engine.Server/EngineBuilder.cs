@@ -7,83 +7,94 @@ namespace SP.Engine.Server;
 
 public class EngineBuilder<TEngine> where TEngine : EngineBase, new()
 {
+    private string _category;
     private string _name = typeof(TEngine).Name;
     private readonly List<Assembly> _assemblies = [];
     private readonly List<ListenerConfig> _listeners = [];
-    private readonly List<ConnectorConfig> _connectors = [];
+    private readonly List<S2SClientConfig> _s2sClientConfigs = [];
 
-    private NetworkConfig _network = new();
-    private SessionConfig _session = new();
-    private PerfConfig _perf = new();
+    private readonly List<Action<EngineConfig>> _configActions = [];
     
     private Action<TEngine> _setupAction;
+    private bool _isBuilt;
     
     private EngineBuilder() { }
 
     public static EngineBuilder<TEngine> Create() => new();
-    
-    public EngineBuilder<TEngine> SetName(string name)
+
+    private EngineBuilder<TEngine> Configure(Action<EngineConfig> action)
     {
-        _name = name;
+        if (_isBuilt) throw new InvalidOperationException("Builder cannot be modified after Build().");
+        if (action != null) _configActions.Add(action);
         return this;
     }
 
-    /// <summary>
-    /// 프로토콜 및 커맨드가 포함된 어셈블리를 추가합니다.
-    /// </summary>
-    public EngineBuilder<TEngine> AddAssembly(Assembly assembly)
+    public EngineBuilder<TEngine> SetCategory(string category)
     {
-        if (assembly != null && !_assemblies.Contains(assembly))
-            _assemblies.Add(assembly);
+        if (string.IsNullOrEmpty(category)) throw new ArgumentNullException(nameof(category));
+        _category = category;
         return this;
     }
     
+    public EngineBuilder<TEngine> SetName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Name cannot be null or empty.", nameof(name));
+        _name = name;
+        return this;
+    }
+    
+    public EngineBuilder<TEngine> ConfigureNetwork(Action<NetworkConfig> configure)
+        => Configure(c => configure?.Invoke(c.Network));
+
+    public EngineBuilder<TEngine> ConfigureSession(Action<SessionConfig> configure)
+        => Configure(c => configure?.Invoke(c.Session));
+
+    public EngineBuilder<TEngine> ConfigurePerformance(Action<PerfConfig> configure)
+        => Configure(c => configure?.Invoke(c.Perf));
+
     public EngineBuilder<TEngine> Listen(int port, string ip = "Any", SocketMode mode = SocketMode.Tcp, int backlog = 1024)
     {
         _listeners.Add(new ListenerConfig { Port = port, Ip = ip, Mode = mode, BackLog = backlog });
         return this;
     }
-
-    /// <summary>
-    /// 외부 서버로의 연결 설정을 추가합니다.
-    /// </summary>
-    public EngineBuilder<TEngine> AddConnector(
+    
+    public EngineBuilder<TEngine> AddS2SClient(
         string name,
         string host, 
         int port,
-        Func<ConnectorConfig, ConnectorConfig> configure = null)
+        Action<S2SClientConfig> configure = null)
     {
-        var config = new ConnectorConfig { Name = name, Host = host, Port = port };
-        if (configure != null)
-        {
-            config = configure(config);
-        }
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Connector name cannot be empty.", nameof(name));
+        if (string.IsNullOrWhiteSpace(host)) throw new ArgumentException("Host cannot be empty.", nameof(host));
         
-        _connectors.Add(config);
+        var config = new S2SClientConfig { Name = name, Host = host, Port = port };
+        configure?.Invoke(config);
+        _s2sClientConfigs.Add(config);
         return this;
     }
-
-    public EngineBuilder<TEngine> ConfigureNetwork(Func<NetworkConfig, NetworkConfig> configure)
+    
+    public EngineBuilder<TEngine> AddAssembly(Assembly assembly)
     {
-        _network = configure?.Invoke(_network) ?? _network;
+        if (assembly != null && !_assemblies.Contains(assembly)) _assemblies.Add(assembly);
         return this;
     }
 
-    public EngineBuilder<TEngine> ConfigureSession(Func<SessionConfig, SessionConfig> configure)
+    public EngineBuilder<TEngine> WithEntryAssembly()
     {
-        _session = configure?.Invoke(_session) ?? _session;
+        var assembly = Assembly.GetEntryAssembly()
+            ?? throw new InvalidOperationException("Could not resolve EntryAssembly.");
+        if (!_assemblies.Contains(assembly)) _assemblies.Add(assembly);
         return this;
     }
-
-    public EngineBuilder<TEngine> ConfigurePerformance(Func<PerfConfig, PerfConfig> configure)
-    {
-        _perf = configure?.Invoke(_perf) ?? _perf;
-        return this;
-    }
-
+    
     public EngineBuilder<TEngine> Setup(Action<TEngine> action)
     {
-        _setupAction = action;
+        if (action != null)
+        {
+            _setupAction = _setupAction == null 
+                ? action 
+                : Delegate.Combine(_setupAction, action) as Action<TEngine>;
+        }
         return this;
     }
 
@@ -92,27 +103,35 @@ public class EngineBuilder<TEngine> where TEngine : EngineBase, new()
     /// </summary>
     public TEngine Build()
     {
-        var config = new EngineConfig
+        if (_isBuilt) throw new InvalidOperationException("This builder has already used to build an engine instance.");
+        
+        if (string.IsNullOrEmpty(_category)) throw new InvalidOperationException("Category cannot be null or empty.");
+        
+        if (_assemblies.Count == 0)
         {
-            Listeners = _listeners,
-            Connectors = _connectors,
-            Network = _network,
-            Session = _session,
-            Perf = _perf
+            throw new InvalidOperationException(
+                "No assemblies configured for command discovery. Did you forget to call WithAssembly() or WithEntryAssembly()?");
+        }
+        
+        var config = new EngineConfig
+        {   
+            Listeners = [.._listeners],
+            S2SClients = [.._s2sClientConfigs]
         };
+
+        foreach (var action in _configActions)
+        {
+            action(config);
+        }
         
         var engine = new TEngine();
-
-        var assembly = Assembly.GetEntryAssembly();
-        if (assembly != null && !_assemblies.Contains(assembly))
-            _assemblies.Add(assembly);
-
-        if (!engine.InternalInitialize(_assemblies.ToArray(), _name, config))
+        if (!engine.InternalInitialize([.._assemblies], _category, _name, config))
         {
             throw new InvalidOperationException("Engine initialization failed. Check logs for details.");
         }
         
         _setupAction?.Invoke(engine);
+        _isBuilt = true;
 
         return engine;
     }

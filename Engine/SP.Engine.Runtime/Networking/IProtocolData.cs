@@ -1,7 +1,7 @@
 using SP.Core.Serialization;
 using SP.Engine.Runtime.Channel;
 
-namespace SP.Engine.Runtime.Protocol
+namespace SP.Engine.Runtime.Networking
 {
     public interface IProtocolData
     {

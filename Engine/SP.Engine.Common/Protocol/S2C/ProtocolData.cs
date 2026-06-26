@@ -1,5 +1,5 @@
 using SP.Engine.Runtime;
-using SP.Engine.Runtime.Protocol;
+using SP.Engine.Runtime.Networking;
 
 namespace SP.Engine.Common.Protocol.S2C
 {

@@ -4,12 +4,11 @@ using SP.Engine.Common.Protocol.C2S;
 using SP.Engine.Common.Protocol.S2C;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Command;
-using SP.Engine.Runtime.Protocol;
 using SP.Engine.Server.Protocol;
 
 namespace SP.Engine.Server.Command;
 
-[ProtocolCommand(ProtocolId.C2S.UdpHelloReq)]
+[CommandHandler(ProtocolId.C2S.UdpHelloReq)]
 internal class UdpHelloReqHandler : CommandHandlerBase<Session, UdpHelloReq>
 {
     protected override void ExecuteCommand(Session session, UdpHelloReq protocol)

@@ -4,19 +4,17 @@ namespace SP.Engine.Runtime.Networking
 {
     public readonly struct FragmentHeader
     {
-        public const int ByteSize = 8; // 4 + 1 + 1 + 2 = 8 bytes
+        public const int ByteSize = 6; // 4 + 1 + 1 = 6 bytes
 
         public uint FragId { get; }
         public byte Index { get; }
         public byte TotalCount { get; }
-        public ushort PayloadLength { get; }
 
-        public FragmentHeader(uint fragId, byte index, byte totalCount, ushort payloadLength)
+        public FragmentHeader(uint fragId, byte index, byte totalCount)
         {
             FragId = fragId;
             Index = index;
             TotalCount = totalCount;
-            PayloadLength = payloadLength;
         }
 
         public static bool TryParse(ReadOnlySpan<byte> source, out FragmentHeader header, out int bytesConsumed)
@@ -29,8 +27,7 @@ namespace SP.Engine.Runtime.Networking
             var fragId = source.ReadUInt32(0);
             var index = source[4];
             var totalCount = source[5];
-            var payloadLength = source.ReadUInt16(6);
-            header = new FragmentHeader(fragId, index, totalCount, payloadLength);
+            header = new FragmentHeader(fragId, index, totalCount);
             bytesConsumed = ByteSize;
             return true;
         }
@@ -41,7 +38,6 @@ namespace SP.Engine.Runtime.Networking
             destination.WriteUInt32(0, FragId);
             destination[4] = Index;
             destination[5] = TotalCount;
-            destination.WriteUInt16(6, PayloadLength);
         }
     }
 }

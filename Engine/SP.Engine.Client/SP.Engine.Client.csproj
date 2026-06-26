@@ -16,6 +16,7 @@
     <ItemGroup>
         <ProjectReference Include="..\SP.Engine.Common\SP.Engine.Common.csproj" />
         <ProjectReference Include="..\SP.Engine.Runtime\SP.Engine.Runtime.csproj"/>
+        <InternalsVisibleTo Include="SP.Engine.Server" />
     </ItemGroup>
 
 </Project>

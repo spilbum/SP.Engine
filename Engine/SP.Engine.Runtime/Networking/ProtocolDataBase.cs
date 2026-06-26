@@ -4,7 +4,7 @@ using SP.Core.Accessor;
 using SP.Core.Serialization;
 using SP.Engine.Runtime.Channel;
 
-namespace SP.Engine.Runtime.Protocol
+namespace SP.Engine.Runtime.Networking
 {
     public abstract class ProtocolDataBase<T> : IProtocolData
         where T : ProtocolDataBase<T>, new()

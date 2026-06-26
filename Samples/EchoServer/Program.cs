@@ -1,4 +1,5 @@
-﻿using SP.Engine.Server;
+﻿using Common.Protocol.ES2EC;
+using SP.Engine.Server;
 using Exception = System.Exception;
 
 namespace EchoServer;
@@ -14,11 +15,14 @@ internal static class Program
             Console.WriteLine("Usage: EchoServer.exe <port>");
             return;
         }
-        
+
         var builder = EngineBuilder<EchoServer>.Create()
+            .SetCategory("Echo")
             .SetName(nameof(EchoServer))
             .Listen(port)
-            .Listen(20000, mode: SocketMode.Udp);
+            .Listen(20000, mode: SocketMode.Udp)
+            .AddAssembly(typeof(TcpEchoAck).Assembly)
+            .WithEntryAssembly();
 
         Console.CancelKeyPress += OnCancelKeyPress;
 

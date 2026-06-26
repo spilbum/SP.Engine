@@ -1,8 +1,8 @@
-using SP.Engine.Runtime.Protocol;
+using SP.Engine.Runtime.Networking;
 
-namespace SP.Engine.Server.Connector;
+namespace SP.Engine.Server.S2S;
 
-public interface IConnector
+public interface IS2SClient
 {
     string Name { get; }
     string Host { get; }

@@ -10,18 +10,11 @@ using SP.Engine.Runtime.Channel;
 using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Compression;
 using SP.Engine.Runtime.Networking;
-using SP.Engine.Runtime.Protocol;
 using SP.Engine.Runtime.Security;
 using SP.Engine.Server.Protocol;
 
 namespace SP.Engine.Server;
 
-public enum PeerKind : byte
-{
-    None = 0,
-    User,
-    Server
-}
 
 public enum PeerState
 {
@@ -52,8 +45,8 @@ public interface IPeer : ICommandContext
 
 public abstract class PeerBase : IPeer, IDisposable
 {
+    private readonly Lz4Compressor _compressor;
     private DiffieHellman _diffieHellman;
-    private Lz4Compressor _compressor;
     private AesGcmEncryptor _encryptor;
     private Session _session;
     private int _stateCode = PeerStateConst.NotAuthenticated;
@@ -66,6 +59,8 @@ public abstract class PeerBase : IPeer, IDisposable
     private readonly ConcurrentQueue<IProtocolData> _sendQueue = new();
     
     internal ReliableMessageProcessor MessageProcessor { get; }
+
+    public EngineBase Engine => _session.Engine;
 
     protected PeerBase(PeerKind kind, Session session)
     {
@@ -85,29 +80,6 @@ public abstract class PeerBase : IPeer, IDisposable
             .SetPendingQueueCapacity(config.ReliablePendingQueueCapacity)
             .SetInFlightLimit(config.ReliableInFlightLimit)
             .Build();
-    }
-
-    protected PeerBase(PeerBase other)
-    {
-        PeerId = other.PeerId;
-        other.PeerId = 0;
-        
-        Kind = other.Kind;
-        Logger = other.Logger;
-        _stateCode = Interlocked.CompareExchange(ref other._stateCode, PeerStateConst.Closed, other._stateCode);
-        
-        _diffieHellman = other._diffieHellman;
-        other._diffieHellman = null;
-        
-        _encryptor = other._encryptor;
-        other._encryptor = null;
-        
-        _compressor = other._compressor;
-        other._compressor = null;
-        
-        MessageProcessor = other.MessageProcessor;
-        _session = other._session;
-        _session.Peer = this;
     }
 
     public double AvgRTTMs { get; private set; }
@@ -310,6 +282,17 @@ public abstract class PeerBase : IPeer, IDisposable
         _lastAckTime = nowUtc;
         _lastSentAck = expectedSeq;
         _session.SendMessageAck(expectedSeq);
+    }
+
+    internal void InheritSecurityContext(PeerBase sourcePeer)
+    {
+        if (sourcePeer == null) return;
+
+        _diffieHellman = sourcePeer._diffieHellman;
+        _encryptor = sourcePeer._encryptor;
+
+        sourcePeer._diffieHellman = null;
+        sourcePeer._encryptor = null;
     }
 
     internal void RecordPingData(double rttMs, double avgRttMs, double jitterMs)

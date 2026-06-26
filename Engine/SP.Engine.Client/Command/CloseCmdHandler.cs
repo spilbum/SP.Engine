@@ -1,11 +1,10 @@
 using SP.Engine.Common.Protocol;
 using SP.Engine.Common.Protocol.S2C;
 using SP.Engine.Runtime.Command;
-using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Client.Command
 {
-    [ProtocolCommand(ProtocolId.S2C.CloseCmd)]
+    [CommandHandler(ProtocolId.S2C.CloseCmd)]
     internal class CloseCmdHandler : CommandHandlerBase<NetPeerBase, CloseCmd>
     {
         protected override void ExecuteCommand(NetPeerBase context, CloseCmd protocol)

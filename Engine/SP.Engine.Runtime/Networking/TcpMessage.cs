@@ -10,12 +10,10 @@ namespace SP.Engine.Runtime.Networking
         public void SetSequenceNumber(uint sequenceNumber)
         {
             _header = new TcpHeader(
-                _header.Flags,
+                _header.Flags, 
                 sequenceNumber,
                 _header.ProtocolId,
-                _header.PayloadLength
-            );
-            
+                _header.PayloadLength);
             UpdateHeaderInBuffer();
         }
 

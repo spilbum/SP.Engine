@@ -1,6 +1,7 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 
 namespace SP.Engine.Client
 {
@@ -8,6 +9,38 @@ namespace SP.Engine.Client
 
     public static class SocketExtensions
     {
+        public static void ConfigureKeepAlive(this Socket socket, uint keepAliveTimeMs, uint keepAliveIntervalMs)
+        {
+            if (socket == null) throw new ArgumentNullException(nameof(socket));
+            
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                var vals = new byte[12];
+                BitConverter.GetBytes((uint)1).CopyTo(vals, 0);
+                BitConverter.GetBytes(keepAliveTimeMs).CopyTo(vals, 4);
+                BitConverter.GetBytes(keepAliveIntervalMs).CopyTo(vals, 8);
+                socket.IOControl(IOControlCode.KeepAliveValues, vals, null);
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+
+                const int SOL_TCP = 6;
+                const int TCP_KEEPIDLE = 4;
+                const int TCP_KEEPINTVL = 5;
+                
+                var timeSec = (int)(keepAliveTimeMs / 1000);
+                var intervalSec = (int)(keepAliveIntervalMs / 1000);
+                
+                socket.SetSocketOption((SocketOptionLevel)SOL_TCP, (SocketOptionName)TCP_KEEPIDLE, timeSec);
+                socket.SetSocketOption((SocketOptionLevel)SOL_TCP, (SocketOptionName)TCP_KEEPINTVL, intervalSec);
+            }
+            else
+            {
+                socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+            }
+        }
+        
         public static void ResolveAndConnectAsync(this EndPoint remoteEndPoint, ConnectCallback callback, object state)
         {
             switch (remoteEndPoint)

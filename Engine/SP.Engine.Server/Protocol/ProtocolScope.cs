@@ -1,5 +1,5 @@
 using System.Runtime.CompilerServices;
-using SP.Engine.Runtime.Protocol;
+using SP.Engine.Runtime.Networking;
 
 namespace SP.Engine.Server.Protocol;
 
@@ -24,7 +24,4 @@ public readonly ref struct ProtocolScope<T>(T protocol, bool isPooled) where T :
             ProtocolPool<T>.Return(Protocol);
         }
     }
-    
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static implicit operator T(ProtocolScope<T> scope) => scope.Protocol;
 }

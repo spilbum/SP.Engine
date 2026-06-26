@@ -2,11 +2,10 @@ using SP.Engine.Common.Protocol;
 using SP.Engine.Common.Protocol.S2C;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Command;
-using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Client.Command
 {
-    [ProtocolCommand(ProtocolId.S2C.UdpHelloAck)]
+    [CommandHandler(ProtocolId.S2C.UdpHelloAck)]
     internal class UdpHelloAckHandler : CommandHandlerBase<NetPeerBase, UdpHelloAck>
     {
         protected override void ExecuteCommand(NetPeerBase context, UdpHelloAck protocol)

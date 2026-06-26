@@ -3,6 +3,7 @@ using System.Buffers;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Threading;
 using SP.Engine.Runtime.Networking;
 
@@ -141,18 +142,9 @@ namespace SP.Engine.Client
                 _socket.SendBufferSize = _netPeer.Config.SendBufferSize;
                 _socket.NoDelay = true;
 
-                var vals = new byte[12];
-                BitConverter.GetBytes((uint)1).CopyTo(vals, 0);
-                BitConverter.GetBytes((uint)30_000).CopyTo(vals, 4);
-                BitConverter.GetBytes((uint)2_000).CopyTo(vals, 8);
-
-                try
+                if (_netPeer.Config.EnableKeepAlive)
                 {
-                    _socket.IOControl(IOControlCode.KeepAliveValues, vals, null);
-                }
-                catch
-                {
-                    _socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+                    _socket.ConfigureKeepAlive(_netPeer.Config.KeepAliveTimeSec, _netPeer.Config.KeepAliveIntervalSec);
                 }
             }
             catch

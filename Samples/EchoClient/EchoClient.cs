@@ -1,4 +1,4 @@
-using Common.Protocol.C2S;
+using Common.Protocol.EC2ES;
 using SP.Engine.Client;
 
 namespace EchoClient;

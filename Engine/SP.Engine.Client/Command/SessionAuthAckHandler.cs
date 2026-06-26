@@ -3,11 +3,10 @@ using SP.Engine.Common.Protocol.S2C;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Networking;
-using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Client.Command
 {
-    [ProtocolCommand(ProtocolId.S2C.SessionAuthAck)]
+    [CommandHandler(ProtocolId.S2C.SessionAuthAck)]
     internal class SessionAuthAckHandler : CommandHandlerBase<NetPeerBase, SessionAuthAck>
     {
         protected override void ExecuteCommand(NetPeerBase context, SessionAuthAck protocol)

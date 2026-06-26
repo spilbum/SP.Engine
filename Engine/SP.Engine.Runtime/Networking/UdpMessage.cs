@@ -11,13 +11,11 @@ namespace SP.Engine.Runtime.Networking
         public void SetSessionId(long sessionId)
         {
             _header = new UdpHeader(
-                _header.Flags,
+                _header.Flags, 
                 sessionId,
                 _header.ProtocolId,
                 _header.Fragmented,
-                _header.PayloadLength
-            );
-            
+                _header.PayloadLength);
             UpdateHeaderInBuffer();
         }
 
@@ -46,11 +44,11 @@ namespace SP.Engine.Runtime.Networking
             if (maxPayloadPerFrag <= 0) return false;
 
             var payloadSpan = memory.Span.Slice(headerSize, PayloadLength);
-            var totalFragCount = (byte)((payloadSpan.Length + maxPayloadPerFrag - 1) / maxPayloadPerFrag);
+            var totalCount = (byte)((payloadSpan.Length + maxPayloadPerFrag - 1) / maxPayloadPerFrag);
             
             fragments = new List<(BufferOwner Buffer, int Length)>();
             
-            for (byte index = 0; index < totalFragCount; index++)
+            for (byte index = 0; index < totalCount; index++)
             {
                 var offset = index * maxPayloadPerFrag;
                 var fragPayloadLength = (ushort)Math.Min(payloadSpan.Length - offset, maxPayloadPerFrag);
@@ -69,7 +67,7 @@ namespace SP.Engine.Runtime.Networking
                     );
                     header.WriteTo(buffer[..headerSize]);
 
-                    var fragHeader = new FragmentHeader(fragId, index, totalFragCount, fragPayloadLength);
+                    var fragHeader = new FragmentHeader(fragId, index, totalCount);
                     fragHeader.WriteTo(buffer.Slice(headerSize, fragHeaderSize));
                 
                     var span = payloadSpan.Slice(offset, fragPayloadLength);
@@ -91,10 +89,10 @@ namespace SP.Engine.Runtime.Networking
         protected override UdpHeader CreateHeader(HeaderFlags flags, ushort protocolId, int payloadLength)
         {
             return new UdpHeader(
-                _header.Flags | flags,
-                _header.SessionId,
+                flags,
+                0,
                 protocolId,
-                _header.Fragmented,
+                0,
                 payloadLength
             );
         }

@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using SP.Core.Serialization;
-using SP.Engine.Runtime.Protocol;
+using SP.Engine.Runtime.Networking;
 
 namespace SP.Engine.Server.Protocol
 {

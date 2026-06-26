@@ -1,16 +1,16 @@
 using SP.Engine.Runtime.Channel;
-using SP.Engine.Runtime.Protocol;
+using SP.Engine.Runtime.Networking;
 
-namespace Common.Protocol.C2S;
+namespace Common.Protocol.EC2ES;
 
-[ProtocolData(ProtocolId.C2S.TcpEchoReq)]
+[ProtocolData(ProtocolId.EC2ES.TcpEchoReq)]
 public class TcpEchoReq : ProtocolDataBase<TcpEchoReq>
 {
     public long SentTicks;
     public byte[]? Data;
 }
 
-[ProtocolData(ProtocolId.C2S.UdpEchoReq, ChannelKind.Unreliable, Toggle.Off, Toggle.Off)]
+[ProtocolData(ProtocolId.EC2ES.UdpEchoReq, ChannelKind.Unreliable, Toggle.Off, Toggle.Off)]
 public class UdpEchoReq : ProtocolDataBase<UdpEchoReq>
 {
     public long SentTicks;

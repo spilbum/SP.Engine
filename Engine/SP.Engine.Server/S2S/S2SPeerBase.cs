@@ -1,0 +1,11 @@
+using SP.Engine.Runtime;
+
+namespace SP.Engine.Server.S2S;
+
+public abstract class S2SPeerBase(Session session) : PeerBase(PeerKind.Server, session)
+{
+}
+
+internal sealed class PendingS2SPeer(Session session) : S2SPeerBase(session)
+{
+}

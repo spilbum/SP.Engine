@@ -1,6 +1,7 @@
 using System;
 using System.Buffers;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Threading;
 using SP.Core.Buffers;
 
@@ -9,26 +10,34 @@ namespace SP.Engine.Runtime.Networking
     internal sealed class FragmentContext : IDisposable
     {
         private const int MaxAllowedFragments = 64;
-        private readonly BufferOwner[] _fragmentBuffers;
-        private readonly int[] _fragmentLengths;
-        private readonly int _maxPayloadLength;
+        
+        private readonly BufferOwner[] _fragmentBuffers = new BufferOwner[MaxAllowedFragments];
+        private readonly int[] _fragmentLengths = new int[MaxAllowedFragments];
+        
+        public readonly object SyncRoot = new object();
+        
+        private int _maxPayloadLength;
         private int _totalPayloadLength;
         private int _disposed; // 0: alive, 1: disposed
         
-        public readonly DateTime CreateAtUtc = DateTime.UtcNow;
+        public long CreateAtTimestamp { get; private set; }
         public int ReceivedCount { get; private set; }
-        public byte TotalExpectedCount { get; }
-        public uint FragId { get; }
+        public byte TotalExpectedCount { get; private set; }
+        public uint FragId { get; private set; }
 
-        public FragmentContext(uint fragId, byte totalExpectedCount, int maxPayloadLength)
+        public void Initialize(uint fragId, byte totalExpectedCount, int maxPayloadLength)
         {
-            if (totalExpectedCount > MaxAllowedFragments) throw new ArgumentOutOfRangeException(nameof(totalExpectedCount));
+            if (totalExpectedCount > MaxAllowedFragments) 
+                throw new ArgumentOutOfRangeException(nameof(totalExpectedCount));
             
             FragId = fragId;
             TotalExpectedCount = totalExpectedCount;
             _maxPayloadLength = maxPayloadLength;
-            _fragmentBuffers = ArrayPool<BufferOwner>.Shared.Rent(totalExpectedCount);
-            _fragmentLengths = ArrayPool<int>.Shared.Rent(totalExpectedCount);
+
+            CreateAtTimestamp = Stopwatch.GetTimestamp();
+            ReceivedCount = 0;
+            _totalPayloadLength = 0;
+            Volatile.Write(ref _disposed, 0);
             
             Array.Clear(_fragmentBuffers, 0, totalExpectedCount);
             Array.Clear(_fragmentLengths, 0, totalExpectedCount);
@@ -75,7 +84,7 @@ namespace SP.Engine.Runtime.Networking
                 }
                 
                 var length = _fragmentLengths[index];
-                var sourceSpan = frag[..length];
+                var sourceSpan = frag.Memory.Span[..length];
                 sourceSpan.CopyTo(destinationSpan[offset..]);
                 offset += length;
             }
@@ -97,8 +106,24 @@ namespace SP.Engine.Runtime.Networking
                 frag.Dispose();
             }
 
-            ArrayPool<BufferOwner>.Shared.Return(_fragmentBuffers);
-            ArrayPool<int>.Shared.Return(_fragmentLengths);
+            FragmentContextPool.Return(this);
+        }
+    }
+
+    internal static class FragmentContextPool
+    {
+        private static readonly ConcurrentQueue<FragmentContext> _pool = new ConcurrentQueue<FragmentContext>();
+
+        public static FragmentContext Rent()
+        {
+            return _pool.TryDequeue(out var context) 
+                ? context
+                : new FragmentContext();
+        }
+
+        public static void Return(FragmentContext context)
+        {
+            _pool.Enqueue(context);
         }
     }
     
@@ -107,36 +132,34 @@ namespace SP.Engine.Runtime.Networking
         private readonly ConcurrentDictionary<uint, FragmentContext> _contexts =
             new ConcurrentDictionary<uint, FragmentContext>();
 
-        private int _pendingContextCount;
-
-        private readonly int _cleanupTimeoutSec;
+        private int _contextCount;
+        private readonly long _timeoutTicks;
         private readonly int _pendingMessageThreshold;
         private readonly int _maxPayloadLength;
         private int _disposed;
         
         public FragmentAssembler(int cleanupTimeoutSec, int pendingMessageThreshold, int maxPayloadLength)
         {
-            _cleanupTimeoutSec = cleanupTimeoutSec;
+            _timeoutTicks = cleanupTimeoutSec * Stopwatch.Frequency;
             _pendingMessageThreshold = pendingMessageThreshold;
             _maxPayloadLength = maxPayloadLength;
         }
         
-        public void Cleanup(DateTime now)
+        public void Cleanup()
         {
-            if (Volatile.Read(ref _pendingContextCount) == 0) return;
+            if (Volatile.Read(ref _contextCount) == 0) return;
 
-            var timeout = TimeSpan.FromSeconds(_cleanupTimeoutSec);
-            foreach (var (key, state) in _contexts)
+            var timestamp = Stopwatch.GetTimestamp();
+            
+            foreach (var (fragId, context) in _contexts)
             {
-                if (now - state.CreateAtUtc < timeout) continue;
+                if (timestamp - context.CreateAtTimestamp < _timeoutTicks) continue;
 
-                lock (state)
+                lock (context.SyncRoot)
                 {
-                    if (_contexts.TryRemove(key, out var expired))
-                    {
-                        Interlocked.Decrement(ref _pendingContextCount);
-                        expired.Dispose();
-                    }   
+                    if (!_contexts.TryRemove(fragId, out var expired)) continue;
+                    Interlocked.Decrement(ref _contextCount);
+                    expired.Dispose();
                 }
             }
         }
@@ -181,15 +204,17 @@ namespace SP.Engine.Runtime.Networking
             bufferOwner = null;
             totalPayloadLength = 0;
 
-            if (!_contexts.ContainsKey(fragHeader.FragId) && Volatile.Read(ref _pendingContextCount) >= _pendingMessageThreshold)
+            if (!_contexts.ContainsKey(fragHeader.FragId) && Volatile.Read(ref _contextCount) >= _pendingMessageThreshold)
                 return false;
 
             if (!_contexts.TryGetValue(fragHeader.FragId, out var context))
             {
-                context = new FragmentContext(fragHeader.FragId, fragHeader.TotalCount, _maxPayloadLength);
+                context = FragmentContextPool.Rent();
+                context.Initialize(fragHeader.FragId, fragHeader.TotalCount, _maxPayloadLength);
+                
                 if (_contexts.TryAdd(fragHeader.FragId, context))
                 {
-                    Interlocked.Increment(ref _pendingContextCount);
+                    Interlocked.Increment(ref _contextCount);
                 }
                 else
                 {
@@ -200,7 +225,7 @@ namespace SP.Engine.Runtime.Networking
             
             if (context == null) return false;
 
-            lock (context)
+            lock (context.SyncRoot)
             {
                 if (!_contexts.ContainsKey(fragHeader.FragId)) return false;
                 
@@ -210,7 +235,7 @@ namespace SP.Engine.Runtime.Networking
 
                 if (_contexts.TryRemove(fragHeader.FragId, out _))
                 {
-                    Interlocked.Decrement(ref _pendingContextCount);
+                    Interlocked.Decrement(ref _contextCount);
                 }
      
                 using (context)
@@ -227,8 +252,9 @@ namespace SP.Engine.Runtime.Networking
             foreach (var key in _contexts.Keys)
             {
                 if (!_contexts.TryRemove(key, out var context)) continue;
-                Interlocked.Decrement(ref _pendingContextCount);
-                lock (context)
+                Interlocked.Decrement(ref _contextCount);
+                
+                lock (context.SyncRoot)
                 {
                     context.Dispose();
                 }

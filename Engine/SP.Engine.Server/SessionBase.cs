@@ -9,7 +9,7 @@ using SP.Engine.Runtime.Channel;
 using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Compression;
 using SP.Engine.Runtime.Networking;
-using SP.Engine.Runtime.Protocol;
+using SP.Engine.Runtime.Policy;
 using SP.Engine.Runtime.Security;
 using SP.Engine.Server.Configuration;
 
@@ -96,10 +96,7 @@ public abstract class SessionBase : ICommandContext, IDisposable
     public void CleanupFragmentAssembler()
     {
         var assembler = Volatile.Read(ref _fragmentAssembler);
-        if (assembler == null) return;
-
-        var now = DateTime.UtcNow;
-        assembler.Cleanup(now);
+        assembler?.Cleanup();
     }
 
     protected void EnableUdp()
@@ -240,7 +237,7 @@ public abstract class SessionBase : ICommandContext, IDisposable
             if (result == MessageReadResult.NeedMoreData) break;
             if (result is MessageReadResult.InvalidHeader or MessageReadResult.CorruptedPayload)
             {
-                Close(CloseReason.InternalError);
+                Close(CloseReason.ProtocolError);
                 return;
             }
             

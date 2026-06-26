@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using SP.Engine.Runtime;
 using SP.Engine.Server.Configuration;
 
@@ -11,16 +12,31 @@ public class PeerManager(IEngineConfig config)
     private readonly ConcurrentDictionary<uint, PeerBase> _activePeers = [];
     private readonly ConcurrentDictionary<uint, PendingReconnect> _reconnectPendingPeers = [];
 
-    public PeerBase GetActivePeer(uint peerId)
-        => _activePeers.GetValueOrDefault(peerId);
+    public int FindActivePeers<T>(List<T> destination) where T : PeerBase
+    {
+        if (destination == null) return 0;
+        
+        var count = 0;
+        foreach (var kvp in _activePeers)
+        {
+            if (kvp.Value is not T target) continue;
+            destination.Add(target);
+            count++;
+        }
+        return count;
+    }
+
+    public T GetActivePeer<T>(uint peerId) where T : PeerBase
+        => _activePeers.TryGetValue(peerId, out var peer) ? peer as T : null;
 
     public PeerBase GetWaitingPeer(uint peerId)
         => _reconnectPendingPeers.TryGetValue(peerId, out var waiting) ? waiting.Peer : null;
 
     public PeerBase GetAnyPeer(uint peerId)
-        => _activePeers.TryGetValue(peerId, out var peer) 
-            ? peer 
-            : _reconnectPendingPeers.TryGetValue(peerId, out var waiting) ? waiting.Peer : null;
+    {
+        if (_activePeers.TryGetValue(peerId, out var peer)) return peer;
+        return _reconnectPendingPeers.TryGetValue(peerId, out var waiting) ? waiting.Peer : null;
+    }
 
     public void Register(PeerBase peer)
     {
@@ -83,8 +99,8 @@ public class PeerManager(IEngineConfig config)
 
     public bool TransitionTo(PeerBase newPeer)
     {
-        return _activePeers.TryGetValue(newPeer.PeerId, out var oldPeer) 
-               && _activePeers.TryUpdate(newPeer.PeerId, newPeer, oldPeer);
+        return _activePeers.TryGetValue(newPeer.PeerId, out var oldPeer)
+            && _activePeers.TryUpdate(newPeer.PeerId, newPeer, oldPeer);
     }
 
     public void Update()
@@ -112,8 +128,8 @@ public class PeerManager(IEngineConfig config)
     
     private readonly struct PendingReconnect(PeerBase peer, int timeoutSec)
     {
+        private readonly DateTime _expireTime = DateTime.UtcNow.AddSeconds(timeoutSec);
         public PeerBase Peer { get; } = peer;
-        public DateTime ExpireTime { get; } = DateTime.UtcNow.AddSeconds(timeoutSec);
-        public bool IsExpired(DateTime now) => now >= ExpireTime;
+        public bool IsExpired(DateTime now) => now >= _expireTime;
     }
 }

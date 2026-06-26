@@ -21,7 +21,7 @@ namespace SP.Core
         public string Region { get; set; } = string.Empty;
         public string PublicIpAddress { get; set; } = string.Empty;
         public string PrivateIpAddress { get; set; } = string.Empty;
-        public string DnsName { get; set; } = string.Empty;
+        public string DomainName { get; set; } = string.Empty;
         public string InstanceId { get; set; } = string.Empty;
     }
 
@@ -93,7 +93,7 @@ namespace SP.Core
                     Region = region,
                     PublicIpAddress = publicIpv4 ?? string.Empty,
                     PrivateIpAddress = privateIpv4 ?? string.Empty,
-                    DnsName = publicHostName ?? string.Empty,
+                    DomainName = publicHostName ?? string.Empty,
                     InstanceId = instanceId ?? string.Empty
                 };
 

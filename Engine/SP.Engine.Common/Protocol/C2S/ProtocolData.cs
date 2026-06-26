@@ -1,4 +1,5 @@
-using SP.Engine.Runtime.Protocol;
+using SP.Engine.Runtime;
+using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Security;
 
 namespace SP.Engine.Common.Protocol.C2S
@@ -8,6 +9,7 @@ namespace SP.Engine.Common.Protocol.C2S
     {
         public byte[]? EncryptPublicKey;
         public DhKeySize EncryptKeySize;
+        public PeerKind PeerKind;
         public uint NextExpectedSeq;
         public uint PeerId;
         public long SessionId;

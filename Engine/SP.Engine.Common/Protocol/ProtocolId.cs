@@ -11,7 +11,7 @@ namespace SP.Engine.Common.Protocol
             public const ushort UdpHelloReq = 104;
             public const ushort UdpHealthCheckAck = 105;
         }
-        
+
         public static class S2C
         {
             public const ushort SessionAuthAck = 200;
@@ -21,6 +21,12 @@ namespace SP.Engine.Common.Protocol
             public const ushort UdpHelloAck = 204;
             public const ushort UdpHealthCheckReq = 205;
             public const ushort UdpStatusNotify = 206;
+        }
+
+        public static class S2S
+        {
+            public const ushort S2SConnectReq = 300;
+            public const ushort S2SConnectAck = 301;
         }
     }
 

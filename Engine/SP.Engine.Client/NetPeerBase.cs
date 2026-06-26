@@ -13,11 +13,12 @@ using SP.Engine.Client.Command;
 using SP.Engine.Client.Configuration;
 using SP.Engine.Common.Protocol;
 using SP.Engine.Common.Protocol.C2S;
+using SP.Engine.Runtime;
 using SP.Engine.Runtime.Channel;
 using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Compression;
 using SP.Engine.Runtime.Networking;
-using SP.Engine.Runtime.Protocol;
+using SP.Engine.Runtime.Policy;
 using SP.Engine.Runtime.Security;
 
 namespace SP.Engine.Client
@@ -121,6 +122,7 @@ namespace SP.Engine.Client
         public NetPeerState State => (NetPeerState)_stateCode;
         public bool IsConnected => State == NetPeerState.Open;
         public ILogger Logger { get; private set; }
+        public PeerKind Kind { get; }
         
         IEncryptor ICommandContext.Encryptor => _encryptor;
         ICompressor ICommandContext.Compressor => _compressor;
@@ -140,6 +142,13 @@ namespace SP.Engine.Client
         public event EventHandler<ErrorEventArgs> Error;
         public event EventHandler<StateChangedEventArgs> StateChanged;
 
+        protected NetPeerBase() : this (PeerKind.User) {}
+        
+        protected NetPeerBase(PeerKind kind)
+        {
+            Kind = kind;
+        }
+        
         public void Connect(string ip, int port)
         {
             if (null != _tcpNetworkSession)
@@ -277,7 +286,7 @@ namespace SP.Engine.Client
             }
         }
         
-        public void SendPing()
+        private void SendPing()
         {
             var ping = new Ping
             {
@@ -341,7 +350,7 @@ namespace SP.Engine.Client
             Dispose(false);
         }
 
-        private void RegisterEngineCommand<T>(ushort protocolId) where T : ICommandHandler, new()
+        protected void RegisterEngineCommand<T>(ushort protocolId) where T : ICommandHandler, new()
             => _engineCommands[protocolId] = new T();
 
         private ICommandHandler GetEngineCommand(ushort protocolId)
@@ -362,10 +371,10 @@ namespace SP.Engine.Client
                 
                 foreach (var t in types)
                 {
-                    var attr = t.GetCustomAttribute<ProtocolCommandAttribute>();
+                    var attr = t.GetCustomAttribute<CommandHandlerAttribute>();
                     if (attr == null)
                     {
-                        Logger.Warn($"[{t.FullName}] requires {nameof(ProtocolCommandAttribute)}");
+                        Logger.Warn($"[{t.FullName}] requires {nameof(CommandHandlerAttribute)}");
                         continue;
                     }
    
@@ -378,7 +387,7 @@ namespace SP.Engine.Client
                 }
             }
 
-            if (_appCommands.Count == 0)
+            if (Kind == PeerKind.User && _appCommands.Count == 0)
             {
                 Logger.Fatal("Command could not be found");
                 return false;
@@ -681,6 +690,7 @@ namespace SP.Engine.Client
             {
                 var success = InternalSend(new SessionAuthReq
                 {
+                    PeerKind = Kind,
                     SessionId = _sessionId,
                     PeerId = _peerId,
                     EncryptPublicKey = _diffieHellman.PublicKey,
@@ -1042,7 +1052,7 @@ namespace SP.Engine.Client
         {
             _fragmentAssemblerCleanupTimer = new TickTimer(_ =>
             {
-                _fragmentAssembler.Cleanup(DateTime.UtcNow);
+                _fragmentAssembler.Cleanup();
             }, null, TimeSpan.FromSeconds(periodSec), TimeSpan.FromSeconds(periodSec));
         }
 
@@ -1077,34 +1087,36 @@ namespace SP.Engine.Client
 
             if (disposing)
             {
-                var ns = _tcpNetworkSession;
+                var tcpSession = _tcpNetworkSession;
                 _tcpNetworkSession = null;
                 
-                if (null != ns)
+                if (null != tcpSession)
                 {
-                    ns.Opened -= OnSessionOpened;
-                    ns.Closed -= OnSessionClosed;
-                    ns.Error -= OnSessionError;
-                    ns.DataReceived -= OnSessionDataReceived;
+                    tcpSession.Opened -= OnSessionOpened;
+                    tcpSession.Closed -= OnSessionClosed;
+                    tcpSession.Error -= OnSessionError;
+                    tcpSession.DataReceived -= OnSessionDataReceived;
 
-                    if (ns.IsConnected)
-                        ns.Close();
+                    if (tcpSession.IsConnected)
+                        tcpSession.Close();
                 }
 
                 StopUdpHandshakeTimer();
                 StopFragmentAssemblerCleanupTimer();
                 
-                if (_udpNetworkSession != null)
+                var udpSession = _udpNetworkSession;
+                _udpNetworkSession = null;
+                
+                if (udpSession != null)
                 {
-                    _udpNetworkSession.DataReceived -= OnUdpSocketDataReceived;
-                    _udpNetworkSession.Error -= OnUdpSocketError;
-                    _udpNetworkSession.Close();
-                    _udpNetworkSession = null;
+                    udpSession.DataReceived -= OnUdpSocketDataReceived;
+                    udpSession.Error -= OnUdpSocketError;
+                    udpSession.Close();
                 }
                 
-                _fragmentAssembler.Dispose();
-                _diffieHellman.Dispose();
+                _fragmentAssembler?.Dispose();
                 _messageProcessor?.Dispose();
+                _diffieHellman.Dispose();
                 
                 CancelTimer();
             }

@@ -1,11 +1,10 @@
 using Common.Protocol;
-using Common.Protocol.S2C;
+using Common.Protocol.ES2EC;
 using SP.Engine.Runtime.Command;
-using SP.Engine.Runtime.Protocol;
 
 namespace EchoClient.Command;
 
-[ProtocolCommand(ProtocolId.S2C.TcpEchoAck)]
+[CommandHandler(ProtocolId.ES2EC.TcpEchoAck)]
 public class TcpEchoAckHandler : CommandHandlerBase<EchoClient, TcpEchoAck>
 {
     protected override void ExecuteCommand(EchoClient context, TcpEchoAck protocol)

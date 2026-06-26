@@ -2,7 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using System.Reflection;
-using SP.Engine.Runtime.Protocol;
+using SP.Engine.Runtime.Networking;
 
 namespace SP.Engine.Server.Protocol;
 
