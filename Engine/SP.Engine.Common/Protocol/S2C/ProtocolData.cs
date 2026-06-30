@@ -37,6 +37,7 @@ namespace SP.Engine.Common.Protocol.S2C
     [ProtocolData(ProtocolId.S2C.Pong)]
     internal class Pong : ProtocolDataBase<Pong>
     {
+        public uint Seq;
         // 클라이언트가 핑 보낸 시간
         public uint SentTimeMs;
         // 서버측 현재 시간

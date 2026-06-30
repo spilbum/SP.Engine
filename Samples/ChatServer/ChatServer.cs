@@ -66,7 +66,7 @@ public class ChatServer : EngineBase
 
     public void BroadcastChat(string? fromUserId, string? targetUserId, string? message)
     {
-        foreach (var client in GetS2SClientsInGroup("Chat"))
+        foreach (var client in GetAvailableS2SClients("Chat"))
         {
             using var scope = ProtocolScope<ChatNotify>.Rent();
             scope.Protocol.FromUserId = fromUserId;

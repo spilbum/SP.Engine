@@ -24,6 +24,7 @@ namespace SP.Engine.Common.Protocol.C2S
     [ProtocolData(ProtocolId.C2S.Ping)]
     internal class Ping : ProtocolDataBase<Ping>
     {
+        public uint Seq;
         public uint SendTimeMs;
         // 최신 RTT
         public double RttMs;

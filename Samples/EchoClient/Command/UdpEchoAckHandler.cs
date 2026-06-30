@@ -5,9 +5,9 @@ using SP.Engine.Runtime.Command;
 namespace EchoClient.Command;
 
 [CommandHandler(ProtocolId.ES2EC.UdpEchoAck)]
-public class UdpEchoAckHandler : CommandHandlerBase<EchoClient, UdpEchoAck>
+public class UdpEchoAckHandler : CommandHandlerBase<UserPeer, UdpEchoAck>
 {
-    protected override void ExecuteCommand(EchoClient context, UdpEchoAck protocol)
+    protected override void ExecuteCommand(UserPeer context, UdpEchoAck protocol)
     {
         
     }

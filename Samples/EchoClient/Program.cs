@@ -5,7 +5,7 @@ namespace EchoClient;
 internal static class Program
 {
     private static readonly CancellationTokenSource _cts = new();
-    private static EchoManager? _manager;
+    private static TestManager? _manager;
     private static string? _host;
     private static int _port;
     
@@ -21,7 +21,7 @@ internal static class Program
         #endif
         
         var logger = new ConsoleLogger("EchoClient", minLevel: minLevel);
-        _manager = new EchoManager(logger);
+        _manager = new TestManager(logger);
 
         try
         {
@@ -83,18 +83,18 @@ internal static class Program
                     || !int.TryParse(args[3], out var period) 
                     || !int.TryParse(args[4], out var batchCount))
                 {
-                    Console.WriteLine("Usage: start <targetCount> <sendType(tcp/udp)> <period(ms)> <batchCount>");
+                    Console.WriteLine("Usage: start <targetCount> <sendType(tcp/udp/heavy)> <period(ms)> <batchCount>");
                     return;
                 }
 
                 var sendType = args[2];
-                _manager?.StartEchoTest(targetCount, sendType, period, batchCount);
+                _manager?.StartTest(targetCount, sendType, period, batchCount);
                 break;
             }
 
             case "stop":
             {
-                _manager?.StopEchoTest();
+                _manager?.StopTest();
                 break;
             }
             

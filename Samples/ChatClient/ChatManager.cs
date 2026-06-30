@@ -10,7 +10,7 @@ public static class NetPeerExtensions
     public static UserPeer Build(this NetPeerBuilder @this, string userId, string targetUserId)
     {
         var peer = new UserPeer(userId, targetUserId);
-        if (!@this.TryInitialize(peer))
+        if (!@this.TryBuild(peer))
         {
             throw new InvalidOperationException("Failed to initialize peer.");
         }

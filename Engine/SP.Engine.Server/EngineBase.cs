@@ -5,7 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
-using SP.Core.Fiber;
+using SP.Core.Fibers;
 using SP.Engine.Common.Protocol;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Command;
@@ -182,12 +182,15 @@ public abstract class EngineBase : EngineCore, IEngine
         return true;
     }
 
-    internal void JoinPeer(PeerBase peer)
+    internal bool JoinPeer(PeerBase peer)
     {
-        _peerManager.Register(peer);
+        if (!_peerManager.Register(peer)) return false;
         
-        var fiber = GetLogicFiber(peer.PeerId);
-        fiber.Enqueue(AddShardPeer, peer);
+        var index = GetShardIndex(peer.PeerId);
+        if (_shardPeers[index].ContainsKey(peer.PeerId)) return false;
+
+        _logicFibers[index].Enqueue(AddShardPeer, peer);
+        return true;
     }
 
     internal bool NewPeer(Session session, out PeerBase peer)
@@ -198,7 +201,7 @@ public abstract class EngineBase : EngineCore, IEngine
 
     internal S2SConnectResult ConnectS2SPeer(Session session, string category)
     {
-        if (session.Peer is not PendingS2SPeer pendingPeer) return S2SConnectResult.AlreadyConnected;
+        if (session.Peer is not S2SPendingPeer pendingPeer) return S2SConnectResult.AlreadyConnected;
         
         var newPeer = OnCreateS2SPeer(session, category);
         if (newPeer == null) return S2SConnectResult.InternalError;
@@ -206,8 +209,7 @@ public abstract class EngineBase : EngineCore, IEngine
         newPeer.InheritSecurityContext(pendingPeer);
         pendingPeer.Dispose();
         
-        session.Peer = newPeer;
-        JoinPeer(newPeer);
+        if (!JoinPeer(newPeer)) return S2SConnectResult.InternalError;
         
         OnS2SPeerConnected(newPeer);
         return S2SConnectResult.Success;
@@ -225,8 +227,8 @@ public abstract class EngineBase : EngineCore, IEngine
         
         switch (peer)
         {
-            case PendingS2SPeer pending:
-                pending.Dispose();
+            case S2SPendingPeer pendingPeer:
+                pendingPeer.Dispose();
                 break;
             default:
             {
@@ -500,117 +502,123 @@ public abstract class EngineBase : EngineCore, IEngine
             var command = GetEngineCommand(message.Id);
             if (command != null)
             {
-                command.Execute(session, message);
+                using (message) command.Execute(session, message);
                 return;
             }
             
             var peer = session.Peer;
-            if (peer == null) return;
-
-            IMessage extracted;
-            switch (message)
+            if (peer == null)
             {
-                case TcpMessage tcp:
-                    extracted = tcp.Extract();
-                    break;
-                case UdpMessage udp:
-                    extracted = udp.Extract();
-                    break;
-                default:
-                    return;
+                message.Dispose();
+                return;
             }
 
-            var fiber = GetLogicFiber(peer.PeerId);
-            fiber.Enqueue(DispatchAppCommand, this, peer, extracted);
+            lock (peer)
+            {
+                if (message is TcpMessage { SequenceNumber: > 0 } tcp)
+                {
+                    _orderCache ??= new List<TcpMessage>(32);
+                    _orderCache.Clear();
+
+                    var result = peer.ReceiveIngestMessage(tcp, _orderCache);
+                    switch (result)
+                    {
+                        case ReceiveIngestResult.Success:
+                        {
+                            var index = 0;
+                            try
+                            {
+                                for (; index < _orderCache.Count; index++)
+                                {
+                                    var m = _orderCache[index];
+                                    using (m) DispatchAppCommand(peer, m.Extract());
+                                }
+                            }
+                            finally
+                            {
+                                for (; index < _orderCache.Count; index++)
+                                {
+                                    _orderCache[index].Dispose();
+                                }
+                            }
+                            break;
+                        }
+                        case ReceiveIngestResult.BufferOverflow:
+                            Logger.Warn("Peer {0} Out-of-order buffer overflow.", peer.PeerId);
+                            peer.Close(CloseReason.Rejected);
+                            tcp.Dispose();
+                            break;
+                        case ReceiveIngestResult.Buffered:
+                            break;
+                        case ReceiveIngestResult.Duplicate:
+                        default:
+                            tcp.Dispose();
+                            break;
+                    }
+                }
+                else
+                {
+                    IMessage extracted = message switch
+                    {
+                        TcpMessage t => t.Extract(),
+                        UdpMessage u => u.Extract(),
+                        _ => null
+                    };
+                    
+                    using (message) DispatchAppCommand(peer, extracted);
+                }
+            }
         }
         catch (Exception ex)
         {
             Logger.Error(ex, "ExecuteCommand failed: {0}", ex.Message);
+            message.Dispose();
+        }
+    }
+
+    private void DispatchAppCommand(PeerBase peer, IMessage message)
+    {
+        if (message == null) return;
+        var fiber = GetLogicFiber(peer.PeerId);
+        fiber.Enqueue(ExecuteAppCommand, this, peer, message);
+    }
+
+    private static void ExecuteAppCommand(EngineBase engine, PeerBase peer, IMessage message)
+    {
+        try
+        {
+            var command = engine.GetAppCommand(message.Id);
+            if (command == null) return;
+
+            var elapsedTicks = command.Execute(peer, message);
+        
+            var log = GetCurrentThreadPerfLog();
+            Interlocked.Increment(ref log.ProcessedCount);
+            Interlocked.Add(ref log.TotalExecutionTimeMs, elapsedTicks);
+            if (elapsedTicks >= engine.Config.Session.CommandSlowThresholdMs)
+            {
+                engine.Logger.Warn(
+                    "Command '{0}' slow detected. PeerId={1}, Exec={2:F2}ms", command.Name, peer.PeerId, elapsedTicks);
+            }
         }
         finally
         {
             message.Dispose();
         }
+
     }
 
-    private static void DispatchAppCommand(EngineBase engine, PeerBase peer, IMessage message)
-    {
-        try
-        {
-            if (message is TcpMessage { SequenceNumber: > 0 } tcp)
-            {
-                _orderCache ??= new List<TcpMessage>(32);
-                _orderCache.Clear();
-
-                var result = peer.ReceiveIngestMessage(tcp, _orderCache);
-                switch (result)
-                {
-                    case ReceiveIngestResult.Success:
-                    {
-                        foreach (var ordered in _orderCache)
-                        {
-                            using (ordered) ExecuteAppCommand(engine, peer, ordered);
-                        }
-                        break;
-                    }
-                    case ReceiveIngestResult.BufferOverflow:
-                    {
-                        engine.Logger.Warn("Peer {0} Out-of-order buffer overflow (Max: {1})"
-                            , peer.PeerId, engine.Config.Network.ReliableMaxOutOfOrderCount);
-
-                        peer.Close(CloseReason.Rejected);
-                        tcp.Dispose();
-                        return;
-                    }
-                    case ReceiveIngestResult.Buffered:
-                        break;
-                    case ReceiveIngestResult.Duplicate:
-                        tcp.Dispose();
-                        break;
-                    default:
-                        throw new Exception($"Invalid result: {result}");
-                }
-            }
-            else
-            {
-                using (message) ExecuteAppCommand(engine, peer, message);
-            }
-        }
-        catch (Exception ex)
-        {
-            engine.Logger.Error(ex, "DispatchUserCommand failed: {0}", ex.Message);
-        }
-    }
-
-    private static void ExecuteAppCommand(EngineBase engine, PeerBase peer, IMessage message)
-    {
-        var command = engine.GetAppCommand(message.Id);
-        if (command == null) return;
-
-        var elapsedTicks = command.Execute(peer, message);
-        
-        var log = GetCurrentThreadPerfLog();
-        Interlocked.Increment(ref log.ProcessedCount);
-        Interlocked.Add(ref log.TotalExecutionTimeMs, elapsedTicks);
-
-        if (elapsedTicks >= engine.Config.Session.CommandSlowThresholdMs)
-        {
-            engine.Logger.Warn(
-                "Command '{0}' slow detected. PeerId={1}, Exec={2:F2}ms", command.Name, peer.PeerId, elapsedTicks);
-        }
-    }
-
-    public IS2SClient GetS2SClient(string name)
+    public IS2SClient GetAvailableS2SClient(string name)
     {
         return _s2sClientGroups.TryGetValue(name, out var group) 
             ? group.GetAvailableClient() 
             : null;
     }
     
-    public IEnumerable<IS2SClient> GetS2SClientsInGroup(string name)
+    public IEnumerable<IS2SClient> GetAvailableS2SClients(string name)
     {
         return _s2sClientGroups.TryGetValue(name, out var group)
-            ? group.GetAllActiveClients()
+            ? group.GetAllAvailableClients()
             : [];
     }
 }

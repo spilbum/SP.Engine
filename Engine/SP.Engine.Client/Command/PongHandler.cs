@@ -9,13 +9,17 @@ namespace SP.Engine.Client.Command
     {
         protected override void ExecuteCommand(NetPeerBase context, Pong protocol)
         {
-            var nowMs = NetPeerBase.NetworkTimeMs;
+            var nowMs = NetPeerBase.LocalElapsedTimeMs;
             var rttMs = nowMs - protocol.SentTimeMs;
+            
+            // RTT 지표 업데이트
             context.SetRttMs(rttMs);
 
-            var estimatedServerNetworkTime = protocol.ServerTimeMs + rttMs / 2;
-            var offset = (long)estimatedServerNetworkTime - nowMs;
-            context.SetServerTimeOffset(offset);
+            // 오프셋 계산 및 최소 RTT 필터링 적용
+            var targetServerTimeMs = protocol.ServerTimeMs + rttMs / 2;
+            var offset = (long)targetServerTimeMs - nowMs;
+            
+            context.SetServerTimeOffset(offset, rttMs);
         }
     }
 }

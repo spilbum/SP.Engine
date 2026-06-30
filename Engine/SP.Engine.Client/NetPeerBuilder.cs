@@ -59,14 +59,7 @@ namespace SP.Engine.Client
                 c.KeepAliveTimeSec = timeSec;
                 c.KeepAliveIntervalSec = intervalSec;
             });
-
-        public NetPeerBuilder WithUdpHealthCheck(int intervalSec, int threshold)
-            => Configure(c =>
-            {
-                c.UdpHealthCheckIntervalSec = intervalSec;
-                c.UdpHealthCheckThreshold = threshold;
-            });
-
+        
         public NetPeerBuilder WithBufferSize(int sendBufferSize, int receiveBufferSize)
             => Configure(c =>
             {
@@ -103,7 +96,7 @@ namespace SP.Engine.Client
             return this;
         }
 
-        public bool TryInitialize<T>(T instance) where T : NetPeerBase
+        public bool TryBuild<T>(T instance) where T : NetPeerBase
         {
             if (instance == null) throw new ArgumentNullException(nameof(instance));
             if (_logger == null) throw new InvalidOperationException("Logger must be configured.");
@@ -130,7 +123,7 @@ namespace SP.Engine.Client
         public T Build<T>() where T : NetPeerBase, new()
         {
             var peer = new T();
-            if (!TryInitialize(peer))
+            if (!TryBuild(peer))
             {
                 throw new InvalidOperationException(
                     $"NetPeer initialization failed for type {typeof(T).Name}. Check logs for details.");

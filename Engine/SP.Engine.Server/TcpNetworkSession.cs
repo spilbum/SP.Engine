@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Net.Sockets;
-using System.Text;
 using System.Threading;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Networking;
@@ -41,10 +40,14 @@ public class TcpNetworkSession(Socket client, SocketSendContext sendContext, Soc
             if (e.Offset != offset)
                 e.SetBuffer(offset, Session.Config.Network.ReceiveBufferSize);
 
+            var client = Volatile.Read(ref _client);
+            if (client == null)
+                return;
+            
             bool pending;
             try
             {
-                pending = _client.ReceiveAsync(e);
+                pending = client.ReceiveAsync(e);
             }
             catch (Exception ex)
             {
@@ -139,6 +142,10 @@ public class TcpNetworkSession(Socket client, SocketSendContext sendContext, Soc
                 Interlocked.Exchange(ref _isSending, 0);
                 return;
             }
+            
+            var client = Volatile.Read(ref _client);
+            if (client == null)
+                return;
 
             var context = Volatile.Read(ref _sendContext);
             if (context == null)
@@ -165,7 +172,7 @@ public class TcpNetworkSession(Socket client, SocketSendContext sendContext, Soc
             bool pending;
             try
             {
-                pending = _client.SendAsync(context.SocketEventArgs);
+                pending = client.SendAsync(context.SocketEventArgs);
             }
             catch (Exception ex)
             {

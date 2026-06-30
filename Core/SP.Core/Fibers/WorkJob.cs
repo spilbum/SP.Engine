@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Threading;
 
-namespace SP.Core.Fiber
+namespace SP.Core.Fibers
 {
     public static class WorkJob
     {

@@ -54,14 +54,24 @@ public abstract class PeerBase : IPeer, IDisposable
     private DateTime _lastAckTime;
     private bool _disposed;
     private readonly List<TcpMessage> _retriesCache = [];
-
     private int _isSending;
     private readonly ConcurrentQueue<IProtocolData> _sendQueue = new();
     
     internal ReliableMessageProcessor MessageProcessor { get; }
 
     public EngineBase Engine => _session.Engine;
+    public double AvgRttMs { get; private set; }
+    public double JitterMs { get; private set; }
+    public IPEndPoint LocalEndPoint => _session.LocalEndPoint;
+    public IPEndPoint RemoteEndPoint => _session.RemoteEndPoint;
+    public bool IsConnected => _stateCode is PeerStateConst.Authenticated or PeerStateConst.Online;
+    public bool IsClosed => _stateCode is PeerStateConst.Closed;
 
+    internal byte[] LocalPublicKey => _diffieHellman?.PublicKey;
+
+    IEncryptor ICommandContext.Encryptor => _encryptor;
+    ICompressor ICommandContext.Compressor => _compressor;
+    
     protected PeerBase(PeerKind kind, Session session)
     {
         PeerId = PeerIdGenerator.Generate();
@@ -81,18 +91,6 @@ public abstract class PeerBase : IPeer, IDisposable
             .SetInFlightLimit(config.ReliableInFlightLimit)
             .Build();
     }
-
-    public double AvgRTTMs { get; private set; }
-    public double LatencyJitterMs { get; private set; }
-    public IPEndPoint LocalEndPoint => _session.LocalEndPoint;
-    public IPEndPoint RemoteEndPoint => _session.RemoteEndPoint;
-    public bool IsConnected => _stateCode is PeerStateConst.Authenticated or PeerStateConst.Online;
-    public bool IsClosed => _stateCode is PeerStateConst.Closed;
-
-    internal byte[] LocalPublicKey => _diffieHellman?.PublicKey;
-
-    IEncryptor ICommandContext.Encryptor => _encryptor;
-    ICompressor ICommandContext.Compressor => _compressor;
     
     public void Dispose()
     {
@@ -298,8 +296,8 @@ public abstract class PeerBase : IPeer, IDisposable
     internal void RecordPingData(double rttMs, double avgRttMs, double jitterMs)
     {
         MessageProcessor.AddRtoSample(rttMs);
-        AvgRTTMs = avgRttMs;
-        LatencyJitterMs = jitterMs;
+        AvgRttMs = avgRttMs;
+        JitterMs = jitterMs;
     }
 
     internal void HandleRemoteAck(uint nextExpectedSeq)

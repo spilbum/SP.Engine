@@ -6,7 +6,7 @@ using System.Net;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
-using SP.Core.Fiber;
+using SP.Core.Fibers;
 using SP.Core.Logging;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Networking;
@@ -44,7 +44,7 @@ public abstract class EngineCore : ILogContext, IDisposable
     private IDisposable _handshakePendingTimer;
     private ListenerInfo[] _listenerInfos;
     private SocketServer _socketServer;
-    private ThreadFiber _engineFiber;
+    private PoolFiber _engineFiber;
     private readonly Scheduler _globalScheduler = new();
     private SessionManager _sessionManager;
     private IDisposable _fragmentAssemblerCleanupTimer;
@@ -95,7 +95,7 @@ public abstract class EngineCore : ILogContext, IDisposable
             return false;
 
         _sessionManager = new SessionManager(config.Session.MaxConnections);
-        _engineFiber = new ThreadFiber("EngineFiber", onError: ex => Logger.Error(ex));
+        _engineFiber = new PoolFiber("EngineFiber", onError: ex => Logger.Error(ex));
         _stateCode = ServerStateConst.NotStarted;
         return true;
     }

@@ -14,14 +14,11 @@ internal class S2SConnectAckHandler : CommandHandlerBase<S2SClient, S2SConnectAc
             case S2SConnectResult.AlreadyConnected:
                 // 이미 연결됨 
                 break;
-            case S2SConnectResult.InternalError:
-                // 완전 종료
-                context.Close();
-                break;
             case S2SConnectResult.Success:
                 // 연결 성공
                 context.S2SConnectCompleted();
                 break;
+            case S2SConnectResult.InternalError:
             default:
                 context.Close();
                 break;

@@ -1,5 +1,5 @@
 using System.Collections.Concurrent;
-using SP.Core.Fiber;
+using SP.Core.Fibers;
 
 namespace SP.Shared.Rank.Season;
 

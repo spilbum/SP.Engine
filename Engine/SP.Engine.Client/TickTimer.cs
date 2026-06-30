@@ -10,9 +10,8 @@ namespace SP.Engine.Client
         private Action<object> _callback;
         private long _periodTicks;
         private long _nextExecutionTicks;
+        private bool _running;
         private bool _disposed;
-        
-        public bool IsRunning { get; private set; }
 
         public TickTimer(Action<object> callback, object state, TimeSpan dueTime, TimeSpan period)
         {
@@ -33,12 +32,12 @@ namespace SP.Engine.Client
                 ? long.MaxValue
                 : nowTimestamp + (long)(dueTime.TotalSeconds * Stopwatch.Frequency);
             
-            IsRunning = true;
+            _running = true;
         }
         
         public void Tick()
         {
-            if (!IsRunning || _disposed) return;
+            if (!_running || _disposed) return;
 
             var nowTicks = Stopwatch.GetTimestamp();
             if (nowTicks >= _nextExecutionTicks)
@@ -64,12 +63,12 @@ namespace SP.Engine.Client
             }
         }
 
-        public void Stop() => IsRunning = false;
+        public void Stop() => _running = false;
         
         public void Dispose()
         {
             if (_disposed) return;
-            IsRunning = false;
+            _running = false;
             _callback = null;
             _disposed = true;
         }

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 
-namespace SP.Core.Fiber
+namespace SP.Core.Fibers
 {
     public sealed class Scheduler : IScheduler
     {

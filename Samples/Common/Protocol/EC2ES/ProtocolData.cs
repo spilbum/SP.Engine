@@ -17,3 +17,9 @@ public class UdpEchoReq : ProtocolDataBase<UdpEchoReq>
     public byte[]? Data;
 }
 
+[ProtocolData(ProtocolId.EC2ES.HeavyLoadNotify)]
+public class HeavyLoadNotify : ProtocolDataBase<HeavyLoadNotify>
+{
+    public int DelayMs;
+}
+

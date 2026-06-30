@@ -3,16 +3,16 @@ using SP.Engine.Client;
 
 namespace EchoClient;
 
-public class EchoClient : NetPeerBase
+public class UserPeer : NetPeerBase
 {
     private CancellationTokenSource? _cts;
     private int _pendingCount;
     private int _batchCount;
     private string? _sendType;
     
-    public bool IsEchoing { get; private set; }
+    public bool IsRunning { get; private set; }
 
-    public EchoClient()
+    public UserPeer()
     {
         Connected += OnConnected;
         Disconnected += OnDisconnected;
@@ -20,7 +20,7 @@ public class EchoClient : NetPeerBase
         StateChanged += OnStateChanged;
         Error += OnError;
     }
-
+    
     private void OnError(object? sender, ErrorEventArgs e)
     {
         var ex = e.GetException();
@@ -46,22 +46,22 @@ public class EchoClient : NetPeerBase
     {
         Logger.Debug("[OnConnected] PeerId: {0}", PeerId);
     }
-    
-    public void StartEcho(string type, int period, int batchCount)
+
+    public void StartTest(string sendType, int period, int batchCount)
     {
-        if (IsEchoing) return;
+        if (IsRunning) return;
         
-        IsEchoing = true;
-        _sendType = type;
+        IsRunning = true;
+        _sendType = sendType;
         _batchCount = batchCount;
         _cts = new CancellationTokenSource();
-        _ = Task.Run(() => EchoScheduler(period, _cts.Token));
+        _ = Task.Run(() => TestScheduler(period, _cts.Token));
     }
 
-    public void StopEcho()
+    public void StopTest()
     {
-        if (!IsEchoing) return;
-        IsEchoing = false;
+        if (!IsRunning) return;
+        IsRunning = false;
         
         if (_cts != null)
         {
@@ -69,13 +69,15 @@ public class EchoClient : NetPeerBase
             _cts.Dispose();
             _cts = null;
         }
-
+        
         _pendingCount = 0;
+        _sendType = null;
+        _batchCount = 0;
     }
 
-    private async Task EchoScheduler(int period, CancellationToken ct)
+    private async Task TestScheduler(int period, CancellationToken ct)
     {
-        Logger.Debug("[EchoScheduler Started] Type: {0}, Period: {1}ms", _sendType, period);
+        Logger.Debug("[TestScheduler Started] Type: {0}, Period: {1}ms, Batch: {2}", _sendType, period, _batchCount);
         
         while (!ct.IsCancellationRequested)
         {
@@ -91,7 +93,7 @@ public class EchoClient : NetPeerBase
         }
     }
 
-    public void ProcessPendingEcho()
+    public void ProcessSend()
     {
         // 원자적으로 현재 쌓인 발송 요청 개수를 땡겨옵니다.
         var count = Interlocked.Exchange(ref _pendingCount, 0);
@@ -111,8 +113,17 @@ public class EchoClient : NetPeerBase
                     SendTcp(128);
                     SendUdp(128);
                     break;
+                case "heavy":
+                    SendHeavy();
+                    break;
             }
         }
+    }
+
+    private void SendHeavy()
+    {
+        var delayMs = new Random().Next(10, 20);
+        Send(new HeavyLoadNotify { DelayMs = delayMs });
     }
 
     private void SendTcp(int bytes)

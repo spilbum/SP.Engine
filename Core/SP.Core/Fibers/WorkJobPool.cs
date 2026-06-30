@@ -2,7 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 
-namespace SP.Core.Fiber
+namespace SP.Core.Fibers
 {
     public static class WorkJobPool<T> where T : class, IWorkJob, new()
     {

@@ -1,7 +1,7 @@
 using System;
 using System.Reflection;
 using System.Threading;
-using SP.Core.Fiber;
+using SP.Core.Fibers;
 using SP.Engine.Client;
 using SP.Engine.Common.Protocol;
 using SP.Engine.Common.Protocol.S2S;
@@ -66,7 +66,7 @@ public class S2SClient(EngineBase engine) : NetPeerBase(PeerKind.Server), IS2SCl
             
             foreach (var assembly in assemblies) builder.AddAssembly(assembly);
  
-            if (!builder.TryInitialize(this))
+            if (!builder.TryBuild(this))
             {
                 _fiber.Dispose();
                 return false;

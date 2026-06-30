@@ -74,7 +74,7 @@ namespace SP.Engine.Client
     {
         private static readonly long _baseUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         private static long UtcNowMs => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        internal static uint NetworkTimeMs => (uint)(UtcNowMs - _baseUnixMs);
+        internal static uint LocalElapsedTimeMs => (uint)(UtcNowMs - _baseUnixMs);
         
         private readonly MessageChannelRouter _channelRouter = new MessageChannelRouter();
         private readonly DiffieHellman _diffieHellman = new DiffieHellman(DhKeySize.Bit2048);
@@ -106,7 +106,9 @@ namespace SP.Engine.Client
         private int _udpHandshakeCount;
         
         private readonly EwmaFilter _serverTimeOffsetFilter = new EwmaFilter(0.1);
-        private long _baseServerTimeOffsetMs;
+        private long _smoothedServerOffsetMs;
+        private double _bestRttWindow = double.MaxValue;
+        private DateTime _lastBestRttReset = DateTime.UtcNow;
         
         private readonly List<TcpMessage> _retriesCache = new List<TcpMessage>();
         private readonly List<TcpMessage> _orderCache = new List<TcpMessage>();
@@ -118,7 +120,6 @@ namespace SP.Engine.Client
         public long LastPingTimeMs { get; private set; }
         public EndPoint RemoteEndPoint { get; private set; }
         public EngineConfig Config { get; private set; }
-        public LatencyStats LatencyStats { get; private set; }
         public NetPeerState State => (NetPeerState)_stateCode;
         public bool IsConnected => State == NetPeerState.Open;
         public ILogger Logger { get; private set; }
@@ -127,11 +128,18 @@ namespace SP.Engine.Client
         IEncryptor ICommandContext.Encryptor => _encryptor;
         ICompressor ICommandContext.Compressor => _compressor;
         
+        private readonly LatencyEstimator _latencyEstimator = new LatencyEstimator();
+        private readonly object _latencyLock = new object();
+        
+        public double LastRttMs { get; set; }
+        public double AvgRttMs { get; set; }
+        public double JitterMs { get; set; }
+        
         public DateTime ServerTime
         {
             get
             {
-                var estimateMs = UtcNowMs + _baseServerTimeOffsetMs;
+                var estimateMs = UtcNowMs + _smoothedServerOffsetMs;
                 return DateTimeOffset.FromUnixTimeMilliseconds(estimateMs).UtcDateTime;    
             }
         }
@@ -290,16 +298,15 @@ namespace SP.Engine.Client
         {
             var ping = new Ping
             {
-                SendTimeMs = NetworkTimeMs,
-                RttMs = LatencyStats.LastRttMs,
-                AvgRttMs = LatencyStats.AvgRttMs,
-                JitterMs = LatencyStats.JitterMs,
+                SendTimeMs = LocalElapsedTimeMs,
+                RttMs = LastRttMs,
+                AvgRttMs = AvgRttMs,
+                JitterMs = JitterMs,
             };
 
             try
             {
-                if (InternalSend(ping))
-                    LatencyStats.OnSent();
+                InternalSend(ping);
             }
             finally
             {
@@ -322,7 +329,6 @@ namespace SP.Engine.Client
         {
             Config = config;
             Logger = logger;
-            LatencyStats = new LatencyStats();
             
             // 엔진 명령어 등록
             RegisterEngineCommand<SessionAuthAckHandler>(ProtocolId.S2C.SessionAuthAck);
@@ -435,20 +441,19 @@ namespace SP.Engine.Client
         {
             while (_messageReceivedQueue.TryDequeue(out var message))
             {
-                _orderCache.Clear();
-                
                 try
                 {
                     if (message is TcpMessage tcp && tcp.SequenceNumber > 0)
                     {
-                        var result = _messageProcessor.ReceiveIngestMessage(tcp.Extract(), _orderCache);
+                        _orderCache.Clear();
+                        var result = _messageProcessor.ReceiveIngestMessage(tcp, _orderCache);
                         switch (result)
                         {
                             case ReceiveIngestResult.Success:
                             {
                                 foreach (var m in _orderCache)
                                 {
-                                    using (m) DispatchCommand(m);
+                                    using (m) ExecuteCommand(m);
                                 }
 
                                 break;
@@ -457,47 +462,41 @@ namespace SP.Engine.Client
                             {
                                 Logger.Warn("NetPeer {0} Out-of-order buffer overflow.", _peerId);
                                 Close();
+                                tcp.Dispose();
                                 return;
                             }
                             case ReceiveIngestResult.Buffered:
+                                break;
                             case ReceiveIngestResult.Duplicate:
                             default:
+                                tcp.Dispose();
                                 break;
                         }
                     }
                     else
                     {
-                        DispatchCommand(message);
+                        using (message) ExecuteCommand(message);
                     }
                 }
                 catch (Exception ex)
                 {
                     Logger.Error(ex, "Message processing failed. Id={0}", message.Id);
                 }
-                finally
-                {
-                    message.Dispose();
-                }
             }
         }
 
-        private void DispatchCommand(IMessage message)
+        private void ExecuteCommand(IMessage message)
         {
-            var engineCommand = GetEngineCommand(message.Id);
-            if (engineCommand != null)
-            {
-                engineCommand.Execute(this, message);
-                return;
-            }
-
-            var appCommand = GetAppCommand(message.Id);
-            if (appCommand == null)
+            if (message == null) return;
+            
+            var command = GetAppCommand(message.Id);
+            if (command == null)
             {
                 Logger.Warn("Unknown command: {0}", message.Id);
                 return;
             }
 
-            appCommand.Execute(this, message);
+            command.Execute(this, message);
         }
         
         private void FlushPendingMessage()
@@ -905,16 +904,39 @@ namespace SP.Engine.Client
             });
         }
         
-        internal void SetServerTimeOffset(long offset)
+        internal void SetServerTimeOffset(long offset, double currentRtt)
         {
-            _serverTimeOffsetFilter.Update(offset);
-            _baseServerTimeOffsetMs = (long)_serverTimeOffsetFilter.Value;
+            if ((DateTime.UtcNow - _lastBestRttReset).TotalSeconds > 60)
+            {
+                _bestRttWindow = double.MaxValue;
+                _lastBestRttReset = DateTime.UtcNow;
+            }
+
+            if (currentRtt <= _bestRttWindow)
+            {
+                _bestRttWindow = currentRtt;
+                _serverTimeOffsetFilter.Update(offset);
+            }
+            else
+            {
+                _serverTimeOffsetFilter.Update(offset * 0.01 + _serverTimeOffsetFilter.Value);
+            }
+
+            _smoothedServerOffsetMs = (long)_serverTimeOffsetFilter.Value;
         }
 
         internal void SetRttMs(uint rttMs)
         {
             _messageProcessor?.AddRtoSample(rttMs);
-            LatencyStats.OnReceived(rttMs);
+
+            lock (_latencyLock)
+            {
+                LastRttMs = rttMs;
+                _latencyEstimator.AddSample(rttMs);
+
+                AvgRttMs = _latencyEstimator.SmoothedRtt;
+                JitterMs = _latencyEstimator.Jitter;
+            }
         }
 
         internal void SetReliableMessageProcessor(ReliableMessageProcessor processor)

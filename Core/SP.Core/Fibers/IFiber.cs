@@ -1,5 +1,6 @@
 using System;
-namespace SP.Core.Fiber
+
+namespace SP.Core.Fibers
 {
     public interface IFiber : IDisposable
     {

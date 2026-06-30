@@ -6,6 +6,4 @@ public abstract class S2SPeerBase(Session session) : PeerBase(PeerKind.Server, s
 {
 }
 
-internal sealed class PendingS2SPeer(Session session) : S2SPeerBase(session)
-{
-}
+

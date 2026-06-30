@@ -47,7 +47,7 @@ public sealed class S2SClientGroup(string name) : IDisposable
         return clients[index];
     }
 
-    public IEnumerable<IS2SClient> GetAllActiveClients() => _activeClients;
+    public IEnumerable<IS2SClient> GetAllAvailableClients() => _activeClients;
 
     public void Dispose()
     {

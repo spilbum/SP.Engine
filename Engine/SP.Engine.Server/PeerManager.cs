@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
 using SP.Engine.Runtime;
 using SP.Engine.Server.Configuration;
 
@@ -38,15 +37,11 @@ public class PeerManager(IEngineConfig config)
         return _reconnectPendingPeers.TryGetValue(peerId, out var waiting) ? waiting.Peer : null;
     }
 
-    public void Register(PeerBase peer)
+    public bool Register(PeerBase peer)
     {
-        if (!_activePeers.TryAdd(peer.PeerId, peer))
-        {
-            peer.Close(CloseReason.InternalError);
-            return;
-        }
-        
+        if (!_activePeers.TryAdd(peer.PeerId, peer)) return false;
         peer.JoinServer();
+        return true;
     }
 
     public bool TransitionToOnline(uint peerId, Session session)

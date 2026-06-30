@@ -23,16 +23,6 @@ namespace SP.Engine.Client.Configuration
         public ushort UdpMtu { get; set; } = 1200;
 
         /// <summary>
-        /// Udp HealthCheck 최대 실패 횟수 (기본값: 3회)
-        /// </summary>
-        public int UdpHealthCheckThreshold { get; set; } = 3;
-
-        /// <summary>
-        /// UDP HealthCheck 주기 (기본값: 10초)
-        /// </summary>
-        public int UdpHealthCheckIntervalSec { get; set; } = 10;
-
-        /// <summary>
         /// UDP 핸드쉐이크 시간 제한 (기본값: 5초)
         /// </summary>
         public int UdpHandshakeTimeSec { get; set; } = 5;

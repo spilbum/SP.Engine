@@ -5,14 +5,13 @@ using SP.Engine.Client;
 
 namespace EchoClient;
 
-public class EchoManager(ILogger logger)
+public class TestManager(ILogger logger)
 {
-    private readonly ConcurrentBag<EchoClient> _clients = [];
+    private readonly ConcurrentBag<UserPeer> _clients = [];
     private string? _host;
     private int _port;
 
     public bool IsRunning { get; private set; }
-    public ILogger Logger => logger;
 
     public void Test_Reconnect(int delayMs)
     {
@@ -62,7 +61,7 @@ public class EchoManager(ILogger logger)
                     .WithAutoPing(true, 2)
                     .AddAssembly(typeof(TcpEchoReq).Assembly)
                     .WithEntryAssembly()
-                    .Build<EchoClient>();
+                    .Build<UserPeer>();
             
                 client.Connect(_host, _port);
                 _clients.Add(client);
@@ -72,7 +71,7 @@ public class EchoManager(ILogger logger)
         }
         catch (Exception ex)
         {
-            Logger.Error(ex);
+            logger.Error(ex);
         }
     }
 
@@ -94,7 +93,7 @@ public class EchoManager(ILogger logger)
 
                             if (client.IsConnected)
                             {
-                                client.ProcessPendingEcho();
+                                client.ProcessSend();
                             }
                         }
                         catch (Exception e)
@@ -115,26 +114,26 @@ public class EchoManager(ILogger logger)
     
     private readonly object _lock = new();
 
-    public void StartEchoTest(int targetCount, string sendType, int period, int batchCount)
+    public void StartTest(int targetCount, string sendType, int period, int batchCount)
     {
         lock (_lock)
         {
-            var targets = _clients.Where(c => !c.IsEchoing).Take(targetCount).ToList();
+            var targets = _clients.Where(c => !c.IsRunning).Take(targetCount).ToList();
             foreach (var client in targets)
             {
-                client.StartEcho(sendType, period, batchCount);
+                client.StartTest(sendType, period, batchCount);
             }
             
-            Logger.Info($"Echo test started for {targets.Count} clients (SendType: {sendType})");
+            logger.Info($"Test started for {targets.Count} clients (SendType: {sendType})");
         }
     }
 
-    public void StopEchoTest()
+    public void StopTest()
     {
         lock (_lock)
         {
-            foreach (var client in _clients) client.StopEcho();
-            logger.Info("All echo tests stopped");
+            foreach (var client in _clients) client.StopTest();
+            logger.Info("All tests stopped");
         }
     }
 }

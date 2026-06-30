@@ -1,6 +1,6 @@
 using System;
 
-namespace SP.Core.Fiber
+namespace SP.Core.Fibers
 {
     [Serializable]
     public sealed class FiberException : Exception

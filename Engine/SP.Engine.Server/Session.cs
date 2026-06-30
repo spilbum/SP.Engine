@@ -43,7 +43,7 @@ public sealed class Session(long sessionId) : SessionBase(sessionId)
     {
         var nowTicks = DateTime.UtcNow.Ticks;
         var elapsedMs = (nowTicks - _lastUdpCheckTimeTicks) / TimeSpan.TicksPerMillisecond;
-        var timeoutMs = Math.Max(Config.Session.UdpHealthCheckMinTimeoutMs, _peer.AvgRTTMs * 3);
+        var timeoutMs = Math.Max(Config.Session.UdpHealthCheckMinTimeoutMs, _peer.AvgRttMs * 3);
         if (elapsedMs >= timeoutMs)
         {
             if (InvalidateUdpHealth(Config.Session.UdpHealthCheckMaxFailCount))

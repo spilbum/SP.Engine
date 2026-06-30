@@ -8,6 +8,7 @@ public class UserPeer : NetPeerBase
     private CancellationTokenSource? _cts;
     private int _pendingCount;
     private int _batchCount;
+
     
     public string UserId { get; }
     public string TargetUserId { get; }
@@ -21,7 +22,7 @@ public class UserPeer : NetPeerBase
         Connected += OnConnected;
         Error += OnError;
     }
-
+    
     private void OnConnected(object? sender, EventArgs e)
     {
         Logger.Debug("Peer {0} connected.", UserId);
@@ -73,9 +74,11 @@ public class UserPeer : NetPeerBase
         }
     }
 
-    public void Chat(string targetUserId, string message)
+    private void Chat(string targetUserId, string message)
     {
         var chat = new ChatNotifyReq { TargetUserId = targetUserId, Message = message };
         Send(chat);
     }
+    
+    
 }

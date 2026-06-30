@@ -61,12 +61,13 @@ internal class SessionAuthReqHandler : CommandHandlerBase<Session, SessionAuthRe
                 if (!peer.TryKeyExchange(req.EncryptKeySize, req.EncryptPublicKey))
                     return (SessionAuthResult.KeyExchangeFailed, null);
                 
-                engine.JoinPeer(peer);
-                return (SessionAuthResult.Ok, peer);
+                return engine.JoinPeer(peer) 
+                    ? (SessionAuthResult.Ok, peer) 
+                    : (SessionAuthResult.InternalError, null);
             }
             case PeerKind.Server:
             {
-                var peer = new PendingS2SPeer(session);
+                var peer = new S2SPendingPeer(session);
                 return peer.TryKeyExchange(req.EncryptKeySize, req.EncryptPublicKey) 
                     ? (SessionAuthResult.Ok, peer)
                     : (SessionAuthResult.KeyExchangeFailed, null);

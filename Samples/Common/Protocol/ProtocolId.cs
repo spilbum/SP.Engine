@@ -6,6 +6,7 @@ public static class ProtocolId
     {
         public const ushort TcpEchoReq = 1000;
         public const ushort UdpEchoReq = 1001;
+        public const ushort HeavyLoadNotify = 1002;
     }
     
     public static class ES2EC
