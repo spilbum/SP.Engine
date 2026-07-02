@@ -9,7 +9,14 @@ internal class PingHandler : CommandHandlerBase<Session, Ping>
 {
     protected override void ExecuteCommand(Session session, Ping protocol)
     {
-        session.Peer?.RecordPingData(protocol.RttMs, protocol.AvgRttMs, protocol.JitterMs);
+        var peer = session.Peer;
+        if (peer != null)
+        {
+            peer.MessageProcessor.AddRtoSample(protocol.RttMs);
+            peer.AvgRttMs = protocol.AvgRttMs;
+            peer.JitterMs = protocol.JitterMs;
+        }
+
         session.SendPong(protocol.SendTimeMs);
     }
 }

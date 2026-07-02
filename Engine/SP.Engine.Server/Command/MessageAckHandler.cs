@@ -9,6 +9,7 @@ internal class MessageAckHandler : CommandHandlerBase<Session, MessageAck>
 {
     protected override void ExecuteCommand(Session session, MessageAck protocol)
     {
-        session.Peer?.HandleRemoteAck(protocol.NextExpectedSeq);
+        var peer = session.Peer;
+        peer?.MessageProcessor.AcknowledgeInFlight(protocol.NextExpectedSeq);
     }
 }

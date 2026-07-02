@@ -41,13 +41,14 @@ public abstract class EngineBase : EngineCore, IEngine
     private ThreadFiber _perfFiber;
     
     private ThreadFiber[] _logicFibers;
-    private IDisposable[] _shardTickTimers;
+    private IDisposable[] _sessionTickTimers;
+    private IDisposable[] _simulationTickTimers;
     private Dictionary<uint, PeerBase>[] _shardPeers;
     private int _shardMask;
     
     private static readonly ConcurrentBag<ThreadPerfLog> _threadPerfLogs = [];
     [ThreadStatic] private static ThreadPerfLog _threadPerfLog;
-    [ThreadStatic] private static List<TcpMessage> _orderCache;
+    [ThreadStatic] private static List<TcpMessage> _receiveIngestCache;
 
     internal int LogicFiberCount => _logicFibers.Length;
     
@@ -118,9 +119,14 @@ public abstract class EngineBase : EngineCore, IEngine
         _perfMonitor?.Dispose();
         _perfFiber?.Dispose();
 
-        if (_shardTickTimers != null)
+        if (_sessionTickTimers != null)
         {
-            foreach (var timer in _shardTickTimers) timer?.Dispose();
+            foreach (var timer in _sessionTickTimers) timer?.Dispose();
+        }
+
+        if (_simulationTickTimers != null)
+        {
+            foreach (var timer in _simulationTickTimers) timer?.Dispose();
         }
 
         if (_logicFibers != null)
@@ -281,7 +287,8 @@ public abstract class EngineBase : EngineCore, IEngine
         fiberCount = Math.Clamp(fiberCount, 4, 32);
         
         _logicFibers = new ThreadFiber[fiberCount];
-        _shardTickTimers = new IDisposable[fiberCount];
+        _sessionTickTimers = new IDisposable[fiberCount];
+        _simulationTickTimers = new IDisposable[fiberCount];
         _shardPeers = new Dictionary<uint, PeerBase>[fiberCount];
         _shardMask = fiberCount - 1;
         
@@ -291,30 +298,52 @@ public abstract class EngineBase : EngineCore, IEngine
                 capacity: 4096,
                 maxBatchSize: 512,
                 onError: OnLogicFiberException);
-
             _shardPeers[index] = [];
-            _shardTickTimers[index] = GlobalScheduler.Schedule(
-                _logicFibers[index],
-                UpdatePeersTick,
+            
+            _sessionTickTimers[index] = GlobalScheduler.Schedule(
+                Fiber,
+                UpdateSessionTick,
                 index,
                 TimeSpan.Zero,
-                TimeSpan.FromMilliseconds(config.Session.PeerUpdateIntervalMs));
+                TimeSpan.FromMilliseconds(20));
+            
+            _simulationTickTimers[index] = GlobalScheduler.Schedule(
+                _logicFibers[index],
+                UpdateSimulationTick,
+                index,
+                TimeSpan.Zero,
+                TimeSpan.FromMilliseconds(config.Session.LogicTickIntervalMs));
         }
         
         Logger.Info("LogicFiber setup completed. FiberCount: {0}", fiberCount);
     }
 
-    private void UpdatePeersTick(int index)
+    private void UpdateSessionTick(int index)
     {
-        foreach (var kvp in _shardPeers[index])
+        foreach (var peer in _shardPeers[index].Values)
         {
             try
             {
-                kvp.Value.Tick();
+                peer.InternalTick();
             }
             catch (Exception ex)
             {
-                Logger.Error(ex, "Failed to update peer: {0}", kvp.Key);
+                Logger.Error(ex, "SessionTick failed: {0}", peer.PeerId);
+            }
+        }
+    }
+
+    private void UpdateSimulationTick(int index)
+    {
+        foreach (var peer in _shardPeers[index].Values)
+        {
+            try
+            {
+                peer.ExecuteSimulationUpdate();
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "LogicTick failed: {0}", peer.PeerId);
             }
         }
     }
@@ -495,17 +524,16 @@ public abstract class EngineBase : EngineCore, IEngine
     internal void ExecuteCommand(Session session, IMessage message)
     {
         if (session == null) return;
-        
+
         try
         {
-            // 내부 명령어 실행
             var command = GetEngineCommand(message.Id);
             if (command != null)
             {
                 using (message) command.Execute(session, message);
                 return;
             }
-            
+
             var peer = session.Peer;
             if (peer == null)
             {
@@ -513,14 +541,14 @@ public abstract class EngineBase : EngineCore, IEngine
                 return;
             }
 
-            lock (peer)
+            lock (session)
             {
                 if (message is TcpMessage { SequenceNumber: > 0 } tcp)
                 {
-                    _orderCache ??= new List<TcpMessage>(32);
-                    _orderCache.Clear();
+                    _receiveIngestCache ??= new List<TcpMessage>(32);
+                    _receiveIngestCache.Clear();
 
-                    var result = peer.ReceiveIngestMessage(tcp, _orderCache);
+                    var result = peer.MessageProcessor.ReceiveIngestMessage(tcp, _receiveIngestCache);
                     switch (result)
                     {
                         case ReceiveIngestResult.Success:
@@ -528,19 +556,20 @@ public abstract class EngineBase : EngineCore, IEngine
                             var index = 0;
                             try
                             {
-                                for (; index < _orderCache.Count; index++)
+                                for (; index < _receiveIngestCache.Count; index++)
                                 {
-                                    var m = _orderCache[index];
+                                    var m = _receiveIngestCache[index];
                                     using (m) DispatchAppCommand(peer, m.Extract());
                                 }
                             }
                             finally
                             {
-                                for (; index < _orderCache.Count; index++)
+                                for (; index < _receiveIngestCache.Count; index++)
                                 {
-                                    _orderCache[index].Dispose();
+                                    _receiveIngestCache[index].Dispose();
                                 }
                             }
+
                             break;
                         }
                         case ReceiveIngestResult.BufferOverflow:
@@ -564,9 +593,9 @@ public abstract class EngineBase : EngineCore, IEngine
                         UdpMessage u => u.Extract(),
                         _ => null
                     };
-                    
+
                     using (message) DispatchAppCommand(peer, extracted);
-                }
+                }   
             }
         }
         catch (Exception ex)

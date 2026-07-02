@@ -60,8 +60,8 @@ public abstract class PeerBase : IPeer, IDisposable
     internal ReliableMessageProcessor MessageProcessor { get; }
 
     public EngineBase Engine => _session.Engine;
-    public double AvgRttMs { get; private set; }
-    public double JitterMs { get; private set; }
+    public double AvgRttMs { get; internal set; }
+    public double JitterMs { get; internal set; }
     public IPEndPoint LocalEndPoint => _session.LocalEndPoint;
     public IPEndPoint RemoteEndPoint => _session.RemoteEndPoint;
     public bool IsConnected => _stateCode is PeerStateConst.Authenticated or PeerStateConst.Online;
@@ -184,7 +184,7 @@ public abstract class PeerBase : IPeer, IDisposable
                     }
                 }
                 
-                peer.MessageProcessor.EnqueuePendingMessage((TcpMessage)message);
+                peer.MessageProcessor.EnqueuePendingMessage((TcpMessage)message);   
             }
             else
             {
@@ -227,12 +227,19 @@ public abstract class PeerBase : IPeer, IDisposable
         _disposed = true;
     }
 
-    public virtual void Tick()
+    internal void InternalTick()
     {
         CheckAndFlushPeriodAck();
         ProcessRetransmission();
         FlushPendingMessages();   
     }
+
+    protected virtual void OnSimulationUpdate()
+    {
+        
+    }
+
+    internal void ExecuteSimulationUpdate() => OnSimulationUpdate();
 
     private void ProcessRetransmission()
     {
@@ -291,23 +298,6 @@ public abstract class PeerBase : IPeer, IDisposable
 
         sourcePeer._diffieHellman = null;
         sourcePeer._encryptor = null;
-    }
-
-    internal void RecordPingData(double rttMs, double avgRttMs, double jitterMs)
-    {
-        MessageProcessor.AddRtoSample(rttMs);
-        AvgRttMs = avgRttMs;
-        JitterMs = jitterMs;
-    }
-
-    internal void HandleRemoteAck(uint nextExpectedSeq)
-    {
-        MessageProcessor.AcknowledgeInFlight(nextExpectedSeq);   
-    }
-
-    internal ReceiveIngestResult ReceiveIngestMessage(TcpMessage message, List<TcpMessage> destinationList)
-    {
-        return MessageProcessor.ReceiveIngestMessage(message, destinationList);
     }
 
     internal void JoinServer()

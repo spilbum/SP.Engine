@@ -99,7 +99,7 @@ internal class SessionAuthReqHandler : CommandHandlerBase<Session, SessionAuthRe
         }
         
         // 클라가 받은 시퀀스 번호로 갱신
-        peer.HandleRemoteAck(req.NextExpectedSeq);
+        peer.MessageProcessor.AcknowledgeInFlight(req.NextExpectedSeq);
         
         return engine.ActivatePeer(peer, session) 
             ? (SessionAuthResult.Ok, targetPeer: peer)

@@ -7,12 +7,10 @@ namespace SP.Core.Fibers
     {
         private readonly BatchQueue<IWorkJob> _queue;
         private readonly Action<Exception> _onError;
-        private readonly int _maxBatchSize;
 
         private int _isExecuting;
         private volatile bool _disposed;
-
-        [ThreadStatic] private static IWorkJob[] _localBatchBuffer;
+        private readonly IWorkJob[] _batchBuffer;
 
         public string Name { get; }
         public bool IsDisposed => _disposed;
@@ -21,7 +19,7 @@ namespace SP.Core.Fibers
         {
             Name = name;
             _queue = new BatchQueue<IWorkJob>(capacity);
-            _maxBatchSize = Math.Max(1, maxBatchSize);
+            _batchBuffer = new IWorkJob[maxBatchSize];
             _onError = onError;
         }
         
@@ -78,9 +76,8 @@ namespace SP.Core.Fibers
         {
             var fiber = (PoolFiber)state;
             if (fiber._disposed) return;
-
-            _localBatchBuffer ??= new IWorkJob[fiber._maxBatchSize];
-            var batchBuf = _localBatchBuffer;
+            
+            var batchBuf = fiber._batchBuffer;
 
             try
             {
@@ -92,6 +89,8 @@ namespace SP.Core.Fibers
                     for (var i = 0; i < count; i++)
                     {
                         var job = batchBuf[i];
+                        if (job == null) continue;
+                        
                         try
                         {
                             job.Execute();
@@ -106,10 +105,6 @@ namespace SP.Core.Fibers
                             batchBuf[i] = null;
                         }
                     }
-
-                    if (fiber._queue.PendingCount <= 0) continue;
-                    ThreadPool.UnsafeQueueUserWorkItem(ExecutePoolLoop, fiber);
-                    return;
                 }
             }
             finally

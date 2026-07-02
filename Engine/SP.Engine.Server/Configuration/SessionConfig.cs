@@ -44,7 +44,7 @@ public sealed class SessionConfig
     /// <summary>
     /// 피어 로직 처리 주기
     /// </summary>
-    public int PeerUpdateIntervalMs { get; set; } = 50;
+    public int LogicTickIntervalMs { get; set; } = 50;
     /// <summary>
     /// 서버 연결 클라이언트 상태 체크 주기
     /// </summary>

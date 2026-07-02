@@ -330,7 +330,7 @@ namespace SP.Engine.Runtime.Networking
         private uint _nextExpectedSeq = 1;
         private readonly Dictionary<uint, TcpMessage> _outOfOrderSlots = new Dictionary<uint, TcpMessage>();
         private bool _disposed;
-        
+
         public uint NextExpectedSeq => _nextExpectedSeq;
 
         public ReceiveSequenceReorderer(int maxOutOfOrderCount)
@@ -341,7 +341,7 @@ namespace SP.Engine.Runtime.Networking
         public ReceiveIngestResult TryIngest(TcpMessage message, List<TcpMessage> destinationList)
         {
             if (_disposed) return ReceiveIngestResult.Success;
-            
+
             var seq = message.SequenceNumber;
             var diff = (int)(seq - _nextExpectedSeq);
             if (diff < 0 || _outOfOrderSlots.ContainsKey(seq))
