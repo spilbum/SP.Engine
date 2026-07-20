@@ -8,7 +8,7 @@ namespace SP.Core.Fibers
         public T Item;
         public long Seq;
     }
-    
+
     public enum EnqueueResult
     {
         Success,
@@ -16,7 +16,7 @@ namespace SP.Core.Fibers
         Contention, // 경합이 심해서 제시간에 넣지 못함
         Closed      // 큐가 종료됨
     }
-    
+
     public sealed class BatchQueue<T> : IDisposable where T : class
     {
         private readonly Slot<T>[] _buffer;
@@ -26,9 +26,9 @@ namespace SP.Core.Fibers
         private readonly SemaphoreSlim _signal = new SemaphoreSlim(0);
         private volatile bool _closed;
         private volatile bool _disposed;
-        
+
         public bool IsClosed => _closed;
-        
+
         private long _totalEnqueuedCount;
         private long _totalDroppedCount;
         private long _totalProcessedCount;
@@ -40,8 +40,8 @@ namespace SP.Core.Fibers
         public long TotalDroppedCount => Volatile.Read(ref _totalDroppedCount);
         public long TotalProcessedCount => Volatile.Read(ref _totalProcessedCount);
         public long TotalDequeuedCount => Volatile.Read(ref _totalDequeuedCount);
-        public double AvgBatchSize => _totalDequeuedCount == 0 
-            ? 0 
+        public double AvgBatchSize => _totalDequeuedCount == 0
+            ? 0
             : (double)Volatile.Read(ref _totalProcessedCount) / Volatile.Read(ref _totalDequeuedCount);
 
         public override string ToString()
@@ -54,7 +54,7 @@ namespace SP.Core.Fibers
             // 2의 배수로 만듬
             var cap = 1;
             while (cap < capacity) cap <<= 1;
-            
+
             _buffer = new Slot<T>[cap];
             _mask = cap - 1;
 
@@ -78,14 +78,14 @@ namespace SP.Core.Fibers
                 var diff = seq - curTail;
                 if (diff == 0)
                 {
-                    if (Interlocked.CompareExchange(ref _tail, curTail + 1, curTail) != curTail) 
+                    if (Interlocked.CompareExchange(ref _tail, curTail + 1, curTail) != curTail)
                         continue;
-                    
+
                     _buffer[index].Item = item;
                     Volatile.Write(ref _buffer[index].Seq, curTail + 1);
-                        
+
                     if (_signal.CurrentCount == 0) _signal.Release();
-                    
+
                     Interlocked.Increment(ref _totalEnqueuedCount);
                     return EnqueueResult.Success;
                 }
@@ -94,9 +94,9 @@ namespace SP.Core.Fibers
                 {
                     if (spins++ >= maxSpinCount)
                     {
-                        if (PendingCount < Capacity - 1) 
+                        if (PendingCount < Capacity - 1)
                             return EnqueueResult.Contention;
-                        
+
                         Interlocked.Increment(ref _totalDroppedCount);
                         return EnqueueResult.Full;
 
@@ -132,15 +132,15 @@ namespace SP.Core.Fibers
                 }
             }
 
-            if (count == 0) 
+            if (count == 0)
                 return 0;
-            
-            _head += count;
+
+            Interlocked.Add(ref _head, count);
             Interlocked.Add(ref _totalProcessedCount, count);
             Interlocked.Increment(ref _totalDequeuedCount);
             return count;
         }
-        
+
         public void WaitForItem() => _signal.Wait();
 
         public void Close()
@@ -155,7 +155,7 @@ namespace SP.Core.Fibers
             }
             catch (ObjectDisposedException)
             {
-                
+
             }
         }
 

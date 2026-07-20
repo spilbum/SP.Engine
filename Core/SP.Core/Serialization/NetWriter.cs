@@ -18,7 +18,7 @@ namespace SP.Core.Serialization
             _resizer = resizer;
             _position = 0;
         }
-        
+
         public int WrittenCount => _position;
         public ReadOnlySpan<byte> WrittenSpan => _buffer[.._position];
 
@@ -28,21 +28,21 @@ namespace SP.Core.Serialization
             if (count < 0) throw new ArgumentOutOfRangeException(nameof(count));
             _position += count;
         }
-        
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Span<byte> GetSpan(int sizeHint = 0)
         {
             CheckAndGrow(sizeHint);
             return _buffer[_position..];
         }
-        
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void CheckAndGrow(int sizeHint)
         {
             var size = sizeHint <= 0 ? 1 : sizeHint;
             if (_position + size <= _buffer.Length) return;
             if (_resizer == null) throw new InvalidOperationException("Buffer overflow and no resizer provided.");
-            
+
             _buffer = _resizer.Resize(_position + size, _position);
         }
 
@@ -69,7 +69,7 @@ namespace SP.Core.Serialization
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUInt16(ushort value)
         {
-            BinaryPrimitives.WriteUInt16BigEndian( GetSpan(2), value);
+            BinaryPrimitives.WriteUInt16BigEndian(GetSpan(2), value);
             Advance(2);
         }
 
@@ -211,7 +211,7 @@ namespace SP.Core.Serialization
                 ThrowNotSupportedType(typeof(T));
             }
         }
-        
+
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static void ThrowNotSupportedType(Type t)
         {

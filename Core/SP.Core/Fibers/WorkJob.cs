@@ -18,7 +18,7 @@ namespace SP.Core.Fibers
             job.Init(action, state);
             return job;
         }
-        
+
         public static IWorkJob From<T1, T2>(Action<T1, T2> action, T1 state1, T2 state2)
         {
             var job = WorkJobPool<StateJob<T1, T2>>.Rent();
@@ -37,7 +37,7 @@ namespace SP.Core.Fibers
         {
             private Action _action;
             private int _disposed;
-         
+
             public string Name { get; private set; }
 
             public void Init(Action action)
@@ -55,13 +55,13 @@ namespace SP.Core.Fibers
             {
                 if (Interlocked.CompareExchange(ref _disposed, 1, 0) != 0)
                     return;
-                
+
                 Name = null;
                 _action = null;
                 WorkJobPool<DelegateJob>.Return(this);
             }
         }
-        
+
         private sealed class StateJob<T> : IWorkJob
         {
             private Action<T> _run;
@@ -93,7 +93,7 @@ namespace SP.Core.Fibers
                 WorkJobPool<StateJob<T>>.Return(this);
             }
         }
-        
+
         private sealed class StateJob<T1, T2> : IWorkJob
         {
             private Action<T1, T2> _run;
@@ -102,7 +102,7 @@ namespace SP.Core.Fibers
             private int _disposed;
 
             public string Name { get; private set; }
-            
+
             public void Init(Action<T1, T2> run, T1 s1, T2 s2)
             {
                 Name = run.Method.Name;
@@ -118,7 +118,7 @@ namespace SP.Core.Fibers
             {
                 if (Interlocked.CompareExchange(ref _disposed, 1, 0) != 0)
                     return;
-                
+
                 Name = null;
                 _run = null;
                 _s1 = default;
@@ -136,7 +136,7 @@ namespace SP.Core.Fibers
             private int _disposed;
 
             public string Name { get; private set; }
-            
+
             public void Init(Action<T1, T2, T3> run, T1 s1, T2 s2, T3 s3)
             {
                 Name = run.Method.Name;
@@ -152,11 +152,11 @@ namespace SP.Core.Fibers
             {
                 if (Interlocked.CompareExchange(ref _disposed, 1, 0) != 0)
                     return;
-                
+
                 Name = null;
-                _run = null; 
+                _run = null;
                 _s1 = default;
-                _s2 = default; 
+                _s2 = default;
                 _s3 = default;
                 WorkJobPool<StateJob<T1, T2, T3>>.Return(this);
             }

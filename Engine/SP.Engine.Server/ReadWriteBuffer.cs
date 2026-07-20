@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Buffers;
-using System.IO;
 using System.Runtime.CompilerServices;
 using SP.Core.Buffers;
 using SP.Engine.Runtime.Networking;

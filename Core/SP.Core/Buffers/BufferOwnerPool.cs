@@ -15,7 +15,7 @@ namespace SP.Core.Buffers
             {
                 return new BufferOwner(capacity);
             }
-            
+
             Interlocked.Decrement(ref _poolCount);
             buffer.Initialize(capacity);
             return buffer;
@@ -27,7 +27,7 @@ namespace SP.Core.Buffers
             {
                 return;
             }
-            
+
             _pool.Enqueue(bufferOwner);
             Interlocked.Increment(ref _poolCount);
         }

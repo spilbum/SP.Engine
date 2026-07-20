@@ -18,40 +18,40 @@ namespace SP.Core.Serialization
         private static readonly MethodInfo ReadGeneric = typeof(NetReader)
             .GetMethods(BindingFlags.Public | BindingFlags.Instance)
             .First(m => m.Name == "Read" && m.IsGenericMethod && m.GetParameters().Length == 0);
-        
+
         // NetSerializer.Serialize<T>(ref NetWriter w, T value)
         private static readonly MethodInfo SerializeGeneric = typeof(NetSerializer)
             .GetMethods(BindingFlags.Public | BindingFlags.Static)
             .First(m => m.Name == "Serialize" && m.IsGenericMethod && m.GetParameters().Length == 2);
-        
+
         // T NetSerializer.Deserialize<T>(ref NetReader r)
         private static readonly MethodInfo DeserializeGeneric = typeof(NetSerializer)
             .GetMethods(BindingFlags.Public | BindingFlags.Static)
             .First(m => m.Name == "Deserialize" && m.IsGenericMethod && m.GetParameters().Length == 1);
-        
+
         private static readonly MethodInfo WriteBool = typeof(NetWriter).GetMethod(nameof(NetWriter.WriteBool));
         private static readonly MethodInfo ReadBool = typeof(NetReader).GetMethod(nameof(NetReader.ReadBool));
         private static readonly MethodInfo WriteInt64 = typeof(NetWriter).GetMethod(nameof(NetWriter.WriteInt64));
         private static readonly MethodInfo ReadInt64 = typeof(NetReader).GetMethod(nameof(NetReader.ReadInt64));
         private static readonly PropertyInfo DateTimeTicks = typeof(DateTime).GetProperty(nameof(DateTime.Ticks));
         private static readonly ConstructorInfo DateTimeCtor = typeof(DateTime).GetConstructor(new[] { typeof(long) });
-        
+
         public static TypeSerializer Build(Type type)
         {
             return new TypeSerializer(
-                CompileReader(type), 
+                CompileReader(type),
                 CompileWriter(type),
                 CompilePopulate(type),
                 CompileReset(type)
             );
         }
-        
+
         private static object CompileWriter(Type type)
         {
             var writerParam = Expression.Parameter(typeof(NetWriter).MakeByRefType(), "writer");
             var valueParam = Expression.Parameter(type, "value");
             var bodyBlock = new List<Expression>();
-            
+
             foreach (var member in RuntimeTypeAccessor
                          .GetOrCreate(type)
                          .Members
@@ -87,14 +87,14 @@ namespace SP.Core.Serialization
                     var writeNull = Expression.Call(writerParam, WriteBool, Expression.Constant(false));
                     var writeNotNull = Expression.Call(writerParam, WriteBool, Expression.Constant(true));
                     var writeContent = Expression.Call(SerializeGeneric.MakeGenericMethod(member.Type), writerParam, memberAccess);
-                    
+
                     bodyBlock.Add(Expression.IfThenElse(
                         Expression.Equal(memberAccess, Expression.Constant(null, member.Type)),
                         writeNull,
-                        Expression.Block(writeNotNull, writeContent)));                    
+                        Expression.Block(writeNotNull, writeContent)));
                 }
             }
-            
+
             if (bodyBlock.Count == 0) bodyBlock.Add(Expression.Empty());
 
             return Expression.Lambda(
@@ -108,7 +108,7 @@ namespace SP.Core.Serialization
         private static object CompileReader(Type type)
         {
             var readerParam = Expression.Parameter(typeof(NetReader).MakeByRefType(), "reader");
-            
+
             var resultVar = Expression.Variable(type, "result");
             var bodyBlock = new List<Expression>
             {
@@ -152,7 +152,7 @@ namespace SP.Core.Serialization
                     ));
                 }
             }
-            
+
             bodyBlock.Add(resultVar);
 
             return Expression.Lambda(
@@ -161,13 +161,13 @@ namespace SP.Core.Serialization
                 readerParam
             ).Compile();
         }
-        
+
         private static object CompilePopulate(Type type)
         {
             var readerParam = Expression.Parameter(typeof(NetReader).MakeByRefType(), "reader");
             var instanceParam = Expression.Parameter(type, "instance");
             var bodyBlock = new List<Expression>();
-            
+
             foreach (var member in RuntimeTypeAccessor
                          .GetOrCreate(type)
                          .Members
@@ -216,12 +216,12 @@ namespace SP.Core.Serialization
                 instanceParam
             ).Compile();
         }
-        
+
         private static object CompileReset(Type type)
         {
             var instanceParam = Expression.Parameter(type, "instance");
             var bodyBlock = new List<Expression>();
-            
+
             var accessor = RuntimeTypeAccessor.GetOrCreate(type);
             foreach (var member in accessor.Members.Where(m => m.CanSet && !m.IgnoreSet))
             {
@@ -233,7 +233,7 @@ namespace SP.Core.Serialization
                 {
                     var clearMethod = member.Type.GetMethod("Clear", BindingFlags.Public | BindingFlags.Instance);
                     if (clearMethod == null) continue;
-                    
+
                     var methodCall = Expression.Call(memberAccess, clearMethod);
                     bodyBlock.Add(Expression.IfThen(Expression.NotEqual(memberAccess, Expression.Constant(null)), methodCall));
                 }

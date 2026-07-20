@@ -13,11 +13,11 @@ namespace SP.Engine.Common.Protocol.S2S
     {
         public S2SConnectResult Result { get; set; } 
     }
-}
 
-public enum S2SConnectResult : byte
-{
-    Success = 0,
-    InternalError,
-    AlreadyConnected,
+    public enum S2SConnectResult : byte
+    {
+        Success = 0,
+        InternalError,
+        AlreadyConnected,
+    }
 }

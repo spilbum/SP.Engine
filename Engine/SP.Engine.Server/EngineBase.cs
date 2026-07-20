@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Threading;
 using SP.Core.Fibers;
 using SP.Engine.Common.Protocol;
+using SP.Engine.Common.Protocol.S2S;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Networking;
@@ -58,7 +59,7 @@ public abstract class EngineBase : EngineCore, IEngine
         public long TotalExecutionTimeMs;
     }
 
-    private static ThreadPerfLog GetCurrentThreadPerfLog()
+    private static ThreadPerfLog GetThreadPerfLog()
     {
         if (_threadPerfLog != null) return _threadPerfLog;
         _threadPerfLog = new ThreadPerfLog();
@@ -621,9 +622,10 @@ public abstract class EngineBase : EngineCore, IEngine
 
             var elapsedTicks = command.Execute(peer, message);
         
-            var log = GetCurrentThreadPerfLog();
+            var log = GetThreadPerfLog();
             Interlocked.Increment(ref log.ProcessedCount);
             Interlocked.Add(ref log.TotalExecutionTimeMs, elapsedTicks);
+            
             if (elapsedTicks >= engine.Config.Session.CommandSlowThresholdMs)
             {
                 engine.Logger.Warn(

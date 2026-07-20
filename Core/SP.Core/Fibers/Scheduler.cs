@@ -44,12 +44,12 @@ namespace SP.Core.Fibers
             }
 
             handle.OnDisposed = h => _timers.TryRemove(h, out _);
-            
+
             _timers.TryAdd(handle, 0);
             handle.Start(dueTime, period);
             return handle;
         }
-        
+
         public void Dispose()
         {
             if (_disposed) return;

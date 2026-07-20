@@ -124,7 +124,7 @@ namespace SP.Core.Logging
         private void Write(LogLevel level, string message)
         {
             if (!IsEnabled(level)) return;
-            
+
             var time = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff");
             var ctx = _context != null && _context.Count > 0
                 ? " | " + string.Join(" ", _context.Select(kv => $"{kv.Key}={kv.Value}"))

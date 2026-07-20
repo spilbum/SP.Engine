@@ -10,7 +10,7 @@ namespace SP.Core.Fibers
         private readonly int _maxBatchSize;
         private readonly Thread _thread;
         private volatile bool _disposed;
-        
+
         public string Name { get; }
         public bool IsDisposed => _disposed;
         public int QueuePendingCount => _queue.PendingCount;
@@ -24,11 +24,11 @@ namespace SP.Core.Fibers
             _queue = new BatchQueue<IWorkJob>(capacity);
             _maxBatchSize = Math.Max(1, maxBatchSize);
             _onError = onError;
-            
+
             _thread = new Thread(Run) { IsBackground = true, Name = name };
             _thread.Start();
         }
-        
+
         public bool Enqueue(Action action) => Enqueue(WorkJob.From(action));
         public bool Enqueue<T>(Action<T> action, T state) => Enqueue(WorkJob.From(action, state));
         public bool Enqueue<T1, T2>(Action<T1, T2> action, T1 s1, T2 s2) => Enqueue(WorkJob.From(action, s1, s2));
@@ -43,7 +43,7 @@ namespace SP.Core.Fibers
                 job.Dispose();
                 return false;
             }
-            
+
             var spinner = new SpinWait();
 
             while (true)
@@ -54,11 +54,11 @@ namespace SP.Core.Fibers
                 {
                     case EnqueueResult.Success:
                         return true;
-                
+
                     case EnqueueResult.Contention:
                         spinner.SpinOnce();
                         continue;
-                
+
                     case EnqueueResult.Full:
                         if (spinner.NextSpinWillYield)
                         {
@@ -69,11 +69,11 @@ namespace SP.Core.Fibers
                             Thread.Yield();
                         }
                         continue;
-                
+
                     case EnqueueResult.Closed:
                         job.Dispose();
                         return false;
-                
+
                     default:
                         return false;
                 }
@@ -84,7 +84,7 @@ namespace SP.Core.Fibers
         {
             var batchBuf = new IWorkJob[_maxBatchSize];
 
-            while (!_disposed)  
+            while (!_disposed)
             {
                 var count = _queue.DequeueBatch(batchBuf);
 
@@ -95,7 +95,7 @@ namespace SP.Core.Fibers
                     if (_queue.IsClosed) break;
                     continue;
                 }
-                
+
                 ExecuteItems(batchBuf, count);
             }
         }
@@ -126,12 +126,12 @@ namespace SP.Core.Fibers
         {
             if (_disposed) return;
             _disposed = true;
-            
+
             _queue.Close();
-            
+
             if (_thread.IsAlive)
                 _thread.Join(1000);
-            
+
             _queue.Dispose();
         }
     }

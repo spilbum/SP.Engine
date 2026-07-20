@@ -47,10 +47,10 @@ namespace SP.Core.Fibers
                 Interlocked.Exchange(ref _gate, 0);
             }
         }
-        
+
         protected abstract void OnTick();
     }
-    
+
     internal sealed class TimerHandle : TimerHandleBase
     {
         private readonly IFiber _fiber;
@@ -60,7 +60,7 @@ namespace SP.Core.Fibers
         {
             _fiber = fiber;
             _action = action;
-  
+
         }
 
         protected override void OnTick()
@@ -71,7 +71,7 @@ namespace SP.Core.Fibers
             _fiber.Enqueue(_action);
         }
     }
-    
+
     internal sealed class TimerHandle<T1> : TimerHandleBase
     {
         private readonly IFiber _fiber;
@@ -93,7 +93,7 @@ namespace SP.Core.Fibers
             }
         }
     }
-    
+
     internal sealed class TimerHandle<T1, T2> : TimerHandleBase
     {
         private readonly IFiber _fiber;
@@ -105,7 +105,7 @@ namespace SP.Core.Fibers
         {
             _fiber = fiber;
             _action = action;
-            _s1 = s1; 
+            _s1 = s1;
             _s2 = s2;
         }
 
@@ -117,7 +117,7 @@ namespace SP.Core.Fibers
             }
         }
     }
-    
+
     internal sealed class TimerHandle<T1, T2, T3> : TimerHandleBase
     {
         private readonly IFiber _fiber;
@@ -131,7 +131,7 @@ namespace SP.Core.Fibers
             _fiber = fiber;
             _action = action;
             _s1 = s1;
-            _s2 = s2; 
+            _s2 = s2;
             _s3 = s3;
         }
 

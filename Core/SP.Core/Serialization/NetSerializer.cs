@@ -16,10 +16,10 @@ namespace SP.Core.Serialization
             _writer = (TypeSerializer.WriteDelegate<T>)pair.Writer;
             _reader = (TypeSerializer.ReadDelegate<T>)pair.Reader;
         }
-        
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Serialize(ref NetWriter w, T value) => _writer(ref w, value);
-        
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static T Deserialize(ref NetReader r) => _reader(ref r);
     }
@@ -29,7 +29,7 @@ namespace SP.Core.Serialization
         private static readonly TypeSerializer.WriteDelegate<T> _writer;
         private static readonly TypeSerializer.PopulateDelegate<T> _populate;
         private static readonly TypeSerializer.ResetDelegate<T> _reset;
-        
+
         static NetObject()
         {
             var pair = NetSerializer.GetOrBuild(typeof(T));
@@ -40,44 +40,44 @@ namespace SP.Core.Serialization
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Serialize(ref NetWriter w, T value) => _writer(ref w, value);
-        
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Deserialize(ref NetReader r, T instance) => _populate(ref r, instance);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Reset(T instance) => _reset.Invoke(instance);
     }
-    
+
     public static class NetSerializer
     {
         private static readonly ConcurrentDictionary<Type, TypeSerializer> Cache =
             new ConcurrentDictionary<Type, TypeSerializer>();
-        
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void Serialize<T>(ref NetWriter w, T value) =>  NetSerializer<T>.Serialize(ref w, value);
+        public static void Serialize<T>(ref NetWriter w, T value) => NetSerializer<T>.Serialize(ref w, value);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static T Deserialize<T>(ref NetReader r) => NetSerializer<T>.Deserialize(ref r);
-        
+
         public static TypeSerializer GetOrBuild(Type type) => Cache.GetOrAdd(type, Build);
-        
+
         private static TypeSerializer Build(Type t)
         {
             if (t == typeof(string)) return BuildString();
             if (t == typeof(byte[])) return BuildByteArray();
             if (t == typeof(DateTime)) return BuildDateTime();
-            
+
             if (t.IsArray) return BuildArray(t);
             if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(List<>))
                 return BuildList(t);
 
             if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Dictionary<,>))
                 return BuildDictionary(t);
-            
+
             return BuildDataClass(t);
         }
 
-         private static TypeSerializer BuildString()
+        private static TypeSerializer BuildString()
         {
             return new TypeSerializer(
                 (TypeSerializer.ReadDelegate<string>)Read,
@@ -91,7 +91,7 @@ namespace SP.Core.Serialization
                     w.WriteBool(false);
                     return;
                 }
-                
+
                 w.WriteBool(true);
                 w.WriteString(v);
             }
@@ -131,7 +131,7 @@ namespace SP.Core.Serialization
                 return arr;
             }
         }
-        
+
         private static TypeSerializer BuildDateTime()
         {
             return new TypeSerializer(
@@ -194,7 +194,7 @@ namespace SP.Core.Serialization
                     w.WriteBool(false);
                     return;
                 }
-                
+
                 w.WriteBool(true);
                 w.WriteVarUInt((uint)arr.Length);
                 for (var i = 0; i < arr.Length; i++) NetSerializer<T>.Serialize(ref w, arr[i]);
@@ -205,7 +205,7 @@ namespace SP.Core.Serialization
                 if (!r.ReadBool()) return null;
                 var count = r.ReadVarUInt();
                 var arr = new T[count];
-                for (var i = 0; i < count; i++) 
+                for (var i = 0; i < count; i++)
                     arr[i] = NetSerializer<T>.Deserialize(ref r);
                 return arr;
             }
@@ -220,7 +220,7 @@ namespace SP.Core.Serialization
                     w.WriteBool(false);
                     return;
                 }
-                
+
                 w.WriteBool(true);
                 w.WriteVarUInt((uint)list.Count);
                 foreach (var item in list) NetSerializer<T>.Serialize(ref w, item);
@@ -245,7 +245,7 @@ namespace SP.Core.Serialization
                     w.WriteBool(false);
                     return;
                 }
-                
+
                 w.WriteBool(true);
                 w.WriteVarUInt((uint)dict.Count);
                 foreach (var kvp in dict)
@@ -266,11 +266,11 @@ namespace SP.Core.Serialization
                 }
                 return dict;
             }
-         }
-        
+        }
+
         private static TypeSerializer BuildDataClass(Type t) => DynamicSerializerBuilder.Build(t);
     }
-    
+
     public class TypeSerializer
     {
         public delegate T ReadDelegate<out T>(ref NetReader r);
@@ -285,7 +285,7 @@ namespace SP.Core.Serialization
 
         public TypeSerializer(object reader, object writer, object populate, object reset)
         {
-            Reader = reader; 
+            Reader = reader;
             Writer = writer;
             Populate = populate;
             Reset = reset;

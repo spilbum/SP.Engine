@@ -22,7 +22,7 @@ namespace SP.Core.Fibers
             _batchBuffer = new IWorkJob[maxBatchSize];
             _onError = onError;
         }
-        
+
         public bool Enqueue(Action action) => Enqueue(WorkJob.From(action));
         public bool Enqueue<T>(Action<T> action, T state) => Enqueue(WorkJob.From(action, state));
         public bool Enqueue<T1, T2>(Action<T1, T2> action, T1 s1, T2 s2) => Enqueue(WorkJob.From(action, s1, s2));
@@ -46,16 +46,16 @@ namespace SP.Core.Fibers
                     case EnqueueResult.Success:
                         TryScheduleExecution();
                         return true;
-                    
+
                     case EnqueueResult.Contention:
                         spinner.SpinOnce();
                         continue;
-                    
+
                     case EnqueueResult.Full:
                         if (spinner.NextSpinWillYield) Thread.Sleep(1);
                         else Thread.Yield();
                         continue;
-                    
+
                     case EnqueueResult.Closed:
                     default:
                         job.Dispose();
@@ -76,7 +76,7 @@ namespace SP.Core.Fibers
         {
             var fiber = (PoolFiber)state;
             if (fiber._disposed) return;
-            
+
             var batchBuf = fiber._batchBuffer;
 
             try
@@ -90,7 +90,7 @@ namespace SP.Core.Fibers
                     {
                         var job = batchBuf[i];
                         if (job == null) continue;
-                        
+
                         try
                         {
                             job.Execute();

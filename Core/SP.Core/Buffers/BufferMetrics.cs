@@ -36,7 +36,7 @@ namespace SP.Core.Buffers
                 totalRent += Volatile.Read(ref counter.RentCount);
                 totalReturn += Volatile.Read(ref counter.ReturnCount);
             }
-            
+
             var active = totalRent - totalReturn;
             return (totalRent, totalReturn, active < 0 ? 0 : active);
         }

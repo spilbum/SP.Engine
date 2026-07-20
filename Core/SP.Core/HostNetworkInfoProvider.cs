@@ -45,7 +45,7 @@ namespace SP.Core
                 return false;
             }
         }
-        
+
         private static async Task<HostNetworkInfo> GetAsync(CancellationToken ct)
         {
             using var http = CreateHttpClient();
@@ -172,24 +172,24 @@ namespace SP.Core
             switch (ip.AddressFamily)
             {
                 case AddressFamily.InterNetwork:
-                {
-                    var b = ip.GetAddressBytes();
-                    // 10.0.0.0/8
-                    if (b[0] == 10) return true;
-                    // 172.16.0.0/12
-                    if (b[0] == 172 && b[1] >= 16 && b[1] <= 31) return true;
-                    // 192.168.0.0/16
-                    if (b[0] == 192 && b[1] == 168) return true;
-                    // CGNAT 100.64.0.0/10 (64~127)
-                    if (b[0] == 100 && (b[1] & 0b1100_0000) == 0b0100_0000) return true;
-                    return false;
-                }
+                    {
+                        var b = ip.GetAddressBytes();
+                        // 10.0.0.0/8
+                        if (b[0] == 10) return true;
+                        // 172.16.0.0/12
+                        if (b[0] == 172 && b[1] >= 16 && b[1] <= 31) return true;
+                        // 192.168.0.0/16
+                        if (b[0] == 192 && b[1] == 168) return true;
+                        // CGNAT 100.64.0.0/10 (64~127)
+                        if (b[0] == 100 && (b[1] & 0b1100_0000) == 0b0100_0000) return true;
+                        return false;
+                    }
                 case AddressFamily.InterNetworkV6:
-                {
-                    var b = ip.GetAddressBytes();
-                    if ((b[0] & 0xFE) == 0xFC) return true;
-                    return false;
-                }
+                    {
+                        var b = ip.GetAddressBytes();
+                        if ((b[0] & 0xFE) == 0xFC) return true;
+                        return false;
+                    }
                 default:
                     return false;
             }
@@ -200,15 +200,15 @@ namespace SP.Core
             switch (ip.AddressFamily)
             {
                 case AddressFamily.InterNetwork:
-                {
-                    var b = ip.GetAddressBytes();
-                    return b[0] == 169 && b[1] == 254;
-                }
+                    {
+                        var b = ip.GetAddressBytes();
+                        return b[0] == 169 && b[1] == 254;
+                    }
                 case AddressFamily.InterNetworkV6:
-                {
-                    var b = ip.GetAddressBytes();
-                    return b.Length >= 2 && b[0] == 0xFE && (b[1] & 0xC0) == 0x80;
-                }
+                    {
+                        var b = ip.GetAddressBytes();
+                        return b.Length >= 2 && b[0] == 0xFE && (b[1] & 0xC0) == 0x80;
+                    }
                 default:
                     return false;
             }

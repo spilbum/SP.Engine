@@ -232,7 +232,7 @@ namespace SP.Core.Serialization
                 var value = ReadDouble();
                 return Unsafe.As<double, T>(ref value);
             }
-            
+
             ThrowNotSupportedType(typeof(T));
             return default;
         }

@@ -15,7 +15,7 @@ namespace SP.Core.Fibers
             public readonly T[] Items = new T[LocalCapacity];
             public int Count;
         }
-            
+
         private static readonly ConcurrentQueue<T> _globalQueue = new ConcurrentQueue<T>();
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -26,7 +26,7 @@ namespace SP.Core.Fibers
             {
                 return pool.Items[--pool.Count];
             }
-                
+
             return _globalQueue.TryDequeue(out var item) ? item : new T();
         }
 
@@ -34,7 +34,7 @@ namespace SP.Core.Fibers
         public static void Return(T item)
         {
             _localPool ??= new LocalPool();
-                
+
             var pool = _localPool;
             if (pool.Count < LocalCapacity)
             {

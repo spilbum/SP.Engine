@@ -13,13 +13,13 @@ namespace SP.Core.Buffers
         private byte[] _buffer;
         private int _disposed;
         private int _capacity;
-        
-        #if DEBUG
+
+#if DEBUG
         private long _bufferId;
         private AllocInfo _allocInfo;
 
         private static long _globalBufferId;
-        private static readonly ConcurrentDictionary<long, (AllocInfo Info, DateTime Time)> _activeRegistry 
+        private static readonly ConcurrentDictionary<long, (AllocInfo Info, DateTime Time)> _activeRegistry
              = new ConcurrentDictionary<long, (AllocInfo, DateTime)>();
 
         private readonly struct AllocInfo
@@ -34,10 +34,10 @@ namespace SP.Core.Buffers
                 FilePath = filePath;
                 LineNumber = lineNumber;
             }
-            
+
             public override string ToString() => $"{FilePath}:{LineNumber} -> {MemberName}";
         }
-        #endif
+#endif
 
         public Memory<byte> Memory
         {
@@ -47,9 +47,9 @@ namespace SP.Core.Buffers
                 return _buffer.AsMemory(0, _capacity);
             }
         }
-        
+
         public int Length => _buffer.Length;
-        
+
         public BufferOwner(int capacity)
         {
             Initialize(capacity);
@@ -65,15 +65,15 @@ namespace SP.Core.Buffers
             _buffer = ArrayPool<byte>.Shared.Rent(capacity);
             _disposed = 0;
             BufferMetrics.OnRent();
-            
+
 #if DEBUG
             _allocInfo = new AllocInfo(callerMethod, callerPath, callerLine);
             _bufferId = Interlocked.Increment(ref _globalBufferId);
             _activeRegistry.TryAdd(_bufferId, (_allocInfo, DateTime.UtcNow));
 #endif
         }
-        
-        #if DEBUG
+
+#if DEBUG
         ~BufferOwner()
         {
             if (_disposed == 0 && _buffer != null)
@@ -92,11 +92,11 @@ namespace SP.Core.Buffers
             sb.AppendLine(_allocInfo.ToString());
 
             var alertMessage = sb.ToString();
-            
+
             Console.ForegroundColor = ConsoleColor.Red;
             Console.WriteLine(alertMessage);
             Console.ResetColor();
-            
+
             Debug.Fail(alertMessage);
         }
 
@@ -119,7 +119,7 @@ namespace SP.Core.Buffers
             {
                 sb.AppendLine($"--- Leak Node #{index++} (Buffer ID: {kvp.Key} | AllocTime: {kvp.Value.Time}) ---");
                 // 덤프 요청 시점에만 문자열로 변환
-                sb.AppendLine(kvp.Value.Info.ToString()); 
+                sb.AppendLine(kvp.Value.Info.ToString());
                 sb.AppendLine();
             }
 
@@ -133,9 +133,9 @@ namespace SP.Core.Buffers
             Debug.Fail($"Memory Leak Detected! Remaining buffers: {_activeRegistry.Count}");
         }
 #endif
-        
+
         public byte[] GetBuffer() => _buffer;
-        
+
         public Span<byte> Slice(int start, int length)
         {
             ThrowIfDisposed();
@@ -147,26 +147,26 @@ namespace SP.Core.Buffers
         {
             if (_disposed != 0) ThrowObjectDisposedException();
         }
-        
+
         [method: MethodImpl(MethodImplOptions.NoInlining)]
         private static void ThrowObjectDisposedException() => throw new ObjectDisposedException(nameof(BufferOwner));
 
         public void Dispose()
         {
             if (Interlocked.Exchange(ref _disposed, 1) == 1) return;
-            
-            #if DEBUG
+
+#if DEBUG
             GC.SuppressFinalize(this);
             _activeRegistry.TryRemove(_bufferId, out _);
-            #endif
-            
+#endif
+
             var buf = _buffer;
             _buffer = null;
 
             if (buf != null)
             {
                 ArrayPool<byte>.Shared.Return(buf);
-                BufferMetrics.OnReturn();   
+                BufferMetrics.OnReturn();
             }
 
             BufferOwnerPool.Return(this);
