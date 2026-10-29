@@ -110,7 +110,7 @@ public class EngineBuilder<TEngine> where TEngine : EngineBase, new()
         if (_assemblies.Count == 0)
         {
             throw new InvalidOperationException(
-                "No assemblies configured for command discovery. Did you forget to call WithAssembly() or WithEntryAssembly()?");
+                "No assemblies configured for protocol discovery. Did you forget to call AddAssembly() or WithEntryAssembly()?");
         }
         
         var config = new EngineConfig

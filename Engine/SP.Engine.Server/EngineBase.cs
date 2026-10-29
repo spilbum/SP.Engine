@@ -1,20 +1,16 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
 using SP.Core.Fibers;
-using SP.Engine.Common.Protocol;
 using SP.Engine.Common.Protocol.S2S;
 using SP.Engine.Runtime;
-using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Networking;
-using SP.Engine.Server.Command;
+using SP.Engine.Runtime.Protocol;
 using SP.Engine.Server.Configuration;
 using SP.Engine.Server.S2S;
-using SP.Engine.Server.S2S.Command;
 
 namespace SP.Engine.Server;
 
@@ -33,8 +29,8 @@ public abstract class EngineBase : EngineCore, IEngine
     private static long UtcNowMs => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     internal static uint NetworkTimeMs => (uint)(UtcNowMs - _baseUnixMs);
     
-    private readonly Dictionary<ushort, ICommandHandler> _appCommands = new();
-    private readonly Dictionary<ushort, ICommandHandler> _engineCommands = new();
+    private readonly Dictionary<ushort, IProtocolHandler> _dictGameProtocolHandler = new();
+    private readonly Dictionary<ushort, IProtocolHandler> _dictEngineProtocolHandler = new();
     private readonly ConcurrentDictionary<string, S2SClientGroup> _s2sClientGroups = [];
     private PeerManager _peerManager;
     private PerfMonitor _perfMonitor;
@@ -80,7 +76,7 @@ public abstract class EngineBase : EngineCore, IEngine
         
         _peerManager = new PeerManager(config);
 
-        if (!SetupCommand(assemblies))
+        if (!SetupProtocolHandler(assemblies))
             return false;
 
         if (!SetupS2SClients(assemblies, config.S2SClients))
@@ -447,25 +443,28 @@ public abstract class EngineBase : EngineCore, IEngine
         
     }
 
-    private bool SetupCommand(Assembly[] assemblies)
+    private bool SetupProtocolHandler(Assembly[] assemblies)
     {
         try
         {
-            // 엔진 명령어 등록
-            RegisterEngineCommand<SessionAuthReqHandler>(ProtocolId.C2S.SessionAuthReq);
-            RegisterEngineCommand<CloseCmdHandler>(ProtocolId.C2S.CloseCmd);
-            RegisterEngineCommand<PingHandler>(ProtocolId.C2S.Ping);
-            RegisterEngineCommand<MessageAckHandler>(ProtocolId.C2S.MessageAck);
-            RegisterEngineCommand<UdpHelloReqHandler>(ProtocolId.C2S.UdpHelloReq);
-            RegisterEngineCommand<UdpHealthCheckAckHandler>(ProtocolId.C2S.UdpHealthCheckAck);
-            RegisterEngineCommand<S2SConnectReqHandler>(ProtocolId.S2S.S2SConnectReq);
-
-            // 사용자 명령어 추출
-            foreach (var assembly in assemblies)
+            foreach (var assembly in assemblies.Append(typeof(EngineBase).Assembly).Distinct())
             {
-                DiscoverAppCommands(assembly);    
+                var attr = assembly.GetCustomAttribute<ProtocolHandlerRegistryAttribute>();
+                if (attr == null || Activator.CreateInstance(attr.RegistryType) is not IProtocolHandlerRegistry registry)
+                    continue;
+
+                registry.Register(
+                    _dictEngineProtocolHandler,
+                    contextType => typeof(Session).IsAssignableFrom(contextType));
+
+                registry.Register(
+                    _dictGameProtocolHandler,
+                    contextType => typeof(PeerBase).IsAssignableFrom(contextType));
             }
-            
+
+            Logger.Debug("Engine handler count: {0}, Game handler count: {1}", 
+                _dictEngineProtocolHandler.Count, _dictGameProtocolHandler.Count);
+        
             return true;
         }
         catch (Exception e)
@@ -474,64 +473,16 @@ public abstract class EngineBase : EngineCore, IEngine
             return false;
         }
     }
-
-    private void RegisterEngineCommand<T>(ushort protocolId) where T : ICommandHandler, new()
-        => _engineCommands[protocolId] = new T();
-
-    private void DiscoverAppCommands(Assembly assembly)
-    {
-        var commandHandlerTypes = assembly.GetTypes()
-            .Where(t => typeof(ICommandHandler).IsAssignableFrom(t) && t.IsClass && !t.IsAbstract)
-            .ToList();
-        
-        var peerTypes = assembly.GetTypes()
-            .Where(t => typeof(IPeer).IsAssignableFrom(t) && t.IsClass && !t.IsAbstract)
-            .ToList();
-        
-        if (commandHandlerTypes.Count == 0 || peerTypes.Count == 0)
-            return;
-
-        foreach (var t in commandHandlerTypes)
-        {
-            var attr = t.GetCustomAttribute<CommandHandlerAttribute>();
-            if (attr == null)
-            {
-                throw new InvalidDataException($"[{t.FullName}] requires {nameof(CommandHandlerAttribute)}");
-            }
-  
-            if (Activator.CreateInstance(t) is not ICommandHandler command) continue;
-            if (!peerTypes.Contains(command.ContextType)) continue;
-            if (!_appCommands.TryAdd(attr.Id, command))
-            {
-                throw new InvalidDataException($"Duplicate command: {attr.Id}");
-            }
-        }
-
-        Logger.Debug("[Engine] Discovered '{0}' commands: [{1}]", _appCommands.Count, string.Join(", ", _appCommands.Keys));
-    }
-
-    private ICommandHandler GetEngineCommand(ushort protocolId)
-    {
-        _engineCommands.TryGetValue(protocolId, out var command);
-        return command;
-    }
-
-    private ICommandHandler GetAppCommand(ushort protocolId)
-    {
-        _appCommands.TryGetValue(protocolId, out var command);
-        return command;
-    }
     
-    internal void ExecuteCommand(Session session, IMessage message)
+    internal void ProcessMessage(Session session, IMessage message)
     {
         if (session == null) return;
 
         try
         {
-            var command = GetEngineCommand(message.Id);
-            if (command != null)
+            if (_dictEngineProtocolHandler.TryGetValue(message.Id, out var handler))
             {
-                using (message) command.Execute(session, message);
+                using (message) handler.Execute(session, message);
                 return;
             }
 
@@ -560,7 +511,7 @@ public abstract class EngineBase : EngineCore, IEngine
                                 for (; index < _receiveIngestCache.Count; index++)
                                 {
                                     var m = _receiveIngestCache[index];
-                                    using (m) DispatchAppCommand(peer, m.Extract());
+                                    using (m) DispatchMessage(peer, m.Extract());
                                 }
                             }
                             finally
@@ -595,48 +546,46 @@ public abstract class EngineBase : EngineCore, IEngine
                         _ => null
                     };
 
-                    using (message) DispatchAppCommand(peer, extracted);
+                    using (message) DispatchMessage(peer, extracted);
                 }   
             }
         }
         catch (Exception ex)
         {
-            Logger.Error(ex, "ExecuteCommand failed: {0}", ex.Message);
+            Logger.Error(ex, "ProcessMessage failed: {0}", ex.Message);
             message.Dispose();
         }
     }
 
-    private void DispatchAppCommand(PeerBase peer, IMessage message)
+    private void DispatchMessage(PeerBase peer, IMessage message)
     {
         if (message == null) return;
+        if (!_dictGameProtocolHandler.TryGetValue(message.Id, out var handler)) return;
+        
         var fiber = GetLogicFiber(peer.PeerId);
-        fiber.Enqueue(ExecuteAppCommand, this, peer, message);
+        fiber.Enqueue(ExecuteProtocolHandler, handler, peer, message);
     }
 
-    private static void ExecuteAppCommand(EngineBase engine, PeerBase peer, IMessage message)
+    private static void ExecuteProtocolHandler(IProtocolHandler handler, PeerBase peer, IMessage message)
     {
         try
         {
-            var command = engine.GetAppCommand(message.Id);
-            if (command == null) return;
-
-            var elapsedTicks = command.Execute(peer, message);
+            var elapsedTicks = handler.Execute(peer, message);
         
             var log = GetThreadPerfLog();
             Interlocked.Increment(ref log.ProcessedCount);
             Interlocked.Add(ref log.TotalExecutionTimeMs, elapsedTicks);
             
-            if (elapsedTicks >= engine.Config.Session.CommandSlowThresholdMs)
+            if (elapsedTicks >= peer.Config.Session.HandlerSlowThresholdMs)
             {
-                engine.Logger.Warn(
-                    "Command '{0}' slow detected. PeerId={1}, Exec={2:F2}ms", command.Name, peer.PeerId, elapsedTicks);
+                peer.Logger.Warn(
+                    "ProtocolHandler '{0}' slow detected. PeerId={1}, Exec={2:F2}ms", handler.Name, peer.PeerId, elapsedTicks);
             }
         }
         finally
         {
             message.Dispose();
         }
-
     }
 
     public IS2SClient GetAvailableS2SClient(string name)

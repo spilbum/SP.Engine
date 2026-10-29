@@ -1,17 +1,17 @@
 using SP.Engine.Runtime.Channel;
-using SP.Engine.Runtime.Networking;
+using SP.Engine.Runtime.Protocol;
 
 namespace Common.Protocol.ES2EC;
 
 [ProtocolData(ProtocolId.ES2EC.TcpEchoAck)]
-public class TcpEchoAck : ProtocolDataBase<TcpEchoAck>
+public partial class TcpEchoAck
 {
     public long SentTicks;
     public byte[]? Data;
 }
 
-[ProtocolData(ProtocolId.ES2EC.UdpEchoAck, ChannelKind.Unreliable, Toggle.Off, Toggle.Off)]
-public class UdpEchoAck : ProtocolDataBase<UdpEchoAck>
+[ProtocolData(ProtocolId.ES2EC.UdpEchoAck, Channel = ChannelKind.Unreliable, Encrypt = Toggle.Off)]
+public partial class UdpEchoAck
 {
     public long SentTicks;
     public byte[]? Data;

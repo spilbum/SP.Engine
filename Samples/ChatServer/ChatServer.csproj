@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
@@ -12,6 +12,7 @@
       <ProjectReference Include="..\..\Engine\SP.Engine.Common\SP.Engine.Common.csproj" />
       <ProjectReference Include="..\..\Engine\SP.Engine.Runtime\SP.Engine.Runtime.csproj" />
       <ProjectReference Include="..\..\Engine\SP.Engine.Server\SP.Engine.Server.csproj" />
+      <ProjectReference Include="..\..\Engine\SP.Engine.SourceGenerator\SP.Engine.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
       <ProjectReference Include="..\Common\Common.csproj" />
     </ItemGroup>
 

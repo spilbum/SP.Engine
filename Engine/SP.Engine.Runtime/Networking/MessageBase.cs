@@ -4,7 +4,7 @@ using System.Threading;
 using SP.Core.Buffers;
 using SP.Core.Serialization;
 using SP.Engine.Runtime.Compression;
-using SP.Engine.Runtime.Policy;
+using SP.Engine.Runtime.Protocol;
 using SP.Engine.Runtime.Security;
 
 namespace SP.Engine.Runtime.Networking
@@ -101,12 +101,12 @@ namespace SP.Engine.Runtime.Networking
         }
 
         public void Serialize(
-            IProtocolData protocol,
-            IPolicy policy = null, 
+            IProtocolData data,
+            IProtocolPolicy policy = null, 
             IEncryptor encryptor = null, 
             ICompressor compressor = null)
         {
-            if (protocol is null) throw new ArgumentNullException(nameof(protocol));
+            if (data is null) throw new ArgumentNullException(nameof(data));
             
             var headerSize = _header.HeaderLength;
             
@@ -114,7 +114,7 @@ namespace SP.Engine.Runtime.Networking
             using var resizerB = BufferResizer.Rent();
             
             var writer = new NetWriter(resizerA.Span, resizerA);
-            protocol.Serialize(ref writer);
+            data.Serialize(ref writer);
             
             var currentSpan = resizerA.GetWrittenSpan(writer.WrittenCount);
             
@@ -160,7 +160,7 @@ namespace SP.Engine.Runtime.Networking
                 var totalSpan = bufferOwner.Memory.Span;
                 currentSpan.CopyTo(totalSpan[headerSize..]);
 
-                _header = CreateHeader(flags, protocol.Id, currentSpan.Length);
+                _header = CreateHeader(flags, data.Id, currentSpan.Length);
                 _header.WriteTo(totalSpan[..headerSize]);
                 _bufferOwner = bufferOwner;
             }

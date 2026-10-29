@@ -11,6 +11,12 @@ internal static class Program
     
     private static async Task Main(string[] args)
     {
+        if (args.Length < 2)
+        {
+            Console.WriteLine("Usage: EchoClient <host> <port>");
+            return;
+        }
+        
         _host = args[0];
         _port = int.Parse(args[1]);
         

@@ -3,12 +3,10 @@ using System.Reflection;
 using System.Threading;
 using SP.Core.Fibers;
 using SP.Engine.Client;
-using SP.Engine.Common.Protocol;
 using SP.Engine.Common.Protocol.S2S;
 using SP.Engine.Runtime;
+using SP.Engine.Runtime.Protocol;
 using SP.Engine.Server.Configuration;
-using SP.Engine.Server.Protocol;
-using SP.Engine.Server.S2S.Command;
 
 namespace SP.Engine.Server.S2S;
 
@@ -71,8 +69,6 @@ public class S2SClient(EngineBase engine) : NetPeerBase(PeerKind.Server), IS2SCl
                 _fiber.Dispose();
                 return false;
             }
-            
-            RegisterEngineCommand<S2SConnectAckHandler>(ProtocolId.S2S.S2SConnectAck);
 
             _tickTimer = _scheduler.Schedule(
                 _fiber, 

@@ -1,5 +1,6 @@
 using System;
 using System.Buffers.Binary;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Text;
 using SP.Core.Buffers;
@@ -118,6 +119,9 @@ namespace SP.Core.Serialization
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteDateTime(DateTime value) => WriteInt64(value.Ticks);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteVarUInt(uint value)
         {
             Span<byte> tmp = stackalloc byte[5];
@@ -171,10 +175,11 @@ namespace SP.Core.Serialization
         {
             if (value == null)
             {
-                WriteVarUInt(0);
+                WriteBool(false);
                 return;
             }
 
+            WriteBool(true);
             var byteLen = Encoding.UTF8.GetByteCount(value);
             WriteVarUInt((uint)byteLen);
 
@@ -193,7 +198,43 @@ namespace SP.Core.Serialization
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Write<T>(T value) where T : unmanaged
+        public void WriteByteArray(byte[] value)
+        {
+            if (value == null)
+            {
+                WriteBool(false);
+                return;
+            }
+
+            WriteBool(true);
+            WriteBytes(value);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteEnum<TEnum>(TEnum value) where TEnum : unmanaged, Enum
+        {
+            if (Unsafe.SizeOf<TEnum>() == 1) WriteByte(Unsafe.As<TEnum, byte>(ref value));
+            else if (Unsafe.SizeOf<TEnum>() == 2) WriteUInt16(Unsafe.As<TEnum, ushort>(ref value));
+            else if (Unsafe.SizeOf<TEnum>() == 4) WriteUInt32(Unsafe.As<TEnum, uint>(ref value));
+            else if (Unsafe.SizeOf<TEnum>() == 8) WriteUInt64(Unsafe.As<TEnum, ulong>(ref value));
+            else ThrowNotSupportedType(typeof(TEnum));
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteData<T>(T value) where T : class, INetSerializable
+        {
+            if (value == null)
+            {
+                WriteBool(false);
+                return;
+            }
+
+            WriteBool(true);
+            value.Serialize(ref this);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteValue<T>(T value)
         {
             if (typeof(T) == typeof(byte)) WriteByte(Unsafe.As<T, byte>(ref value));
             else if (typeof(T) == typeof(sbyte)) WriteSByte(Unsafe.As<T, sbyte>(ref value));
@@ -206,9 +247,81 @@ namespace SP.Core.Serialization
             else if (typeof(T) == typeof(ulong)) WriteUInt64(Unsafe.As<T, ulong>(ref value));
             else if (typeof(T) == typeof(float)) WriteSingle(Unsafe.As<T, float>(ref value));
             else if (typeof(T) == typeof(double)) WriteDouble(Unsafe.As<T, double>(ref value));
+            else if (typeof(T) == typeof(DateTime)) WriteDateTime(Unsafe.As<T, DateTime>(ref value));
+            else if (typeof(T) == typeof(string)) WriteString(Unsafe.As<T, string>(ref value));
+            else if (typeof(T) == typeof(byte[])) WriteByteArray(Unsafe.As<T, byte[]>(ref value));
+            else if (typeof(T).IsEnum)
+            {
+                if (Unsafe.SizeOf<T>() == 1) WriteByte(Unsafe.As<T, byte>(ref value));
+                else if (Unsafe.SizeOf<T>() == 2) WriteUInt16(Unsafe.As<T, ushort>(ref value));
+                else if (Unsafe.SizeOf<T>() == 4) WriteUInt32(Unsafe.As<T, uint>(ref value));
+                else if (Unsafe.SizeOf<T>() == 8) WriteUInt64(Unsafe.As<T, ulong>(ref value));
+                else ThrowNotSupportedType(typeof(T));
+            }
+            else if (value is INetSerializable serializableRef)
+            {
+                WriteBool(true);
+                serializableRef.Serialize(ref this);
+            }
+            else if (value == null && typeof(INetSerializable).IsAssignableFrom(typeof(T)))
+            {
+                WriteBool(false);
+            }
             else
             {
                 ThrowNotSupportedType(typeof(T));
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteArray<T>(T[] array)
+        {
+            if (array == null)
+            {
+                WriteBool(false);
+                return;
+            }
+
+            WriteBool(true);
+            WriteVarUInt((uint)array.Length);
+            for (var i = 0; i < array.Length; i++)
+            {
+                WriteValue(array[i]);
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteList<T>(List<T> list)
+        {
+            if (list == null)
+            {
+                WriteBool(false);
+                return;
+            }
+
+            WriteBool(true);
+            WriteVarUInt((uint)list.Count);
+            for (var i = 0; i < list.Count; i++)
+            {
+                WriteValue(list[i]);
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteDict<TKey, TValue>(Dictionary<TKey, TValue> dict)
+        {
+            if (dict == null)
+            {
+                WriteBool(false);
+                return;
+            }
+
+            WriteBool(true);
+            WriteVarUInt((uint)dict.Count);
+            foreach (var kvp in dict)
+            {
+                WriteValue(kvp.Key);
+                WriteValue(kvp.Value);
             }
         }
 

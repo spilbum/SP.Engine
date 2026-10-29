@@ -17,14 +17,14 @@ public static class ProtocolId
 
     public static class CC2CS
     {
-        public const ushort LoginReq = 1000;
-        public const ushort ChatNotifyReq = 1001;
+        public const ushort LoginReq = 1100;
+        public const ushort ChatNotifyReq = 1101;
     }
 
     public static class CS2CC
     {
-        public const ushort LoginAck = 2000;
-        public const ushort ChatNotify = 2001;
+        public const ushort LoginAck = 2100;
+        public const ushort ChatNotify = 2101;
     }
 
     public static class CS2CS

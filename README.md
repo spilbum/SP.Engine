@@ -29,9 +29,9 @@ SP.Engine은 복잡한 로우레벨 제어(스레드 동기화, GC 메모리 관
   * 단일 서버의 한계를 넘어 전역 매치메이킹, 랭킹, 채팅 등 다양한 마이크로서비스와 유기적으로 연동할 수 있는 통신 인프라를 제공합니다.
   * 자체 암호화, 가변 압축, Zero-Allocation 직렬화 등 클라이언트와 동일한 고성능 스택을 서버 간 통신에도 대칭 적용하여 대용량 상태 동기화와 유연한 스케일아웃(Scale-out)을 지원합니다.
     
-* **동적 IL(Emit) 기반의 Zero-Reflection 직렬화**
-  * 성능 저하와 GC 스파이크의 주범인 C# 기본 리플렉션과 박싱(Boxing) 연산을 완벽히 배제했습니다.
-  * 프레임워크 초기화 시점에 컴파일되는 동적 IL(Intermediate Language)과 정적 메타데이터를 활용하여, 개발자가 패킷 구조체만 정의하면 즉시 런타임 오버헤드 없는 초고속 직렬화 통신이 가능합니다.
+* **Roslyn Source Generator 기반의 Zero-Reflection 직렬화**
+  * 성능 저하와 GC 스파이크의 주범인 런타임 리플렉션과 박싱(Boxing) 연산을 완벽히 배제했습니다.
+  * Roslyn 증분 소스 생성기(`SP.Engine.SourceGenerator`)가 컴파일 타임에 패킷 직렬화/역직렬화 코드와 핸들러/정책 레지스트리를 정적으로 생성하여, 패킷 클래스(`partial`)만 정의하면 런타임 오버헤드 없는 초고속 직렬화 통신이 가능합니다.
     
 ---
 
@@ -45,7 +45,7 @@ SP.Engine은 복잡한 로우레벨 제어(스레드 동기화, GC 메모리 관
 
 ```bash
 # 저장소 클론
-git clone [https://github.com/spilbum/SP.Engine.git](https://github.com/spilbum/SP.Engine.git)
+git clone https://github.com/spilbum/SP.Engine.git
 cd SP.Engine
 
 # 1. 에코 서버 실행 (터미널 1)
@@ -53,57 +53,63 @@ dotnet run --project Samples/EchoServer 10000
 
 # 2. 에코 클라이언트 실행 (터미널 2)
 dotnet run --project Samples/EchoClient 127.0.0.1 10000
-
 ```
 
-Basic Usage Example
-1. Common (Protocol Definition)
-클라이언트와 서버가 공유하는 패킷 규격입니다.
+### Basic Usage Example
+
+#### 1. Common (Protocol Definition)
+클라이언트와 서버가 공유하는 패킷 규격입니다. `[ProtocolData]` 어트리뷰트와 `partial` 키워드를 선언하면 Source Generator가 컴파일 타임에 `IProtocolData` 구현과 직렬화 코드를 자동 생성합니다.
 
 ```csharp
+using SP.Engine.Runtime.Protocol;
+
 // 프로토콜 ID 정의
 public static class C2S { public const ushort EchoReq = 1000; }
 public static class S2C { public const ushort EchoAck = 2000; }
 
 // 요청 패킷
 [ProtocolData(C2S.EchoReq)]
-public class C2S_EchoReq : ProtocolDataBase<C2S_EchoReq>
+public partial class C2S_EchoReq
 {
     public long SentTicks;
 }
 
 // 응답 패킷
 [ProtocolData(S2C.EchoAck)]
-public class S2C_EchoAck : ProtocolDataBase<S2C_EchoAck>
+public partial class S2C_EchoAck
 {
     public long SentTicks;
 }
 ```
 
-2. Server Side
-엔진을 상속받아 서버를 구성하고 비즈니스 로직(Command)을 연결합니다.
+#### 2. Server Side
+엔진을 상속받아 서버를 구성하고 프로토콜 핸들러(`ProtocolHandlerBase`)를 연결합니다.
 
 ```csharp
+using SP.Engine.Runtime;
+using SP.Engine.Runtime.Protocol;
+using SP.Engine.Server;
+using SP.Engine.Server.S2S;
+
 // 1. 유저 세션(Peer) 객체 정의
-public class UserPeer : PeerBase
+public class UserPeer(Session session) : PeerBase(PeerKind.User, session)
 {
-    public UserPeer(Session session) : base(session) { }
 }
 
 // 2. 메인 서버 엔진 구성
 public class EchoServer : EngineBase
 {
-    protected override IPeer CreatePeer(Session session) => new UserPeer(session);
+    protected override PeerBase OnCreatePeer(Session session) => new UserPeer(session);
 
-    protected override IConnector CreateConnector(string name) 
+    protected override S2SPeerBase OnCreateS2SPeer(Session session, string category) 
         => throw new NotImplementedException("본 예제에서는 S2S 커넥터를 생략합니다.");
 }
 
-// 3. 패킷 수신 커맨드 (비즈니스 로직)
-[ProtocolCommand(C2S.EchoReq)]
-public class EchoReqCommand : CommandBase<UserPeer, C2S_EchoReq>
+// 3. 패킷 수신 핸들러 (비즈니스 로직)
+[ProtocolHandler(C2S.EchoReq)]
+public class EchoReqHandler : ProtocolHandlerBase<UserPeer, C2S_EchoReq>
 {
-    protected override void ExecuteCommand(UserPeer context, C2S_EchoReq protocol)
+    protected override void ExecuteProtocol(UserPeer context, C2S_EchoReq protocol)
     {
         // GC 스파이크 방지를 위해 객체 풀에서 응답 프로토콜을 대여 (Zero-Allocation 지향)
         using var scope = ProtocolScope<S2C_EchoAck>.Rent();
@@ -115,33 +121,41 @@ public class EchoReqCommand : CommandBase<UserPeer, C2S_EchoReq>
 
 // 4. 서버 빌드 및 구동
 var builder = EngineBuilder<EchoServer>.Create()
+    .SetCategory("Echo")
     .SetName(nameof(EchoServer))
     .Listen(10000, mode: SocketMode.Tcp)
-    .Listen(20000, mode: SocketMode.Udp); // TCP/UDP 하이브리드 리슨
+    .Listen(20000, mode: SocketMode.Udp) // TCP/UDP 하이브리드 리슨
+    .AddAssembly(typeof(S2C_EchoAck).Assembly)
+    .WithEntryAssembly();
 
 var server = builder.Build();
 server.Start();
-
 ```
 
-3. Client Side
+#### 3. Client Side
 서버와 대칭되는 구조로 클라이언트를 구현하여 에코 응답 레이턴시를 측정합니다.
 
 ```csharp
+using SP.Core.Logging;
+using SP.Engine.Client;
+using SP.Engine.Runtime.Protocol;
+
 // 1. 클라이언트 피어 정의
 public class EchoClient : NetPeerBase
 {
     public void SendEcho()
     {
-        Send(new C2S_EchoReq { SentTicks = DateTime.UtcNow.Ticks });
+        using var scope = ProtocolScope<C2S_EchoReq>.Rent();
+        scope.Protocol.SentTicks = DateTime.UtcNow.Ticks;
+        Send(scope.Protocol);
     }
 }
 
-// 2. 서버 응답 처리 커맨드
-[ProtocolCommand(S2C.EchoAck)]
-public class EchoAckCommand : CommandBase<EchoClient, S2C_EchoAck>
+// 2. 서버 응답 처리 핸들러
+[ProtocolHandler(S2C.EchoAck)]
+public class EchoAckHandler : ProtocolHandlerBase<EchoClient, S2C_EchoAck>
 {
-    protected override void ExecuteCommand(EchoClient context, S2C_EchoAck protocol)
+    protected override void ExecuteProtocol(EchoClient context, S2C_EchoAck protocol)
     {
         // 왕복 레이턴시(RTT) 계산
         var rtt = TimeSpan.FromTicks(DateTime.UtcNow.Ticks - protocol.SentTicks);
@@ -153,7 +167,9 @@ public class EchoAckCommand : CommandBase<EchoClient, S2C_EchoAck>
 var logger = new ConsoleLogger("EchoClient");
 var client = NetPeerBuilder.Create()
     .WithLogger(logger)
-    .WithAutoPing(true, intervalSeconds: 2) // 자동 핑/세션 유지 로직 내장
+    .WithAutoPing(true, intervalSec: 2) // 자동 핑/세션 유지 로직 내장
+    .AddAssembly(typeof(C2S_EchoReq).Assembly)
+    .WithEntryAssembly()
     .Build<EchoClient>();
 
 client.Connect("127.0.0.1", 10000);

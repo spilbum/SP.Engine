@@ -1,11 +1,11 @@
 using SP.Engine.Runtime;
-using SP.Engine.Runtime.Networking;
+using SP.Engine.Runtime.Protocol;
 using SP.Engine.Runtime.Security;
 
 namespace SP.Engine.Common.Protocol.C2S
 {
     [ProtocolData(ProtocolId.C2S.SessionAuthReq)]
-    internal class SessionAuthReq : ProtocolDataBase<SessionAuthReq>
+    internal partial class SessionAuthReq
     {
         public byte[]? EncryptPublicKey;
         public DhKeySize EncryptKeySize;
@@ -16,15 +16,14 @@ namespace SP.Engine.Common.Protocol.C2S
     }
 
     [ProtocolData(ProtocolId.C2S.MessageAck)]
-    internal class MessageAck : ProtocolDataBase<MessageAck>
+    internal partial class MessageAck
     {
         public uint NextExpectedSeq;  
     }
 
     [ProtocolData(ProtocolId.C2S.Ping)]
-    internal class Ping : ProtocolDataBase<Ping>
+    internal partial class Ping
     {
-        public uint Seq;
         public uint SendTimeMs;
         // 최신 RTT
         public double RttMs;
@@ -35,13 +34,13 @@ namespace SP.Engine.Common.Protocol.C2S
     }
 
     [ProtocolData(ProtocolId.C2S.CloseCmd)]
-    internal class CloseCmd : ProtocolDataBase<CloseCmd>
+    internal partial class CloseCmd
     {
         
     }
 
     [ProtocolData(ProtocolId.C2S.UdpHelloReq)]
-    internal class UdpHelloReq : ProtocolDataBase<UdpHelloReq>
+    internal partial class UdpHelloReq
     {
         public ushort Mtu;
         public uint PeerId;
@@ -49,7 +48,7 @@ namespace SP.Engine.Common.Protocol.C2S
     }
 
     [ProtocolData(ProtocolId.C2S.UdpHealthCheckAck)]
-    internal class UdpHealthCheckAck : ProtocolDataBase<UdpHealthCheckAck>
+    internal partial class UdpHealthCheckAck
     {
         
     }

@@ -1,10 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using SP.Core;
-using SP.Core.Buffers;
 
 namespace SP.Engine.Runtime.Networking
 {
@@ -93,6 +92,7 @@ namespace SP.Engine.Runtime.Networking
         private readonly int _mask;
         private readonly int _initialRtoMs;
         private readonly int _maxRetransmitCount;
+        private readonly int _maxRetransmitPerTick;
         
         private readonly RetransmissionTracker[] _windowSlots;
         private readonly RetransmissionTrackerPool _pool = new RetransmissionTrackerPool();
@@ -112,13 +112,14 @@ namespace SP.Engine.Runtime.Networking
         private long _nextReliableSeq;
         private int _disposed;
 
-        public ReliableSendWindow(int windowSize, int initialRtoMs, int maxRetransmitCount)
+        public ReliableSendWindow(int windowSize, int initialRtoMs, int maxRetransmitCount, int maxRetransmitPerTick)
         {
             _windowSize = windowSize;
             _mask = windowSize - 1;
             _windowSlots = new RetransmissionTracker[windowSize];
             _initialRtoMs = initialRtoMs;
             _maxRetransmitCount = maxRetransmitCount;
+            _maxRetransmitPerTick = maxRetransmitPerTick;
         }
 
         public bool TryPush(TcpMessage message, out TcpMessage inFlightMessage)
@@ -199,17 +200,24 @@ namespace SP.Engine.Runtime.Networking
                 var unaSeq = _sendUnaSeq;
                 var maxSeq = _sendMaxSeq;
                 var proceeded = 0;
-                const int MAX_RETRANSMIT_PER_TICK = 2;
+                var noTimeoutCount = 0;
                 
                 for (var seq = unaSeq; seq <= maxSeq; seq++)
                 {
-                    if (proceeded >= MAX_RETRANSMIT_PER_TICK) break;
+                    if (proceeded >= _maxRetransmitPerTick) break;
                     
                     var index = (int)(seq & _mask);
                     var tracker = _windowSlots[index];
                     if (tracker == null) continue;
 
-                    if (!tracker.IsTimeout(nowUtc)) continue;
+                    if (!tracker.IsTimeout(nowUtc))
+                    {
+                        noTimeoutCount++;
+                        if (noTimeoutCount >= 10) break;
+                        continue;
+                    }
+                    
+                    noTimeoutCount = 0;
 
                     if (tracker.IsExhausted)
                     {
@@ -263,15 +271,16 @@ namespace SP.Engine.Runtime.Networking
         private readonly int _minRtoMs;
         private readonly int _maxRtoMs;
         private readonly int _minRtoVarianceMs;
+        private readonly double _jitterMultiplier;
 
-        private readonly EwmaFilter _rttVar = new EwmaFilter(0.25);
-        private readonly EwmaFilter _rttFilter = new EwmaFilter(0.125);
+        private readonly EwmaFilter _rttVar;
+        private readonly EwmaFilter _rttFilter;
 
         public double SRttMs => _rttFilter.Value;
         public double JitterMs => _rttVar.Value;
         public double LastRttMs { get; private set; }
 
-        public RtoEstimator(int minRtoMs = 200, int maxRtoMs = 5000, int minRtoVarianceMs = 100)
+        public RtoEstimator(double ewmaAlpha, double ewmaBeta, double jitterMultiplier, int minRtoMs = 200, int maxRtoMs = 5000, int minRtoVarianceMs = 100)
         {
             if (minRtoMs < 10) throw new ArgumentException("RTO estimator minRtoMs must be >= 50");
             if (maxRtoMs < minRtoMs) throw new ArgumentException("RTO estimator maxRtoMs must be >= minRtoMs");
@@ -279,6 +288,9 @@ namespace SP.Engine.Runtime.Networking
             _minRtoMs = minRtoMs;
             _maxRtoMs = maxRtoMs;
             _minRtoVarianceMs = minRtoVarianceMs;
+            _jitterMultiplier = jitterMultiplier;
+            _rttVar = new EwmaFilter(ewmaBeta);
+            _rttFilter = new EwmaFilter(ewmaAlpha);
         }
 
         public void AddSample(double rttMs)
@@ -301,8 +313,8 @@ namespace SP.Engine.Runtime.Networking
 
         public int GetRtoMs(int retryCount)
         {
-            // RTO = SRTT + max(G, K*RTTVAR)  (K = 4)
-            var baseRto = _rttFilter.Value + Math.Max(_minRtoVarianceMs, 4 * _rttVar.Value);
+            // RTO = SRTT + max(G, K*RTTVAR)
+            var baseRto = _rttFilter.Value + Math.Max(_minRtoVarianceMs, _jitterMultiplier * _rttVar.Value);
 
             if (double.IsNaN(baseRto) || double.IsInfinity(baseRto) || baseRto <= 0)
             {
@@ -327,15 +339,24 @@ namespace SP.Engine.Runtime.Networking
     public sealed class ReceiveSequenceReorderer : IDisposable
     {
         private readonly int _maxOutOfOrderCount;
+        private readonly int _mask;
         private uint _nextExpectedSeq = 1;
-        private readonly Dictionary<uint, TcpMessage> _outOfOrderSlots = new Dictionary<uint, TcpMessage>();
+        private readonly TcpMessage[] _outOfOrderSlots;
+        private int _bufferedCount;
         private bool _disposed;
 
         public uint NextExpectedSeq => _nextExpectedSeq;
 
         public ReceiveSequenceReorderer(int maxOutOfOrderCount)
         {
+            if (maxOutOfOrderCount <= 0 || (maxOutOfOrderCount & (maxOutOfOrderCount - 1)) != 0)
+            {
+                throw new ArgumentException("MaxOutOfOrderCount must be a power of 2.");
+            }
+            
             _maxOutOfOrderCount = maxOutOfOrderCount;
+            _mask = maxOutOfOrderCount - 1;
+            _outOfOrderSlots = new TcpMessage[maxOutOfOrderCount];
         }
 
         public ReceiveIngestResult TryIngest(TcpMessage message, List<TcpMessage> destinationList)
@@ -344,40 +365,61 @@ namespace SP.Engine.Runtime.Networking
 
             var seq = message.SequenceNumber;
             var diff = (int)(seq - _nextExpectedSeq);
-            if (diff < 0 || _outOfOrderSlots.ContainsKey(seq))
-            {
-                return ReceiveIngestResult.Duplicate;
-            }
-
-            if (diff > _maxOutOfOrderCount || _outOfOrderSlots.Count >= _maxOutOfOrderCount)
+            
+            if (diff < 0) return ReceiveIngestResult.Duplicate;
+            
+            if (diff >= _maxOutOfOrderCount || _bufferedCount >= _maxOutOfOrderCount)
             {
                 return ReceiveIngestResult.BufferOverflow;
             }
 
-            if (diff == 0)
+            var index = (int)(seq & _mask);
+            
+            if (diff > 0)
             {
-                destinationList.Add(message);
-                _nextExpectedSeq++;
-
-                while (_outOfOrderSlots.Remove(_nextExpectedSeq, out var nextMessage))
+                if (_outOfOrderSlots[index] != null)
                 {
-                    destinationList.Add(nextMessage);
-                    _nextExpectedSeq++;
+                    return ReceiveIngestResult.Duplicate;
                 }
-                    
-                return ReceiveIngestResult.Success;
+                
+                _outOfOrderSlots[index] = message;
+                _bufferedCount++;
+                return ReceiveIngestResult.Buffered;
+            }
+
+            destinationList.Add(message);
+            _nextExpectedSeq++;
+
+            while (_bufferedCount > 0)
+            {
+                var nextIndex = (int)(_nextExpectedSeq & _mask);
+                var nextMessage = _outOfOrderSlots[nextIndex];
+                if (nextMessage == null) break;
+
+                _outOfOrderSlots[nextIndex] = null;
+                _bufferedCount--;
+                
+                destinationList.Add(nextMessage);
+                _nextExpectedSeq++;
             }
                 
-            _outOfOrderSlots.TryAdd(seq, message);
-            return ReceiveIngestResult.Buffered;
+            return ReceiveIngestResult.Success;
         }
         
         public void Dispose()
         {
             if (_disposed) return;
             _disposed = true;
-            foreach (var message in _outOfOrderSlots.Values) message.Dispose();
-            _outOfOrderSlots.Clear();  
+            for (var i = 0; i < _maxOutOfOrderCount; i++)
+            {
+                var message = _outOfOrderSlots[i];
+                if (message != null)
+                {
+                    message.Dispose();
+                    _outOfOrderSlots[i] = null;
+                }
+            }
+            _bufferedCount = 0;
         }
     }
     
@@ -385,7 +427,7 @@ namespace SP.Engine.Runtime.Networking
     {
         private readonly ReliableSendWindow _reliableSendWindow;
         private readonly ReceiveSequenceReorderer _receiveSequenceReorderer;
-        private readonly RtoEstimator _rtoEstimator = new RtoEstimator();
+        private readonly RtoEstimator _rtoEstimator;
         private readonly ConcurrentQueue<TcpMessage> _pendingQueue = new ConcurrentQueue<TcpMessage>();
         private int _currentPendingCount;
         private readonly int _pendingQueueCapacity;
@@ -399,9 +441,14 @@ namespace SP.Engine.Runtime.Networking
             _reliableSendWindow = new ReliableSendWindow(
                 builder.InFlightLimit,
                 builder.InitialRetransmitTimeoutMs,
-                builder.MaxRetransmitCount);
+                builder.MaxRetransmitCount,
+                builder.MaxRetransmitPerTick);
             _pendingQueueCapacity = builder.PendingQueueCapacity;
             _receiveSequenceReorderer = new ReceiveSequenceReorderer(builder.MaxOutOfOrderCount);
+            _rtoEstimator = new RtoEstimator(
+                builder.EwmaAlpha,
+                builder.EwmaBeta,
+                builder.JitterMultiplier);
             
             MaxAckDelayMs = builder.MaxAckDelayMs;
             AckFrequency = builder.AckFrequency;
@@ -462,17 +509,21 @@ namespace SP.Engine.Runtime.Networking
         {
             internal int InFlightLimit { get; private set; } = 2048;
             internal int PendingQueueCapacity { get; private set; } = 1024;
-            internal int MaxOutOfOrderCount { get; private set; } = 100;
+            internal int MaxOutOfOrderCount { get; private set; } = 128;
             internal int MaxRetransmitCount { get; private set; } = 3;
             internal int InitialRetransmitTimeoutMs { get; private set; } = 500;
             internal int MaxAckDelayMs { get; private set; } = 30;
             internal int AckFrequency { get; private set; } = 10;
+            internal double JitterMultiplier { get; private set; } = 4.0;
+            internal double EwmaAlpha { get; private set; } = 0.125;
+            internal double EwmaBeta { get; private set; } = 0.25;
+            internal int MaxRetransmitPerTick { get; private set; } = 2;
             
             internal Builder() {}
 
             public Builder SetInFlightLimit(int limit)
             {
-                if (limit <= 0 || (limit & limit - 1) != 0)
+                if (limit <= 0 || (limit & (limit - 1)) != 0)
                 {
                     throw new ArgumentException("InFlightLimit must be a power of 2.");
                 }
@@ -501,10 +552,30 @@ namespace SP.Engine.Runtime.Networking
                 AckFrequency = frequency > 0 ? frequency : 10;
                 return this;
             }
+            
+            private int GetNextPowerOfTwo(int value)
+            {
+                var n = value - 1;
+                n |= n >> 1;
+                n |= n >> 2;
+                n |= n >> 4;
+                n |= n >> 8;
+                n |= n >> 16;
+                return n + 1;
+            }
 
             public Builder SetMaxOutOfOrderCount(int count)
             {
-                MaxOutOfOrderCount = count > 0 ? count : 100;
+                MaxOutOfOrderCount = count > 0 ? GetNextPowerOfTwo(count) : 128;
+                return this;
+            }
+            
+            public Builder SetRtoConfig(double jitterMultiplier = 4.0, double ewmaAlpha = 0.125, double ewmaBeta = 0.25, int maxRetransmitPerTick = 2)
+            {
+                JitterMultiplier = jitterMultiplier;
+                EwmaAlpha = ewmaAlpha;
+                EwmaBeta = ewmaBeta;
+                MaxRetransmitPerTick = maxRetransmitPerTick > 0 ? maxRetransmitPerTick : 2;
                 return this;
             }
 

@@ -1,5 +1,6 @@
 using System;
 using System.Net.Sockets;
+using SP.Core.Buffers;
 
 namespace SP.Engine.Server;
 
@@ -10,7 +11,7 @@ public sealed class SocketSendContext : IDisposable
     public int OriginOffset { get; }
     public int BufferSize { get; private set; }
     
-    public SendRingBuffer RingBuffer { get; }
+    public ByteRingBuffer RingBuffer { get; }
 
     public SocketSendContext(
         SocketAsyncEventArgs e, 
@@ -22,7 +23,7 @@ public sealed class SocketSendContext : IDisposable
         Buffer = globalBuffer;
         OriginOffset = offset;
         BufferSize = bufferSize;
-        RingBuffer = new SendRingBuffer(globalBuffer, offset, bufferSize);
+        RingBuffer = new ByteRingBuffer(globalBuffer, offset, bufferSize);
         SocketEventArgs.Completed += OnSendCompleted;
     }
 

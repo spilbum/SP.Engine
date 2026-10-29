@@ -3,9 +3,9 @@ using System.Buffers;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
-using System.Runtime.InteropServices;
 using System.Threading;
 using SP.Engine.Runtime.Networking;
+using SP.Core.Buffers;
 
 namespace SP.Engine.Client
 {

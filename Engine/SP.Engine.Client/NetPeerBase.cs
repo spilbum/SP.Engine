@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -9,16 +9,13 @@ using System.Threading;
 using SP.Core;
 using SP.Core.Buffers;
 using SP.Core.Logging;
-using SP.Engine.Client.Command;
 using SP.Engine.Client.Configuration;
-using SP.Engine.Common.Protocol;
 using SP.Engine.Common.Protocol.C2S;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Channel;
-using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Compression;
 using SP.Engine.Runtime.Networking;
-using SP.Engine.Runtime.Policy;
+using SP.Engine.Runtime.Protocol;
 using SP.Engine.Runtime.Security;
 
 namespace SP.Engine.Client
@@ -70,7 +67,7 @@ namespace SP.Engine.Client
         Closed = 6
     }
 
-    public abstract class NetPeerBase : ICommandContext, IDisposable
+    public abstract class NetPeerBase : IProtocolHandlerContext, IDisposable
     {
         private static readonly long _baseUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         private static long UtcNowMs => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -78,9 +75,9 @@ namespace SP.Engine.Client
         
         private readonly MessageChannelRouter _channelRouter = new MessageChannelRouter();
         private readonly DiffieHellman _diffieHellman = new DiffieHellman(DhKeySize.Bit2048);
-        private readonly Dictionary<ushort, ICommandHandler> _engineCommands = new Dictionary<ushort, ICommandHandler>();
-        private readonly Dictionary<ushort, ICommandHandler> _appCommands = new Dictionary<ushort, ICommandHandler>();
-        private ByteReadWriteBuffer _readWriteBuffer;
+        private readonly Dictionary<ushort, IProtocolHandler> _engineProtocolHandlers = new Dictionary<ushort, IProtocolHandler>();
+        private readonly Dictionary<ushort, IProtocolHandler> _appProtocolHandlers = new Dictionary<ushort, IProtocolHandler>();
+        private MessageReadBuffer _messageReadBuffer;
         private readonly ConcurrentQueue<IMessage> _messageReceivedQueue = new ConcurrentQueue<IMessage>();
         private Lz4Compressor _compressor;
         private bool _disposed;
@@ -88,8 +85,8 @@ namespace SP.Engine.Client
         private ReliableMessageProcessor _messageProcessor;
         private int _maxPayloadLength = 65536;
 
-        private readonly Dictionary<ushort, ProtocolOverrides> _protocolOverrides = new Dictionary<ushort, ProtocolOverrides>();
-        private IPolicySnapshot _policySnapshot;
+        private readonly Dictionary<ushort, ProtocolPolicyOverrides> _protocolPolicyOverrides = new Dictionary<ushort, ProtocolPolicyOverrides>();
+        private IProtocolPolicyProvider _protocolPolicyProvider;
         private TcpNetworkSession _tcpNetworkSession;
         private long _sessionId;
         private volatile uint _peerId;
@@ -125,8 +122,8 @@ namespace SP.Engine.Client
         public ILogger Logger { get; private set; }
         public PeerKind Kind { get; }
         
-        IEncryptor ICommandContext.Encryptor => _encryptor;
-        ICompressor ICommandContext.Compressor => _compressor;
+        IEncryptor IProtocolHandlerContext.Encryptor => _encryptor;
+        ICompressor IProtocolHandlerContext.Compressor => _compressor;
         
         private readonly LatencyEstimator _latencyEstimator = new LatencyEstimator();
         private readonly object _latencyLock = new object();
@@ -229,7 +226,7 @@ namespace SP.Engine.Client
         
         public bool Send(IProtocolData data)
         {
-            var policy = _policySnapshot.Resolve(data.Id);
+            var policy = _protocolPolicyProvider.Resolve(data.Id);
             var encryptor = policy.UseEncrypt ? _encryptor : null;
             var compressor = policy.UseCompress ? _compressor : null;
             var originalChannel = data.Channel;
@@ -330,24 +327,12 @@ namespace SP.Engine.Client
             Config = config;
             Logger = logger;
             
-            // 엔진 명령어 등록
-            RegisterEngineCommand<SessionAuthAckHandler>(ProtocolId.S2C.SessionAuthAck);
-            RegisterEngineCommand<CloseCmdHandler>(ProtocolId.S2C.CloseCmd);
-            RegisterEngineCommand<MessageAckHandler>(ProtocolId.S2C.MessageAck);
-            RegisterEngineCommand<PongHandler>(ProtocolId.S2C.Pong);
-            RegisterEngineCommand<UdpHelloAckHandler>(ProtocolId.S2C.UdpHelloAck);
-            RegisterEngineCommand<UdpHealthCheckReqHandler>(ProtocolId.S2C.UdpHealthCheckReq);
-            RegisterEngineCommand<UdpStatusNotifyHandler>(ProtocolId.S2C.UdpStatusNotify);
-
-            // 사용자 명령어 추출
-            if (!DiscoverAppCommands(assemblies))
+            if (!SetupProtocolHandler(assemblies))
                 return false;
 
-            if (!SetupPolicy(assemblies))
+            if (!SetupProtocolPolicy(assemblies))
                 return false;
 
-            var defaultPolicy = new PolicyGlobals(false, false, 0);
-            _policySnapshot = CreatePolicySnapshot(defaultPolicy);
             return true;
         }
 
@@ -356,79 +341,70 @@ namespace SP.Engine.Client
             Dispose(false);
         }
 
-        protected void RegisterEngineCommand<T>(ushort protocolId) where T : ICommandHandler, new()
-            => _engineCommands[protocolId] = new T();
-
-        private ICommandHandler GetEngineCommand(ushort protocolId)
+        private IProtocolHandler GetEngineProtocolHandler(ushort protocolId)
         {
-            _engineCommands.TryGetValue(protocolId, out var command);
-            return command;
+            _engineProtocolHandlers.TryGetValue(protocolId, out var handler);
+            return handler;
         }
         
-        private bool DiscoverAppCommands(Assembly[] assemblies)
+        private bool SetupProtocolHandler(Assembly[] assemblies)
         {
-            var targetType = GetType();
-            
-            foreach (var assembly in assemblies)
+            var engineAssembly = typeof(NetPeerBase).Assembly;
+            var engineAttr = engineAssembly.GetCustomAttribute<ProtocolHandlerRegistryAttribute>();
+            if (engineAttr != null && Activator.CreateInstance(engineAttr.RegistryType) is IProtocolHandlerRegistry engineRegistry)
             {
-                var types = assembly.GetTypes()
-                    .Where(t => typeof(ICommandHandler).IsAssignableFrom(t) && t.IsClass && !t.IsAbstract)
-                    .ToList();
+                engineRegistry.Register(
+                    _engineProtocolHandlers,
+                    contextType => typeof(NetPeerBase).IsAssignableFrom(contextType));
+            }
+            
+            foreach (var assembly in assemblies.Distinct())
+            {
+                if (assembly == engineAssembly) continue;
                 
-                foreach (var t in types)
+                var attr = assembly.GetCustomAttribute<ProtocolHandlerRegistryAttribute>();
+                if (attr != null && Activator.CreateInstance(attr.RegistryType) is IProtocolHandlerRegistry registry)
                 {
-                    var attr = t.GetCustomAttribute<CommandHandlerAttribute>();
-                    if (attr == null)
-                    {
-                        Logger.Warn($"[{t.FullName}] requires {nameof(CommandHandlerAttribute)}");
-                        continue;
-                    }
-   
-                    if (!(Activator.CreateInstance(t) is ICommandHandler command)) continue;
-                    if (targetType != command.ContextType) continue;
-                    if (!_appCommands.TryAdd(attr.Id, command))
-                    {
-                        Logger.Warn($"Duplicate command: {attr.Id}");
-                    }
+                    registry.Register(
+                        _appProtocolHandlers,
+                        contextType => typeof(NetPeerBase).IsAssignableFrom(contextType));
                 }
             }
 
-            if (Kind == PeerKind.User && _appCommands.Count == 0)
+            if (Kind == PeerKind.User && _appProtocolHandlers.Count == 0)
             {
-                Logger.Fatal("Command could not be found");
+                Logger.Fatal("ProtocolHandler could not be found");
                 return false;
             }
             
-            Logger.Debug("[NetPeer] Discovered '{0}' commands: [{1}]", _appCommands.Count, string.Join(", ", _appCommands.Keys));
+            Logger.Debug("[NetPeer] Initialized. Engine handlers: {0}, App handlers: {1}", 
+                _engineProtocolHandlers.Count, _appProtocolHandlers.Count);
             return true;
         }
 
-        private ICommandHandler GetAppCommand(ushort protocolId)
+        private IProtocolHandler GetAppProtocolHandler(ushort protocolId)
         {
-            _appCommands.TryGetValue(protocolId, out var command);
-            return command;
+            _appProtocolHandlers.TryGetValue(protocolId, out var handler);
+            return handler;
         }
 
-        private bool SetupPolicy(Assembly[] assemblies)
+        private bool SetupProtocolPolicy(Assembly[] assemblies)
         {
             foreach (var assembly in assemblies)
             {
-                var types = assembly.GetTypes()
-                    .Where(t => typeof(IProtocolData).IsAssignableFrom(t) && t.IsClass && !t.IsAbstract);
-
-                foreach (var type in types)
+                var registryAttr = assembly.GetCustomAttribute<ProtocolPolicyRegistryAttribute>();
+                if (registryAttr != null && Activator.CreateInstance(registryAttr.RegistryType) is IProtocolPolicyRegistry registry)
                 {
-                    var attr = type.GetCustomAttribute<ProtocolDataAttribute>();
-                    if (attr == null) return false;
-                    _protocolOverrides[attr.Id] = new ProtocolOverrides(attr.Encrypt, attr.Compress);
+                    registry.Register(_protocolPolicyOverrides);
                 }
             }
 
-            return _protocolOverrides.Count != 0;
-        }
+            if (_protocolPolicyOverrides.Count == 0) return false;
 
-        private IPolicySnapshot CreatePolicySnapshot(PolicyGlobals globals)
-            => new PolicySnapshot(globals, _protocolOverrides);
+            var g = new GlobalProtocolPolicy(false, false, 0);
+            _protocolPolicyProvider = new ProtocolPolicyProvider(g, _protocolPolicyOverrides);
+            return true;
+        }
 
         private static EndPoint ResolveEndPoint(string ip, int port)
         {
@@ -453,7 +429,7 @@ namespace SP.Engine.Client
                             {
                                 foreach (var m in _orderCache)
                                 {
-                                    using (m) ExecuteCommand(m);
+                                    using (m) ProcessMessage(m);
                                 }
 
                                 break;
@@ -475,7 +451,7 @@ namespace SP.Engine.Client
                     }
                     else
                     {
-                        using (message) ExecuteCommand(message);
+                        using (message) ProcessMessage(message);
                     }
                 }
                 catch (Exception ex)
@@ -485,18 +461,18 @@ namespace SP.Engine.Client
             }
         }
 
-        private void ExecuteCommand(IMessage message)
+        private void ProcessMessage(IMessage message)
         {
             if (message == null) return;
             
-            var command = GetAppCommand(message.Id);
-            if (command == null)
+            var handler = GetAppProtocolHandler(message.Id);
+            if (handler == null)
             {
-                Logger.Warn("Unknown command: {0}", message.Id);
+                Logger.Warn("Unknown handler: {0}", message.Id);
                 return;
             }
 
-            command.Execute(this, message);
+            handler.Execute(this, message);
         }
         
         private void FlushPendingMessage()
@@ -624,7 +600,7 @@ namespace SP.Engine.Client
             var session = _tcpNetworkSession;
             session?.Close();
             
-            _readWriteBuffer = new ByteReadWriteBuffer(Config.ReceiveBufferSize);
+            _messageReadBuffer = new MessageReadBuffer(Config.ReceiveBufferSize);
 
             session = new TcpNetworkSession(this);
             session.Opened += OnSessionOpened;
@@ -732,12 +708,20 @@ namespace SP.Engine.Client
         
         private void OnSessionDataReceived(object sender, DataEventArgs e)
         {
-            if (!_readWriteBuffer.TryWrite(e.Data.AsSpan(e.Offset, e.Length))) return;
+            if (!_messageReadBuffer.TryWrite(e.Data.AsSpan(e.Offset, e.Length))) return;
 
             try
             {
-                while (_readWriteBuffer.TryRead(_maxPayloadLength, out var header, out var bufferOwner))
+                while (true)
                 {
+                    var result = _messageReadBuffer.TryRead(_maxPayloadLength, out var header, out var bufferOwner);
+                    if (result == MessageReadResult.NeedMoreData) break;
+                    if (result == MessageReadResult.InvalidHeader || result == MessageReadResult.CorruptedPayload)
+                    {
+                        Close();
+                        return;
+                    }
+
                     var message = MessagePool<TcpMessage>.Rent();
                     message.Initialize(header, bufferOwner);
                     MessageReceived(message);
@@ -883,10 +867,10 @@ namespace SP.Engine.Client
 
         private void MessageReceived(IMessage message)
         {
-            var command = GetEngineCommand(message.Id);
-            if (command != null)
+            var handler = GetEngineProtocolHandler(message.Id);
+            if (handler != null)
             {
-                using (message) command.Execute(this, message);
+                using (message) handler.Execute(this, message);
             }
             else
             {
@@ -955,11 +939,11 @@ namespace SP.Engine.Client
             _compressor = new Lz4Compressor(maxPayloadLength);
         }
 
-        internal void SetupPolicy(bool useEncrypt, bool useCompress, int compressionThreshold)
+        internal void SetupProtocolPolicy(bool useEncrypt, bool useCompress, int compressionThreshold)
         {
-            var g = new PolicyGlobals(useEncrypt, useCompress, compressionThreshold);
-            var snapshot = CreatePolicySnapshot(g);
-            Interlocked.Exchange(ref _policySnapshot, snapshot);
+            var g = new GlobalProtocolPolicy(useEncrypt, useCompress, compressionThreshold);
+            var provider = new ProtocolPolicyProvider(g, _protocolPolicyOverrides);
+            Interlocked.Exchange(ref _protocolPolicyProvider, provider);
         }
 
         internal void SetMaxPayloadLength(int maxPayloadLength)

@@ -6,14 +6,14 @@ namespace SP.Engine.Runtime.Channel
 {
     public sealed class MessageChannelRouter
     {
-        private readonly IMessageChannel[] _channels = new IMessageChannel[(int)ChannelKind.Count];
+        private readonly IMessageChannel[] _channels = new IMessageChannel[(int)ChannelKind.Max];
         public bool IsUdpAvailable { get; private set; }
 
         public void Bind(IMessageChannel channel)
         {
             if (channel == null) throw new ArgumentNullException(nameof(channel));
             
-            var index = (int)channel.Kind;
+            var index = (int)channel.Kind - 1;
             if (index >= _channels.Length) throw new ArgumentOutOfRangeException(nameof(channel));
             
             Volatile.Write(ref _channels[index], channel);
@@ -27,7 +27,7 @@ namespace SP.Engine.Runtime.Channel
             if (kind == ChannelKind.Unreliable)
                 SetUdpAvailable(false);
 
-            var index = (int)kind;
+            var index = (int)kind - 1;
             if (index >= _channels.Length) throw new ArgumentOutOfRangeException(nameof(kind));
             
             Volatile.Write(ref _channels[index], null);
@@ -40,7 +40,7 @@ namespace SP.Engine.Runtime.Channel
 
         public bool TrySend(ChannelKind kind, IMessage message)
         {
-            var index = (int)kind;
+            var index = (int)kind - 1;
             if (index >= _channels.Length) throw new ArgumentOutOfRangeException(nameof(kind));
             
             var channel = Volatile.Read(ref _channels[index]);

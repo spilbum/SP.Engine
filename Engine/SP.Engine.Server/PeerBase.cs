@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Net;
@@ -7,11 +7,11 @@ using System.Threading;
 using SP.Core.Logging;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Channel;
-using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Compression;
 using SP.Engine.Runtime.Networking;
+using SP.Engine.Runtime.Protocol;
 using SP.Engine.Runtime.Security;
-using SP.Engine.Server.Protocol;
+using SP.Engine.Server.Configuration;
 
 namespace SP.Engine.Server;
 
@@ -34,12 +34,12 @@ internal static class PeerStateConst
     public const int Closed = 4;
 }
 
-public interface IPeer : ICommandContext
+public interface IPeer : IProtocolHandlerContext
 {
     uint PeerId { get; }
     PeerKind Kind { get; }
     PeerState State { get; }
-    bool Send<T>(T data) where T : class, IProtocolData, new();
+    bool Send(IProtocolData data);
     void Close(CloseReason reason);
 }
 
@@ -59,7 +59,7 @@ public abstract class PeerBase : IPeer, IDisposable
     
     internal ReliableMessageProcessor MessageProcessor { get; }
 
-    public EngineBase Engine => _session.Engine;
+    public IEngineConfig Config => _session.Config;
     public double AvgRttMs { get; internal set; }
     public double JitterMs { get; internal set; }
     public IPEndPoint LocalEndPoint => _session.LocalEndPoint;
@@ -69,8 +69,8 @@ public abstract class PeerBase : IPeer, IDisposable
 
     internal byte[] LocalPublicKey => _diffieHellman?.PublicKey;
 
-    IEncryptor ICommandContext.Encryptor => _encryptor;
-    ICompressor ICommandContext.Compressor => _compressor;
+    IEncryptor IProtocolHandlerContext.Encryptor => _encryptor;
+    ICompressor IProtocolHandlerContext.Compressor => _compressor;
     
     protected PeerBase(PeerKind kind, Session session)
     {
@@ -111,13 +111,7 @@ public abstract class PeerBase : IPeer, IDisposable
 
     public bool Send(IProtocolData data)
     {
-        if (data == null) return false;
-        return !IsClosed && ProtocolDispatcher.DispatchSend(this, data);
-    }
-    
-    public bool Send<T>(T data) where T : class, IProtocolData, new()
-    {
-        if (IsClosed) return false;
+        if (data == null || IsClosed) return false;
         
         _sendQueue.Enqueue(data);
 
@@ -159,7 +153,7 @@ public abstract class PeerBase : IPeer, IDisposable
         try
         {
             var session = peer._session;
-            var policy = session.PolicySnapshot.Resolve(data.Id);
+            var policy = session.PolicyProvider.Resolve(data.Id);
             var encryptor = policy.UseEncrypt ? peer._encryptor : null;
             var compressor = policy.UseCompress ? peer._compressor : null;
 

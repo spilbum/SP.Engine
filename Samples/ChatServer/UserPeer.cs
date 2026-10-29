@@ -1,7 +1,6 @@
 using Common.Protocol.CS2CC;
 using SP.Engine.Runtime;
 using SP.Engine.Server;
-using SP.Engine.Server.Protocol;
 
 namespace ChatServer;
 

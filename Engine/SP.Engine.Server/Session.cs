@@ -1,10 +1,10 @@
-﻿using System;
+using System;
 using System.Threading;
 using SP.Engine.Common.Protocol.S2C;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Channel;
 using SP.Engine.Runtime.Networking;
-using SP.Engine.Server.Protocol;
+using SP.Engine.Runtime.Protocol;
 
 namespace SP.Engine.Server;
 
@@ -23,9 +23,9 @@ public sealed class Session(long sessionId) : SessionBase(sessionId)
     
     public EngineBase Engine { get; private set; }
 
-    public override void Initialize(EngineCore engine, TcpNetworkSession ns, ReadWriteBuffer readWriteBuffer)
+    public override void Initialize(EngineCore engine, TcpNetworkSession ns, MessageReadBuffer messageReadBuffer)
     {
-        base.Initialize(engine, ns, readWriteBuffer);
+        base.Initialize(engine, ns, messageReadBuffer);
         Engine = (EngineBase)engine;
     }
 
@@ -162,7 +162,7 @@ public sealed class Session(long sessionId) : SessionBase(sessionId)
     protected override void MessageReceived(IMessage message)
     {
         base.MessageReceived(message);
-        Engine.ExecuteCommand(this, message);
+        Engine.ProcessMessage(this, message);
     }
 
     public override void Close(CloseReason reason)

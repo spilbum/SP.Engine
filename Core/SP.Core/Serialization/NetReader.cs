@@ -1,5 +1,6 @@
 using System;
 using System.Buffers.Binary;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -90,6 +91,9 @@ namespace SP.Core.Serialization
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public DateTime ReadDateTime() => new DateTime(ReadInt64());
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public uint ReadVarUInt()
         {
             // LEB128 (up to 5 bytes for 32-bit)
@@ -142,6 +146,7 @@ namespace SP.Core.Serialization
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public string ReadString()
         {
+            if (!ReadBool()) return null;
             var byteLen = (int)ReadVarUInt();
             if (byteLen < 0) throw new InvalidDataException("Negative string length");
             return Encoding.UTF8.GetString(ReadSpan(byteLen));
@@ -156,91 +161,277 @@ namespace SP.Core.Serialization
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Align(int alignment)
+        public byte[] ReadByteArray()
         {
-            if (alignment <= 1) return;
-            var mis = _position % alignment;
-            if (mis == 0) return;
-            Advance(alignment - mis);
+            if (!ReadBool()) return null;
+            var span = ReadBytes();
+            var arr = new byte[span.Length];
+            span.CopyTo(arr);
+            return arr;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public T Read<T>() where T : unmanaged
+        public TEnum ReadEnum<TEnum>() where TEnum : unmanaged, Enum
+        {
+            if (Unsafe.SizeOf<TEnum>() == 1)
+            {
+                var v = ReadByte();
+                return Unsafe.As<byte, TEnum>(ref v);
+            }
+
+            if (Unsafe.SizeOf<TEnum>() == 2)
+            {
+                var v = ReadUInt16();
+                return Unsafe.As<ushort, TEnum>(ref v);
+            }
+
+            if (Unsafe.SizeOf<TEnum>() == 4)
+            {
+                var v = ReadUInt32();
+                return Unsafe.As<uint, TEnum>(ref v);
+            }
+
+            if (Unsafe.SizeOf<TEnum>() == 8)
+            {
+                var v = ReadUInt64();
+                return Unsafe.As<ulong, TEnum>(ref v);
+            }
+
+            ThrowNotSupportedType(typeof(TEnum));
+            return default;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public T ReadData<T>() where T : class, INetSerializable, new()
+        {
+            if (!ReadBool()) return null;
+            var instance = new T();
+            instance.Deserialize(ref this);
+            return instance;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public T ReadValue<T>()
         {
             if (typeof(T) == typeof(bool))
             {
-                var val = ReadBool();
-                return Unsafe.As<bool, T>(ref val);
+                var v = ReadBool();
+                return Unsafe.As<bool, T>(ref v);
             }
 
             if (typeof(T) == typeof(byte))
             {
-                var value = ReadByte();
-                return Unsafe.As<byte, T>(ref value);
+                var v = ReadByte();
+                return Unsafe.As<byte, T>(ref v);
             }
 
             if (typeof(T) == typeof(sbyte))
             {
-                var value = ReadSByte();
-                return Unsafe.As<sbyte, T>(ref value);
+                var v = ReadSByte();
+                return Unsafe.As<sbyte, T>(ref v);
             }
 
             if (typeof(T) == typeof(short))
             {
-                var value = ReadInt16();
-                return Unsafe.As<short, T>(ref value);
+                var v = ReadInt16();
+                return Unsafe.As<short, T>(ref v);
             }
 
             if (typeof(T) == typeof(ushort))
             {
-                var value = ReadUInt16();
-                return Unsafe.As<ushort, T>(ref value);
+                var v = ReadUInt16();
+                return Unsafe.As<ushort, T>(ref v);
             }
 
             if (typeof(T) == typeof(int))
             {
-                var value = ReadInt32();
-                return Unsafe.As<int, T>(ref value);
+                var v = ReadInt32();
+                return Unsafe.As<int, T>(ref v);
             }
 
             if (typeof(T) == typeof(uint))
             {
-                var value = ReadUInt32();
-                return Unsafe.As<uint, T>(ref value);
+                var v = ReadUInt32();
+                return Unsafe.As<uint, T>(ref v);
             }
 
             if (typeof(T) == typeof(long))
             {
-                var value = ReadInt64();
-                return Unsafe.As<long, T>(ref value);
+                var v = ReadInt64();
+                return Unsafe.As<long, T>(ref v);
             }
 
             if (typeof(T) == typeof(ulong))
             {
-                var value = ReadUInt64();
-                return Unsafe.As<ulong, T>(ref value);
+                var v = ReadUInt64();
+                return Unsafe.As<ulong, T>(ref v);
             }
 
             if (typeof(T) == typeof(float))
             {
-                var value = ReadSingle();
-                return Unsafe.As<float, T>(ref value);
+                var v = ReadSingle();
+                return Unsafe.As<float, T>(ref v);
             }
 
             if (typeof(T) == typeof(double))
             {
-                var value = ReadDouble();
-                return Unsafe.As<double, T>(ref value);
+                var v = ReadDouble();
+                return Unsafe.As<double, T>(ref v);
+            }
+
+            if (typeof(T) == typeof(DateTime))
+            {
+                var v = ReadDateTime();
+                return Unsafe.As<DateTime, T>(ref v);
+            }
+
+            if (typeof(T) == typeof(string))
+            {
+                var v = ReadString();
+                return Unsafe.As<string, T>(ref v);
+            }
+
+            if (typeof(T) == typeof(byte[]))
+            {
+                var v = ReadByteArray();
+                return Unsafe.As<byte[], T>(ref v);
+            }
+
+            if (typeof(T).IsEnum)
+            {
+                if (Unsafe.SizeOf<T>() == 1)
+                {
+                    var v = ReadByte();
+                    return Unsafe.As<byte, T>(ref v);
+                }
+
+                if (Unsafe.SizeOf<T>() == 2)
+                {
+                    var v = ReadUInt16();
+                    return Unsafe.As<ushort, T>(ref v);
+                }
+
+                if (Unsafe.SizeOf<T>() == 4)
+                {
+                    var v = ReadUInt32();
+                    return Unsafe.As<uint, T>(ref v);
+                }
+
+                if (Unsafe.SizeOf<T>() == 8)
+                {
+                    var v = ReadUInt64();
+                    return Unsafe.As<ulong, T>(ref v);
+                }
             }
 
             ThrowNotSupportedType(typeof(T));
             return default;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public T[] ReadArray<T>()
+        {
+            if (!ReadBool()) return null;
+            var count = (int)ReadVarUInt();
+            var arr = new T[count];
+            for (var i = 0; i < count; i++)
+            {
+                arr[i] = ReadValue<T>();
+            }
+            return arr;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public T[] ReadDataArray<T>() where T : class, INetSerializable, new()
+        {
+            if (!ReadBool()) return null;
+            var count = (int)ReadVarUInt();
+            var arr = new T[count];
+            for (var i = 0; i < count; i++)
+            {
+                arr[i] = ReadData<T>();
+            }
+            return arr;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public List<T> ReadList<T>(List<T> existing = null)
+        {
+            if (!ReadBool()) return null;
+            var count = (int)ReadVarUInt();
+            var list = PrepareList(existing, count);
+            for (var i = 0; i < count; i++)
+            {
+                list.Add(ReadValue<T>());
+            }
+            return list;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public List<T> ReadDataList<T>(List<T> existing = null) where T : class, INetSerializable, new()
+        {
+            if (!ReadBool()) return null;
+            var count = (int)ReadVarUInt();
+            var list = PrepareList(existing, count);
+            for (var i = 0; i < count; i++)
+            {
+                list.Add(ReadData<T>());
+            }
+            return list;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Dictionary<TKey, TValue> ReadDict<TKey, TValue>(Dictionary<TKey, TValue> existing = null)
+        {
+            if (!ReadBool()) return null;
+            var count = (int)ReadVarUInt();
+            var dict = PrepareDict(existing, count);
+            for (var i = 0; i < count; i++)
+            {
+                dict[ReadValue<TKey>()] = ReadValue<TValue>();
+            }
+            return dict;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Dictionary<TKey, TValue> ReadDataDict<TKey, TValue>(Dictionary<TKey, TValue> existing = null) where TValue : class, INetSerializable, new()
+        {
+            if (!ReadBool()) return null;
+            var count = (int)ReadVarUInt();
+            var dict = PrepareDict(existing, count);
+            for (var i = 0; i < count; i++)
+            {
+                dict[ReadValue<TKey>()] = ReadData<TValue>();
+            }
+            return dict;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static List<T> PrepareList<T>(List<T> existing, int count)
+        {
+            if (existing == null)
+                return new List<T>(count);
+
+            existing.Clear();
+            if (existing.Capacity < count)
+                existing.Capacity = count;
+            return existing;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static Dictionary<TKey, TValue> PrepareDict<TKey, TValue>(Dictionary<TKey, TValue> existing, int count)
+        {
+            if (existing == null)
+                return new Dictionary<TKey, TValue>(count);
+
+            existing.Clear();
+            return existing;
+        }
+
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static void ThrowNotSupportedType(Type t)
         {
-            throw new NotSupportedException($"Type '{t.Name}' is not supported by NetReader<T>. Only primitives are allowed.");
+            throw new NotSupportedException($"Type '{t.Name}' is not supported by NetReader.");
         }
     }
 }

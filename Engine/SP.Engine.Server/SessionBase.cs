@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -6,10 +6,9 @@ using SP.Core.Buffers;
 using SP.Core.Logging;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Channel;
-using SP.Engine.Runtime.Command;
 using SP.Engine.Runtime.Compression;
 using SP.Engine.Runtime.Networking;
-using SP.Engine.Runtime.Policy;
+using SP.Engine.Runtime.Protocol;
 using SP.Engine.Runtime.Security;
 using SP.Engine.Server.Configuration;
 
@@ -24,12 +23,12 @@ public enum SessionState
     Closed
 }
 
-public abstract class SessionBase : ICommandContext, IDisposable
+public abstract class SessionBase : IProtocolHandlerContext, IDisposable
 {
     private readonly MessageChannelRouter _router = new();
-    private ReadWriteBuffer _readWriteBuffer;
+    private MessageReadBuffer _messageReadBuffer;
     private EngineCore _engine;
-    private IPolicySnapshot _policySnapshot;
+    private IProtocolPolicyProvider _policyProvider;
     private long _sessionId;
     private volatile TcpNetworkSession _tcpNetworkSession;
     private long _lastActiveTimeTicks;
@@ -55,7 +54,7 @@ public abstract class SessionBase : ICommandContext, IDisposable
     
     public ILogger Logger => _engine?.Logger;
     public IEngineConfig Config => _engine?.Config;
-    public IPolicySnapshot PolicySnapshot => _policySnapshot;
+    public IProtocolPolicyProvider PolicyProvider => _policyProvider;
     
     public DateTime StartTime { get; }
     public CloseReason CloseReason { get; private set; }
@@ -63,8 +62,8 @@ public abstract class SessionBase : ICommandContext, IDisposable
     public bool IsClosing => (SessionState)_state == SessionState.Closing;
     public bool IsClosed => (SessionState)_state == SessionState.Closed;
 
-    IEncryptor ICommandContext.Encryptor => null;
-    ICompressor ICommandContext.Compressor => null;
+    IEncryptor IProtocolHandlerContext.Encryptor => null;
+    ICompressor IProtocolHandlerContext.Compressor => null;
     
     public DateTime StartClosingTime { get; protected set; }
     
@@ -75,20 +74,20 @@ public abstract class SessionBase : ICommandContext, IDisposable
         LastActiveTimeTicks = DateTime.UtcNow.Ticks;
     }
     
-    public virtual void Initialize(EngineCore engine, TcpNetworkSession ns, ReadWriteBuffer readWriteBuffer)
+    public virtual void Initialize(EngineCore engine, TcpNetworkSession ns, MessageReadBuffer messageReadBuffer)
     {
         _engine = engine;
         _tcpNetworkSession = ns;
         _tcpNetworkSession.Session = this;
         _router.Bind(new ReliableChannel(ns));
-        _readWriteBuffer = readWriteBuffer;
-        _policySnapshot = _engine.CreatePolicySnapshot(new PolicyGlobals(false, false, 0));
+        _messageReadBuffer = messageReadBuffer;
+        _policyProvider = _engine.CreateProtocolPolicyProvider(new GlobalProtocolPolicy(false, false, 0));
         _state = (int)SessionState.NotAuthenticated;
     }
 
-    public ReadWriteBuffer ReleaseReadWriteBuffer()
+    public MessageReadBuffer ReleaseMessageReadBuffer()
     {
-        var buffer = Interlocked.Exchange(ref _readWriteBuffer, null);
+        var buffer = Interlocked.Exchange(ref _messageReadBuffer, null);
         buffer?.Clear();
         return buffer;
     }
@@ -110,9 +109,9 @@ public abstract class SessionBase : ICommandContext, IDisposable
     protected void SetupProtocolPolicy()
     {
         var n = Config.Network;
-        var g = new PolicyGlobals(n.UseEncrypt, n.UseCompress, n.CompressionThreshold);
-        var snapshot = _engine.CreatePolicySnapshot(g);
-        Interlocked.Exchange(ref _policySnapshot, snapshot);
+        var g = new GlobalProtocolPolicy(n.UseEncrypt, n.UseCompress, n.CompressionThreshold);
+        var provider = _engine.CreateProtocolPolicyProvider(g);
+        Interlocked.Exchange(ref _policyProvider, provider);
     }
 
     public bool TrySend(ChannelKind channel, IMessage message)
@@ -221,19 +220,19 @@ public abstract class SessionBase : ICommandContext, IDisposable
     {
         if (IsClosed) return;
 
-        var rwBuffer = Volatile.Read(ref _readWriteBuffer);
-        if (rwBuffer == null) return;
+        var messageReadBuffer = Volatile.Read(ref _messageReadBuffer);
+        if (messageReadBuffer == null) return;
 
         var data = buffer.AsSpan(offset, length);
-        if (!rwBuffer.TryWrite(data))
+        if (!messageReadBuffer.TryWrite(data))
         {
             Close(CloseReason.InternalError);
             return;
         }
 
-        while (Volatile.Read(ref _readWriteBuffer) != null)
+        while (Volatile.Read(ref _messageReadBuffer) != null)
         {
-            var result = rwBuffer.TryRead(Config.Network.MaxPayloadLength, out var header, out var bufferOwner);
+            var result = messageReadBuffer.TryRead(Config.Network.MaxPayloadLength, out var header, out var bufferOwner);
             if (result == MessageReadResult.NeedMoreData) break;
             if (result is MessageReadResult.InvalidHeader or MessageReadResult.CorruptedPayload)
             {

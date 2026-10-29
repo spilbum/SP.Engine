@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Threading;
+using SP.Engine.Runtime.Networking;
 
 namespace SP.Engine.Server;
 
@@ -30,7 +31,7 @@ public sealed class SessionManager
         return _activeSnapshot;
     }
 
-    public Session CreateSession(EngineCore engine, TcpNetworkSession ns, ReadWriteBuffer readWriteBuffer)
+    public Session CreateSession(EngineCore engine, TcpNetworkSession ns, MessageReadBuffer messageReadBuffer)
     {
         lock (_lock)
         {
@@ -44,7 +45,7 @@ public sealed class SessionManager
 
             try
             {
-                session.Initialize(engine, ns, readWriteBuffer);
+                session.Initialize(engine, ns, messageReadBuffer);
             }
             catch (Exception ex)
             {

@@ -49,7 +49,7 @@ public sealed class SessionConfig
     /// 서버 연결 클라이언트 상태 체크 주기
     /// </summary>
     public int S2SClientUpdateIntervalMs { get; set; } = 30;
-    public int CommandSlowThresholdMs { get; set; } = 100;
+    public int HandlerSlowThresholdMs { get; set; } = 100;
     
     /// <summary>
     /// UDP 상태 체크 주기

@@ -104,7 +104,7 @@ namespace SP.Engine.Client
             if (_assemblies.Count == 0)
             {
                 _logger.Warn(
-                    "No assemblies configured for command discovery. Did you forget to call WithAssembly() or WithEntryAssembly()?");
+                    "No assemblies configured for protocol discovery. Did you forget to call AddAssembly() or WithEntryAssembly()?");
             }
             
             var config = new EngineConfig();

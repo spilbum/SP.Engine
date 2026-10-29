@@ -4,9 +4,9 @@ namespace SP.Engine.Runtime.Channel
 {
     public enum ChannelKind : byte
     {
-        Reliable = 0, // 순서보장/재전송
-        Unreliable = 1, // 비보장
-        Count = 2
+        Reliable = 1, // 순서보장/재전송
+        Unreliable = 2, // 비보장
+        Max = Unreliable
     }
 
     public interface IMessageChannel

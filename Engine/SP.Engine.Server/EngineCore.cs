@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,7 +10,7 @@ using SP.Core.Fibers;
 using SP.Core.Logging;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Networking;
-using SP.Engine.Runtime.Policy;
+using SP.Engine.Runtime.Protocol;
 using SP.Engine.Server.Configuration;
 using SP.Engine.Server.Logging;
 
@@ -48,8 +48,8 @@ public abstract class EngineCore : ILogContext, IDisposable
     private readonly Scheduler _globalScheduler = new();
     private SessionManager _sessionManager;
     private IDisposable _fragmentAssemblerCleanupTimer;
-    private ExpandablePool<ReadWriteBuffer> _readWritePool;
-    private readonly Dictionary<ushort, ProtocolOverrides> _protocolOverrides = new();
+    private ExpandablePool<MessageReadBuffer> _messageReadPool;
+    private readonly Dictionary<ushort, ProtocolPolicyOverrides> _dictProtocolOptionOverrides = new();
     private int _stateCode = ServerStateConst.NotInitialized;
     private bool _disposed;
     
@@ -88,10 +88,10 @@ public abstract class EngineCore : ILogContext, IDisposable
         if (!SetupSocketServer())
             return false;
 
-        if (!SetupPolicy(assemblies))
+        if (!SetupProtocolRegistry(assemblies))
             return false;
 
-        if (!SetupReadWritePool(config))
+        if (!SetupMessageReadPool(config))
             return false;
 
         _sessionManager = new SessionManager(config.Session.MaxConnections);
@@ -231,36 +231,32 @@ public abstract class EngineCore : ILogContext, IDisposable
         return "IPv6Any".Equals(ip, StringComparison.OrdinalIgnoreCase) ? IPAddress.IPv6Any : IPAddress.Parse(ip);
     }
 
-    private bool SetupPolicy(Assembly[] assemblies)
+    private bool SetupProtocolRegistry(Assembly[] assemblies)
     {
         foreach (var assembly in assemblies)
         {
-            var types = assembly.GetTypes().Where(
-                t => typeof(IProtocolData).IsAssignableFrom(t) && !t.IsInterface);
-
-            foreach (var type in types)
+            var attr = assembly.GetCustomAttribute<ProtocolPolicyRegistryAttribute>();
+            if (attr != null && Activator.CreateInstance(attr.RegistryType) is IProtocolPolicyRegistry registry)
             {
-                var attr = type.GetCustomAttribute<ProtocolDataAttribute>();
-                if (attr == null) continue;
-                _protocolOverrides[attr.Id] = new ProtocolOverrides(attr.Encrypt, attr.Compress);
+                registry.Register(_dictProtocolOptionOverrides);
             }
         }
 
-        return _protocolOverrides.Count != 0;
+        return _dictProtocolOptionOverrides.Count != 0;
     }
 
-    private bool SetupReadWritePool(EngineConfig config)
+    private bool SetupMessageReadPool(EngineConfig config)
     {
-        _readWritePool = new ExpandablePool<ReadWriteBuffer>();
-        _readWritePool.Initialize(
+        _messageReadPool = new ExpandablePool<MessageReadBuffer>();
+        _messageReadPool.Initialize(
                 Math.Max(config.Session.MaxConnections, 512),
                 Math.Max(config.Session.MaxConnections * 2, 512),
-                new ReadWritePoolFactory(config.Network.ReceiveBufferSize));
+                new MessageReadPoolFactory(config.Network.ReceiveBufferSize));
         return true;
     }
 
-    internal IPolicySnapshot CreatePolicySnapshot(PolicyGlobals globals)
-        => new PolicySnapshot(globals, _protocolOverrides);
+    internal IProtocolPolicyProvider CreateProtocolPolicyProvider(GlobalProtocolPolicy g)
+        => new ProtocolPolicyProvider(g, _dictProtocolOptionOverrides);
 
     protected virtual void OnSessionClosed(Session session, CloseReason reason)
     {
@@ -419,10 +415,12 @@ public abstract class EngineCore : ILogContext, IDisposable
     
     internal Session CreateSession(TcpNetworkSession ns)
     {
-        if (!_readWritePool.TryRent(out var readWriteBuffer))
+        if (!_messageReadPool.TryRent(out var messageReadBuffer))
+        {
             return null;
+        }
         
-        var session = _sessionManager.CreateSession(this, ns, readWriteBuffer);
+        var session = _sessionManager.CreateSession(this, ns, messageReadBuffer);
         if (session == null) return null;
         
         ns.Closed += OnSessionClosed;
@@ -443,8 +441,8 @@ public abstract class EngineCore : ILogContext, IDisposable
         {
             session.Close(reason);
 
-            var buffer = session.ReleaseReadWriteBuffer();
-            if (buffer != null) _readWritePool.Return(buffer);
+            var buffer = session.ReleaseMessageReadBuffer();
+            if (buffer != null) _messageReadPool.Return(buffer);
         }
         catch (Exception ex)
         {
@@ -465,5 +463,22 @@ public abstract class EngineCore : ILogContext, IDisposable
     internal void EnqueueCloseHandshakePending(SessionBase session)
     {
         _closeHandshakePendingQueue.Enqueue(session);
+    }
+}
+
+public class MessageReadPoolFactory(int bufferSize) : IPoolObjectFactory<MessageReadBuffer>
+{
+    public MessageReadBuffer[] Create(int size)
+    {
+        var globalBuffer = GC.AllocateArray<byte>(bufferSize * size);
+        var items = new MessageReadBuffer[size];
+
+        for (var i = 0; i < size; i++)
+        {
+            var offset = i * bufferSize;
+            items[i] = new MessageReadBuffer(globalBuffer, offset, bufferSize);
+        }
+            
+        return items;
     }
 }

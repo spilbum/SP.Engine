@@ -39,7 +39,7 @@ public sealed class NetworkConfig
     /// <summary>
     /// 패킷 압축 사용 여부
     /// </summary>
-    public bool UseCompress { get; set; } = true;
+    public bool UseCompress { get; set; } = false;
     /// <summary>
     /// 압축을 시도할 최소 패킷 크기 (Bytes)
     /// </summary>
