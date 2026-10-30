@@ -1,0 +1,350 @@
+.
+├── Core
+│   └── SP.Core
+│       ├── Accessor
+│       │   ├── FieldAccessor.cs
+│       │   ├── IMemberAccessor.cs
+│       │   ├── MemberAttribute.cs
+│       │   ├── PropertyAccessor.cs
+│       │   └── RuntimeTypeAccessor.cs
+│       ├── Buffers
+│       │   ├── BufferMetrics.cs
+│       │   ├── BufferOwner.cs
+│       │   ├── BufferOwnerPool.cs
+│       │   ├── BufferResizer.cs
+│       │   ├── ByteRingBuffer.cs
+│       │   └── IBufferResizer.cs
+│       ├── EwmaFilter.cs
+│       ├── Fibers
+│       │   ├── BatchQueue.cs
+│       │   ├── FiberException.cs
+│       │   ├── IFiber.cs
+│       │   ├── IScheduler.cs
+│       │   ├── IWorkJob.cs
+│       │   ├── PoolFiber.cs
+│       │   ├── Scheduler.cs
+│       │   ├── ThreadFiber.cs
+│       │   ├── TimerHandle.cs
+│       │   ├── WorkJob.cs
+│       │   └── WorkJobPool.cs
+│       ├── HostNetworkInfoProvider.cs
+│       ├── Logging
+│       │   ├── ConsoleLogger.cs
+│       │   ├── ConsoleLoggerFactory.cs
+│       │   ├── ILogContext.cs
+│       │   ├── ILogger.cs
+│       │   ├── ILoggerFactory.cs
+│       │   └── LogLevel.cs
+│       ├── Serialization
+│       │   ├── INetSerializable.cs
+│       │   ├── NetReader.cs
+│       │   ├── NetSerializableAttribute.cs
+│       │   └── NetWriter.cs
+│       ├── Singleton.cs
+│       ├── SlowChecker.cs
+│       └── SP.Core.csproj
+├── Docs
+│   └── architecture.md
+├── Engine
+│   ├── SP.Engine.Client
+│   │   ├── Configuration
+│   │   │   └── EngineConfig.cs
+│   │   ├── DataEventArgs.cs
+│   │   ├── LatencyEstimator.cs
+│   │   ├── NetPeerBase.cs
+│   │   ├── NetPeerBuilder.cs
+│   │   ├── Protocol
+│   │   │   └── Handlers
+│   │   │       ├── CloseCmdHandler.cs
+│   │   │       ├── MessageAckHandler.cs
+│   │   │       ├── PongHandler.cs
+│   │   │       ├── SessionAuthAckHandler.cs
+│   │   │       ├── UdpHealthCheckReqHandler.cs
+│   │   │       ├── UdpHelloAckHandler.cs
+│   │   │       └── UdpStatusNotifyHandler.cs
+│   │   ├── SocketExtensions.cs
+│   │   ├── SP.Engine.Client.csproj
+│   │   ├── TcpNetworkSession.cs
+│   │   ├── TickTimer.cs
+│   │   └── UdpNetworkSession.cs
+│   ├── SP.Engine.Common
+│   │   ├── Protocol
+│   │   │   ├── C2S
+│   │   │   │   └── ProtocolData.cs
+│   │   │   ├── ProtocolId.cs
+│   │   │   ├── S2C
+│   │   │   │   └── ProtocolData.cs
+│   │   │   └── S2S
+│   │   │       └── ProtocolData.cs
+│   │   └── SP.Engine.Common.csproj
+│   ├── SP.Engine.Runtime
+│   │   ├── Channel
+│   │   │   ├── MessageChannel.cs
+│   │   │   └── MessageChannelRouter.cs
+│   │   ├── CloseReason.cs
+│   │   ├── Compression
+│   │   │   ├── ICompressor.cs
+│   │   │   └── Lz4Compressor.cs
+│   │   ├── Networking
+│   │   │   ├── FragmentAssembler.cs
+│   │   │   ├── FragmentHeader.cs
+│   │   │   ├── HeaderFlags.cs
+│   │   │   ├── IHeader.cs
+│   │   │   ├── IMessage.cs
+│   │   │   ├── IReliableSender.cs
+│   │   │   ├── IUnreliableSender.cs
+│   │   │   ├── MessageBase.cs
+│   │   │   ├── MessagePool.cs
+│   │   │   ├── MessageReadBuffer.cs
+│   │   │   ├── ReliableMessageProcessor.cs
+│   │   │   ├── TcpHeader.cs
+│   │   │   ├── TcpMessage.cs
+│   │   │   ├── UdpHeader.cs
+│   │   │   └── UdpMessage.cs
+│   │   ├── PeerKind.cs
+│   │   ├── Protocol
+│   │   │   ├── Attributes
+│   │   │   │   ├── ProtocolDataAttribute.cs
+│   │   │   │   └── ProtocolHandlerAttribute.cs
+│   │   │   ├── Handler
+│   │   │   │   ├── IProtocolHandler.cs
+│   │   │   │   ├── IProtocolHandlerContext.cs
+│   │   │   │   ├── IProtocolHandlerRegistry.cs
+│   │   │   │   └── ProtocolHandlerBase.cs
+│   │   │   ├── IProtocolData.cs
+│   │   │   ├── Policy
+│   │   │   │   ├── IProtocolPolicyRegistry.cs
+│   │   │   │   ├── ProtocolPolicy.cs
+│   │   │   │   └── ProtocolPolicyProvider.cs
+│   │   │   ├── ProtocolPool.cs
+│   │   │   └── ProtocolScope.cs
+│   │   ├── Security
+│   │   │   ├── AesGcmEncryptor.cs
+│   │   │   ├── DhKeyPair.cs
+│   │   │   ├── DhParameters.cs
+│   │   │   ├── DhUtil.cs
+│   │   │   ├── DiffieHellman.cs
+│   │   │   └── IEncryptor.cs
+│   │   ├── SessionAuthResult.cs
+│   │   ├── SocketExtensions.cs
+│   │   ├── SP.Engine.Runtime.csproj
+│   │   ├── SpanExtensions.cs
+│   │   └── UdpHelloResult.cs
+│   ├── SP.Engine.Server
+│   │   ├── AsyncExtensions.cs
+│   │   ├── Configuration
+│   │   │   ├── EngineConfig.cs
+│   │   │   ├── ListenerConfig.cs
+│   │   │   ├── NetworkConfig.cs
+│   │   │   ├── PerfConfig.cs
+│   │   │   ├── S2SClientConfig.cs
+│   │   │   └── SessionConfig.cs
+│   │   ├── EngineBase.cs
+│   │   ├── EngineBuilder.cs
+│   │   ├── EngineCore.cs
+│   │   ├── ExpandablePool.cs
+│   │   ├── Logging
+│   │   │   ├── LogManager.cs
+│   │   │   ├── SerilogFactory.cs
+│   │   │   └── SerilogLogger.cs
+│   │   ├── NetworkListenerBase.cs
+│   │   ├── NetworkSessionBase.cs
+│   │   ├── PeerBase.cs
+│   │   ├── PeerManager.cs
+│   │   ├── PerfMetrics.cs
+│   │   ├── Protocol
+│   │   │   └── Handlers
+│   │   │       ├── CloseCmdHandler.cs
+│   │   │       ├── MessageAckHandler.cs
+│   │   │       ├── PingHandler.cs
+│   │   │       ├── S2SConnectAckHandler.cs
+│   │   │       ├── S2SConnectReqHandler.cs
+│   │   │       ├── SessionAuthReqHandler.cs
+│   │   │       ├── UdpHealthCheckAckHandler.cs
+│   │   │       └── UdpHelloReqHandler.cs
+│   │   ├── S2S
+│   │   │   ├── IS2SClient.cs
+│   │   │   ├── S2SClient.cs
+│   │   │   ├── S2SClientGroup.cs
+│   │   │   ├── S2SPeerBase.cs
+│   │   │   └── S2SPendingPeer.cs
+│   │   ├── Session.cs
+│   │   ├── SessionBase.cs
+│   │   ├── SessionManager.cs
+│   │   ├── SocketReceiveContext.cs
+│   │   ├── SocketSendContext.cs
+│   │   ├── SocketServer.cs
+│   │   ├── SP.Engine.Server.csproj
+│   │   ├── TcpNetworkListener.cs
+│   │   ├── TcpNetworkSession.cs
+│   │   ├── UdpNetworkListenerBase.cs
+│   │   ├── UdpNetworkSession.cs
+│   │   ├── UnixUdpNetworkListener.cs
+│   │   └── WindowsUdpNetworkListener.cs
+│   └── SP.Engine.SourceGenerator
+│       ├── Diagnostics.cs
+│       ├── GeneratorModels.cs
+│       ├── KnownSymbols.cs
+│       ├── MemberCodeBuilder.cs
+│       ├── ProtocolDataGenerator.cs
+│       ├── ProtocolHandlerGenerator.cs
+│       └── SP.Engine.SourceGenerator.csproj
+├── Library
+│   └── Application Support
+│       └── Microsoft
+│           └── DeveloperTools
+│               └── deviceid
+├── LICENSE
+├── Modules
+│   ├── SP.Database
+│   │   ├── DbConnectionFactory.cs
+│   │   ├── DbEntityBinder.cs
+│   │   ├── DbExecutor.cs
+│   │   ├── DbParamUtils.cs
+│   │   ├── DbSession.cs
+│   │   ├── IDbProvider.cs
+│   │   └── SP.Database.csproj
+│   ├── SP.Database.Tests
+│   │   ├── DatabaseLayerTests.cs
+│   │   └── SP.Database.Tests.csproj
+│   ├── SP.Rank
+│   │   ├── IRankFormatter.cs
+│   │   ├── IRankRecord.cs
+│   │   ├── MemoryRankBoard.cs
+│   │   ├── RankOptions.cs
+│   │   ├── RankOrder.cs
+│   │   ├── RankRecordBase.cs
+│   │   ├── RankRecordComparer.cs
+│   │   ├── RankSeason.cs
+│   │   └── SP.Rank.csproj
+│   ├── SP.Rank.Tests
+│   │   ├── DailyRankSeasonManager.cs
+│   │   ├── DailyRankSeasonManagerTests.cs
+│   │   ├── MemoryRankBoardTests.cs
+│   │   ├── RankSeasonTests.cs
+│   │   ├── SP.Rank.Tests.csproj
+│   │   └── TestSeasonRecord.cs
+│   ├── SP.Resource
+│   │   ├── BuildVersion.cs
+│   │   ├── CodeGen
+│   │   │   ├── CodeWriter.cs
+│   │   │   └── ReferenceCodeGenerator.cs
+│   │   ├── Localization
+│   │   │   ├── LocFile.cs
+│   │   │   ├── LocFileReader.cs
+│   │   │   ├── LocFileWriter.cs
+│   │   │   ├── LocPackReader.cs
+│   │   │   └── LocPackWriter.cs
+│   │   ├── Refs
+│   │   │   ├── RefFileReader.cs
+│   │   │   ├── RefFileWriter.cs
+│   │   │   ├── RefsPackReader.cs
+│   │   │   └── RefsPackWriter.cs
+│   │   ├── Schs
+│   │   │   ├── SchFileReader.cs
+│   │   │   ├── SchFileWriter.cs
+│   │   │   ├── SchsPackReader.cs
+│   │   │   └── SchsPackWriter.cs
+│   │   ├── SharedClass.cs
+│   │   ├── SharedEnum.cs
+│   │   ├── SP.Resource.csproj
+│   │   ├── SQL
+│   │   │   ├── ISqlSyntax.cs
+│   │   │   ├── MySqlSyntax.cs
+│   │   │   └── SqlServerSyntax.cs
+│   │   ├── Table
+│   │   │   ├── RefColumn.cs
+│   │   │   ├── RefRow.cs
+│   │   │   ├── RefTableData.cs
+│   │   │   └── RefTableSchema.cs
+│   │   ├── TableSqlBuilder.cs
+│   │   ├── Web
+│   │   │   ├── HttpRpc.cs
+│   │   │   ├── JsonCmd.cs
+│   │   │   ├── JsonRes.cs
+│   │   │   ├── Protocol.cs
+│   │   │   ├── ResourceMsgId.cs
+│   │   │   └── WebHandler.cs
+│   │   └── ZipHelper.cs
+│   └── SP.Resource.Tests
+│       ├── RefFileTests.cs
+│       ├── RefRowTests.cs
+│       ├── SP.Resource.Tests.csproj
+│       └── TableSqlBuilderTests.cs
+├── README.md
+├── Samples
+│   ├── ChatClient
+│   │   ├── ChatClient.csproj
+│   │   ├── ChatManager.cs
+│   │   ├── Program.cs
+│   │   ├── Protocol
+│   │   │   └── Handlers
+│   │   │       ├── ChatNotifyHandler.cs
+│   │   │       └── LoginAckHandler.cs
+│   │   └── UserPeer.cs
+│   ├── ChatServer
+│   │   ├── ChatServer.cs
+│   │   ├── ChatServer.csproj
+│   │   ├── ChatServerPeer.cs
+│   │   ├── logs
+│   │   │   ├── app20260621.log
+│   │   │   ├── app20260622.log
+│   │   │   ├── app20260623.log
+│   │   │   ├── app20260624.log
+│   │   │   └── app20260626.log
+│   │   ├── Program.cs
+│   │   ├── Protocol
+│   │   │   ├── CC2CS
+│   │   │   │   ├── ChatNotifyReqHandler.cs
+│   │   │   │   └── LoginReqHandler.cs
+│   │   │   └── CS2CS
+│   │   │       └── ChatNotifyHandler.cs
+│   │   └── UserPeer.cs
+│   ├── Common
+│   │   ├── Common.csproj
+│   │   └── Protocol
+│   │       ├── CC2CS
+│   │       │   └── ProtocolData.cs
+│   │       ├── CS2CC
+│   │       │   └── ProtocolData.cs
+│   │       ├── CS2CS
+│   │       │   └── ProtocolData.cs
+│   │       ├── EC2ES
+│   │       │   └── ProtocolData.cs
+│   │       ├── ES2EC
+│   │       │   └── ProtocolData.cs
+│   │       └── ProtocolId.cs
+│   ├── EchoClient
+│   │   ├── EchoClient.csproj
+│   │   ├── Program.cs
+│   │   ├── Protocol
+│   │   │   └── ES2EC
+│   │   │       ├── TcpEchoAckHandler.cs
+│   │   │       └── UdpEchoAckHandler.cs
+│   │   ├── TestManager.cs
+│   │   └── UserPeer.cs
+│   └── EchoServer
+│       ├── config.json
+│       ├── EchoServer.cs
+│       ├── EchoServer.csproj
+│       ├── logs
+│       │   ├── app20260712.log
+│       │   ├── app20260720.log
+│       │   ├── app20260721.log
+│       │   ├── app20260722.log
+│       │   ├── app20260723.log
+│       │   ├── app20261026.log
+│       │   └── app20261027.log
+│       ├── Program.cs
+│       ├── Protocol
+│       │   └── EC2ES
+│       │       ├── HeavyLoadNotifyHandler.cs
+│       │       ├── TcpEchoReqHandler.cs
+│       │       └── UdpEchoReqHandler.cs
+│       └── UserPeer.cs
+├── sp.egine_tree.txt
+├── SP.Engine.sln
+├── SP.Engine.sln.DotSettings.user
+└── Tools
+
+77 directories, 271 files

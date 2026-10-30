@@ -23,7 +23,7 @@ namespace SP.Engine.SourceGenerator
         public static readonly DiagnosticDescriptor UnsupportedMemberType = new(
             id: "SPE003",
             title: "Unsupported member type for network serialization",
-            messageFormat: "Member '{0}' of type '{1}' is not supported by network serialization; use a partial class within the protocol assembly",
+            messageFormat: "Member '{0}' of type '{1}' is not supported by network serialization",
             category: "SP.Engine.SourceGenerator",
             defaultSeverity: DiagnosticSeverity.Error,
             isEnabledByDefault: true);

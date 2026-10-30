@@ -7,13 +7,10 @@ namespace SP.Engine.SourceGenerator
         // Metadata Attribute Names
         public const string ProtocolDataAttribute = "SP.Engine.Runtime.Protocol.ProtocolDataAttribute";
         public const string ProtocolHandlerAttribute = "SP.Engine.Runtime.Protocol.ProtocolHandlerAttribute";
-        public const string NetSerializableAttribute = "SP.Core.Serialization.NetSerializableAttribute";
 
         // Base Types & Interfaces
         public const string ProtocolHandlerBase = "ProtocolHandlerBase";
         public const string ProtocolHandlerBaseNamespace = "SP.Engine.Runtime.Protocol";
-        public const string INetSerializable = "SP.Core.Serialization.INetSerializable";
-
 
         // Collection Generic Definitions
         public const string ListGenericDef = "System.Collections.Generic.List<T>";
@@ -23,7 +20,6 @@ namespace SP.Engine.SourceGenerator
         // Fully Qualified Code Generation Type References
         public const string GlobalNetWriter = "global::SP.Core.Serialization.NetWriter";
         public const string GlobalNetReader = "global::SP.Core.Serialization.NetReader";
-        public const string GlobalINetSerializable = "global::SP.Core.Serialization.INetSerializable";
         public const string GlobalChannelKind = "global::SP.Engine.Runtime.Channel.ChannelKind";
         public const string GlobalProtocolPolicyToggle = "global::SP.Engine.Runtime.Protocol.Toggle";
         public const string GlobalProtocolPolicyOverrides = "global::SP.Engine.Runtime.Protocol.ProtocolPolicyOverrides";

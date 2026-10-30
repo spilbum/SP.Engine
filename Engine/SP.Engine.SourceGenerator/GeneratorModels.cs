@@ -1,8 +1,6 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using Microsoft.CodeAnalysis;
 
 namespace System.Runtime.CompilerServices
 {
@@ -18,31 +16,26 @@ namespace SP.Engine.SourceGenerator
         int Channel,
         int Encrypt,
         int Compress,
-        SerializableTypeModel Type);
-    
-    internal sealed record ProtocolPolicyModel(
-        string AssemblyName,
-        ushort Id,
-        int Encrypt,
-        int Compress);
-
-    // 직렬화 대상 타입 모델
-    internal sealed record SerializableTypeModel(
         string Namespace,
         string TypeName,
         string FullTypeName,
         bool IsPartial,
         List<SerializableMemberModel> Members)
     {
-        public bool Equals(SerializableTypeModel? other)
+        public bool Equals(ProtocolTypeModel? other)
         {
             if (ReferenceEquals(this, other)) return true;
             if (other is null) return false;
-            return Namespace == other.Namespace &&
+            return AssemblyName == other.AssemblyName &&
+                   Id == other.Id &&
+                   Channel == other.Channel &&
+                   Encrypt == other.Encrypt &&
+                   Compress == other.Compress &&
+                   Namespace == other.Namespace &&
                    TypeName == other.TypeName &&
                    FullTypeName == other.FullTypeName &&
                    IsPartial == other.IsPartial &&
-                   Members.Count == other.Members.Count;
+                   Members.SequenceEqual(other.Members);
         }
 
         public override int GetHashCode()
@@ -50,6 +43,10 @@ namespace SP.Engine.SourceGenerator
             unchecked
             {
                 var hash = FullTypeName.GetHashCode();
+                hash = (hash * 397) ^ Id;
+                hash = (hash * 397) ^ Channel;
+                hash = (hash * 397) ^ Encrypt;
+                hash = (hash * 397) ^ Compress;
                 hash = (hash * 397) ^ (IsPartial ? 1 : 0);
                 for (var i = 0; i < Members.Count; i++)
                 {
@@ -59,6 +56,12 @@ namespace SP.Engine.SourceGenerator
             }
         }
     }
+    
+    internal sealed record ProtocolPolicyModel(
+        string AssemblyName,
+        ushort Id,
+        int Encrypt,
+        int Compress);
 
     // 멤버 직렬화 정보
     internal sealed record SerializableMemberModel(

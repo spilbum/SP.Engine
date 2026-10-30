@@ -28,20 +28,6 @@ namespace SP.Engine.SourceGenerator
                 if (protocol == null) return;
                 GenerateProtocolType(spc, protocol);
             });
-            
-            // [NetSerializable] 
-            var complexTypeProvider = context.SyntaxProvider
-                .ForAttributeWithMetadataName(
-                    KnownSymbols.NetSerializableAttribute,
-                    predicate: static (node, _) => node is ClassDeclarationSyntax,
-                    transform: static (context, ct) => TransformComplexTypeModel(context, ct))
-                .Where(static s => s != null);
-            
-            context.RegisterSourceOutput(complexTypeProvider, static (spc, subType) =>
-            {
-                if (subType == null) return;
-                GenerateComplexType(spc, subType);
-            });
 
             var registryPolicies = protocolTypeProvider
                 .Select(static (p, _) => new ProtocolPolicyModel(p!.AssemblyName, p.Id, p.Encrypt, p.Compress))
@@ -143,35 +129,20 @@ namespace SP.Engine.SourceGenerator
             }
 
             var classSyntax = (ClassDeclarationSyntax)context.TargetNode;
-            var typeModel = CreateSerializableTypeModel(typeSymbol, classSyntax, ct);
-            var assemblyName = IdentifierHelper.Sanitize(typeSymbol.ContainingAssembly.Name);
-
-            return new ProtocolTypeModel(assemblyName, id, channel, encrypt, compress, typeModel);
-        }
-
-        private static SerializableTypeModel? TransformComplexTypeModel(GeneratorAttributeSyntaxContext context, CancellationToken ct)
-        {
-            if (context.TargetSymbol is not INamedTypeSymbol symbol || symbol.IsAbstract || symbol.IsGenericType)
-                return null;
-            
-            var classSyntax = (ClassDeclarationSyntax)context.TargetNode;
-            return CreateSerializableTypeModel(symbol, classSyntax, ct);
-        }
-
-        private static SerializableTypeModel CreateSerializableTypeModel(
-            INamedTypeSymbol typeSymbol,
-            ClassDeclarationSyntax classSyntax,
-            CancellationToken ct)
-        {
             var isPartial = classSyntax.Modifiers.Any(static m => m.IsKind(SyntaxKind.PartialKeyword));
             var members = ExtractSerializableMembers(typeSymbol, ct);
             var namespaceName = typeSymbol.ContainingNamespace.IsGlobalNamespace
                 ? string.Empty
                 : typeSymbol.ContainingNamespace.ToDisplayString();
-
             var fullTypeName = typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            var assemblyName = IdentifierHelper.Sanitize(typeSymbol.ContainingAssembly.Name);
 
-            return new SerializableTypeModel(
+            return new ProtocolTypeModel(
+                assemblyName,
+                id,
+                channel,
+                encrypt,
+                compress,
                 namespaceName,
                 typeSymbol.Name,
                 fullTypeName,
@@ -182,62 +153,20 @@ namespace SP.Engine.SourceGenerator
         private static List<SerializableMemberModel> ExtractSerializableMembers(INamedTypeSymbol typeSymbol, CancellationToken ct)
         {
             var result = new List<SerializableMemberModel>();
-            var typeChain = new List<INamedTypeSymbol>();
-            var current = typeSymbol;
 
-            // 상속 관계에 있는 클래스들 추출
-            while (current != null && current.SpecialType != SpecialType.System_Object)
-            {
-                typeChain.Add(current);
-                current = current.BaseType;
-            }
-
-            // 부모 클래스 멤버 -> 자식 클래스 멤버
-            typeChain.Reverse();
-
-            foreach (var member in typeChain.SelectMany(static t => t.GetMembers()))
+            foreach (var (name, memberType, canGet, canSet) in MemberCodeBuilder.GetSerializableMembers(typeSymbol))
             {
                 ct.ThrowIfCancellationRequested();
 
-                if (member.IsStatic || member.DeclaredAccessibility != Accessibility.Public)
-                    continue;
-
-                ITypeSymbol? memberType;
-                bool canGet;
-                bool canSet;
-
-                switch (member)
-                {
-                    case IFieldSymbol { IsImplicitlyDeclared: true }:
-                        continue;
-                    case IFieldSymbol field:
-                        memberType = field.Type;
-                        canGet = true;
-                        canSet = field is { IsReadOnly: false, IsConst: false };
-                        break;
-                    case IPropertySymbol { IsIndexer: true }:
-                        continue;
-                    case IPropertySymbol prop:
-                        memberType = prop.Type;
-                        canGet = prop.GetMethod is { DeclaredAccessibility: Accessibility.Public, IsStatic: false };
-                        canSet = prop.SetMethod is { DeclaredAccessibility: Accessibility.Public, IsStatic: false, IsInitOnly: false };
-                        break;
-                    default:
-                        continue;
-                }
-
-                if (!canGet && !canSet)
-                    continue;
-
                 var isSupported = MemberCodeBuilder.TryCreateStatements(
-                    member.Name,
+                    name,
                     memberType,
                     out var writeStatement,
                     out var readStatement,
                     out var resetStatement);
 
                 result.Add(new SerializableMemberModel(
-                    member.Name,
+                    name,
                     memberType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     isSupported,
                     canGet,
@@ -252,25 +181,15 @@ namespace SP.Engine.SourceGenerator
         
         private static void GenerateProtocolType(SourceProductionContext spc, ProtocolTypeModel typeModel)
         {
-            if (!ValidateSerializableType(spc, typeModel.Type))
+            if (!ValidateProtocolType(spc, typeModel))
                 return;
 
             var source = BuildProtocolTypeSource(typeModel);
-            var hintName = BuildHintName(typeModel.Type, "Protocol.g.cs");
+            var hintName = $"{typeModel.Namespace}.{typeModel.TypeName}.Protocol.g.cs";
             spc.AddSource(hintName, SourceText.From(source, Encoding.UTF8));
         }
 
-        private static void GenerateComplexType(SourceProductionContext spc, SerializableTypeModel typeModel)
-        {
-            if (!ValidateSerializableType(spc, typeModel))
-                return;
-
-            var source = BuildComplexTypeSource(typeModel);
-            var hintName = BuildHintName(typeModel, "ComplexType.g.cs");
-            spc.AddSource(hintName, SourceText.From(source, Encoding.UTF8));
-        }
-
-        private static bool ValidateSerializableType(SourceProductionContext spc, SerializableTypeModel typeModel)
+        private static bool ValidateProtocolType(SourceProductionContext spc, ProtocolTypeModel typeModel)
         {
             if (string.IsNullOrEmpty(typeModel.Namespace))
             {
@@ -302,20 +221,12 @@ namespace SP.Engine.SourceGenerator
             return true;
         }
 
-        private static string BuildHintName(SerializableTypeModel type, string suffix)
-        {
-            return string.IsNullOrEmpty(type.Namespace)
-                ? $"{type.TypeName}.{suffix}"
-                : $"{type.Namespace}.{type.TypeName}.{suffix}";
-        }
-
         private static string BuildProtocolTypeSource(ProtocolTypeModel typeModel)
         {
-            var type = typeModel.Type;
-            var methods = BuildSerializationMethods(type.Members);
+            var methods = BuildSerializationMethods(typeModel.Members);
             
             var sb = new StringBuilder();
-            sb.AppendLine($"    partial class {type.TypeName} : {KnownSymbols.GlobalIProtocolData}");
+            sb.AppendLine($"    partial class {typeModel.TypeName} : {KnownSymbols.GlobalIProtocolData}");
             sb.AppendLine("    {");
             sb.AppendLine($"        public ushort Id => {typeModel.Id};");
             sb.AppendLine($"        public {KnownSymbols.GlobalChannelKind} Channel => ({KnownSymbols.GlobalChannelKind}){typeModel.Channel};");
@@ -323,19 +234,6 @@ namespace SP.Engine.SourceGenerator
             sb.AppendLine(methods);
             sb.AppendLine("    }");
             
-            return WrapNamespace(type.Namespace, sb.ToString());
-        }
-
-        private static string BuildComplexTypeSource(SerializableTypeModel typeModel)
-        {
-            var methods = BuildSerializationMethods(typeModel.Members);
-            
-            var sb = new StringBuilder();
-            sb.AppendLine($"    partial class {typeModel.TypeName} : {KnownSymbols.GlobalINetSerializable}");
-            sb.AppendLine("    {");
-            sb.AppendLine(methods);
-            sb.AppendLine("    }");
-
             return WrapNamespace(typeModel.Namespace, sb.ToString());
         }
 
