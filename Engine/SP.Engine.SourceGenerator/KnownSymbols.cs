@@ -11,6 +11,7 @@ namespace SP.Engine.SourceGenerator
         // Base Types & Interfaces
         public const string ProtocolHandlerBase = "ProtocolHandlerBase";
         public const string ProtocolHandlerBaseNamespace = "SP.Engine.Runtime.Protocol";
+        public const string INetSerializable = "SP.Engine.Runtime.Protocol.INetSerializable";
 
         // Collection Generic Definitions
         public const string ListGenericDef = "System.Collections.Generic.List<T>";

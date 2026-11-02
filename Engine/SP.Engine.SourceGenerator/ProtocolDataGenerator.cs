@@ -245,7 +245,7 @@ namespace SP.Engine.SourceGenerator
             sb.AppendLine("        {");
             foreach (var m in members.Where(static m => m is { IsSupported: true, SerializeGet: true }))
             {
-                sb.AppendLine($"            {m.WriteStatement}");
+                MemberCodeBuilder.AppendIndented(sb, m.WriteStatement, "            ");
             }
 
             sb.AppendLine("        }");
@@ -254,7 +254,7 @@ namespace SP.Engine.SourceGenerator
             sb.AppendLine("        {");
             foreach (var m in members.Where(static m => m is { IsSupported: true, SerializeSet: true }))
             {
-                sb.AppendLine($"            {m.ReadStatement}");
+                MemberCodeBuilder.AppendIndented(sb, m.ReadStatement, "            ");
             }
             sb.AppendLine("        }");
             sb.AppendLine();
@@ -262,7 +262,7 @@ namespace SP.Engine.SourceGenerator
             sb.AppendLine("        {");
             foreach (var m in members.Where(static m => m is { IsSupported: true, SerializeSet: true }))
             {
-                sb.AppendLine($"            {m.ResetStatement}");
+                MemberCodeBuilder.AppendIndented(sb, m.ResetStatement, "            ");
             }
 
             sb.Append("        }");

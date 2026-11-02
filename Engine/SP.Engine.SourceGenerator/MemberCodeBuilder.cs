@@ -29,6 +29,7 @@ namespace SP.Engine.SourceGenerator
             {
                 typeChain.Add(current);
             }
+            
             typeChain.Reverse();
 
             foreach (var member in typeChain.SelectMany(static t => t.GetMembers()))
@@ -63,212 +64,314 @@ namespace SP.Engine.SourceGenerator
             out string readStatement,
             out string resetStatement)
         {
-            var visiting = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
-            return TryCreateStatementsCore(
-                $"this.{memberName}",
-                type,
-                depth: 0,
-                visiting,
-                out writeStatement,
-                out readStatement,
-                out resetStatement);
-        }
-
-        private static bool TryCreateStatementsCore(
-            string targetExpr,
-            ITypeSymbol type,
-            int depth,
-            HashSet<ITypeSymbol> visiting,
-            out string writeStatement,
-            out string readStatement,
-            out string resetStatement)
-        {
-            // 1. Primitive, DateTime, String, byte[], Enum
-            if (TryGetBuiltin(type, targetExpr, out var builtinWrite, out var builtinRead, out var builtinReset))
+            // Primitive, DateTime, String, byte[], Enum
+            if (TryGetBuiltin(type, $"this.{memberName}", out var builtinWrite, out var builtinRead, out var builtinReset))
             {
                 writeStatement = builtinWrite;
-                readStatement = $"{targetExpr} = {builtinRead};";
-                resetStatement = $"{targetExpr} = {builtinReset};";
+                readStatement = $"this.{memberName} = {builtinRead};";
+                resetStatement = $"this.{memberName} = {builtinReset};";
                 return true;
             }
 
-            // 2. T[] (1D array)
+            // T[] (1D array)
             if (type is IArrayTypeSymbol { Rank: 1 } arrayType)
             {
-                return TryBuildArray(targetExpr, arrayType.ElementType, depth, visiting, out writeStatement, out readStatement, out resetStatement);
+                return TryBuildArray(memberName, arrayType.ElementType, out writeStatement, out readStatement, out resetStatement);
             }
 
-            // 3. List<T> and Dictionary<TKey, TValue>
+            // List<T> and Dictionary<TKey, TValue>
             if (type is INamedTypeSymbol { IsGenericType: true } namedType)
             {
                 switch (namedType.ConstructedFrom.ToDisplayString())
                 {
                     case KnownSymbols.ListGenericDef when namedType.TypeArguments.Length == 1:
-                        return TryBuildList(targetExpr, namedType.TypeArguments[0], depth, visiting, out writeStatement, out readStatement, out resetStatement);
+                        return TryBuildList(memberName, namedType.TypeArguments[0], out writeStatement, out readStatement, out resetStatement);
 
                     case KnownSymbols.DictionaryGenericDef when namedType.TypeArguments.Length == 2:
-                        return TryBuildDictionary(targetExpr, namedType.TypeArguments[0], namedType.TypeArguments[1], depth, visiting, out writeStatement, out readStatement, out resetStatement);
+                        return TryBuildDictionary(memberName, namedType.TypeArguments[0], namedType.TypeArguments[1], out writeStatement, out readStatement, out resetStatement);
                 }
             }
 
-            // 4. Custom Sub-class
-            if (IsCandidateClass(type, visiting))
+            // Custom class implementing INetSerializable
+            if (ImplementsINetSerializable(type))
             {
-                return TryBuildCustomClass(targetExpr, type, depth, visiting, out writeStatement, out readStatement, out resetStatement);
+                return TryBuildCustomClass(memberName, type, out writeStatement, out readStatement, out resetStatement);
             }
 
             writeStatement = readStatement = resetStatement = string.Empty;
             return false;
         }
 
-        private static bool TryBuildArray(
-            string targetExpr,
-            ITypeSymbol elemType,
-            int depth,
-            HashSet<ITypeSymbol> visiting,
+        private static bool TryBuildCustomClass(
+            string memberName,
+            ITypeSymbol typeSymbol,
             out string writeStatement,
             out string readStatement,
             out string resetStatement)
         {
-            var idxVar = $"i{depth}";
-            var cntVar = $"count{depth}";
-            var arrVar = $"arr{depth}";
+            writeStatement = BuildWrite();
+            readStatement = BuildRead();
+            resetStatement = BuildReset();
+            return true;
 
-            if (!TryBuildElement($"{targetExpr}[{idxVar}]", elemType, $"{arrVar}[{idxVar}] = {{0}};", depth + 1, visiting, out var elemWrite, out var elemRead))
+            string BuildWrite()
+            {
+                var sb = new StringBuilder();
+                sb.AppendLine($"if (this.{memberName} == null)");
+                sb.AppendLine("    writer.WriteBool(false);");
+                sb.AppendLine("else");
+                sb.AppendLine("{");
+                sb.AppendLine("    writer.WriteBool(true);");
+                sb.AppendLine($"    this.{memberName}.Serialize(ref writer);");
+                sb.AppendLine("}");
+                return sb.ToString();
+            }
+
+            string BuildRead()
+            {
+                var fullTypeName = typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+                var sb = new StringBuilder();
+                sb.AppendLine("if (!reader.ReadBool())");
+                sb.AppendLine($"    this.{memberName} = null;");
+                sb.AppendLine("else");
+                sb.AppendLine("{");
+                sb.AppendLine($"    if (this.{memberName} == null)");
+                sb.AppendLine($"        this.{memberName} = new {fullTypeName}();");
+                sb.AppendLine($"    this.{memberName}.Deserialize(ref reader);");
+                sb.AppendLine("}");
+                return sb.ToString();
+            }
+
+            string BuildReset()
+            {
+                var sb = new StringBuilder();
+                sb.AppendLine($"this.{memberName} = null;");
+                return sb.ToString();
+            }
+        }
+
+        private static bool TryBuildArray(
+            string memberName,
+            ITypeSymbol elemType,
+            out string writeStatement,
+            out string readStatement,
+            out string resetStatement)
+        {
+            if (!TryBuildElement($"this.{memberName}[i]", elemType, "arr[i] = {0};", out var elemWrite, out var elemRead))
             {
                 writeStatement = readStatement = resetStatement = string.Empty;
                 return false;
             }
 
-            var elemFullName = elemType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var arrayAlloc = elemType is IArrayTypeSymbol { Rank: 1, ElementType.SpecialType: SpecialType.System_Byte }
-                ? $"new byte[{cntVar}][]"
-                : $"new {elemFullName}[{cntVar}]";
-
-            writeStatement =
-                $"if ({targetExpr} == null) writer.WriteBool(false); " +
-                $"else {{ writer.WriteBool(true); writer.WriteVarUInt((uint){targetExpr}.Length); " +
-                $"for (var {idxVar} = 0; {idxVar} < {targetExpr}.Length; {idxVar}++) {{ {elemWrite} }} }}";
-
-            readStatement =
-                $"if (!reader.ReadBool()) {targetExpr} = null; " +
-                $"else {{ var {cntVar} = (int)reader.ReadVarUInt(); var {arrVar} = {arrayAlloc}; " +
-                $"for (var {idxVar} = 0; {idxVar} < {cntVar}; {idxVar}++) {{ {elemRead} }} {targetExpr} = {arrVar}; }}";
-
-            resetStatement = $"{targetExpr} = null;";
+            writeStatement = BuildWrite();
+            readStatement = BuildRead();
+            resetStatement = BuildReset();
             return true;
+
+            string BuildReset()
+            {
+                var sb = new StringBuilder();
+                sb.AppendLine($"this.{memberName} = null;");
+                return sb.ToString();
+            }
+
+            string BuildWrite()
+            {
+                var sb = new StringBuilder();
+                sb.AppendLine($"if (this.{memberName} == null)");
+                sb.AppendLine("    writer.WriteBool(false);");
+                sb.AppendLine("else");
+                sb.AppendLine("{");
+                sb.AppendLine("    writer.WriteBool(true);");
+                sb.AppendLine($"    writer.WriteVarUInt((uint)this.{memberName}.Length);");
+                sb.AppendLine($"    for (var i = 0; i < this.{memberName}.Length; i++)");
+                sb.AppendLine("    {");
+                AppendIndented(sb, elemWrite, "        ");
+                sb.AppendLine("    }");
+                sb.AppendLine("}");
+                return sb.ToString();
+            }
+
+            string BuildRead()
+            {
+                var elemFullName = elemType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                var arrayAlloc = elemType is IArrayTypeSymbol { Rank: 1, ElementType.SpecialType: SpecialType.System_Byte }
+                    ? "new byte[count][]"
+                    : $"new {elemFullName}[count]";
+
+                var sb = new StringBuilder();
+                sb.AppendLine("if (!reader.ReadBool())");
+                sb.AppendLine($"    this.{memberName} = null;");
+                sb.AppendLine("else");
+                sb.AppendLine("{");
+                sb.AppendLine("    var count = (int)reader.ReadVarUInt();");
+                sb.AppendLine($"    var arr = {arrayAlloc};");
+                sb.AppendLine("    for (var i = 0; i < count; i++)");
+                sb.AppendLine("    {");
+                AppendIndented(sb, elemRead, "        ");
+                sb.AppendLine("    }");
+                sb.AppendLine($"    this.{memberName} = arr;");
+                sb.AppendLine("}");
+                return sb.ToString();
+            }
         }
 
         private static bool TryBuildList(
-            string targetExpr,
+            string memberName,
             ITypeSymbol elemType,
-            int depth,
-            HashSet<ITypeSymbol> visiting,
             out string writeStatement,
             out string readStatement,
             out string resetStatement)
         {
-            var idxVar = $"i{depth}";
-            var cntVar = $"count{depth}";
-            var listVar = $"list{depth}";
-
-            if (!TryBuildElement($"{targetExpr}[{idxVar}]", elemType, $"{listVar}.Add({{0}});", depth + 1, visiting, out var elemWrite, out var elemRead))
+            if (!TryBuildElement($"this.{memberName}[i]", elemType, "list.Add({0});", out var elemWrite, out var elemRead))
             {
                 writeStatement = readStatement = resetStatement = string.Empty;
                 return false;
             }
 
-            var elemFullName = elemType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-
-            writeStatement =
-                $"if ({targetExpr} == null) writer.WriteBool(false); " +
-                $"else {{ writer.WriteBool(true); writer.WriteVarUInt((uint){targetExpr}.Count); " +
-                $"for (var {idxVar} = 0; {idxVar} < {targetExpr}.Count; {idxVar}++) {{ {elemWrite} }} }}";
-
-            readStatement =
-                $"if (!reader.ReadBool()) {targetExpr} = null; " +
-                $"else {{ var {cntVar} = (int)reader.ReadVarUInt(); var {listVar} = {targetExpr}; " +
-                $"if ({listVar} == null) {{ {listVar} = new global::System.Collections.Generic.List<{elemFullName}>({cntVar}); {targetExpr} = {listVar}; }} " +
-                $"else {{ {listVar}.Clear(); if ({listVar}.Capacity < {cntVar}) {listVar}.Capacity = {cntVar}; }} " +
-                $"for (var {idxVar} = 0; {idxVar} < {cntVar}; {idxVar}++) {{ {elemRead} }} }}";
-
-            resetStatement = $"if ({targetExpr} != null) {targetExpr}.Clear();";
+            writeStatement = BuildWrite();
+            readStatement = BuildRead();
+            resetStatement = BuildReset();
             return true;
+
+            string BuildWrite()
+            {
+                var sb = new StringBuilder();
+                sb.AppendLine($"if (this.{memberName} == null)");
+                sb.AppendLine("    writer.WriteBool(false);");
+                sb.AppendLine("else");
+                sb.AppendLine("{");
+                sb.AppendLine("    writer.WriteBool(true);");
+                sb.AppendLine($"    writer.WriteVarUInt((uint)this.{memberName}.Count);");
+                sb.AppendLine($"    for (var i = 0; i < this.{memberName}.Count; i++)");
+                sb.AppendLine("    {");
+                AppendIndented(sb, elemWrite, "        ");
+                sb.AppendLine("    }");
+                sb.AppendLine("}");
+                return sb.ToString();
+            }
+
+            string BuildRead()
+            {
+                var elemFullName = elemType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+                var sb = new StringBuilder();
+                sb.AppendLine("if (!reader.ReadBool())");
+                sb.AppendLine($"    this.{memberName} = null;");
+                sb.AppendLine("else");
+                sb.AppendLine("{");
+                sb.AppendLine("    var count = (int)reader.ReadVarUInt();");
+                sb.AppendLine($"    var list = this.{memberName};");
+                sb.AppendLine("    if (list == null)");
+                sb.AppendLine("    {");
+                sb.AppendLine($"        list = new global::System.Collections.Generic.List<{elemFullName}>(count);");
+                sb.AppendLine($"        this.{memberName} = list;");
+                sb.AppendLine("    }");
+                sb.AppendLine("    else");
+                sb.AppendLine("    {");
+                sb.AppendLine("        list.Clear();");
+                sb.AppendLine("        if (list.Capacity < count)");
+                sb.AppendLine("            list.Capacity = count;");
+                sb.AppendLine("    }");
+                sb.AppendLine("    for (var i = 0; i < count; i++)");
+                sb.AppendLine("    {");
+                AppendIndented(sb, elemRead, "        ");
+                sb.AppendLine("    }");
+                sb.AppendLine("}");
+                return sb.ToString();
+            }
+
+            string BuildReset()
+            {
+                var sb = new StringBuilder();
+                sb.AppendLine($"if (this.{memberName} != null)");
+                sb.AppendLine($"    this.{memberName}.Clear();");
+                return sb.ToString();
+            }
         }
 
         private static bool TryBuildDictionary(
-            string targetExpr,
+            string memberName,
             ITypeSymbol keyType,
             ITypeSymbol valType,
-            int depth,
-            HashSet<ITypeSymbol> visiting,
             out string writeStatement,
             out string readStatement,
             out string resetStatement)
         {
-            var idxVar = $"i{depth}";
-            var cntVar = $"count{depth}";
-            var kvpVar = $"kvp{depth}";
-            var dictVar = $"dict{depth}";
-            var keyVar = $"key{depth}";
-
-            if (!TryGetBuiltin(keyType, $"{kvpVar}.Key", out var keyWrite, out var keyReadExpr, out _) ||
-                !TryBuildElement($"{kvpVar}.Value", valType, $"{dictVar}[{keyVar}] = {{0}};", depth + 1, visiting, out var valWrite, out var valRead))
+            if (!TryGetBuiltin(keyType, "kvp.Key", out var keyWrite, out var keyReadExpr, out _) ||
+                !TryBuildElement("kvp.Value", valType, "dict[key] = {0};", out var valWrite, out var valRead))
             {
                 writeStatement = readStatement = resetStatement = string.Empty;
                 return false;
             }
 
-            var keyFullName = keyType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var valFullName = valType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-
-            writeStatement =
-                $"if ({targetExpr} == null) writer.WriteBool(false); " +
-                $"else {{ writer.WriteBool(true); writer.WriteVarUInt((uint){targetExpr}.Count); " +
-                $"foreach (var {kvpVar} in {targetExpr}) {{ {keyWrite} {valWrite} }} }}";
-
-            readStatement =
-                $"if (!reader.ReadBool()) {targetExpr} = null; " +
-                $"else {{ var {cntVar} = (int)reader.ReadVarUInt(); var {dictVar} = {targetExpr}; " +
-                $"if ({dictVar} == null) {{ {dictVar} = new global::System.Collections.Generic.Dictionary<{keyFullName}, {valFullName}>({cntVar}); {targetExpr} = {dictVar}; }} " +
-                $"else {{ {dictVar}.Clear(); }} " +
-                $"for (var {idxVar} = 0; {idxVar} < {cntVar}; {idxVar}++) {{ var {keyVar} = {keyReadExpr}; {valRead} }} }}";
-
-            resetStatement = $"if ({targetExpr} != null) {targetExpr}.Clear();";
+            writeStatement = BuildWrite();
+            readStatement = BuildRead();
+            resetStatement = BuildReset();
             return true;
-        }
 
-        private static bool TryBuildCustomClass(
-            string targetExpr,
-            ITypeSymbol type,
-            int depth,
-            HashSet<ITypeSymbol> visiting,
-            out string writeStatement,
-            out string readStatement,
-            out string resetStatement)
-        {
-            var objVar = $"obj{depth}";
-            if (!TryBuildCustomClassBody(type, objVar, depth + 1, visiting, out var bodyWrite, out var bodyRead))
+            string BuildWrite()
             {
-                writeStatement = readStatement = resetStatement = string.Empty;
-                return false;
+                var sb = new StringBuilder();
+                sb.AppendLine($"if (this.{memberName} == null)");
+                sb.AppendLine("    writer.WriteBool(false);");
+                sb.AppendLine("else");
+                sb.AppendLine("{");
+                sb.AppendLine("    writer.WriteBool(true);");
+                sb.AppendLine($"    writer.WriteVarUInt((uint)this.{memberName}.Count);");
+                sb.AppendLine($"    foreach (var kvp in this.{memberName})");
+                sb.AppendLine("    {");
+                sb.AppendLine($"        {keyWrite}");
+                AppendIndented(sb, valWrite, "        ");
+                sb.AppendLine("    }");
+                sb.AppendLine("}");
+                return sb.ToString();
             }
 
-            var fullTypeName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            writeStatement = BuildNullableObjectWrite(objVar, targetExpr, bodyWrite);
-            readStatement =
-                $"if (!reader.ReadBool()) {targetExpr} = null; " +
-                $"else {{ var {objVar} = {targetExpr}; if ({objVar} == null) {{ {objVar} = new {fullTypeName}(); {targetExpr} = {objVar}; }} {bodyRead} }}";
-            resetStatement = $"{targetExpr} = null;";
-            return true;
+            string BuildRead()
+            {
+                var keyFullName = keyType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                var valFullName = valType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+                var sb = new StringBuilder();
+                sb.AppendLine("if (!reader.ReadBool())");
+                sb.AppendLine($"    this.{memberName} = null;");
+                sb.AppendLine("else");
+                sb.AppendLine("{");
+                sb.AppendLine("    var count = (int)reader.ReadVarUInt();");
+                sb.AppendLine($"    var dict = this.{memberName};");
+                sb.AppendLine("    if (dict == null)");
+                sb.AppendLine("    {");
+                sb.AppendLine($"        dict = new global::System.Collections.Generic.Dictionary<{keyFullName}, {valFullName}>(count);");
+                sb.AppendLine($"        this.{memberName} = dict;");
+                sb.AppendLine("    }");
+                sb.AppendLine("    else");
+                sb.AppendLine("    {");
+                sb.AppendLine("        dict.Clear();");
+                sb.AppendLine("    }");
+                sb.AppendLine("    for (var i = 0; i < count; i++)");
+                sb.AppendLine("    {");
+                sb.AppendLine($"        var key = {keyReadExpr};");
+                AppendIndented(sb, valRead, "        ");
+                sb.AppendLine("    }");
+                sb.AppendLine("}");
+                return sb.ToString();
+            }
+
+            string BuildReset()
+            {
+                var sb = new StringBuilder();
+                sb.AppendLine($"if (this.{memberName} != null)");
+                sb.AppendLine($"    this.{memberName}.Clear();");
+                return sb.ToString();
+            }
         }
 
         private static bool TryBuildElement(
             string valueExpr,
             ITypeSymbol elemType,
             string assignFormat,
-            int depth,
-            HashSet<ITypeSymbol> visiting,
             out string writeStmt,
             out string readStmt)
         {
@@ -278,23 +381,52 @@ namespace SP.Engine.SourceGenerator
                 return true;
             }
 
-            var itemVar = $"item{depth}";
-            if (IsCandidateClass(elemType, visiting) &&
-                TryBuildCustomClassBody(elemType, itemVar, depth + 1, visiting, out var bodyWrite, out var bodyRead))
+            if (ImplementsINetSerializable(elemType))
             {
                 var elemFullName = elemType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                writeStmt = BuildNullableObjectWrite(itemVar, valueExpr, bodyWrite);
-                readStmt = $"{elemFullName} {itemVar} = null; if (reader.ReadBool()) {{ {itemVar} = new {elemFullName}(); {bodyRead} }} {string.Format(assignFormat, itemVar)}";
+                writeStmt = BuildWrite();
+                readStmt = BuildRead();
                 return true;
+
+                string BuildRead()
+                {
+                    var sb = new StringBuilder();
+                    sb.AppendLine($"{elemFullName} item = null;");
+                    sb.AppendLine("if (reader.ReadBool())");
+                    sb.AppendLine("{");
+                    sb.AppendLine($"    item = new {elemFullName}();");
+                    sb.AppendLine("    item.Deserialize(ref reader);");
+                    sb.AppendLine("}");
+                    sb.AppendLine(string.Format(assignFormat, "item"));
+                    return sb.ToString();
+                }
+
+                string BuildWrite()
+                {
+                    var sb = new StringBuilder();
+                    sb.AppendLine($"var item = {valueExpr};");
+                    sb.AppendLine("if (item == null)");
+                    sb.AppendLine("    writer.WriteBool(false);");
+                    sb.AppendLine("else");
+                    sb.AppendLine("{");
+                    sb.AppendLine("    writer.WriteBool(true);");
+                    sb.AppendLine("    item.Serialize(ref writer);");
+                    sb.AppendLine("}");
+                    return sb.ToString();
+                }
             }
 
             writeStmt = readStmt = string.Empty;
             return false;
         }
 
-        private static string BuildNullableObjectWrite(string objVar, string valueExpr, string bodyWrite)
+        internal static void AppendIndented(StringBuilder sb, string statement, string indent)
         {
-            return $"var {objVar} = {valueExpr}; if ({objVar} == null) writer.WriteBool(false); else {{ writer.WriteBool(true); {bodyWrite} }}";
+            using var reader = new System.IO.StringReader(statement);
+            while (reader.ReadLine() is { } line)
+            {
+                sb.Append(indent).AppendLine(line);
+            }
         }
 
         private static bool TryGetBuiltin(
@@ -350,75 +482,10 @@ namespace SP.Engine.SourceGenerator
             return false;
         }
 
-        private static bool TryBuildCustomClassBody(
-            ITypeSymbol type,
-            string instanceVar,
-            int depth,
-            HashSet<ITypeSymbol> visiting,
-            out string writeBody,
-            out string readBody)
+        private static bool ImplementsINetSerializable(ITypeSymbol type)
         {
-            if (type is not INamedTypeSymbol namedType || !visiting.Add(namedType))
-            {
-                writeBody = readBody = string.Empty;
-                return false;
-            }
-
-            try
-            {
-                var writeSb = new StringBuilder();
-                var readSb = new StringBuilder();
-
-                foreach (var (name, memberType, canGet, canSet) in GetSerializableMembers(namedType))
-                {
-                    if (!TryCreateStatementsCore($"{instanceVar}.{name}", memberType, depth, visiting, out var mWrite, out var mRead, out _))
-                    {
-                        writeBody = readBody = string.Empty;
-                        return false;
-                    }
-
-                    if (canGet)
-                    {
-                        if (writeSb.Length > 0) writeSb.Append(' ');
-                        writeSb.Append(mWrite);
-                    }
-
-                    if (canSet)
-                    {
-                        if (readSb.Length > 0) readSb.Append(' ');
-                        readSb.Append(mRead);
-                    }
-                }
-
-                writeBody = writeSb.ToString();
-                readBody = readSb.ToString();
-                return true;
-            }
-            finally
-            {
-                visiting.Remove(namedType);
-            }
-        }
-
-        private static bool IsCandidateClass(ITypeSymbol type, HashSet<ITypeSymbol> visiting)
-        {
-            if (type is not INamedTypeSymbol { TypeKind: TypeKind.Class, SpecialType: SpecialType.None, IsAbstract: false, IsGenericType: false } namedType)
-                return false;
-
-            if (visiting.Contains(namedType))
-                return false;
-
-            for (var checkType = namedType; checkType != null; checkType = checkType.ContainingType)
-            {
-                if (checkType.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal))
-                    return false;
-            }
-
-            return namedType.InstanceConstructors.Length == 0 ||
-                   namedType.InstanceConstructors.Any(static c =>
-                       !c.IsStatic &&
-                       c.Parameters.Length == 0 &&
-                       c.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal);
+            return type is INamedTypeSymbol { TypeKind: TypeKind.Class, IsAbstract: false } namedType &&
+                   namedType.AllInterfaces.Any(static i => i.ToDisplayString() == KnownSymbols.INetSerializable);
         }
     }
 }
