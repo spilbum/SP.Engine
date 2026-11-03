@@ -90,7 +90,7 @@ namespace SP.Core.Serialization
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public DateTime ReadDateTime() => new DateTime(ReadInt64());
+        public DateTime ReadDateTime() => new DateTime(ReadInt64(), DateTimeKind.Utc);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public uint ReadVarUInt()

@@ -118,7 +118,7 @@ namespace SP.Core.Serialization
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteDateTime(DateTime value) => WriteInt64(value.Ticks);
+        public void WriteDateTime(DateTime value) => WriteInt64(value.ToUniversalTime().Ticks);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteVarUInt(uint value)

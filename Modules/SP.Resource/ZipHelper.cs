@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -94,7 +96,7 @@ public static class ZipHelper
                 continue;
 
             using var es = entry.Open();
-            using var ms = new MemoryStream();
+            using var ms = new MemoryStream((int)entry.Length);
             es.CopyTo(ms);
 
             list.Add(new Entry { Name = entry.Name, Data = ms.ToArray() });
@@ -125,11 +127,50 @@ public static class ZipHelper
                 continue;
 
             await using var es = entry.Open();
-            await using var ms = new MemoryStream();
+            await using var ms = new MemoryStream((int)entry.Length);
             await es.CopyToAsync(ms, ct).ConfigureAwait(false);
 
             list.Add(new Entry { Name = entry.Name, Data = ms.ToArray() });
         }
         return list;
+    }
+
+    public static byte[]? ReadEntry(string zipPath, string entryName)
+    {
+        using var fs = File.OpenRead(zipPath);
+        using var zip = new ZipArchive(fs, ZipArchiveMode.Read);
+        
+        var entry = FindEntry(zip, entryName);
+        if (entry == null)
+            return null;
+
+        using var es = entry.Open();
+        using var ms = new MemoryStream((int)entry.Length);
+        es.CopyTo(ms);
+        return ms.ToArray();
+    }
+
+    public static async Task<byte[]?> ReadEntryAsync(
+        string zipPath, 
+        string entryName,
+        CancellationToken ct = default)
+    {
+        await using var fs = new FileStream(
+            zipPath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
+        using var zip = new ZipArchive(fs, ZipArchiveMode.Read);
+        
+        var entry = FindEntry(zip, entryName);
+        if (entry == null)
+            return null;
+        
+        await using var es = entry.Open();
+        using var ms = new MemoryStream((int)entry.Length);
+        await es.CopyToAsync(ms, ct).ConfigureAwait(false);
+        return ms.ToArray();
+    }
+
+    private static ZipArchiveEntry? FindEntry(ZipArchive zip, string entryName)
+    {
+        return zip.Entries.FirstOrDefault(entry => string.Equals(entry.Name, entryName, StringComparison.OrdinalIgnoreCase));
     }
 }

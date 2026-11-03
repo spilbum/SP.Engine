@@ -49,7 +49,7 @@ public static class RefFileReader
             case ColumnType.Float: row.SetSingle(index, r.ReadSingle()); break;
             case ColumnType.Double: row.SetDouble(index, r.ReadDouble()); break;
             case ColumnType.Boolean: row.SetBoolean(index, r.ReadBool()); break;
-            case ColumnType.DateTime: row.SetDateTime(index, new DateTime(r.ReadInt64(), DateTimeKind.Utc)); break;
+            case ColumnType.DateTime: row.SetDateTime(index, r.ReadDateTime()); break;
             default: throw new NotSupportedException($"Unsupported ColumnType: {type}");
         }
     }

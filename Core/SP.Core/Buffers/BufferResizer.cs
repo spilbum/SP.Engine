@@ -50,6 +50,9 @@ namespace SP.Core.Buffers
         public ReadOnlySpan<byte> GetWrittenSpan(int position)
             => _buffer.AsSpan(0, position);
 
+        public ReadOnlyMemory<byte> GetWrittenMemory(int position)
+            => _buffer.AsMemory(0, position);
+
         public void Dispose()
         {
             if (_disposed) return;

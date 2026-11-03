@@ -1,4 +1,3 @@
-using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,13 +9,16 @@ namespace SP.Resource.Schs;
 
 public static class SchFileWriter
 {
+    private const int InitialBufferCapacity = 4096;
+
     public static void Write(RefTableSchema schema, string path)
     {
-        using var resizer = BufferResizer.Rent(65536);
-        var bytes = SerializeToBytes(resizer, schema);
+        using var resizer = BufferResizer.Rent(InitialBufferCapacity);
+        var written = Serialize(resizer, schema);
 
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllBytes(path, bytes);
+        EnsureDirectory(path);
+        using var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
+        fs.Write(resizer.GetWrittenSpan(written));
     }
 
     public static async Task WriteAsync(
@@ -24,14 +26,22 @@ public static class SchFileWriter
         string path,
         CancellationToken ct = default)
     {
-        using var resizer = BufferResizer.Rent(65536);
-        var bytes = SerializeToBytes(resizer, schema);
+        using var resizer = BufferResizer.Rent(InitialBufferCapacity);
+        var written = Serialize(resizer, schema);
 
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await File.WriteAllBytesAsync(path, bytes, ct);
+        EnsureDirectory(path);
+        await using var fs = new FileStream(
+            path,
+            FileMode.Create,
+            FileAccess.Write,
+            FileShare.None,
+            bufferSize: 4096,
+            useAsync: true);
+
+        await fs.WriteAsync(resizer.GetWrittenMemory(written), ct).ConfigureAwait(false);
     }
 
-    private static byte[] SerializeToBytes(BufferResizer resizer, RefTableSchema schema)
+    private static int Serialize(BufferResizer resizer, RefTableSchema schema)
     {
         var w = new NetWriter(resizer.Span, resizer);
         w.WriteByte((byte)'R');
@@ -50,6 +60,13 @@ public static class SchFileWriter
             w.WriteInt32(column.Length ?? 0);
         }
 
-        return resizer.GetWrittenSpan(w.WrittenCount).ToArray();
+        return w.WrittenCount;
+    }
+
+    private static void EnsureDirectory(string path)
+    {
+        var dir = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(dir))
+            Directory.CreateDirectory(dir);
     }
 }

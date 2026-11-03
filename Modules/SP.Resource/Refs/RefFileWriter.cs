@@ -10,13 +10,16 @@ namespace SP.Resource.Refs;
 
 public static class RefFileWriter
 {
+    private const int InitialBufferCapacity = 65536;
+
     public static void Write(RefTableSchema schema, RefTableData data, string path)
     {
-        using var resizer = BufferResizer.Rent(65536);
-        var bytes = SerializeToBytes(resizer, schema, data);
+        using var resizer = BufferResizer.Rent(InitialBufferCapacity);
+        var written = Serialize(resizer, schema, data);
 
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllBytes(path, bytes);
+        EnsureDirectory(path);
+        using var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
+        fs.Write(resizer.GetWrittenSpan(written));
     }
 
     public static async Task WriteAsync(
@@ -25,14 +28,22 @@ public static class RefFileWriter
         string path,
         CancellationToken ct = default)
     {
-        using var resizer = BufferResizer.Rent(65536);
-        var bytes = SerializeToBytes(resizer, schema, data);
+        using var resizer = BufferResizer.Rent(InitialBufferCapacity);
+        var written = Serialize(resizer, schema, data);
 
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await File.WriteAllBytesAsync(path, bytes, ct);
+        EnsureDirectory(path);
+        await using var fs = new FileStream(
+            path,
+            FileMode.Create,
+            FileAccess.Write,
+            FileShare.None,
+            bufferSize: 4096,
+            useAsync: true);
+
+        await fs.WriteAsync(resizer.GetWrittenMemory(written), ct).ConfigureAwait(false);
     }
 
-    private static byte[] SerializeToBytes(BufferResizer resizer, RefTableSchema schema, RefTableData data)
+    private static int Serialize(BufferResizer resizer, RefTableSchema schema, RefTableData data)
     {
         var w = new NetWriter(resizer.Span, resizer);
 
@@ -53,7 +64,7 @@ public static class RefFileWriter
             }
         }
 
-        return resizer.GetWrittenSpan(w.WrittenCount).ToArray();
+        return w.WrittenCount;
     }
 
     private static void GetAndWrite(ref NetWriter w, RefRow row, int index, ColumnType type)
@@ -82,15 +93,17 @@ public static class RefFileWriter
                 w.WriteBool(row.GetBoolean(index));
                 break;
             case ColumnType.DateTime:
-                w.WriteInt64(row.GetDateTime(index).ToUniversalTime().Ticks);
+                w.WriteDateTime(row.GetDateTime(index));
                 break;
             default:
                 throw new NotSupportedException($"Unsupported ColumnType: {type}");
         }
     }
+
+    private static void EnsureDirectory(string path)
+    {
+        var dir = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(dir))
+            Directory.CreateDirectory(dir);
+    }
 }
-
-
-
-
-

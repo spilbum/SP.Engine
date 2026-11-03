@@ -11,20 +11,47 @@ namespace SP.Resource.Localization;
 
 public static class LocFileWriter
 {
-    public static async Task WriteAsync(
+    private const int InitialBufferCapacity = 65536;
+
+    public static void Write(
+        string dir,
         string language,
-        IReadOnlyDictionary<string, string> map,
-        string path,
-        CancellationToken ct = default)
+        IReadOnlyDictionary<string, string> map)
     {
-        using var resizer = BufferResizer.Rent(65536);
+        using var resizer = BufferResizer.Rent(InitialBufferCapacity);
+        var written = Serialize(resizer, language, map);
 
-        var bytes = SerializeToBytes(resizer, language, map);
+        EnsureDirectory(dir);
 
-        await File.WriteAllBytesAsync(path, bytes, ct);
+        var filePath = Path.Combine(dir, $"{language}.{PatchConst.LocFile}");
+        using var fs = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None);
+        fs.Write(resizer.GetWrittenSpan(written));
     }
 
-    private static byte[] SerializeToBytes(
+    public static async Task WriteAsync(
+        string dir,
+        string language,
+        IReadOnlyDictionary<string, string> map,
+        CancellationToken ct = default)
+    {
+        using var resizer = BufferResizer.Rent(InitialBufferCapacity);
+        var written = Serialize(resizer, language, map);
+
+        EnsureDirectory(dir);
+        
+        var filePath = Path.Combine(dir, $"{language}.{PatchConst.LocFile}");
+        await using var fs = new FileStream(
+            filePath,
+            FileMode.Create,
+            FileAccess.Write,
+            FileShare.None,
+            bufferSize: 4096,
+            useAsync: true);
+
+        await fs.WriteAsync(resizer.GetWrittenMemory(written), ct).ConfigureAwait(false);
+    }
+
+    private static int Serialize(
         BufferResizer resizer,
         string language,
         IReadOnlyDictionary<string, string> map)
@@ -45,6 +72,13 @@ public static class LocFileWriter
             w.WriteString(value ?? string.Empty);
         }
 
-        return resizer.GetWrittenSpan(w.WrittenCount).ToArray();
+        return w.WrittenCount;
+    }
+
+    private static void EnsureDirectory(string path)
+    {
+        var dir = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(dir))
+            Directory.CreateDirectory(dir);
     }
 }
