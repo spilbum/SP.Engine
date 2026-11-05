@@ -1,4 +1,5 @@
 using Common.Protocol.CC2CS;
+using SP.Core.Logging;
 using SP.Engine.Client;
 
 namespace ChatClient;

@@ -2,7 +2,7 @@ using SP.Engine.Common.Protocol;
 using SP.Engine.Common.Protocol.C2S;
 using SP.Engine.Runtime.Protocol;
 
-namespace SP.Engine.Server.Protocol;
+namespace SP.Engine.Server.ProtocolHandler;
 
 [ProtocolHandler(ProtocolId.C2S.Ping)]
 internal class PingHandler : ProtocolHandlerBase<Session, Ping>

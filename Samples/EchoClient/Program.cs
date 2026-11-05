@@ -1,4 +1,5 @@
-﻿using SP.Core.Logging;
+using Microsoft.Extensions.Logging;
+using SP.Core.Logging;
 
 namespace EchoClient;
 
@@ -23,11 +24,11 @@ internal static class Program
         #if DEBUG
         const LogLevel minLevel = LogLevel.Debug;
         #else
-        const LogLevel minLevel = LogLevel.Info;
+        const LogLevel minLevel = LogLevel.Information;
         #endif
         
-        var logger = new ConsoleLogger("EchoClient", minLevel: minLevel);
-        _manager = new TestManager(logger);
+        LogManager.InitializeConsole(minLevel, "EchoClient");
+        _manager = new TestManager();
 
         try
         {

@@ -1,10 +1,12 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using SP.Core.Buffers;
+using SP.Core.Logging;
 using SP.Engine.Runtime.Networking;
+using SP.Engine.Server.Logging;
 
 namespace SP.Engine.Server;
 
@@ -39,7 +41,7 @@ public class UdpNetworkSession : NetworkSessionBase, IUnreliableSender
         const int MaxUdpQueueSize = 512;
         if (_sendQueue.Count >= MaxUdpQueueSize)
         {
-            Session.Logger.Warn("Session {0} UDP Send Queue is full.", Session.SessionId);
+            Logger.Warn($"Session {Session.SessionId} UDP Send Queue is full.");
             return false;
         }
         
@@ -69,7 +71,7 @@ public class UdpNetworkSession : NetworkSessionBase, IUnreliableSender
     {
         if (Interlocked.CompareExchange(ref _inSending, 1, 0) == 0)
         {
-            Session.AsyncRun(StartSend);
+            AsyncExtensions.AsyncRun(StartSend);
         }
     }
 
@@ -141,7 +143,7 @@ public class UdpNetworkSession : NetworkSessionBase, IUnreliableSender
             syncCount++;
             if (syncCount >= MaxSyncCompletions)
             {
-                Session.AsyncRun(StartSend);
+                AsyncExtensions.AsyncRun(StartSend);
                 return;
             }
         }

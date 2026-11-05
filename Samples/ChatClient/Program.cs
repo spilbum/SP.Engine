@@ -1,4 +1,5 @@
-﻿using SP.Core.Logging;
+using Microsoft.Extensions.Logging;
+using SP.Core.Logging;
 
 namespace ChatClient;
 
@@ -27,11 +28,12 @@ internal static class Program
 #if DEBUG
         const LogLevel minLevel = LogLevel.Debug;
 #else
-        const LogLevel minLevel = LogLevel.Info;
+        const LogLevel minLevel = LogLevel.Information;
 #endif
 
-        var logger = new ConsoleLogger($"PeerPool-{_myGroup}", minLevel: minLevel);
-        _manager = new ChatManager(logger);
+        LogManager.InitializeConsole(minLevel, $"PeerPool-{_myGroup}");
+        var logger = LogManager.GetLogger(typeof(Program));
+        _manager = new ChatManager();
 
         logger.Info("Bootstrap sequence loaded. Targeting Target Server => {0}:{1}", _host, _port);
         logger.Info("Available Context Commands: [connect, start, stop, disconnect, quit]");

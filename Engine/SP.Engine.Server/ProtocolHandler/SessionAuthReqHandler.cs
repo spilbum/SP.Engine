@@ -4,9 +4,10 @@ using SP.Engine.Common.Protocol.C2S;
 using SP.Engine.Common.Protocol.S2C;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Protocol;
+using SP.Engine.Server.Logging;
 using SP.Engine.Server.S2S;
 
-namespace SP.Engine.Server.Protocol;
+namespace SP.Engine.Server.ProtocolHandler;
 
 [ProtocolHandler(ProtocolId.C2S.SessionAuthReq)]
 internal class SessionAuthReqHandler : ProtocolHandlerBase<Session, SessionAuthReq>
@@ -18,7 +19,7 @@ internal class SessionAuthReqHandler : ProtocolHandlerBase<Session, SessionAuthR
 
         if (!session.TryEnterAuthenticating())
         {
-            session.Logger.Warn("Session {0} attempted duplicate auth.", session.SessionId);
+            Logger.Warn($"Session {session.SessionId} attempted duplicate auth.");
             return;
         }
         
@@ -32,12 +33,12 @@ internal class SessionAuthReqHandler : ProtocolHandlerBase<Session, SessionAuthR
             if (scope.Protocol.Result != SessionAuthResult.Ok) return;
 
             session.CompleteAuthenticated(peer);
-            session.Logger.Debug("Session {0}({1}) TCP handshake succeeded.", session.SessionId, peer.PeerId);
+            Logger.Debug($"Session {session.SessionId}({peer.PeerId}) TCP handshake succeeded.");
         }
         catch (Exception e)
         {
             scope.Protocol.Result = SessionAuthResult.InternalError;
-            session.Logger.Error("Session {0} TCP handshake failed. err: {1}\n{2}", session.SessionId, e.Message, e.StackTrace);
+            Logger.Error($"Session {session.SessionId} TCP handshake failed. err: {e.Message}\n{e.StackTrace}");
         }
         finally
         {

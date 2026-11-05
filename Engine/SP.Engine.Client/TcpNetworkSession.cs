@@ -4,13 +4,16 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using Microsoft.Extensions.Logging;
 using SP.Engine.Runtime.Networking;
 using SP.Core.Buffers;
+using SP.Core.Logging;
 
 namespace SP.Engine.Client
 {
     public class TcpNetworkSession : IReliableSender
     {
+        private static readonly ILogger Logger = LogManager.GetLogger<TcpNetworkSession>();
         private readonly ByteRingBuffer _sendRingBuffer;
         private int _inSending;
         private bool _isConnecting;
@@ -49,7 +52,7 @@ namespace SP.Engine.Client
                 
                 if (!message.TryGetBuffer(out var memory))
                 {
-                    _netPeer.Logger.Warn("NetPeer {0} TCP TryGetBuffer failed. Id={1}, IsEmpty={2}",
+                    Logger.Warn("NetPeer {0} TCP TryGetBuffer failed. Id={1}, IsEmpty={2}",
                         _netPeer.PeerId, message.Id, message.IsEmpty);
                     return false;
                 }
@@ -58,7 +61,7 @@ namespace SP.Engine.Client
                 {
                     if (!buffer.TryWrite(memory.Span))
                     {
-                        _netPeer.Logger.Warn("NetPeer {0} TCP TryWrite failed. RingBuffer: {1}/{2}",
+                        Logger.Warn("NetPeer {0} TCP TryWrite failed. RingBuffer: {1}/{2}",
                             _netPeer.PeerId, _sendRingBuffer.Size, _sendRingBuffer.Capacity);
                         return false;
                     }   

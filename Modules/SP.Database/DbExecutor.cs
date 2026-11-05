@@ -20,12 +20,7 @@ public sealed class DbExecutor(DbCommand command, IDbProvider provider) : IDispo
     public async ValueTask DisposeAsync()
     {
         if (_disposed) return;
-
-        if (_command is IAsyncDisposable disposable)
-            await disposable.DisposeAsync().ConfigureAwait(false);
-        else
-            _command.Dispose();
-
+        await _command.DisposeAsync().ConfigureAwait(false);
         _disposed = true;
     }
 
@@ -84,17 +79,9 @@ public sealed class DbExecutor(DbCommand command, IDbProvider provider) : IDispo
 
     public T? GetOut<T>(string name)
     {
+        ThrowIfDisposed();
         var value = _command.Parameters[_provider.FormatParameterName(name)].Value;
-        if (value == null || value == DBNull.Value)
-            return default;
-
-        var type = typeof(T);
-        var underlyingType = Nullable.GetUnderlyingType(type) ?? type;
-
-        if (underlyingType.IsEnum)
-            return (T)Enum.Parse(underlyingType, value.ToString() ?? string.Empty);
-
-        return (T)Convert.ChangeType(value, underlyingType);
+        return ConvertScalar<T>(value);
     }
 
     public int ExecuteNonQuery()
@@ -106,20 +93,24 @@ public sealed class DbExecutor(DbCommand command, IDbProvider provider) : IDispo
         }
         catch (Exception ex)
         {
-            throw new Exception("Error executing SQL command (NonQuery).", ex);
+            throw new InvalidOperationException("Error executing SQL command (NonQuery).", ex);
         }
     }
 
-    public async Task<int> ExecuteNonQueryAsync(CancellationToken ct)
+    public async Task<int> ExecuteNonQueryAsync(CancellationToken ct = default)
     {
         ThrowIfDisposed();
         try
         {
             return await _command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
-            throw new Exception("Error executing SQL command (NonQuery).", ex);
+            throw new InvalidOperationException("Error executing SQL command (NonQuery).", ex);
         }
     }
 
@@ -137,14 +128,14 @@ public sealed class DbExecutor(DbCommand command, IDbProvider provider) : IDispo
         return instance;
     }
 
-    public async Task<T?> ExecuteReaderAsync<T>(CancellationToken ct) where T : class
+    public async Task<T?> ExecuteReaderAsync<T>(CancellationToken ct = default) where T : class
     {
         ThrowIfDisposed();
         await using var reader = await _command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         if (!await reader.ReadAsync(ct).ConfigureAwait(false)) return null;
 
         var meta = DbEntityBinder.Get(typeof(T));
-        var ordinals = reader.HasRows ? GetOrdinals(reader, meta.ColumnNames) : [];
+        var ordinals = GetOrdinals(reader, meta.ColumnNames);
 
         var instance = (T)meta.Create();
         meta.Read(instance, reader, ordinals);
@@ -153,11 +144,13 @@ public sealed class DbExecutor(DbCommand command, IDbProvider provider) : IDispo
 
     public List<T> ExecuteReaderList<T>() where T : class
     {
+        ThrowIfDisposed();
         using var reader = _command.ExecuteReader();
-        var list = new List<T>();
+        if (!reader.HasRows) return [];
 
+        var list = new List<T>();
         var meta = DbEntityBinder.Get(typeof(T));
-        var ordinals = reader.HasRows ? GetOrdinals(reader, meta.ColumnNames) : [];
+        var ordinals = GetOrdinals(reader, meta.ColumnNames);
 
         while (reader.Read())
         {
@@ -169,13 +162,15 @@ public sealed class DbExecutor(DbCommand command, IDbProvider provider) : IDispo
         return list;
     }
 
-    public async Task<List<T>> ExecuteReaderListAsync<T>(CancellationToken ct) where T : class
+    public async Task<List<T>> ExecuteReaderListAsync<T>(CancellationToken ct = default) where T : class
     {
+        ThrowIfDisposed();
         await using var reader = await _command.ExecuteReaderAsync(ct).ConfigureAwait(false);
-        var list = new List<T>();
+        if (!reader.HasRows) return [];
 
+        var list = new List<T>();
         var meta = DbEntityBinder.Get(typeof(T));
-        var ordinals = reader.HasRows ? GetOrdinals(reader, meta.ColumnNames) : [];
+        var ordinals = GetOrdinals(reader, meta.ColumnNames);
 
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
         {
@@ -189,10 +184,12 @@ public sealed class DbExecutor(DbCommand command, IDbProvider provider) : IDispo
 
     public async IAsyncEnumerable<T> ExecuteReaderEnumerableAsync<T>([EnumeratorCancellation] CancellationToken ct = default) where T : class
     {
+        ThrowIfDisposed();
         await using var reader = await _command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        if (!reader.HasRows) yield break;
 
         var meta = DbEntityBinder.Get(typeof(T));
-        var ordinals = reader.HasRows ? GetOrdinals(reader, meta.ColumnNames) : [];
+        var ordinals = GetOrdinals(reader, meta.ColumnNames);
 
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
         {
@@ -216,24 +213,33 @@ public sealed class DbExecutor(DbCommand command, IDbProvider provider) : IDispo
     {
         ThrowIfDisposed();
         var obj = _command.ExecuteScalar();
-        if (obj is null or DBNull) return default;
-
-        var type = typeof(T);
-        return type.IsEnum
-            ? (T)Enum.Parse(type, obj.ToString() ?? string.Empty)
-            : (T)Convert.ChangeType(obj, type);
+        return ConvertScalar<T>(obj);
     }
 
-    public async Task<T?> ExecuteScalarAsync<T>(CancellationToken ct)
+    public async Task<T?> ExecuteScalarAsync<T>(CancellationToken ct = default)
     {
+        ThrowIfDisposed();
         var obj = await _command.ExecuteScalarAsync(ct).ConfigureAwait(false);
+        return ConvertScalar<T>(obj);
+    }
+
+    private static T? ConvertScalar<T>(object? obj)
+    {
         if (obj is null or DBNull) return default;
 
         var type = typeof(T);
-        return type.IsEnum
-            ? (T)Enum.Parse(type, obj.ToString() ?? string.Empty)
-            : (T)Convert.ChangeType(obj, type);
+        var underlyingType = Nullable.GetUnderlyingType(type) ?? type;
+
+        if (underlyingType.IsEnum)
+        {
+            if (obj is int or long or byte or short)
+                return (T)Enum.ToObject(underlyingType, obj);
+
+            return (T)Enum.Parse(underlyingType, obj.ToString() ?? string.Empty, ignoreCase: true);
+        }
+
+        return underlyingType.IsInstanceOfType(obj)
+            ? (T)obj
+            : (T)Convert.ChangeType(obj, underlyingType);
     }
-
-
 }

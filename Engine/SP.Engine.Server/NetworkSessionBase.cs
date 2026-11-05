@@ -1,10 +1,12 @@
-﻿using System;
+using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Threading;
+using Microsoft.Extensions.Logging;
 using SP.Core.Logging;
 using SP.Engine.Runtime;
+using SP.Engine.Server.Logging;
 
 namespace SP.Engine.Server;
 
@@ -14,7 +16,7 @@ public enum SocketMode
     Udp = 1
 }
 
-public interface INetworkSession : ILogContext
+public interface INetworkSession
 {
     SessionBase Session { get; }
 }
@@ -40,7 +42,7 @@ public abstract class NetworkSessionBase : INetworkSession
         internal set => Interlocked.Exchange(ref _session, value);
     }
 
-    public ILogger Logger => _session?.Logger;
+    protected ILogger Logger { get; }
     
     public IPEndPoint LocalEndPoint { get; }
     public IPEndPoint RemoteEndPoint => Volatile.Read(ref _remoteEndPoint);
@@ -52,6 +54,7 @@ public abstract class NetworkSessionBase : INetworkSession
     {
         _mode = mode;
         _client = client;
+        Logger = LogManager.GetLogger(GetType());
         if (client != null)
         {
             LocalEndPoint = (IPEndPoint)client.LocalEndPoint;
@@ -125,15 +128,13 @@ public abstract class NetworkSessionBase : INetworkSession
         
         if (e is SocketException socketEx)
         {
-            Session.Logger.Error(
-                "[NetworkError] SessionId: {SessionId}, Mode: {Mode}\nMessage: {Message}\nSocketErrorCode: {ErrorCode} ({SocketError})\nLocation: {Caller} in {FileName}:{LineNumber}\nStackTrace:\n{StackTrace}",
-                sessionId, _mode, e.Message, (int)socketEx.SocketErrorCode, socketEx.SocketErrorCode, caller, fileName, lineNumber, e.StackTrace);
+            Logger.Error(
+                $"[NetworkError] SessionId: {sessionId}, Mode: {_mode}\nMessage: {e.Message}\nSocketErrorCode: {(int)socketEx.SocketErrorCode} ({socketEx.SocketErrorCode})\nLocation: {caller} in {fileName}:{lineNumber}\nStackTrace:\n{e.StackTrace}");
         }
         else
         {
-            Session.Logger.Error(
-                "[NetworkError] SessionId: {SessionId}, Mode: {Mode}\nMessage: {Message}\nLocation: {Caller} in {FileName}:{LineNumber}\nStackTrace:\n{StackTrace}",
-                sessionId, _mode, e.Message, caller, fileName, lineNumber, e.StackTrace);
+            Logger.Error(
+                $"[NetworkError] SessionId: {sessionId}, Mode: {_mode}\nMessage: {e.Message}\nLocation: {caller} in {fileName}:{lineNumber}\nStackTrace:\n{e.StackTrace}");
         }
     }
 

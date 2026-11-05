@@ -8,6 +8,7 @@ using System.Reflection;
 using System.Threading;
 using SP.Core;
 using SP.Core.Buffers;
+using Microsoft.Extensions.Logging;
 using SP.Core.Logging;
 using SP.Engine.Client.Configuration;
 using SP.Engine.Common.Protocol.C2S;
@@ -119,7 +120,7 @@ namespace SP.Engine.Client
         public EngineConfig Config { get; private set; }
         public NetPeerState State => (NetPeerState)_stateCode;
         public bool IsConnected => State == NetPeerState.Open;
-        public ILogger Logger { get; private set; }
+        protected ILogger Logger { get; }
         public PeerKind Kind { get; }
         
         IEncryptor IProtocolHandlerContext.Encryptor => _encryptor;
@@ -152,6 +153,7 @@ namespace SP.Engine.Client
         protected NetPeerBase(PeerKind kind)
         {
             Kind = kind;
+            Logger = LogManager.GetLogger(GetType());
         }
         
         public void Connect(string ip, int port)
@@ -322,10 +324,9 @@ namespace SP.Engine.Client
             _tcpNetworkSession?.Close();
         }
 
-        internal bool InternalInitialize(Assembly[] assemblies, EngineConfig config, ILogger logger)
+        internal bool InternalInitialize(Assembly[] assemblies, EngineConfig config)
         {
             Config = config;
-            Logger = logger;
             
             if (!SetupProtocolHandler(assemblies))
                 return false;

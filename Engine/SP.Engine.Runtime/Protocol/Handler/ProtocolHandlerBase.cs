@@ -1,5 +1,7 @@
 using System;
 using System.Diagnostics;
+using Microsoft.Extensions.Logging;
+using SP.Core.Logging;
 using SP.Engine.Runtime.Networking;
 
 namespace SP.Engine.Runtime.Protocol
@@ -8,11 +10,14 @@ namespace SP.Engine.Runtime.Protocol
         where TContext : IProtocolHandlerContext
         where TProtocol : class, IProtocolData, new()
     {
+        protected ILogger Logger { get; }
         public string Name { get; }
 
         protected ProtocolHandlerBase()
         {
-            Name = GetType().Name;
+            var type = GetType();
+            Name = type.Name;
+            Logger = LogManager.GetLogger(type);
         }
 
         public long Execute(IProtocolHandlerContext context, IMessage message)
@@ -28,7 +33,7 @@ namespace SP.Engine.Runtime.Protocol
             }
             catch (Exception ex)
             {
-                context.Logger.Error(ex, "ProtocolHandler '{0}' deserialize failed.", Name);
+                Logger.Error(ex, "ProtocolHandler '{0}' deserialize failed.", Name);
                 return 0;
             }
 
@@ -40,7 +45,7 @@ namespace SP.Engine.Runtime.Protocol
             }
             catch (Exception e)
             {
-                context.Logger.Error(e, "ProtocolHandler '{0}' execution failed.", Name);
+                Logger.Error(e, "ProtocolHandler '{0}' execution failed.", Name);
             }
 
             var deltaTicks = Stopwatch.GetTimestamp() - start;

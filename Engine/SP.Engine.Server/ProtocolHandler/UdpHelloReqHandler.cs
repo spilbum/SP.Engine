@@ -4,8 +4,9 @@ using SP.Engine.Common.Protocol.C2S;
 using SP.Engine.Common.Protocol.S2C;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Protocol;
+using SP.Engine.Server.Logging;
 
-namespace SP.Engine.Server.Protocol;
+namespace SP.Engine.Server.ProtocolHandler;
 
 [ProtocolHandler(ProtocolId.C2S.UdpHelloReq)]
 internal class UdpHelloReqHandler : ProtocolHandlerBase<Session, UdpHelloReq>
@@ -30,12 +31,12 @@ internal class UdpHelloReqHandler : ProtocolHandlerBase<Session, UdpHelloReq>
             
             scope.Protocol.Mtu = mtu;
             scope.Protocol.Result = UdpHelloResult.Ok;
-            session.Logger.Debug("Session {0} UDP handshake succeeded with MTU: {1}", session.SessionId, mtu);
+            Logger.Debug($"Session {session.SessionId} UDP handshake succeeded with MTU: {mtu}");
         }
         catch (Exception ex)
         {
             scope.Protocol.Result = UdpHelloResult.InternalError;
-            session.Logger.Error("Session {0} UDP handshake failed. err: {1}\n{2}", session.SessionId, ex.Message, ex.StackTrace);
+            Logger.Error($"Session {session.SessionId} UDP handshake failed. err: {ex.Message}\n{ex.StackTrace}");
         }
         finally
         {

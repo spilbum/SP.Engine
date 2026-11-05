@@ -25,7 +25,7 @@ public sealed class SocketReceiveContext : IDisposable
         if (e.UserToken is not TcpNetworkSession session) return;
         if (e.LastOperation != SocketAsyncOperation.Receive) return;
         var state = (session, e);
-        session.AsyncRun(state, static s => s.session.ProcessReceive(s.e));
+        AsyncExtensions.AsyncRun(state, static s => s.session.ProcessReceive(s.e));
     }
 
     public void Reset()

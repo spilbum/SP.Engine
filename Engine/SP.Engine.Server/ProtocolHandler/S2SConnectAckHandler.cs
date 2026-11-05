@@ -3,7 +3,7 @@ using SP.Engine.Common.Protocol.S2S;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Server.S2S;
 
-namespace SP.Engine.Server.Protocol;
+namespace SP.Engine.Server.ProtocolHandler;
 
 [ProtocolHandler(ProtocolId.S2S.S2SConnectAck)]
 internal class S2SConnectAckHandler : ProtocolHandlerBase<S2SClient, S2SConnectAck>

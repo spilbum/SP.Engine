@@ -2,7 +2,7 @@ using SP.Engine.Common.Protocol;
 using SP.Engine.Common.Protocol.C2S;
 using SP.Engine.Runtime.Protocol;
 
-namespace SP.Engine.Server.Protocol;
+namespace SP.Engine.Server.ProtocolHandlers;
 
 [ProtocolHandler(ProtocolId.C2S.MessageAck)]
 internal class MessageAckHandler : ProtocolHandlerBase<Session, MessageAck>

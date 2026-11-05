@@ -4,13 +4,16 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using Microsoft.Extensions.Logging;
 using SP.Core.Buffers;
+using SP.Core.Logging;
 using SP.Engine.Runtime.Networking;
 
 namespace SP.Engine.Client
 {
     public class UdpNetworkSession : IUnreliableSender
     {
+        private static readonly ILogger Logger = LogManager.GetLogger<UdpNetworkSession>();
         private readonly SocketAsyncEventArgs _receiveEventArgs = new SocketAsyncEventArgs();
         private readonly SocketAsyncEventArgs _sendEventArgs;
         private byte[] _receiveBuffer;
@@ -39,7 +42,7 @@ namespace SP.Engine.Client
             const int MaxUdpQueueSize = 512;
             if (_sendQueue.Count >= MaxUdpQueueSize)
             {
-                _netPeer.Logger.Warn("NetPeer {0} UDP Send Queue is full.", _netPeer.PeerId);
+                Logger.Warn("NetPeer {0} UDP Send Queue is full.", _netPeer.PeerId);
                 return false;
             }
 
@@ -48,7 +51,7 @@ namespace SP.Engine.Client
                 // 단일 패킷 처리
                 if (!message.TryGetBufferOwner(out var buffer, out var length))
                 {
-                    _netPeer.Logger.Warn("NetPeer {0} UDP TryGetBufferOwner failed.", _netPeer.PeerId);
+                    Logger.Warn("NetPeer {0} UDP TryGetBufferOwner failed.", _netPeer.PeerId);
                     return false;
                 }
             
@@ -60,7 +63,7 @@ namespace SP.Engine.Client
                 var fragId = (uint)Interlocked.Increment(ref _nextFragId);
                 if (!message.TryGetFragments(fragId, _maxFragmentSize, out var fragments))
                 {
-                    _netPeer.Logger.Warn("NetPeer {0} UDP TryGetFragments failed.", _netPeer.PeerId);
+                    Logger.Warn("NetPeer {0} UDP TryGetFragments failed.", _netPeer.PeerId);
                     return false;
                 }
 

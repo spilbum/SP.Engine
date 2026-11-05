@@ -6,6 +6,7 @@ using System.Net;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using SP.Core.Fibers;
 using SP.Core.Logging;
 using SP.Engine.Runtime;
@@ -36,7 +37,7 @@ public struct ServerStateConst
     public const int Stopping = 5;
 }
 
-public abstract class EngineCore : ILogContext, IDisposable
+public abstract class EngineCore : IDisposable
 {
     private readonly ConcurrentQueue<SessionBase> _authHandshakePendingQueue = new();
     private readonly ConcurrentQueue<SessionBase> _closeHandshakePendingQueue = new();
@@ -53,14 +54,19 @@ public abstract class EngineCore : ILogContext, IDisposable
     private int _stateCode = ServerStateConst.NotInitialized;
     private bool _disposed;
     
+    protected ILogger Logger { get; }
     public string Category { get; private set; }
     public string Name { get; private set; }
     public ServerState State => (ServerState)_stateCode;
     public Session[] SessionsSource => _sessionManager.GetActiveSnapshot();
-    public ILogger Logger { get; private set; }
     public IEngineConfig Config { get; private set; }
     public IScheduler GlobalScheduler => _globalScheduler;
     internal IFiber Fiber => _engineFiber;
+
+    protected EngineCore()
+    {
+        Logger = LogManager.GetLogger(GetType());
+    }
 
     public void Dispose()
     {
@@ -79,7 +85,7 @@ public abstract class EngineCore : ILogContext, IDisposable
         Name = !string.IsNullOrEmpty(name) ? name : $"{GetType().Name}-{Math.Abs(GetHashCode())}";
         Config = config ?? throw new ArgumentNullException(nameof(config));
         
-        if (!SetupLogger())
+        if (!SetupLogger(config.Logging))
             return false;
 
         if (!SetupListeners(config))
@@ -106,7 +112,7 @@ public abstract class EngineCore : ILogContext, IDisposable
             Interlocked.CompareExchange(ref _stateCode, ServerStateConst.Starting, ServerStateConst.NotStarted);
         if (oldState != ServerStateConst.NotStarted)
         {
-            Logger.Fatal("This server instance is in the state {0}, you cannot start it now.", (ServerState)oldState);
+            Logger.Fatal($"This server instance is in the state {(ServerState)oldState}, you cannot start it now.");
             return false;
         }
 
@@ -127,7 +133,7 @@ public abstract class EngineCore : ILogContext, IDisposable
 
         StartHandshakePendingTimer();
         
-        Logger.Info("The server instance {0} was been started!", Name);
+        Logger.Info($"The server instance {Name} was been started!");
         return true;
     }
 
@@ -143,7 +149,6 @@ public abstract class EngineCore : ILogContext, IDisposable
         StopClearIdleSessionTimer();
         StopHandshakePendingTimer();
         StopFragmentAssemblerCleanupTimer();
-        LogManager.Dispose();
 
         var snapshot = _sessionManager.GetActiveSnapshot();
         if (snapshot.Length > 0)
@@ -157,12 +162,13 @@ public abstract class EngineCore : ILogContext, IDisposable
                 }
                 catch (Exception ex)
                 {
-                    Logger.Error(ex, "Error closing session {0} during shutdown", s.SessionId);
+                    Logger.Error(ex, $"Error closing session {s.SessionId} during shutdown");
                 }
             });
         }
 
-        Logger.Debug("The server instance {0} has been stopped!", Name);
+        Logger.Debug($"The server instance {Name} has been stopped!");
+        LogManager.Dispose();
     }
 
     public int GetOpenPort(SocketMode mode)
@@ -177,11 +183,10 @@ public abstract class EngineCore : ILogContext, IDisposable
     public Session GetSession(long sessionId)
         => _sessionManager.GetSession(sessionId);
 
-    private bool SetupLogger()
+    private bool SetupLogger(LoggingConfig loggingConfig)
     {
-        LogManager.Initialize(Name, new SerilogFactory());
-        Logger = LogManager.GetLogger(Name);
-        Logger?.Info("Logger setup was successful: {0}", Name);
+        LogManager.Initialize(ZLoggerFactory.Create(Name, loggingConfig), Name);
+        Logger.Info($"Logger setup was successful: {Name} (MinLevel: {loggingConfig.MinimumLevel})");
         return true;
     }
 
@@ -317,11 +322,8 @@ public abstract class EngineCore : ILogContext, IDisposable
             if (Logger.IsEnabled(LogLevel.Debug))
             {
                 var lastActiveTime = new DateTime(lastActive, DateTimeKind.Utc);
-                Logger.Debug(
-                    "[TimeOut] Session {0} idle for {1}s. LastActiveTime: {2}",
-                    session.SessionId,
-                    TimeSpan.FromTicks(nowUtc.Ticks - lastActive).TotalSeconds,
-                    lastActiveTime);   
+                var idleSeconds = TimeSpan.FromTicks(nowUtc.Ticks - lastActive).TotalSeconds;
+                Logger.Debug($"[TimeOut] Session {session.SessionId} idle for {idleSeconds}s. LastActiveTime: {lastActiveTime}");
             }
 
             session.Close(CloseReason.TimeOut);
@@ -379,7 +381,7 @@ public abstract class EngineCore : ILogContext, IDisposable
                 if (DateTime.UtcNow < session.StartTime.AddSeconds(Config.Session.AuthHandshakeTimeoutSec))
                     break;
                 
-                Logger.Debug("Timeout auth handshake for session: {0}", session.SessionId);
+                Logger.Debug($"Timeout auth handshake for session: {session.SessionId}");
                 
                 // 인증 타임 아웃
                 if (!_authHandshakePendingQueue.TryDequeue(out var expired)) continue;
@@ -392,7 +394,7 @@ public abstract class EngineCore : ILogContext, IDisposable
                 {
                     // 종료 처리가 되었음
                     _closeHandshakePendingQueue.TryDequeue(out _);
-                    Logger.Debug("Remove close handshake: {0}", session.SessionId);
+                    Logger.Debug($"Remove close handshake: {session.SessionId}");
                     continue;
                 }
 
@@ -400,7 +402,7 @@ public abstract class EngineCore : ILogContext, IDisposable
                 if (DateTime.UtcNow < session.StartClosingTime.AddSeconds(Config.Session.CloseHandshakeTimeoutSec))
                     break;
 
-                Logger.Debug("Timeout close handshake for session: {0}", session.SessionId);
+                Logger.Debug($"Timeout close handshake for session: {session.SessionId}");
                 
                 // 종료 타임아웃
                 if (_closeHandshakePendingQueue.TryDequeue(out var expired))
@@ -427,7 +429,7 @@ public abstract class EngineCore : ILogContext, IDisposable
         
         // 인증 해드쉐이크 대기 등록
         EnqueueAuthHandshakePending(session);
-        Logger.Debug("A new session {0} connected.", session.SessionId);
+        Logger.Debug($"A new session {session.SessionId} connected.");
         return session;
     }
 
@@ -435,7 +437,7 @@ public abstract class EngineCore : ILogContext, IDisposable
     {
         if (ns.Session is not Session session) return;
 
-        Logger.Debug("The session {0} has been closed. reason={1}", session.SessionId, reason);
+        Logger.Debug($"The session {session.SessionId} has been closed. reason={reason}");
 
         try
         {
@@ -446,7 +448,7 @@ public abstract class EngineCore : ILogContext, IDisposable
         }
         catch (Exception ex)
         {
-            Logger.Error(ex, "Session {0} OnSessionClosed failed: {1}", session.SessionId, ex.Message);
+            Logger.Error(ex, $"Session {session.SessionId} OnSessionClosed failed: {ex.Message}");
         }
         finally
         {

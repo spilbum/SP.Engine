@@ -1,17 +1,21 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using Microsoft.Extensions.Logging;
 using SP.Core.Buffers;
+using SP.Core.Logging;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Server.Configuration;
+using SP.Engine.Server.Logging;
 
 namespace SP.Engine.Server;
 
 internal sealed class SocketServer(EngineCore engine, ListenerInfo[] listenerInfos) : IDisposable
 {
+    private static readonly ILogger Logger = LogManager.GetLogger<SocketServer>();
     private bool _disposed;
     private byte[] _keepAliveOptionValues;
     private ExpandablePool<SocketReceiveContext> _receiveContextPool;
@@ -57,11 +61,11 @@ internal sealed class SocketServer(EngineCore engine, ListenerInfo[] listenerInf
             if (listener.Start())
             {
                 Listeners.Add(listener);
-                engine.Logger.Info("Listener ({0}:{1}) was started.", listener.EndPoint, listener.Mode);
+                Logger.Info($"Listener ({listener.EndPoint}:{listener.Mode}) was started.");
             }
             else
             {
-                engine.Logger.Error("Listener ({0}:{1}) failed to start.", listener.EndPoint, listener.Mode);
+                Logger.Error($"Listener ({listener.EndPoint}:{listener.Mode}) failed to start.");
 
                 foreach (var t in Listeners)
                     t.Stop();
@@ -108,7 +112,7 @@ internal sealed class SocketServer(EngineCore engine, ListenerInfo[] listenerInf
         }
         catch (Exception ex)
         {
-            engine.Logger.Fatal("An exception occurred: {0}\r\nstackTrace: {1}", ex.Message, ex.StackTrace);
+            Logger.Fatal($"An exception occurred: {ex.Message}\r\nstackTrace: {ex.StackTrace}");
             return false;
         }
     }
@@ -140,7 +144,7 @@ internal sealed class SocketServer(EngineCore engine, ListenerInfo[] listenerInf
         data.CopyTo(buffer.Memory.Span);
 
         var state = (session, socket, remoteEndPoint, header, buffer);
-        session.AsyncRun(state, static s =>
+        AsyncExtensions.AsyncRun(state, static s =>
         {
             if (s.session.IsClosed)
             { 
@@ -156,8 +160,8 @@ internal sealed class SocketServer(EngineCore engine, ListenerInfo[] listenerInf
     {
         if (!_sendContextPool.TryRent(out var sendContext))
         {
-            engine.Logger.Warn("TCP _sendContextPool.TryRent failed. ");
-            engine.AsyncRun(client.SafeClose);
+            Logger.Warn("TCP _sendContextPool.TryRent failed. ");
+            AsyncExtensions.AsyncRun(client.SafeClose);
             return;
         }
         
@@ -165,7 +169,7 @@ internal sealed class SocketServer(EngineCore engine, ListenerInfo[] listenerInf
         {
             sendContext.Reset();
             _sendContextPool.Return(sendContext);
-            engine.AsyncRun(client.SafeClose);
+            AsyncExtensions.AsyncRun(client.SafeClose);
             return;
         }
 
@@ -175,7 +179,7 @@ internal sealed class SocketServer(EngineCore engine, ListenerInfo[] listenerInf
         var session = CreateSession(client, ns);
         if (session != null)
         {
-            engine.AsyncRun(ns, static s =>
+            AsyncExtensions.AsyncRun(ns, static s =>
             {
                 if (!s.Start())
                 {
@@ -211,12 +215,12 @@ internal sealed class SocketServer(EngineCore engine, ListenerInfo[] listenerInf
     private void OnListenerStopped(object sender, EventArgs e)
     {
         if (sender is INetworkListener listener)
-            engine.Logger.Info("Listener ({0}) was stopped.", listener.EndPoint);
+            Logger.Info($"Listener ({listener.EndPoint}) was stopped.");
     }
 
     private void OnListenerError(INetworkListener listener, Exception e)
     {
-        engine.Logger.Error($"Listener ({listener.EndPoint}) error: {e.Message}\r\nstackTrace={e.StackTrace}");
+        Logger.Error($"Listener ({listener.EndPoint}) error: {e.Message}\r\nstackTrace={e.StackTrace}");
     }
 
     private Session CreateSession(Socket client, TcpNetworkSession networkSession)

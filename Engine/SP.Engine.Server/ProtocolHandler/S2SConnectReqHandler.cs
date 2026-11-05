@@ -2,7 +2,7 @@ using SP.Engine.Common.Protocol;
 using SP.Engine.Common.Protocol.S2S;
 using SP.Engine.Runtime.Protocol;
 
-namespace SP.Engine.Server.Protocol;
+namespace SP.Engine.Server.ProtocolHandler;
 
 [ProtocolHandler(ProtocolId.S2S.S2SConnectReq)]
 internal sealed class S2SConnectReqHandler : ProtocolHandlerBase<Session, S2SConnectReq>

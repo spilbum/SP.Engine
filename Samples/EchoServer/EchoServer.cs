@@ -1,4 +1,5 @@
 using SP.Core;
+using SP.Core.Logging;
 using SP.Engine.Server;
 using SP.Engine.Server.S2S;
 

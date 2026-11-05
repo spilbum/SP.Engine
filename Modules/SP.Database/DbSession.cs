@@ -16,18 +16,24 @@ public sealed class DbSession(DbConnection connection, IDbProvider provider) : I
     {
         if (_disposed) return;
 
-        try
+        if (_transaction != null)
         {
-            _transaction?.Rollback();
-        }
-        catch (Exception)
-        {
-            /* ignored */
+            try
+            {
+                _transaction.Rollback();
+            }
+            catch
+            {
+                /* ignored */
+            }
+            finally
+            {
+                _transaction.Dispose();
+                _transaction = null;
+            }
         }
 
-        _transaction = null;
         _connection.Dispose();
-
         _disposed = true;
     }
 
@@ -41,25 +47,22 @@ public sealed class DbSession(DbConnection connection, IDbProvider provider) : I
             {
                 await _transaction.RollbackAsync().ConfigureAwait(false);
             }
-            catch { /* ignored */ }
-            _transaction = null;
+            catch
+            {
+                /* ignored */
+            }
+            finally
+            {
+                await _transaction.DisposeAsync().ConfigureAwait(false);
+                _transaction = null;
+            }
         }
 
-        if (_connection is IAsyncDisposable disposable)
-            await disposable.DisposeAsync().ConfigureAwait(false);
-        else
-            _connection.Dispose();
-
+        await _connection.DisposeAsync().ConfigureAwait(false);
         _disposed = true;
     }
 
-
-
-    private void ThrowIfDisposed()
-    {
-        if (_disposed)
-            throw new ObjectDisposedException(nameof(DbSession), "Connection is already disposed.");
-    }
+    private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
 
     public void Open()
     {
@@ -83,7 +86,7 @@ public sealed class DbSession(DbConnection connection, IDbProvider provider) : I
         _transaction = _connection.BeginTransaction();
     }
 
-    public async Task BeginTransactionAsync(CancellationToken ct)
+    public async Task BeginTransactionAsync(CancellationToken ct = default)
     {
         ThrowIfDisposed();
 
@@ -95,38 +98,74 @@ public sealed class DbSession(DbConnection connection, IDbProvider provider) : I
 
     public void Commit()
     {
+        ThrowIfDisposed();
+
         if (_transaction == null)
             throw new InvalidOperationException("No active transaction to commit.");
 
-        _transaction.Commit();
-        _transaction = null;
+        try
+        {
+            _transaction.Commit();
+        }
+        finally
+        {
+            _transaction.Dispose();
+            _transaction = null;
+        }
     }
 
-    public async Task CommitAsync(CancellationToken ct)
+    public async Task CommitAsync(CancellationToken ct = default)
     {
+        ThrowIfDisposed();
+
         if (_transaction == null)
             throw new InvalidOperationException("No active transaction to commit.");
 
-        await _transaction.CommitAsync(ct).ConfigureAwait(false);
-        _transaction = null;
+        try
+        {
+            await _transaction.CommitAsync(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            await _transaction.DisposeAsync().ConfigureAwait(false);
+            _transaction = null;
+        }
     }
 
     public void Rollback()
     {
+        ThrowIfDisposed();
+
         if (_transaction == null)
             throw new InvalidOperationException("No active transaction to rollback.");
 
-        _transaction.Rollback();
-        _transaction = null;
+        try
+        {
+            _transaction.Rollback();
+        }
+        finally
+        {
+            _transaction.Dispose();
+            _transaction = null;
+        }
     }
 
-    public async Task RollbackAsync(CancellationToken ct)
+    public async Task RollbackAsync(CancellationToken ct = default)
     {
+        ThrowIfDisposed();
+
         if (_transaction == null)
             throw new InvalidOperationException("No active transaction to rollback.");
 
-        await _transaction.RollbackAsync(ct).ConfigureAwait(false);
-        _transaction = null;
+        try
+        {
+            await _transaction.RollbackAsync(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            await _transaction.DisposeAsync().ConfigureAwait(false);
+            _transaction = null;
+        }
     }
 
     public DbExecutor CreateExecutor(string commandText, CommandType commandType = CommandType.Text)

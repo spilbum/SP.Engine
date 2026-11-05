@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.Extensions.Logging;
 
 namespace SP.Core.Logging
 {
@@ -17,120 +18,57 @@ namespace SP.Core.Logging
             _context = context;
         }
 
-        public bool IsEnabled(LogLevel level)
-            => level >= _minLevel;
+        public bool IsEnabled(LogLevel logLevel)
+            => logLevel != LogLevel.None && logLevel >= _minLevel;
 
-        public ILogger With(string key, object value)
+        public IDisposable BeginScope<TState>(TState state) where TState : notnull
+            => NullScope.Instance;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception exception,
+            Func<TState, Exception, string> formatter)
         {
-            var dict = _context == null
-                ? new Dictionary<string, object>()
-                : new Dictionary<string, object>(_context);
+            if (!IsEnabled(logLevel)) return;
+            if (formatter == null) throw new ArgumentNullException(nameof(formatter));
 
-            dict[key] = value;
-            return new ConsoleLogger(_category, context: dict);
-        }
-
-        public void Log(LogLevel level, string message)
-        {
-            Write(level, message);
-        }
-
-        public void Log(LogLevel level, string format, params object[] args)
-        {
-            Write(level, string.Format(format, args));
-        }
-
-        public void Log(LogLevel level, Exception ex)
-        {
-            Write(level, $"An exception occurred: {ex.Message}\r\n{ex.StackTrace}");
-        }
-
-        public void Log(LogLevel level, Exception ex, string format, params object[] args)
-        {
-            Write(level, string.Format(format, args) + "\n" +
-                         $"An exception occurred: {ex.Message}\r\n{ex.StackTrace}");
-        }
-
-        public void Debug(string message)
-        {
-            Log(LogLevel.Debug, message);
-        }
-
-        public void Debug(string format, params object[] args)
-        {
-            Log(LogLevel.Debug, format, args);
-        }
-
-        public void Info(string message)
-        {
-            Log(LogLevel.Info, message);
-        }
-
-        public void Info(string format, params object[] args)
-        {
-            Log(LogLevel.Info, format, args);
-        }
-
-        public void Warn(string message)
-        {
-            Log(LogLevel.Warning, message);
-        }
-
-        public void Warn(string format, params object[] args)
-        {
-            Log(LogLevel.Warning, format, args);
-        }
-
-        public void Error(string message)
-        {
-            Log(LogLevel.Error, message);
-        }
-
-        public void Error(string format, params object[] args)
-        {
-            Log(LogLevel.Error, format, args);
-        }
-
-        public void Error(Exception ex)
-        {
-            Log(LogLevel.Error, ex);
-        }
-
-        public void Error(Exception ex, string format, params object[] args)
-        {
-            Log(LogLevel.Error, ex, format, args);
-        }
-
-        public void Fatal(string message)
-        {
-            Log(LogLevel.Fatal, message);
-        }
-
-        public void Fatal(string format, params object[] args)
-        {
-            Log(LogLevel.Fatal, format, args);
-        }
-
-        public void Fatal(Exception ex)
-        {
-            Log(LogLevel.Fatal, ex);
-        }
-
-        public void Fatal(Exception ex, string format, params object[] args)
-        {
-            Log(LogLevel.Fatal, ex, format, args);
-        }
-
-        private void Write(LogLevel level, string message)
-        {
-            if (!IsEnabled(level)) return;
+            var message = formatter(state, exception);
+            if (string.IsNullOrEmpty(message) && exception == null) return;
 
             var time = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff");
             var ctx = _context != null && _context.Count > 0
                 ? " | " + string.Join(" ", _context.Select(kv => $"{kv.Key}={kv.Value}"))
                 : string.Empty;
 
-            Console.WriteLine($"[{time}][{_category}][{level.ToString().ToUpper()}] {message}{ctx}");
+            var text = exception != null
+                ? string.IsNullOrEmpty(message)
+                    ? $"An exception occurred: {exception.Message}\r\n{exception.StackTrace}"
+                    : $"{message}\nAn exception occurred: {exception.Message}\r\n{exception.StackTrace}"
+                : message;
+
+            Console.WriteLine($"[{time}][{_category}][{GetLevelShortName(logLevel)}] {text}{ctx}");
+        }
+
+        private static string GetLevelShortName(LogLevel level)
+        {
+            return level switch
+            {
+                LogLevel.Trace => "TRC",
+                LogLevel.Debug => "DBG",
+                LogLevel.Information => "INF",
+                LogLevel.Warning => "WRN",
+                LogLevel.Error => "ERR",
+                LogLevel.Critical => "CRI",
+                _ => level.ToString().ToUpperInvariant()
+            };
+        }
+
+        private sealed class NullScope : IDisposable
+        {
+            public static readonly NullScope Instance = new NullScope();
+            public void Dispose() { }
         }
     }
 }

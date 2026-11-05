@@ -2,11 +2,13 @@ using System;
 using System.Reflection;
 using System.Threading;
 using SP.Core.Fibers;
+using SP.Core.Logging;
 using SP.Engine.Client;
 using SP.Engine.Common.Protocol.S2S;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Server.Configuration;
+using SP.Engine.Server.Logging;
 
 namespace SP.Engine.Server.S2S;
 
@@ -41,7 +43,7 @@ public class S2SClient(EngineBase engine) : NetPeerBase(PeerKind.Server), IS2SCl
     {
         if (config == null || string.IsNullOrEmpty(config.Host) || 0 >= config.Port)
         {
-            engine.Logger.Error("Invalid connector config. host={0}, port={1}", config?.Host, config?.Port);
+            Logger.Error($"Invalid connector config. host={config?.Host}, port={config?.Port}");
             return false;
         }
 
@@ -51,12 +53,10 @@ public class S2SClient(EngineBase engine) : NetPeerBase(PeerKind.Server), IS2SCl
 
         _scheduler = engine.GlobalScheduler;
         _fiber = new ThreadFiber($"S2SFiber-{config.Name}", onError: OnFiberException);
-        var logger = engine.Logger;
         
         try
         {
             var builder = NetPeerBuilder.Create()
-                .WithLogger(logger)
                 .WithAutoPing(config.EnableAutoPing, config.AutoPingIntervalSec)
                 .WithConnectAttempts(config.MaxConnectAttempts, config.ConnectAttemptIntervalSec)
                 .WithReconnectAttempts(config.MaxReconnectAttempts, config.ReconnectAttemptIntervalSec)
@@ -83,7 +83,7 @@ public class S2SClient(EngineBase engine) : NetPeerBase(PeerKind.Server), IS2SCl
         catch (Exception ex)
         {
             _fiber.Dispose();
-            logger.Error(ex);
+            Logger.Error(ex);
             return false;
         }
     }
@@ -93,7 +93,7 @@ public class S2SClient(EngineBase engine) : NetPeerBase(PeerKind.Server), IS2SCl
         switch (ex)
         {
             case FiberException fe:
-                Logger.Error(fe, "Fiber '{0}' execute failed. Job: {1}", fe.FiberName, fe.Job?.Name);
+                Logger.Error(fe, $"Fiber '{fe.FiberName}' execute failed. Job: {fe.Job?.Name}");
                 break;
             default:
                 Logger.Error(ex);

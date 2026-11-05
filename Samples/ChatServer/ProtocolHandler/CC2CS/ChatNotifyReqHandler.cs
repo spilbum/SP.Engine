@@ -2,7 +2,7 @@ using Common.Protocol;
 using Common.Protocol.CC2CS;
 using SP.Engine.Runtime.Protocol;
 
-namespace ChatServer.Protocol;
+namespace ChatServer.ProtocolHandler.CC2CS;
 
 [ProtocolHandler(ProtocolId.CC2CS.ChatNotifyReq)]
 public class ChatNotifyReqHandler : ProtocolHandlerBase<UserPeer, ChatNotifyReq>

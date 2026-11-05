@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
 namespace SP.Engine.Server.Configuration;
 
@@ -7,6 +7,7 @@ public interface IEngineConfig
     NetworkConfig Network { get; }
     SessionConfig Session { get; }
     PerfConfig Perf { get; }
+    LoggingConfig Logging { get; }
 }
 
 public sealed class EngineConfig : IEngineConfig
@@ -16,4 +17,5 @@ public sealed class EngineConfig : IEngineConfig
     public NetworkConfig Network { get; } = new();
     public SessionConfig Session { get; } = new();
     public PerfConfig Perf { get; } = new();
+    public LoggingConfig Logging { get; } = new();
 }

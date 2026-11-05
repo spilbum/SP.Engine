@@ -1,3 +1,4 @@
+using SP.Core.Logging;
 using SP.Engine.Common.Protocol;
 using SP.Engine.Common.Protocol.S2C;
 using SP.Engine.Runtime;
@@ -13,7 +14,7 @@ namespace SP.Engine.Client.Protocol
         {
             if (protocol.Result != SessionAuthResult.Ok)
             {
-                context.Logger.Error("Session authentication failed: {0}", protocol.Result);
+                Logger.Error("Session authentication failed: {0}", protocol.Result);
                 context.Close();
                 return;
             }

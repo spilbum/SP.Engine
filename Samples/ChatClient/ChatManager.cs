@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Common.Protocol.CC2CS;
+using Microsoft.Extensions.Logging;
 using SP.Core.Logging;
 using SP.Engine.Client;
 
@@ -19,8 +20,9 @@ public static class NetPeerExtensions
     }
 }
 
-public class ChatManager(ILogger logger)
+public class ChatManager
 {
+    private static readonly ILogger Logger = LogManager.GetLogger<ChatManager>();
     private readonly ConcurrentBag<UserPeer> _peers = [];
     private string? _host;
     private int _port;
@@ -58,7 +60,6 @@ public class ChatManager(ILogger logger)
                 var targetUserId = $"User_{targetGroup}_{i:D3}";
                 
                 var peer = NetPeerBuilder.Create()
-                    .WithLogger(logger)
                     .WithAutoPing(true, 2)
                     .AddAssembly(typeof(ChatNotifyReq).Assembly)
                     .WithEntryAssembly()
@@ -71,11 +72,11 @@ public class ChatManager(ILogger logger)
                     await Task.Delay(delayMs, ct);
             }
             
-            logger.Info("Successfully initiated connection pool for {0} clients. Group: {1}", count, myGroup);
+            Logger.Info("Successfully initiated connection pool for {0} clients. Group: {1}", count, myGroup);
         }
         catch (Exception ex)
         {
-            logger.Error(ex, "Failed during connection allocation process.");
+            Logger.Error(ex, "Failed during connection allocation process.");
         }
     }
 
@@ -102,14 +103,14 @@ public class ChatManager(ILogger logger)
                         }
                         catch (Exception ex)
                         {
-                            logger.Error("Tick Processing Exception: {0}\n{1}", ex.Message, ex.StackTrace);
+                            Logger.Error("Tick Processing Exception: {0}\n{1}", ex.Message, ex.StackTrace);
                         }
                     });
                 }
             }
             catch (Exception ex)
             {
-                logger.Error("UpdateLoop pipeline fault: {0}", ex.Message);
+                Logger.Error("UpdateLoop pipeline fault: {0}", ex.Message);
             }
 
             await Task.Delay(10);
@@ -128,7 +129,7 @@ public class ChatManager(ILogger logger)
                 peer.StartChatTest(period, batchCount);
             }
             
-            logger.Info("S2S Cross Chat stress test activated for {0} peers. (Interval: {1}ms, Burst: {2}",
+            Logger.Info("S2S Cross Chat stress test activated for {0} peers. (Interval: {1}ms, Burst: {2}",
                 targets.Count, period, batchCount);
         }
     }
@@ -138,7 +139,7 @@ public class ChatManager(ILogger logger)
         lock (_lock)
         {
             foreach (var peer in _peers) peer.StopChatTest();
-            logger.Info("All active chat scheduler sequences suspended.");
+            Logger.Info("All active chat scheduler sequences suspended.");
         }
     }
 
@@ -146,6 +147,6 @@ public class ChatManager(ILogger logger)
     {
         IsRunning = false;
         foreach (var peer in _peers) peer.Close();
-        logger.Info("All simulated client endpoints successfully closed.");
+        Logger.Info("All simulated client endpoints successfully closed.");
     }
 }

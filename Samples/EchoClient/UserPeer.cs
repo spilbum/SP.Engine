@@ -1,4 +1,5 @@
 using Common.Protocol.EC2ES;
+using SP.Core.Logging;
 using SP.Engine.Client;
 
 namespace EchoClient;

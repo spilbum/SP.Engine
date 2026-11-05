@@ -1,10 +1,12 @@
 using System;
 using System.Threading;
+using SP.Core.Logging;
 using SP.Engine.Common.Protocol.S2C;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Channel;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
+using SP.Engine.Server.Logging;
 
 namespace SP.Engine.Server;
 
@@ -49,7 +51,7 @@ public sealed class Session(long sessionId) : SessionBase(sessionId)
             if (InvalidateUdpHealth(Config.Session.UdpHealthCheckMaxFailCount))
             {
                 SendUdpStatusNotify(false);
-                Logger.Warn("Session {0} UDP disabled.", SessionId);
+                Logger.Warn($"Session {SessionId} UDP disabled.");
             }
             
             SendUdpHealthCheck();

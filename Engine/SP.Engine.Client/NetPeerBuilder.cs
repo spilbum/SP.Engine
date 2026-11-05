@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Microsoft.Extensions.Logging;
 using SP.Core.Logging;
 using SP.Engine.Client.Configuration;
 
@@ -9,9 +10,9 @@ namespace SP.Engine.Client
 {
     public class NetPeerBuilder
     {
+        private static readonly ILogger Logger = LogManager.GetLogger<NetPeerBuilder>();
         private readonly List<Action<EngineConfig>> _configActions = new List<Action<EngineConfig>>();
         private readonly HashSet<Assembly> _assemblies = new HashSet<Assembly>();
-        private ILogger _logger;
         private bool _isBuilt;
         
         public static NetPeerBuilder Create() => new NetPeerBuilder();
@@ -67,12 +68,6 @@ namespace SP.Engine.Client
                 c.ReceiveBufferSize = receiveBufferSize;
             });
         
-        public NetPeerBuilder WithLogger(ILogger logger)
-        {
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            return this;
-        }
-
         public NetPeerBuilder AddAssembly(Assembly assembly)
         {
             if (assembly != null)
@@ -99,11 +94,10 @@ namespace SP.Engine.Client
         public bool TryBuild<T>(T instance) where T : NetPeerBase
         {
             if (instance == null) throw new ArgumentNullException(nameof(instance));
-            if (_logger == null) throw new InvalidOperationException("Logger must be configured.");
 
             if (_assemblies.Count == 0)
             {
-                _logger.Warn(
+                Logger.Warn(
                     "No assemblies configured for protocol discovery. Did you forget to call AddAssembly() or WithEntryAssembly()?");
             }
             
@@ -113,7 +107,7 @@ namespace SP.Engine.Client
                 action(config);
             }
             
-            if (!instance.InternalInitialize(_assemblies.ToArray(), config, _logger))
+            if (!instance.InternalInitialize(_assemblies.ToArray(), config))
                 return false;
             
             _isBuilt = true;

@@ -2,6 +2,7 @@ using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using Microsoft.Extensions.Logging;
 using SP.Core.Buffers;
 using SP.Core.Logging;
 using SP.Engine.Runtime;
@@ -11,6 +12,7 @@ using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Runtime.Security;
 using SP.Engine.Server.Configuration;
+using SP.Engine.Server.Logging;
 
 namespace SP.Engine.Server;
 
@@ -52,7 +54,7 @@ public abstract class SessionBase : IProtocolHandlerContext, IDisposable
     public IPEndPoint LocalEndPoint => _tcpNetworkSession?.LocalEndPoint;
     public IPEndPoint RemoteEndPoint => _tcpNetworkSession?.RemoteEndPoint;
     
-    public ILogger Logger => _engine?.Logger;
+    protected ILogger Logger { get; }
     public IEngineConfig Config => _engine?.Config;
     public IProtocolPolicyProvider PolicyProvider => _policyProvider;
     
@@ -70,6 +72,7 @@ public abstract class SessionBase : IProtocolHandlerContext, IDisposable
     protected SessionBase(long sessionId)
     {
         SessionId = sessionId;
+        Logger = LogManager.GetLogger(GetType());
         StartTime = DateTime.UtcNow;
         LastActiveTimeTicks = DateTime.UtcNow.Ticks;
     }
@@ -159,7 +162,7 @@ public abstract class SessionBase : IProtocolHandlerContext, IDisposable
                             Config.Network.MaxPayloadLength);
                         Interlocked.Exchange(ref _fragmentAssembler, assembler);
                     
-                        Logger.Debug("Successfully initialized UDP Network Session for SessionId={0}", SessionId);
+                        Logger.Debug($"Successfully initialized UDP Network Session for SessionId={SessionId}");
                     }
                 }
             }
@@ -283,7 +286,7 @@ public abstract class SessionBase : IProtocolHandlerContext, IDisposable
 
         if (!IsClosed)
         {
-            Logger.Fatal("Memory Leak Detection: Session {0} is being disposed without logically closed!", SessionId);
+            Logger.Fatal($"Memory Leak Detection: Session {SessionId} is being disposed without logically closed!");
         }
     }
 }

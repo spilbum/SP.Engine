@@ -3,7 +3,6 @@ using System.Data.Common;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using SP.Core.Accessor;
 
 namespace SP.Database;
 
@@ -17,18 +16,60 @@ public static class DbEntityBinder
 {
     private static readonly ConcurrentDictionary<Type, EntityMetadata> Cache = new();
 
+    private readonly record struct DbMemberMeta(
+        string ColumnName,
+        Type MemberType,
+        MemberInfo MemberInfo,
+        bool CanSetFromDb,
+        bool CanGetForDb);
+
     public static EntityMetadata Get(Type type)
         => Cache.GetOrAdd(type, Compile);
 
     private static EntityMetadata Compile(Type type)
     {
+        var members = ExtractMembers(type);
         var createFunc = Expression.Lambda<Func<object>>(Expression.New(type)).Compile();
-        var (readAction, columnNames) = CompileRead(type);
-        var writeAction = CompileWrite(type);
+        var (readAction, columnNames) = CompileRead(type, members);
+        var writeAction = CompileWrite(type, members);
         return new EntityMetadata(createFunc, readAction, columnNames, writeAction);
     }
 
-    private static (Action<object, DbDataReader, int[]>, string[]) CompileRead(Type type)
+    private static List<DbMemberMeta> ExtractMembers(Type type)
+    {
+        var members = new List<DbMemberMeta>();
+
+        foreach (var member in type.GetMembers(BindingFlags.Instance | BindingFlags.Public))
+        {
+            switch (member)
+            {
+                case FieldInfo field:
+                {
+                    var attr = field.GetCustomAttribute<DbColumnAttribute>();
+                    var columnName = attr?.Name ?? field.Name;
+                    var canSetFromDb = field is { IsInitOnly: false, IsLiteral: false } && !(attr?.IgnoreRead ?? false);
+                    var canGetForDb = !(attr?.IgnoreWrite ?? false);
+                    members.Add(new DbMemberMeta(columnName, field.FieldType, field, canSetFromDb, canGetForDb));
+                    break;
+                }
+                case PropertyInfo prop when prop.GetIndexParameters().Length == 0:
+                {
+                    var attr = prop.GetCustomAttribute<DbColumnAttribute>();
+                    var columnName = attr?.Name ?? prop.Name;
+                    var hasGetter = prop.GetMethod is { IsPublic: true, IsStatic: false };
+                    var hasSetter = prop.SetMethod is { IsPublic: true, IsStatic: false };
+                    var canSetFromDb = hasSetter && !(attr?.IgnoreRead ?? false);
+                    var canGetForDb = hasGetter && !(attr?.IgnoreWrite ?? false);
+                    members.Add(new DbMemberMeta(columnName, prop.PropertyType, prop, canSetFromDb, canGetForDb));
+                    break;
+                }
+            }
+        }
+
+        return members;
+    }
+
+    private static (Action<object, DbDataReader, int[]>, string[]) CompileRead(Type type, List<DbMemberMeta> members)
     {
         var entityParam = Expression.Parameter(typeof(object), "entity");
         var readerParam = Expression.Parameter(typeof(DbDataReader), "reader");
@@ -42,18 +83,15 @@ public static class DbEntityBinder
         var columnNames = new List<string>();
         var readMethod = typeof(DbValueMapper).GetMethod(nameof(DbValueMapper.ReadValueByOrdinal));
 
-        var accessor = RuntimeTypeAccessor.GetOrCreate(type);
-        foreach (var member in accessor.Members)
+        foreach (var member in members.Where(member => member.CanSetFromDb))
         {
-            if (!member.CanSet || member.IgnoreSet) continue;
-
             // int ordinal = reader.GetOrdinal(name);
-            // if (ordinal >= 0) { target.Prob = (Type)ReadValueByOrdinal(reader, ordinal, type); }
+            // if (ordinal >= 0) { target.Prop = (Type)ReadValueByOrdinal(reader, ordinal, type); }
             
-            columnNames.Add(member.Name);
+            columnNames.Add(member.ColumnName);
             var arrayIndex = columnNames.Count - 1;
 
-            var ordinalVar = Expression.Variable(typeof(int), $"ord_{member.Name}");
+            var ordinalVar = Expression.Variable(typeof(int), $"ord_{member.ColumnName}");
 
             // ordinal = ordinalsParam[arrayIndex];
             var assignOrdinal = Expression.Assign(
@@ -66,18 +104,18 @@ public static class DbEntityBinder
             var callRead = Expression.Call(readMethod!,
                 readerParam,
                 ordinalVar,
-                Expression.Constant(member.Type)
+                Expression.Constant(member.MemberType)
             );
 
-            var assignProb = Expression.Assign(
-                Expression.MakeMemberAccess(typedEntity, member.Info),
-                Expression.Convert(callRead, member.Type)
+            var assignProp = Expression.Assign(
+                Expression.MakeMemberAccess(typedEntity, member.MemberInfo),
+                Expression.Convert(callRead, member.MemberType)
             );
 
-            // if (ordinal >= 0) { assignProb; }
+            // if (ordinal >= 0) { assignProp; }
             var checkAndAssign = Expression.IfThen(
                 Expression.GreaterThanOrEqual(ordinalVar, Expression.Constant(0)),
-                assignProb
+                assignProp
             );
 
             blocks.Add(checkAndAssign);
@@ -95,7 +133,7 @@ public static class DbEntityBinder
         return (lambda, columnNames.ToArray());
     }
 
-    private static Action<object, DbExecutor> CompileWrite(Type type)
+    private static Action<object, DbExecutor> CompileWrite(Type type, List<DbMemberMeta> members)
     {
         var entityParam = Expression.Parameter(typeof(object), "entity");
         var cmdParam = Expression.Parameter(typeof(DbExecutor), "cmd");
@@ -107,31 +145,12 @@ public static class DbEntityBinder
 
         var writeMethod = typeof(DbValueMapper).GetMethod(nameof(DbValueMapper.WriteValue));
 
-        var accessor = RuntimeTypeAccessor.GetOrCreate(type);
-        foreach (var member in accessor.Members)
-        {
-            if (!member.CanGet || member.IgnoreGet) continue;
-
-            // 로직: WriteValue(cmd, name, target.Prop, type);
-
-            // 값 읽기 (target.Prop) -> object 변환
-            var propValue = Expression.Convert(
-                Expression.MakeMemberAccess(typedEntity, member.Info),
-                typeof(object)
-            );
-
-            var colName = member.Name;
-
-            // WriteValue 호출
-            var callWrite = Expression.Call(writeMethod!,
-                cmdParam,
-                Expression.Constant(colName),
-                propValue,
-                Expression.Constant(member.Type)
-            );
-
-            blocks.Add(callWrite);
-        }
+        blocks.AddRange(
+            from member in members 
+            where member.CanGetForDb 
+            let propValue = Expression.Convert(Expression.MakeMemberAccess(typedEntity, member.MemberInfo), typeof(object)) 
+            select Expression.Call(writeMethod!, cmdParam, Expression.Constant(member.ColumnName), propValue, Expression.Constant(member.MemberType)
+            ));
 
         return Expression.Lambda<Action<object, DbExecutor>>(
             Expression.Block([typedEntity], blocks),

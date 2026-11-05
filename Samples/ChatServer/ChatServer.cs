@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Common.Protocol.CS2CS;
 using SP.Core;
+using SP.Core.Logging;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Server;
 using SP.Engine.Server.S2S;

@@ -1,30 +1,32 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using SP.Core.Logging;
 
 namespace SP.Engine.Server;
 
 public static class AsyncExtensions
 {
-    public static Task AsyncRun(this ILogContext logContext, Action task, Action<Exception> onError = null)
+    private static readonly ILogger Logger = LogManager.GetLogger(nameof(AsyncExtensions));
+
+    public static Task AsyncRun(Action task, Action<Exception> onError = null)
     {
-        return Task.Run(task).ContinueWith(t => { HandleException(logContext, t, onError); },
+        return Task.Run(task).ContinueWith(t => { HandleException(t, onError); },
             TaskContinuationOptions.OnlyOnFaulted);
     }
 
     public static Task AsyncRun<T>(
-        this ILogContext logContext,
         T state,
         Action<T> task,
         Action<Exception> onError = null)
     {
         return Task.Run(() => task(state)).ContinueWith(t =>
         {
-            HandleException(logContext, t, onError);
+            HandleException(t, onError);
         }, TaskContinuationOptions.OnlyOnFaulted);
     }
 
-    private static void HandleException(ILogContext logContext, Task task, Action<Exception> exceptionHandler)
+    private static void HandleException(Task task, Action<Exception> exceptionHandler)
     {
         if (task.Exception == null)
             return;
@@ -35,6 +37,6 @@ public static class AsyncExtensions
                 exceptionHandler(ex);
         else
             foreach (var ex in exceptions)
-                logContext.Logger.Error(ex);
+                Logger.Error(ex);
     }
 }

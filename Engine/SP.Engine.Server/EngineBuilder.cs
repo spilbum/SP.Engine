@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using Microsoft.Extensions.Logging;
 using SP.Engine.Server.Configuration;
 
 namespace SP.Engine.Server;
@@ -51,6 +52,12 @@ public class EngineBuilder<TEngine> where TEngine : EngineBase, new()
 
     public EngineBuilder<TEngine> ConfigurePerformance(Action<PerfConfig> configure)
         => Configure(c => configure?.Invoke(c.Perf));
+
+    public EngineBuilder<TEngine> ConfigureLogging(Action<LoggingConfig> configure)
+        => Configure(c => configure?.Invoke(c.Logging));
+
+    public EngineBuilder<TEngine> SetLogLevel(LogLevel minimumLevel)
+        => Configure(c => c.Logging.MinimumLevel = minimumLevel);
 
     public EngineBuilder<TEngine> Listen(int port, string ip = "Any", SocketMode mode = SocketMode.Tcp, int backlog = 1024)
     {

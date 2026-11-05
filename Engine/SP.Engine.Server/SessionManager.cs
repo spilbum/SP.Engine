@@ -2,12 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Threading;
+using Microsoft.Extensions.Logging;
+using SP.Core.Logging;
 using SP.Engine.Runtime.Networking;
 
 namespace SP.Engine.Server;
 
 public sealed class SessionManager
 {
+    private static readonly ILogger Logger = LogManager.GetLogger<SessionManager>();
     private readonly Session[] _sessions;
     private readonly Stack<int> _freeIndices;
     private readonly object _lock = new();
@@ -49,7 +52,7 @@ public sealed class SessionManager
             }
             catch (Exception ex)
             {
-                engine.Logger.Error(ex);
+                Logger.Error(ex);
                 _freeIndices.Push(index);
                 return null;
             }

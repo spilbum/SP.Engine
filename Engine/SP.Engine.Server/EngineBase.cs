@@ -5,11 +5,13 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using SP.Core.Fibers;
+using SP.Core.Logging;
 using SP.Engine.Common.Protocol.S2S;
 using SP.Engine.Runtime;
 using SP.Engine.Runtime.Networking;
 using SP.Engine.Runtime.Protocol;
 using SP.Engine.Server.Configuration;
+using SP.Engine.Server.Logging;
 using SP.Engine.Server.S2S;
 
 namespace SP.Engine.Server;
@@ -84,7 +86,7 @@ public abstract class EngineBase : EngineCore, IEngine
         
         SetupLogicFibers(config);
 
-        Logger.Info("The server {0} is initialized.", name);
+        Logger.Info($"The server {name} is initialized.");
         return true;
     }
 
@@ -104,7 +106,7 @@ public abstract class EngineBase : EngineCore, IEngine
         }
         catch (Exception ex)
         {
-            Logger.Fatal("An exception occurred in the method 'OnStarted()': {0}", ex.Message);
+            Logger.Fatal($"An exception occurred in the method 'OnStarted()': {ex.Message}");
             return false;
         }
 
@@ -312,7 +314,7 @@ public abstract class EngineBase : EngineCore, IEngine
                 TimeSpan.FromMilliseconds(config.Session.LogicTickIntervalMs));
         }
         
-        Logger.Info("LogicFiber setup completed. FiberCount: {0}", fiberCount);
+        Logger.Info($"LogicFiber setup completed. FiberCount: {fiberCount}");
     }
 
     private void UpdateSessionTick(int index)
@@ -325,7 +327,7 @@ public abstract class EngineBase : EngineCore, IEngine
             }
             catch (Exception ex)
             {
-                Logger.Error(ex, "SessionTick failed: {0}", peer.PeerId);
+                Logger.Error(ex, $"SessionTick failed: {peer.PeerId}");
             }
         }
     }
@@ -340,7 +342,7 @@ public abstract class EngineBase : EngineCore, IEngine
             }
             catch (Exception ex)
             {
-                Logger.Error(ex, "LogicTick failed: {0}", peer.PeerId);
+                Logger.Error(ex, $"LogicTick failed: {peer.PeerId}");
             }
         }
     }
@@ -349,7 +351,7 @@ public abstract class EngineBase : EngineCore, IEngine
     {
         if (ex is FiberException e)
         {
-            Logger.Error(e.InnerException, "LogicFiber '{0}' execute failed. Job={1}", e.FiberName, e.Job?.Name);
+            Logger.Error(e.InnerException, $"LogicFiber '{e.FiberName}' execute failed. Job={e.Job?.Name}");
         }
     }
 
@@ -420,7 +422,7 @@ public abstract class EngineBase : EngineCore, IEngine
             var s2sClient = new S2SClient(this);
             if (!s2sClient.Initialize(assemblies, config))
             {
-                Logger.Fatal("S2SClient '{0}' initialize failed.", config.Name);
+                Logger.Fatal($"S2SClient '{config.Name}' initialize failed.");
                 return false;
             }
 
@@ -462,8 +464,7 @@ public abstract class EngineBase : EngineCore, IEngine
                     contextType => typeof(PeerBase).IsAssignableFrom(contextType));
             }
 
-            Logger.Debug("Engine handler count: {0}, Game handler count: {1}", 
-                _dictEngineProtocolHandler.Count, _dictGameProtocolHandler.Count);
+            Logger.Debug($"Engine handler count: {_dictEngineProtocolHandler.Count}, Game handler count: {_dictGameProtocolHandler.Count}");
         
             return true;
         }
@@ -525,7 +526,7 @@ public abstract class EngineBase : EngineCore, IEngine
                             break;
                         }
                         case ReceiveIngestResult.BufferOverflow:
-                            Logger.Warn("Peer {0} Out-of-order buffer overflow.", peer.PeerId);
+                            Logger.Warn($"Peer {peer.PeerId} Out-of-order buffer overflow.");
                             peer.Close(CloseReason.Rejected);
                             tcp.Dispose();
                             break;
@@ -552,7 +553,7 @@ public abstract class EngineBase : EngineCore, IEngine
         }
         catch (Exception ex)
         {
-            Logger.Error(ex, "ProcessMessage failed: {0}", ex.Message);
+            Logger.Error(ex, $"ProcessMessage failed: {ex.Message}");
             message.Dispose();
         }
     }
@@ -578,8 +579,8 @@ public abstract class EngineBase : EngineCore, IEngine
             
             if (elapsedTicks >= peer.Config.Session.HandlerSlowThresholdMs)
             {
-                peer.Logger.Warn(
-                    "ProtocolHandler '{0}' slow detected. PeerId={1}, Exec={2:F2}ms", handler.Name, peer.PeerId, elapsedTicks);
+                peer.Engine.Logger.Warn(
+                    $"ProtocolHandler '{handler.Name}' slow detected. PeerId={peer.PeerId}, Exec={elapsedTicks:F2}ms");
             }
         }
         finally

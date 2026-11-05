@@ -1,12 +1,14 @@
 using System.Collections.Concurrent;
 using Common.Protocol.EC2ES;
+using Microsoft.Extensions.Logging;
 using SP.Core.Logging;
 using SP.Engine.Client;
 
 namespace EchoClient;
 
-public class TestManager(ILogger logger)
+public class TestManager
 {
+    private static readonly ILogger Logger = LogManager.GetLogger<TestManager>();
     private readonly ConcurrentBag<UserPeer> _clients = [];
     private string? _host;
     private int _port;
@@ -57,7 +59,6 @@ public class TestManager(ILogger logger)
             for (var i = 0; i < count; i++)
             {
                 var client = NetPeerBuilder.Create()
-                    .WithLogger(logger)
                     .WithAutoPing(true, 2)
                     .AddAssembly(typeof(TcpEchoReq).Assembly)
                     .WithEntryAssembly()
@@ -71,7 +72,7 @@ public class TestManager(ILogger logger)
         }
         catch (Exception ex)
         {
-            logger.Error(ex);
+            Logger.Error(ex);
         }
     }
 
@@ -98,14 +99,14 @@ public class TestManager(ILogger logger)
                         }
                         catch (Exception e)
                         {
-                            logger.Error($"Tick Error: {e.Message}/r/nStacktrace: {e.StackTrace}");
+                            Logger.Error($"Tick Error: {e.Message}/r/nStacktrace: {e.StackTrace}");
                         }
                     });
                 }
             }
             catch (Exception ex)
             {
-                logger.Error("UpdateLoop failed: {0}", ex.Message);
+                Logger.Error("UpdateLoop failed: {0}", ex.Message);
             }
 
             await Task.Delay(10);
@@ -124,7 +125,7 @@ public class TestManager(ILogger logger)
                 client.StartTest(sendType, period, batchCount);
             }
             
-            logger.Info($"Test started for {targets.Count} clients (SendType: {sendType})");
+            Logger.Info($"Test started for {targets.Count} clients (SendType: {sendType})");
         }
     }
 
@@ -133,7 +134,7 @@ public class TestManager(ILogger logger)
         lock (_lock)
         {
             foreach (var client in _clients) client.StopTest();
-            logger.Info("All tests stopped");
+            Logger.Info("All tests stopped");
         }
     }
 }

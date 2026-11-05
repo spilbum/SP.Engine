@@ -1,21 +1,24 @@
 using System.Diagnostics;
+using Microsoft.Extensions.Logging;
 using SP.Core.Logging;
 
 namespace SP.Core
 {
     public readonly ref struct SlowChecker
     {
+        private static readonly ILogger DefaultLogger = LogManager.GetLogger(nameof(SlowChecker));
+
         private readonly long _startTicks;
         private readonly int _thresholdMs;
         private readonly string _title;
         private readonly ILogger _logger;
 
-        public SlowChecker(int thresholdMs, string title, ILogger logger)
+        public SlowChecker(int thresholdMs, string title, ILogger logger = null)
         {
             _startTicks = Stopwatch.GetTimestamp();
             _thresholdMs = thresholdMs;
             _title = title;
-            _logger = logger;
+            _logger = logger ?? DefaultLogger;
         }
 
         public void Dispose()

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net.Sockets;
 using System.Threading;
 using SP.Engine.Runtime;
@@ -126,7 +126,7 @@ public class TcpNetworkSession(Socket client, SocketSendContext sendContext, Soc
     {
         if (Interlocked.CompareExchange(ref _isSending, 1, 0) == 0)
         {
-            Session.AsyncRun(StartSend);
+            AsyncExtensions.AsyncRun(StartSend);
         }
     }
 
@@ -194,7 +194,7 @@ public class TcpNetworkSession(Socket client, SocketSendContext sendContext, Soc
             syncCount++;
             if (syncCount >= MaxSyncCompletions)
             {
-                Session.AsyncRun(StartSend);
+                AsyncExtensions.AsyncRun(StartSend);
                 return;
             }
         }
