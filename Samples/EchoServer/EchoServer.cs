@@ -7,7 +7,7 @@ namespace EchoServer;
 
 public class EchoServer : EngineBase
 {
-    public static EchoServer? Instance { get; private set; }
+    public static EchoServer Instance { get; private set; } = null!;
     private HostNetworkInfo? _networkInfo;
     
     public EchoServer()
@@ -29,7 +29,7 @@ public class EchoServer : EngineBase
         return new UserPeer(session);
     }
 
-    protected override S2SPeerBase OnCreateS2SPeer(Session session, string cateogry)
+    protected override S2SPeerBase OnCreateS2SPeer(Session session, string category)
     {
         throw new NotImplementedException();
     }

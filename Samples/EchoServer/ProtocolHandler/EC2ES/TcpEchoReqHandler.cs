@@ -3,7 +3,7 @@ using Common.Protocol.EC2ES;
 using Common.Protocol.ES2EC;
 using SP.Engine.Runtime.Protocol;
 
-namespace EchoServer.Protocol;
+namespace EchoServer.ProtocolHandler.EC2ES;
 
 [ProtocolHandler(ProtocolId.EC2ES.TcpEchoReq)]
 public class TcpEchoReqHandler : ProtocolHandlerBase<UserPeer, TcpEchoReq>

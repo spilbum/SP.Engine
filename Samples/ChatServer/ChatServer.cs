@@ -10,14 +10,13 @@ namespace ChatServer;
 
 public class ChatServer : EngineBase
 {
-    private static ChatServer? _instance;
-    public static ChatServer Instance => _instance ?? throw new NullReferenceException(nameof(ChatServer));
+    public static ChatServer Instance { get; private set; } = null!;
     
     private readonly ConcurrentDictionary<string, uint> _byUserId = new();
 
     public ChatServer()
     {
-        _instance = this;
+        Instance = this;
     }
 
     protected override void OnStarted()

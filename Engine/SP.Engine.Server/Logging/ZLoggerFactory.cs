@@ -26,11 +26,6 @@ public static class ZLoggerFactory
             logging.ClearProviders();
             logging.SetMinimumLevel(config.MinimumLevel);
 
-            if (config.EnableConsole)
-            {
-                logging.AddZLoggerConsole(ConfigurePlainTextFormatter);
-            }
-
             if (config.EnableFile)
             {
                 var rollSizeKB = Math.Max(1, config.RollingSizeMB) * 1024;
@@ -42,6 +37,11 @@ public static class ZLoggerFactory
                     options.RollingSizeKB = rollSizeKB;
                     ConfigurePlainTextFormatter(options);
                 });
+            }
+            
+            if (config.EnableConsole)
+            {
+                logging.AddZLoggerConsole(ConfigurePlainTextFormatter);
             }
         });
     }

@@ -32,6 +32,10 @@ SP.Engine은 복잡한 로우레벨 제어(스레드 동기화, GC 메모리 관
 * **Roslyn Source Generator 기반의 Zero-Reflection 직렬화**
   * 성능 저하와 GC 스파이크의 주범인 런타임 리플렉션과 박싱(Boxing) 연산을 완벽히 배제했습니다.
   * Roslyn 증분 소스 생성기(`SP.Engine.SourceGenerator`)가 컴파일 타임에 패킷 직렬화/역직렬화 코드와 핸들러/정책 레지스트리를 정적으로 생성하여, 패킷 클래스(`partial`)만 정의하면 런타임 오버헤드 없는 초고속 직렬화 통신이 가능합니다.
+
+* **ZLogger 기반의 초경량 비동기 로깅**
+  * 로깅으로 인한 GC 부하와 I/O 대기 시간을 없애, 대규모 트래픽 환경에서 로그를 대량으로 남겨도 서버 틱과 응답 속도에 영향을 주지 않습니다.
+  * 엔진 내부에 로깅 구현을 캡슐화하여, 클라이언트와 서버 모두 별도의 설정이나 외부 패키지 참조 없이 즉시 일관된 로깅을 사용할 수 있습니다.
     
 ---
 
@@ -159,14 +163,12 @@ public class EchoAckHandler : ProtocolHandlerBase<EchoClient, S2C_EchoAck>
     {
         // 왕복 레이턴시(RTT) 계산
         var rtt = TimeSpan.FromTicks(DateTime.UtcNow.Ticks - protocol.SentTicks);
-        Console.WriteLine($"[Client] Echo 응답 수신 완료. RTT: {rtt.TotalMilliseconds:F2} ms");
+        Logger.Info($"[Client] Echo 응답 수신 완료. RTT: {rtt.TotalMilliseconds:F2} ms");
     }
 }
 
 // 3. 클라이언트 구동 및 연결 테스트
-var logger = new ConsoleLogger("EchoClient");
 var client = NetPeerBuilder.Create()
-    .WithLogger(logger)
     .WithAutoPing(true, intervalSec: 2) // 자동 핑/세션 유지 로직 내장
     .AddAssembly(typeof(C2S_EchoReq).Assembly)
     .WithEntryAssembly()

@@ -21,24 +21,11 @@ namespace SP.Core.Logging
                 _defaultCategory = defaultCategory;
             }
 
-            var oldFactory = _factory;
             _factory = factory;
 
             foreach (var kv in Loggers)
             {
                 kv.Value.Update(_factory.CreateLogger(kv.Key));
-            }
-
-            if (oldFactory != null && !ReferenceEquals(oldFactory, factory))
-            {
-                try
-                {
-                    oldFactory.Dispose();
-                }
-                catch
-                {
-                    /* ignored */
-                }
             }
         }
 
@@ -87,8 +74,8 @@ namespace SP.Core.Logging
         private static LogLevel GetDefaultMinimumLevel()
         {
             var entry = Assembly.GetEntryAssembly();
-            var debugAttr = entry != null ? CustomAttributeExtensions.GetCustomAttribute<DebuggableAttribute>(entry) : null;
-            return debugAttr != null && debugAttr.IsJITTrackingEnabled
+            var debugAttr = entry != null ? entry.GetCustomAttribute<DebuggableAttribute>() : null;
+            return debugAttr is { IsJITTrackingEnabled: true }
                 ? LogLevel.Debug
                 : LogLevel.Information;
         }

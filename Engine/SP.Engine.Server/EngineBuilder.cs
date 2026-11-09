@@ -108,7 +108,7 @@ public class EngineBuilder<TEngine> where TEngine : EngineBase, new()
     /// <summary>
     /// 설정을 바탕으로 엔진을 생성하고 초기화합니다.
     /// </summary>
-    public TEngine Build()
+    public TEngine Build(Func<TEngine> factory = null)
     {
         if (_isBuilt) throw new InvalidOperationException("This builder has already used to build an engine instance.");
         
@@ -131,7 +131,7 @@ public class EngineBuilder<TEngine> where TEngine : EngineBase, new()
             action(config);
         }
         
-        var engine = new TEngine();
+        var engine = factory != null ? factory() : new TEngine();
         if (!engine.InternalInitialize([.._assemblies], _category, _name, config))
         {
             throw new InvalidOperationException("Engine initialization failed. Check logs for details.");

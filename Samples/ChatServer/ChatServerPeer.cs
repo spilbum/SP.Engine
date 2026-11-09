@@ -5,5 +5,4 @@ namespace ChatServer;
 
 public sealed class ChatServerPeer(Session session) : S2SPeerBase(session)
 {
-    
 }

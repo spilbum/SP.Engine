@@ -1,12 +1,11 @@
-﻿using Common.Protocol.CC2CS;
+using System.Runtime.InteropServices;
+using Common.Protocol.CC2CS;
 using SP.Engine.Server;
 
 namespace ChatServer;
 
 internal static class Program
 {
-    private static readonly CancellationTokenSource CTS = new();
-    
     private static async Task Main(string[] args)
     {
         if (args.Length < 3 
@@ -20,51 +19,75 @@ internal static class Program
 
         var targetIp = args[1];
 
-        var builder = EngineBuilder<ChatServer>.Create()
+        await EngineBuilder<ChatServer>.Create()
             .SetCategory("Chat")
             .Listen(port)
             .AddS2SClient("Chat", targetIp, targetPort)
             .AddAssembly(typeof(ChatNotifyReq).Assembly)
-            .WithEntryAssembly();
+            .WithEntryAssembly()
+            .RunAsync();
+    }
+    
+     private static async Task RunAsync(this EngineBuilder<ChatServer> builder, CancellationToken cancellationToken = default)
+    {
+        using var engine = builder.Build();
+        await engine.RunAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task RunAsync(this EngineBase engine, CancellationToken cancellationToken = default)
+    {
+        if (!engine.Start())
+            throw new InvalidOperationException($"Failed to start engine '{engine.Name}'.");
+
+        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         Console.CancelKeyPress += OnCancelKeyPress;
-        
-        ChatServer? server = null;
+        AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
+
+        using var sigIntReg = TryRegisterPosixSignal(PosixSignal.SIGINT);
+        using var sigTermReg = TryRegisterPosixSignal(PosixSignal.SIGTERM);
+        using var sigQuitReg = TryRegisterPosixSignal(PosixSignal.SIGQUIT);
+        await using var ctReg = cancellationToken.Register(
+            static s => ((TaskCompletionSource)s!).TrySetResult(), tcs);
+
         try
         {
-            server = builder.Build();
-            if (!server.Start())
-            {
-                throw new Exception("Failed to start server");
-            }
-            
-            Console.WriteLine("Server '{0}' started.", server.Name);
-
-            await Task.Delay(Timeout.Infinite, CTS.Token);
-        }
-        catch (TaskCanceledException)
-        {
-
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("An exception occurred: {0}\nStacktrace: {1}", ex.Message, ex.StackTrace);
+            await tcs.Task.ConfigureAwait(false);
         }
         finally
         {
             Console.CancelKeyPress -= OnCancelKeyPress;
-            server?.Stop();
-            CTS.Dispose();
+            AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
+            engine.Stop();
         }
-    }
 
-    private static void OnCancelKeyPress(object? sender, ConsoleCancelEventArgs e)
-    {
-        e.Cancel = true;
+        return;
 
-        if (!CTS.IsCancellationRequested)
+        void OnProcessExit(object? sender, EventArgs e)
         {
-            CTS.Cancel();
+            tcs.TrySetResult();
+        }
+
+        void OnCancelKeyPress(object? sender, ConsoleCancelEventArgs e)
+        {
+            e.Cancel = true;
+            tcs.TrySetResult();
+        }
+
+        IDisposable? TryRegisterPosixSignal(PosixSignal signal)
+        {
+            try
+            {
+                return PosixSignalRegistration.Create(signal, ctx =>
+                {
+                    ctx.Cancel = true;
+                    tcs.TrySetResult();
+                });
+            }
+            catch
+            {
+                return null;
+            }
         }
     }
 }

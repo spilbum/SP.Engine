@@ -337,11 +337,11 @@ public abstract class EngineCore : IDisposable
 
         if (disposing)
         {
-            _engineFiber?.Dispose();
-            _globalScheduler.Dispose();
-            
             if (_stateCode == ServerStateConst.Running)
                 InternalStop();
+
+            _engineFiber?.Dispose();
+            _globalScheduler.Dispose();
         }
 
         _disposed = true;

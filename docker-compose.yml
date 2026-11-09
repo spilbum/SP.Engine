@@ -1,0 +1,15 @@
+services:
+  echoserver:
+    build:
+      context: .
+      dockerfile: Samples/EchoServer/Dockerfile
+    image: echoserver:latest
+    container_name: echoserver
+    command: ["10000"]
+    ports:
+      - "10000:10000/tcp"
+      - "20000:20000/udp"
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    

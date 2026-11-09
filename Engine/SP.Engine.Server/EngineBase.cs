@@ -140,7 +140,7 @@ public abstract class EngineBase : EngineCore, IEngine
         OnStopped();
     }
 
-    protected abstract S2SPeerBase OnCreateS2SPeer(Session session, string cateogry);
+    protected abstract S2SPeerBase OnCreateS2SPeer(Session session, string category);
     protected abstract PeerBase OnCreatePeer(Session session);
     protected virtual void OnStarted() { }
     protected virtual void OnStopped() { }
