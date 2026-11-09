@@ -1,7 +1,6 @@
 # SP.Engine
 
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?style=flat-square&logo=dotnet)](https://dotnet.microsoft.com/)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 
 SP.Engine은 .NET 8 인프라를 기반으로 구축된 고성능 실시간 멀티플레이어 게임 서버 엔진입니다.
 본 프로젝트는 13년 간의 대규모 글로벌 게임 서버 설계 및 라이브 서비스 경험을 바탕으로, **실시간 분산 환경에서 발생하는 로우레벨 최적화 이슈와 동시성 제어 기술을 집대성한 '고성능 게임 서버 레퍼런스 아키텍처'**입니다. 
@@ -177,8 +176,5 @@ var client = NetPeerBuilder.Create()
 client.Connect("127.0.0.1", 10000);
 client.SendEcho();
 ```
-
-## 📄 라이선스 (License)
-이 프로젝트는 MIT 라이선스 하에 배포됩니다.
 
 ### Contact GitHub: @spilbum
